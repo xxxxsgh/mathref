@@ -49,7 +49,14 @@ export class EnemyShip {
     this.flight = new FlightModel();
     // Sobrescreve as constantes de voo do jogador pelas do inimigo. O
     // FlightModel lê de CONFIG.flight, então injetamos um perfil próprio.
-    this.flightProfile = CONFIG.enemies.flight;
+    //
+    // Cópia, e não referência a `CONFIG.enemies.flight`: o escalonamento por
+    // onda ajusta a velocidade máxima POR NAVE, e escrever direto no config
+    // faria a onda 12 acelerar permanentemente todos os inimigos do jogo,
+    // inclusive os das ondas seguintes que deveriam partir do valor base.
+    this.flightProfile = { ...CONFIG.enemies.flight };
+    /** Multiplicador de dano dos tiros, vindo do escalonamento por onda. */
+    this.damageMul = 1;
 
     this.ai = new EnemyAI(index);
     this.health = new Health('enemy');
@@ -85,8 +92,29 @@ export class EnemyShip {
   get velocity() { return this.flight.velocity; }
   get quaternion() { return this.flight.quaternion; }
 
-  /** Coloca o inimigo em jogo. */
-  spawn(position, lookAt) {
+  /**
+   * Aplica o escalonamento da onda. Sempre a partir dos valores BASE do
+   * config, nunca do estado anterior — o mesmo princípio de `_applyUpgrades`
+   * no Engine, e pelo mesmo motivo: assim dá pra chamar quantas vezes quiser
+   * sem os números inflarem.
+   *
+   * @param {{hull:number, shield:number, damage:number, speed:number, aimError:number}} [k]
+   */
+  applyScale(k) {
+    const C = CONFIG.combat.enemy;
+    this.health.hullMax = C.hullMax * (k?.hull ?? 1);
+    this.health.shieldMax = C.shieldMax * (k?.shield ?? 1);
+    this.damageMul = k?.damage ?? 1;
+    this.ai.aimErrorMul = k?.aimError ?? 1;
+    // Recarrega o perfil inteiro do config antes de escalar: assim mexer nos
+    // valores pelo painel de tuning tem efeito no próximo spawn.
+    Object.assign(this.flightProfile, CONFIG.enemies.flight);
+    this.flightProfile.maxSpeed = CONFIG.enemies.flight.maxSpeed * (k?.speed ?? 1);
+  }
+
+  /** Coloca o inimigo em jogo.
+   *  @param {object} [scale] escalonamento da onda; ver applyScale */
+  spawn(position, lookAt, scale) {
     this.flight.position.copy(position);
     this.flight.velocity.set(0, 0, 0);
     this.flight.angularVelocity.set(0, 0, 0);
@@ -98,8 +126,11 @@ export class EnemyShip {
     m.lookAt(position, lookAt, new THREE.Vector3(0, 1, 0));
     this.flight.quaternion.setFromRotationMatrix(m);
 
-    this.health.reset();
     this.ai = new EnemyAI(this.index);
+    // A escala vem ANTES do reset: é ela que define hullMax/shieldMax, e o
+    // reset é o que enche as barras até esses máximos.
+    this.applyScale(scale);
+    this.health.reset();
     this.active = true;
     this.fireCooldown = 0.4 + Math.random() * 0.6;
     this.object.visible = true;
