@@ -141,24 +141,34 @@ jobs:
       # que EXISTE um site, só não com esse arquivo. Um site que não existe dá
       # outra mensagem ("There isn't a GitHub Pages site here").
       #
-      # Este passo força a origem para o Actions. Pode falhar por falta de
-      # permissão do GITHUB_TOKEN, e por isso é `continue-on-error`: o passo
-      # seguinte cobre esse caso.
-      - name: Forçar a origem do Pages para o Actions
+      # Este passo tenta forçar a origem para o Actions e, dê certo ou não,
+      # LÊ a origem que está valendo. É a leitura que decide o plano B — e não
+      # o sucesso da escrita. A diferença importa: na prática o GITHUB_TOKEN
+      # não tem permissão de trocar a origem (a escrita volta 403), então
+      # decidir pelo resultado da escrita faria o plano B rodar para sempre,
+      # inclusive depois de alguém trocar a origem à mão em Settings → Pages.
+      - name: Verificar a origem do Pages
         id: origem
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api -X PUT "repos/${{ github.repository }}/pages" \
-            -f build_type=workflow
-          echo "Origem do Pages agora é o GitHub Actions."
+          gh api -X PUT "repos/${{ github.repository }}/pages" -f build_type=workflow \
+            && echo "Origem trocada para o GitHub Actions." \
+            || echo "Sem permissão para trocar a origem — seguindo com o que estiver configurado."
+          tipo=$(gh api "repos/${{ github.repository }}/pages" --jq .build_type 2>/dev/null || echo desconhecida)
+          echo "tipo=$tipo" >> "$GITHUB_OUTPUT"
+          echo "Origem atual do Pages: $tipo"
 
       # ═══ PLANO B ═══
       #
-      # Se o passo acima não conseguiu trocar a origem, o site publicado
-      # continua sendo a pasta `docs/` da branch. Então escrevemos o site
-      # compilado lá dentro e commitamos de volta.
+      # Enquanto a origem não for `workflow`, o site publicado continua sendo a
+      # pasta `docs/` da branch. Então escrevemos o site compilado lá dentro e
+      # commitamos de volta.
+      #
+      # Para desligar isto de vez: Settings → Pages → Source → GitHub Actions.
+      # Na execução seguinte a leitura acima devolve `workflow`, este passo é
+      # pulado sozinho, e os commits de build somem.
       #
       # Não é bonito — build commitado é sempre uma segunda fonte da verdade —
       # mas aqui é gerado por CI a partir de `game-src/` a cada push, então
@@ -168,7 +178,7 @@ jobs:
       # Commits feitos com o GITHUB_TOKEN não disparam workflows, então isto
       # não vira loop infinito.
       - name: Publicar em docs/ (plano B)
-        if: steps.origem.outcome != 'success' && github.ref == 'refs/heads/main'
+        if: steps.origem.outputs.tipo != 'workflow' && github.ref == 'refs/heads/main'
         run: |
           mkdir -p docs
           # Remove só o que é site publicado. As notas em markdown que moram
