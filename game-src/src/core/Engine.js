@@ -14,6 +14,7 @@ import { Combat } from '../systems/Combat.js';
 import { SolarSystem } from '../procgen/SolarSystem.js';
 import { PlanetSurface } from '../systems/PlanetSurface.js';
 import { PlanetaryFlight } from '../systems/PlanetaryFlight.js';
+import { Autopilot } from '../systems/Autopilot.js';
 import { SkyDome } from '../systems/SkyDome.js';
 import { Progression } from '../systems/Progression.js';
 import { Missions } from '../systems/Missions.js';
@@ -76,9 +77,10 @@ export class Engine {
     this.combat.surfaceProvider = () => (this.surface.active ? this.surface : null);
     this.surface = new PlanetSurface(this.scene);
     this.planetary = new PlanetaryFlight();
+    this.autopilot = new Autopilot();
     this.skyDome = new SkyDome(this.scene);
 
-    // ── Progressão ─────────────────────────────────────────────────────────────────────
+    // ── Progressão ────────────────────────────────────────────────────────────────
     this.progression = new Progression();
     this.missions = new Missions(this.system, this.progression);
     this.upgrades = new UpgradePanel(document.getElementById('upgrades'), this.progression);
@@ -120,6 +122,9 @@ export class Engine {
     // ALCANÇÁVEIS, não só existentes.
     this.hud.nav.build(this.system);
     this.hud._system = this.system;
+    // O botão contextual e a tecla L caem no mesmo lugar: uma ação de borda
+    // que o `update` consome. Assim não há dois caminhos pra manter iguais.
+    this.hud.onAction = () => { this.input.actions.land = true; };
 
     this.debug = new DebugPanel(document.getElementById('debug-panel'));
     this.touchUI = this.input.touch
@@ -208,7 +213,7 @@ export class Engine {
     this.scene.add(this.rimLight);
     lightAllLayers(this.rimLight);
 
-    // ── Luz de preenchimento presa à CÂMERA ──────────────────────────────
+    // ── Luz de preenchimento presa à CÂMERA ────────────────────────
     // Problema real que isso resolve: a estrela tem uma posição fixa no mundo,
     // mas o jogador vira a nave pra qualquer lado. Sempre que ele voa NA
     // DIREÇÃO da estrela, a traseira da nave — que é a vista que ele tem 95%
@@ -330,6 +335,26 @@ export class Engine {
     }
     if (this.input.actions.toggleTuner) this.onToggleTuner?.();
 
+    // ── Piloto automático ─────────────────────────────────────────
+    // Roda ANTES da nave, porque ele escreve no MESMO `state` que a nave lê
+    // logo abaixo. Depois seria tarde: o comando só valeria no frame
+    // seguinte, e a direção ficaria com um quadro de atraso permanente.
+    if (this.input.actions.land) {
+      this.input.actions.land = false;
+      if (!this.combat.playerDead) this.autopilot.request();
+    }
+    if (this.combat.playerDead) {
+      this.autopilot.disengage(null);
+      this.ship.flight.cruiseMul = 1;
+    } else {
+      const ap = this.autopilot.update(
+        state, this.ship.flight, this.planetary, this.surface,
+        this.system, this.combat, dt,
+      );
+      if (ap.engaged) this.hud.bigMessage(ap.engaged, 1.2);
+      if (ap.disengaged) this.hud.bigMessage(ap.disengaged, 1.8);
+    }
+
     // Morto: a nave não responde a controle, mas a câmera e os efeitos
     // continuam rodando — é o que faz a morte ter peso em vez de virar um
     // corte seco pra tela de respawn.
@@ -339,7 +364,7 @@ export class Engine {
       this.ship.flight.update(NEUTRAL_CONTROL, dt);
     }
 
-    // ── Referência de "para cima" da câmera ──────────────────────────────
+    // ── Referência de "para cima" da câmera ─────────────────────
     // No espaço é o +Y do mundo; num planeta é a normal da superfície. A
     // interpolação pela densidade atmosférica é o que faz o horizonte "se
     // endireitar" durante a descida em vez de saltar.
@@ -359,7 +384,7 @@ export class Engine {
     this._updateFillLight();
     this.system.update(this.renderer.camera.position, dt);
 
-    // ── Voo planetário ────────────────────────────────────────
+    // ── Voo planetário ─────────────────────────────────────────────────────────
     // Precisa rodar DEPOIS da nave (usa a posição já integrada) e ANTES do
     // combate (o dano de reentrada e de batida entra no mesmo frame).
     if (!this.combat.playerDead) {
@@ -396,6 +421,11 @@ export class Engine {
     // isso vem depois dela e antes da HUD.
     this.combat.update(state, this.renderer.camera, dt);
     if (this.combat.playerHealth.justHitHull) this.hud.flashDamage();
+    // Recorde de onda. `recordWave` só grava quando o recorde de fato sobe,
+    // então chamar por frame não escreve no localStorage à toa.
+    if (this.progression.recordWave(this.combat.waveIndex)) {
+      this.hud.bigMessage(`RECORDE · ONDA ${this.combat.waveIndex}`, 1.6, 'good');
+    }
 
     this.dust.update(this.ship.position, this.ship.speed, dt);
 
@@ -409,6 +439,7 @@ export class Engine {
     this.touchUI?.update(state);
     this.hud.update(this.ship, state, this.renderer.camera, this.combat, dt,
       this.planetary, this.missions, this.progression);
+    this.hud.setAutopilot(this.autopilot, state);
   }
 
   /** Rastro de plasma da reentrada.
