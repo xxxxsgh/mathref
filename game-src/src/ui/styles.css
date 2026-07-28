@@ -587,7 +587,7 @@ html, body {
   .hud__landing-ring { width: 104px; }
 }
 
-/* ── Painel de upgrades ────────────────────────────────────────────────────── */
+/* ── Painel de upgrades ──────────────────────────────────────────────────── */
 
 .upgrades {
   position: fixed; inset: 0; z-index: 40;
@@ -841,7 +841,7 @@ html, body {
 
 .hud__approach {
   /* Abaixo da linha de missão, no topo. Ficava embaixo, centralizado, e
-     caia exatamente em cima da nave — o texto competia com a coisa que o
+     caía exatamente em cima da nave — o texto competia com a coisa que o
      jogador precisa olhar para pilotar. */
   position: absolute; left: 50%; top: calc(84px + var(--safe-t));
   transform: translate(-50%, -8px);
