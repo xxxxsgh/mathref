@@ -53,7 +53,7 @@ html, body {
   touch-action: none;
 }
 
-/* ── HUD ─────────────────────────────────────────────────────────────── */
+/* ── HUD ─────────────────────────────────────────────────────────────────────── */
 
 .hud {
   position: fixed;
@@ -118,7 +118,7 @@ html, body {
 .hud__bar-fill--boost.is-critical { background: var(--hud-red); box-shadow: 0 0 10px rgba(255, 107, 94, 0.6); }
 .hud__bar-fill--throttle { background: var(--hud-green); box-shadow: 0 0 10px rgba(125, 255, 168, 0.5); }
 
-/* ── Retículo ─────────────────────────────────────────────────────────── */
+/* ── Retículo ───────────────────────────────────────────────────────────────────── */
 
 .hud__reticle {
   position: absolute;
@@ -169,7 +169,7 @@ html, body {
   fill: none;
 }
 
-/* ── Avisos centrais ─────────────────────────────────────────────────── */
+/* ── Avisos centrais ────────────────────────────────────────────────────────── */
 .hud__alert {
   position: absolute;
   left: 50%;
@@ -184,7 +184,7 @@ html, body {
 }
 .hud__alert.is-on { opacity: 1; }
 
-/* ── Painel de debug ──────────────────────────────────────────────────── */
+/* ── Painel de debug ────────────────────────────────────────────────────────── */
 
 .debug-panel {
   position: fixed;
@@ -221,7 +221,7 @@ html, body {
 .is-warn { color: var(--hud-amber) !important; }
 .is-bad { color: var(--hud-red) !important; }
 
-/* ── Controles touch ──────────────────────────────────────────────────── */
+/* ── Controles touch ─────────────────────────────────────────────────────────────────── */
 
 .touch-ui {
   position: fixed;
@@ -343,7 +343,7 @@ html, body {
   box-shadow: 0 0 10px rgba(125, 255, 168, 0.5);
 }
 
-/* ── Tela inicial ────────────────────────────────────────────────────── */
+/* ── Tela inicial ──────────────────────────────────────────────────────────────── */
 
 .boot {
   position: fixed;
@@ -414,7 +414,7 @@ html, body {
   .boot__subtitle { margin-bottom: 20px; }
 }
 
-/* ── Elementos de combate ─────────────────────────────────────────────── */
+/* ── Elementos de combate ──────────────────────────────────────────────────────── */
 
 .hud__mini { color: var(--hud-cyan); font-size: 10px; letter-spacing: 0; }
 .hud__bar--wide { width: 168px; }
@@ -527,7 +527,7 @@ html, body {
   .hud__radar canvas { transform: scale(.8); transform-origin: bottom center; }
 }
 
-/* ── Painel de voo planetário ─────────────────────────────────────────── */
+/* ── Painel de voo planetário ─────────────────────────────────────────────────── */
 
 .hud__planet {
   position: absolute;
@@ -587,7 +587,7 @@ html, body {
   .hud__landing-ring { width: 104px; }
 }
 
-/* ── Painel de upgrades ───────────────────────────────────────────────── */
+/* ── Painel de upgrades ────────────────────────────────────────────────────── */
 
 .upgrades {
   position: fixed; inset: 0; z-index: 40;
@@ -674,7 +674,7 @@ html, body {
   padding: 1px 5px; font-size: 10px;
 }
 
-/* ── Missão e carga na HUD ────────────────────────────────────────────── */
+/* ── Missão e carga na HUD ─────────────────────────────────────────────────── */
 
 .hud__mission {
   position: absolute;
@@ -720,7 +720,7 @@ html, body {
 .hud__bar-fill--cargo { background: #ffd47d; box-shadow: 0 0 10px rgba(255,212,125,.5); }
 .hud__bar-fill--cargo.is-critical { background: var(--hud-amber); }
 
-/* ── Menu de pausa ────────────────────────────────────────────────────── */
+/* ── Menu de pausa ──────────────────────────────────────────────────────── */
 
 .pause {
   position: fixed; inset: 0; z-index: 45;
@@ -799,7 +799,7 @@ html, body {
   width: 44px; height: 44px; font-size: 14px; opacity: .55;
 }
 
-/* ── Marcadores de navegação (planetas e estações) ────────────────────── */
+/* ── Marcadores de navegação (planetas e estações) ──────────────────────────────── */
 
 .hud__nav { position: absolute; inset: 0; pointer-events: none; }
 
@@ -837,11 +837,11 @@ html, body {
   text-shadow: 0 0 8px rgba(0, 0, 0, .95);
 }
 
-/* ── Aviso de aproximação de planeta ──────────────────────────────────── */
+/* ── Aviso de aproximação de planeta ────────────────────────────────────────── */
 
 .hud__approach {
   /* Abaixo da linha de missão, no topo. Ficava embaixo, centralizado, e
-     caía exatamente em cima da nave — o texto competia com a coisa que o
+     caia exatamente em cima da nave — o texto competia com a coisa que o
      jogador precisa olhar para pilotar. */
   position: absolute; left: 50%; top: calc(84px + var(--safe-t));
   transform: translate(-50%, -8px);
@@ -863,7 +863,7 @@ html, body {
   .hud__approach { top: calc(72px + var(--safe-t)); }
 }
 
-/* ── Botão contextual: aproximar / pousar / decolar ───────────────────────
+/* ── Botão contextual: aproximar / pousar / decolar ──────────────────────────────
 
    Fica embaixo, centralizado: é a única região da tela que não disputa com
    nada — o manche touch nasce na metade esquerda, os botões de combate ficam
@@ -957,4 +957,41 @@ html, body {
 @media (max-width: 780px) {
   .hud__action-glyph { display: none; }
   .hud__action { bottom: calc(96px + var(--safe-b)); }
+}
+
+/* ── Corrida de superfície ────────────────────────────────────────────────────────
+
+   Alto e à esquerda do centro, não num canto: num circuito o olhar fica
+   travado à frente, e um cronômetro no canto obriga a desviar exatamente no
+   momento em que não dá pra desviar. */
+
+.hud__race {
+  position: absolute;
+  left: 50%; top: calc(120px + var(--safe-t));
+  transform: translate(-50%, -6px);
+  text-align: center;
+  opacity: 0; transition: opacity .25s ease, transform .25s ease;
+  pointer-events: none;
+}
+.hud__race.is-on { opacity: 1; transform: translate(-50%, 0); }
+.hud__race-time {
+  font-size: 30px; font-weight: 700; letter-spacing: .06em;
+  color: var(--hud-green);
+  text-shadow: 0 0 18px rgba(125, 255, 168, .5), 0 0 4px rgba(0,0,0,.9);
+  font-variant-numeric: tabular-nums;
+}
+.hud__race-line {
+  display: flex; gap: 14px; justify-content: center;
+  font-size: 10px; letter-spacing: .16em; margin-top: 2px;
+  color: rgba(219, 234, 255, .68);
+}
+.hud__race-delta {
+  font-size: 12px; letter-spacing: .18em; margin-top: 4px;
+  color: var(--hud-amber);
+}
+.hud__race-delta.is-good { color: var(--hud-green); }
+
+@media (max-height: 500px) {
+  .hud__race { top: calc(96px + var(--safe-t)); }
+  .hud__race-time { font-size: 24px; }
 }
