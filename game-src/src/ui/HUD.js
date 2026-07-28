@@ -159,6 +159,16 @@ export class HUD {
         <kbd class="hud__action-key" id="hud-action-key">L</kbd>
       </button>
 
+      <!-- Painel da corrida de superfície -->
+      <div class="hud__race" id="hud-race">
+        <div class="hud__race-time" id="hud-race-time">0:00.00</div>
+        <div class="hud__race-line">
+          <span id="hud-race-cp">0/0</span>
+          <span id="hud-race-best"></span>
+        </div>
+        <div class="hud__race-delta" id="hud-race-delta"></div>
+      </div>
+
       <div class="hud__status" id="hud-status"></div>
       <div class="hud__bigmsg" id="hud-bigmsg"></div>
     `;
@@ -206,6 +216,11 @@ export class HUD {
     this.el.approach = q('hud-approach');
     this.el.approachTitle = q('hud-approach-title');
     this.el.approachHint = q('hud-approach-hint');
+    this.el.race = q('hud-race');
+    this.el.raceTime = q('hud-race-time');
+    this.el.raceCp = q('hud-race-cp');
+    this.el.raceBest = q('hud-race-best');
+    this.el.raceDelta = q('hud-race-delta');
     this.el.action = q('hud-action');
     this.el.actionLabel = q('hud-action-label');
     this.el.actionHint = q('hud-action-hint');
@@ -237,6 +252,7 @@ export class HUD {
     this._actionHint = null;
     this._actionKey = null;
     this._actionOn = false;
+    this._raceOn = false;
     /** Injetado pelo Engine: usado pelo radar pra mostrar corpos celestes. */
     this._system = null;
   }
@@ -458,6 +474,38 @@ export class HUD {
     }
   }
 
+  /**
+   * Painel da corrida.
+   *
+   * Fica no alto à esquerda do centro e não num canto: num circuito você está
+   * olhando pra frente o tempo todo, e um cronômetro num canto da tela obriga
+   * a desviar o olhar exatamente quando não dá.
+   *
+   * @param {import('../systems/SurfaceRace.js').SurfaceRace} race
+   */
+  setRace(race, formatar) {
+    const on = race.estado === 'correndo' || race.estado === 'concluida';
+    if (on !== this._raceOn) {
+      this._raceOn = on;
+      this.el.race.classList.toggle('is-on', on);
+    }
+    if (!on) return;
+
+    this._set('raceTime', 'raceTime', formatar(race.tempo));
+    this._set('raceCp', 'raceCp', `ARGOLA ${Math.min(race.indice + 1, race.total)}/${race.total}`);
+    this._set('raceBest', 'raceBest',
+      race.recorde !== null ? `RECORDE ${formatar(race.recorde)}` : 'SEM RECORDE');
+
+    // Diferença contra o recorde, só quando existe um. É o número que
+    // transforma uma volta solitária numa disputa.
+    let delta = '';
+    if (race.estado === 'concluida') {
+      delta = race.novoRecorde ? 'NOVO RECORDE' : `+${(race.tempo - race.recorde).toFixed(2)}s`;
+    }
+    this._set('raceDelta', 'raceDelta', delta);
+    this.el.raceDelta.classList.toggle('is-good', race.novoRecorde);
+  }
+
   _updateReticle(input) {
     if (input.aimActive && input.source === 'keyboard') {
       const half = Math.min(window.innerWidth, window.innerHeight) * 0.5;
@@ -495,7 +543,7 @@ export class HUD {
       return;
     }
 
-    // ── Caixa em volta do alvo ────────────────────────────────────────────
+    // ── Caixa em volta do alvo ──────────────────────────────────
     this._proj.copy(target.position).project(camera);
     const onScreen = this._proj.z < 1 &&
       Math.abs(this._proj.x) < 1 && Math.abs(this._proj.y) < 1;
@@ -515,7 +563,7 @@ export class HUD {
       this.el.targetShield.style.transform = `scaleX(${target.health.shieldPct})`;
       this.el.targetHull.style.transform = `scaleX(${target.health.hullPct})`;
     } else {
-      // ── Seta de fora de tela ────────────────────────────────────────────
+      // ── Seta de fora de tela ─────────────────────────────────────
       // Sem isso, perder o alvo de vista significa perdê-lo de vez: em 6DOF
       // não há "virar a cabeça" pra procurar.
       this.el.target.style.opacity = '0';
@@ -536,7 +584,7 @@ export class HUD {
       this.el.offscreen.style.opacity = '1';
     }
 
-    // ── Retículo de predição ──────────────────────────────────────────────
+    // ── Retículo de predição ────────────────────────────────────────
     if (combat.hasLead) {
       this._proj.copy(combat.leadPoint).project(camera);
       if (this._proj.z < 1) {
