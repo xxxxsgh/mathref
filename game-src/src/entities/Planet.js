@@ -54,6 +54,7 @@ uniform float uSeed;
 uniform float uNoiseScale;
 uniform float uWaterLevel;
 uniform float uIceAmount;
+uniform float uMountain;
 uniform float uBanded;      // 1 = gigante gasoso (faixas), 0 = rochoso
 uniform float uAmbient;
 
@@ -87,6 +88,22 @@ float fbm(vec3 p, int oct) {
   return s / n;
 }
 
+/** Ruído de crista: 1 - |2n-1| dobra o ruído e transforma a passagem suave
+ *  pelo valor médio num vinco. Somadas, essas dobras viram cristas afiadas.
+ *  Ver o comentário longo em procgen/noise.js. */
+float ridged(vec3 p, int oct) {
+  float s = 0.0, a = 0.5, n = 0.0;
+  for (int i = 0; i < 4; i++) {
+    if (i >= oct) break;
+    float v = 1.0 - abs(valueNoise(p) * 2.0 - 1.0);
+    s += v * v * a;
+    n += a;
+    p *= 2.03;
+    a *= 0.5;
+  }
+  return s / n;
+}
+
 void main() {
   vec3 p = normalize(vLocal);
   vec3 np = p * uNoiseScale + uSeed;
@@ -96,6 +113,7 @@ void main() {
   // dá as ondulações de turbulência.
   float banded = fbm(vec3(np.x * 0.12, np.y * 2.6, np.z * 0.12), 4);
   float rocky = fbm(np + fbm(np * 0.5 + 3.1, 3) * 1.6, 5);
+
   float h = mix(rocky, banded, uBanded);
 
   // Rampa de altitude: água → terra baixa → terra alta.
@@ -105,8 +123,19 @@ void main() {
     // Profundidade: água rasa mais clara na borda dos continentes.
     col = mix(col * 0.62, col, smoothstep(uWaterLevel - 0.14, uWaterLevel, h));
   } else {
+    // ── Cordilheiras ──
+    // Mesma matemática de terrainHeight() em procgen/noise.js, inclusive a
+    // ORDEM: o perfil é elevado ao quadrado primeiro e a crista é somada
+    // depois. Os dois precisam concordar — este shader pinta o planeta visto
+    // da órbita e aquele arquivo gera o terreno em que a nave pousa. Se
+    // divergirem, a serra que você vê de cima não é a serra em que aterrissa,
+    // e o erro é silencioso porque cada metade está certa isoladamente.
     float t = (h - uWaterLevel) / max(0.001, 1.0 - uWaterLevel);
-    col = mix(uColorMid, uColorHigh, smoothstep(0.28, 0.85, t));
+    float mask = smoothstep(0.52, 0.66, fbm(np * 0.55 + 11.7, 3));
+    float coast = smoothstep(0.0, 0.12, t);
+    float perfil = min(1.0, t * t
+      + mask * ridged(np * 2.3 + 5.3, 4) * uMountain * coast * (1.0 - uBanded));
+    col = mix(uColorMid, uColorHigh, smoothstep(0.18, 0.78, perfil));
   }
 
   // Calotas polares: função da latitude (|y| do ponto normalizado), com o
@@ -195,6 +224,7 @@ export class Planet {
         uNoiseScale: { value: spec.noiseScale },
         uWaterLevel: { value: spec.waterLevel },
         uIceAmount: { value: spec.iceAmount },
+        uMountain: { value: spec.mountainStrength ?? 0 },
         uBanded: { value: spec.gasGiant ? 1 : 0 },
         uAmbient: { value: 0.16 },
       },
@@ -282,7 +312,7 @@ export class Planet {
       this.atmosphere.visible = camDist > this.radius * 1.25;
     }
 
-    // ── Troca de faixa de profundidade ───────────────────────────────────
+    // ── Troca de faixa de profundidade ─────────────────────────────────────────────────────
     // Quando a câmera se aproxima, o planeta precisa migrar da faixa distante
     // pra próxima — senão o plano `farNear` o recortaria e ele desapareceria
     // exatamente quando o jogador chega perto.

@@ -50,7 +50,7 @@ export class SolarSystem {
     const S = CONFIG.system;
     const baseSeed = hashString(seed);
 
-    // ── Estrela ───────────────────────────────────────────────────────────
+    // ── Estrela ──────────────────────────────────────────────────
     const starRng = rngHelpers(createRng(mix(baseSeed, hashString('star'))));
     const starDir = new THREE.Vector3(...CONFIG.world.sunDirection).normalize();
     this.starPosition = starDir.clone().multiplyScalar(S.starDistance);
@@ -69,7 +69,7 @@ export class SolarSystem {
     scene.add(this.star);
     this.starGeometry = starGeo;
 
-    // ── Planetas ──────────────────────────────────────────────────────────
+    // ── Planetas ────────────────────────────────────────────────────
     const countRng = rngHelpers(createRng(mix(baseSeed, hashString('count'))));
     const planetCount = countRng.int(S.planetCount[0], S.planetCount[1]);
 
@@ -82,7 +82,7 @@ export class SolarSystem {
       this.planets.push(planet);
     }
 
-    // ── Cinturão de asteroides ────────────────────────────────────────────
+    // ── Cinturão de asteroides ──────────────────────────────────────────────
     const beltRng = rngHelpers(createRng(mix(baseSeed, hashString('belt'))));
     this.asteroids = null;
     if (beltRng.chance(S.belt.chance)) {
@@ -97,7 +97,7 @@ export class SolarSystem {
       };
     }
 
-    // ── Estações ──────────────────────────────────────────────────────────
+    // ── Estações ─────────────────────────────────────────────────────
     const stRng = rngHelpers(createRng(mix(baseSeed, hashString('stations'))));
     const stationCount = Math.min(stRng.int(S.stations[0], S.stations[1]), this.planets.length);
     /** @type {Station[]} */
@@ -181,6 +181,24 @@ export class SolarSystem {
       iceAmount: type === 'ice' ? rng.range(0.5, 0.75)
         : type === 'volcanic' ? rng.range(0.02, 0.1)
         : rng.range(0.12, 0.34),
+      // Quanta cordilheira este planeta tem. Sorteado por planeta, e não fixo,
+      // porque é o que faz um mundo ser "as planícies" e o outro "as serras" —
+      // sem isso todo planeta pousável teria o mesmo relevo com outra cor.
+      // Gigante gasoso não tem superfície; vulcânico e estéril são os mais
+      // acidentados, oceânico o mais suave (o que sobra do mar são ilhas).
+      // Escala em espaço de PERFIL (0..1 acima da água), não no FBM cru — ver
+      // mountainProfile em procgen/noise.js. Por isso os valores são grandes:
+      // 0,9 significa "a crista sozinha pode levar o terreno ao topo da
+      // amplitude". Somado ao t², produz serras que dominam a paisagem.
+      mountainStrength: gasGiant ? 0
+        : type === 'volcanic' || type === 'barren' ? rng.range(0.75, 1.05)
+        : type === 'oceanic' ? rng.range(0.30, 0.55)
+        : rng.range(0.55, 0.90),
+      // Densidade de vegetação/rochas na superfície, 0..1. Ver SurfaceProps.
+      lifeDensity: gasGiant ? 0
+        : type === 'barren' ? rng.range(0.05, 0.18)
+        : type === 'volcanic' || type === 'toxic' ? rng.range(0.25, 0.5)
+        : rng.range(0.55, 1.0),
       hasAtmosphere: gasGiant || rng.chance(S.atmosphereChance),
       atmosphereIntensity: gasGiant ? rng.range(0.9, 1.4) : rng.range(0.5, 1.1),
       hasRings: gasGiant ? rng.chance(0.6) : rng.chance(S.ringChance),
