@@ -131,7 +131,7 @@ export class Combat {
     this._updateRespawn(dt);
   }
 
-  // ────────────────────────────────────────────────────────────────────────
+  // ───────────────────────────────────────────────────────────────────────
   _updateWaves(dt) {
     if (this.playerDead) return;
     if (this.aliveEnemies > 0) return;
@@ -174,6 +174,37 @@ export class Combat {
    * frente do jogador, o que na superfície colocaria metade dos caças dentro
    * de uma montanha.
    */
+  /**
+   * Escalonamento da onda atual.
+   *
+   * ═══ POR QUE MULTIPLICADORES E NÃO UMA TABELA ═══
+   *
+   * Uma tabela por onda precisaria de uma linha nova para cada onda, e o jogo
+   * não tem última onda. Multiplicadores sobre os valores base cobrem o
+   * infinito com cinco números — e, porque partem sempre de `combat.enemy`,
+   * a onda 20 é calculada direto do config, sem acúmulo.
+   *
+   * Cada eixo cresce em ritmo próprio de propósito. Casco e escudo sobem
+   * rápido (é o que estica o combate), o dano sobe devagar (subir junto faria
+   * a onda 15 matar o jogador em dois tiros), e a velocidade quase não sobe:
+   * um inimigo mais rápido que o jogador não é difícil, é impossível de
+   * desengajar.
+   *
+   * @returns {{hull:number, shield:number, damage:number, speed:number, aimError:number}}
+   */
+  waveScale() {
+    const K = CONFIG.enemies.scaling;
+    const w = this.waveIndex;
+    const teto = K.maxWaveScale;
+    return {
+      hull: Math.min(teto, 1 + w * K.hullPerWave),
+      shield: Math.min(teto, 1 + w * K.shieldPerWave),
+      damage: Math.min(teto, 1 + w * K.damagePerWave),
+      speed: 1 + Math.min(K.speedMaxBonus, w * K.speedPerWave),
+      aimError: Math.pow(K.aimErrorDecay, w),
+    };
+  }
+
   spawnSurfaceWave(count) {
     const pf = this.planetaryProvider();
     const surface = this.surfaceProvider();
@@ -182,6 +213,7 @@ export class Combat {
     const S = CONFIG.enemies.surface;
     const free = this.enemies.filter((e) => !e.active).slice(0, count);
     const centro = pf.planet.object.position;
+    const escala = this.waveScale();
 
     free.forEach((e, i) => {
       // Distribui em torno do jogador, no plano tangente à superfície.
@@ -199,7 +231,7 @@ export class Combat {
       const amostra = surface.sample(this._spawnPos, this._surfaceUp);
       this._spawnPos.copy(centro).addScaledVector(this._surfaceUp, amostra.ground + alvo);
 
-      e.spawn(this._spawnPos, this.player.position);
+      e.spawn(this._spawnPos, this.player.position, escala);
     });
   }
 
@@ -208,6 +240,7 @@ export class Combat {
     const E = CONFIG.enemies;
     const free = this.enemies.filter((e) => !e.active).slice(0, count);
     if (free.length === 0) return;
+    const escala = this.waveScale();
 
     // Direção de chegada aleatória, mas SEMPRE à frente do jogador. Nascer
     // atrás significa tomar tiro sem aviso, o que o jogador lê como injusto —
@@ -233,7 +266,7 @@ export class Combat {
         this._spawnPos.y += (Math.random() - 0.5) * E.spawnSpread * 0.5;
         this._spawnPos.z += (Math.random() - 0.5) * E.spawnSpread;
       }
-      e.spawn(this._spawnPos, this.player.position);
+      e.spawn(this._spawnPos, this.player.position, escala);
 
       if (i === 0) {
         leader = e.flight;
@@ -251,7 +284,7 @@ export class Combat {
     });
   }
 
-  // ────────────────────────────────────────────────────────────────────────
+  // ───────────────────────────────────────────────────────────────────────
   /**
    * Escolhe o alvo travado.
    *
@@ -308,7 +341,7 @@ export class Combat {
   _updatePlayerWeapons(input, dt) {
     const W = CONFIG.weapons.player;
 
-    // ── Calor ─────────────────────────────────────────────────────────────────
+    // ── Calor ───────────────────────────────────────────────────────────────
     // Superaquecimento existe pra impor RITMO. Sem ele, a estratégia ótima é
     // segurar o gatilho o tempo todo, e a arma deixa de ter decisão.
     if (this.overheatLock > 0) {
@@ -329,7 +362,7 @@ export class Combat {
       this.overheatLock = W.overheatLock;
     }
 
-    // ── Ponto de convergência dos canhões ───────────────────────
+    // ── Ponto de convergência dos canhões ────────────────────────
     // Por padrão os tiros saem ao longo do NARIZ, convergindo numa distância
     // fixa à frente — os dois canhões de asa se cruzam nesse ponto, como um
     // caça de verdade é regulado.
@@ -359,7 +392,7 @@ export class Combat {
     for (const e of this.enemies) {
       if (!e.active) continue;
       e.update(this._playerTargetRef, dt, (origin, quat, vel) => {
-        this.projectiles.fire(origin, quat, vel, 'enemy', 1);
+        this.projectiles.fire(origin, quat, vel, 'enemy', 1, null, e.damageMul);
       });
 
       // Inimigo que se afasta demais é reciclado. Sem isso, um que perde o
@@ -414,7 +447,7 @@ export class Combat {
   }
 
   _resolveHits() {
-    // ── Projéteis inimigos contra o jogador ───────────────────────
+    // ── Projéteis inimigos contra o jogador ─────────────────────
     if (!this.playerDead) {
       this.projectiles.collideSphere(
         this.player.position, this.playerHealth.radius, 0,
@@ -478,7 +511,7 @@ export class Combat {
     if (!field) return;
     if (this.asteroidCooldown > 0) this.asteroidCooldown -= dt;
 
-    // ── Projéteis contra rocha ───────────────────────────────
+    // ── Projéteis contra rocha ────────────────────────────────
     this.projectiles.pool.forEachActive((p) => {
       const idx = field.querySegment(
         p.prevPosition.x, p.prevPosition.y, p.prevPosition.z,
@@ -503,7 +536,7 @@ export class Combat {
       this.projectiles.pool.release(p);
     });
 
-    // ── Nave do jogador contra rocha ───────────────────────
+    // ── Nave do jogador contra rocha ──────────────────────────
     if (!this.playerDead && this.asteroidCooldown <= 0) {
       const hit = field.querySphere(
         this.player.position.x, this.player.position.y, this.player.position.z,
@@ -530,7 +563,7 @@ export class Combat {
       }
     }
 
-    // ── Inimigos contra rocha ────────────────────────────
+    // ── Inimigos contra rocha ───────────────────────────────
     // Sem isso os caças atravessam o cinturão como fantasmas, e a única
     // tática do jogador (atrair a perseguição pras rochas) deixa de existir.
     for (const e of this.enemies) {

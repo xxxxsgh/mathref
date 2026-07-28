@@ -60,6 +60,9 @@ export class EnemyAI {
     this._aimError = new THREE.Vector3();
     this._aimErrorTarget = new THREE.Vector3();
     this._errorTimer = Math.random() * 2;
+    /** Multiplicador do erro de mira, vindo do escalonamento por onda.
+     *  Menor que 1 = mira melhor. Ver `enemies.scaling.aimErrorDecay`. */
+    this.aimErrorMul = 1;
 
     // Dessincroniza os temporizadores: sem isso, inimigos criados no mesmo
     // frame trocam de estado todos juntos e o combate parece coreografado.
@@ -115,7 +118,7 @@ export class EnemyAI {
     this._updateAimError(dt);
     this._updateState(dist, A);
 
-    // ── Escolhe o ponto de destino conforme o estado ─────────────────────
+    // ── Escolhe o ponto de destino conforme o estado ─────────────────
     switch (this.state) {
       case STATE.APPROACH:
       case STATE.ATTACK:
@@ -166,7 +169,7 @@ export class EnemyAI {
 
     this._steerTowards(self, this._desired, out);
 
-    // ── Acelerador e boost ───────────────────────────────────────────────
+    // ── Acelerador e boost ──────────────────────────────────
     if (this.state === STATE.BREAK || this.state === STATE.EVADE) {
       out.throttle = 1;
       out.boost = this.stateTime < 1.0;
@@ -183,7 +186,7 @@ export class EnemyAI {
       out.boost = false;
     }
 
-    // ── Decisão de atirar ────────────────────────────────────────────────
+    // ── Decisão de atirar ──────────────────────────────────
     if (this.state === STATE.ATTACK && dist < A.firingRange) {
       // Só atira se o nariz estiver dentro do cone de tiro em relação ao
       // ponto de interceptação. Atirar fora do cone gastaria tiro e, pior,
@@ -247,7 +250,7 @@ export class EnemyAI {
         (Math.random() - 0.5) * 2,
         (Math.random() - 0.5) * 2,
         (Math.random() - 0.5) * 2,
-      ).multiplyScalar(A.aimErrorMax);
+      ).multiplyScalar(A.aimErrorMax * this.aimErrorMul);
     }
     this._aimError.lerp(this._aimErrorTarget, 1 - Math.exp(-A.aimErrorLambda * dt));
   }
