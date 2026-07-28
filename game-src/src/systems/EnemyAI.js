@@ -118,7 +118,7 @@ export class EnemyAI {
     this._updateAimError(dt);
     this._updateState(dist, A);
 
-    // ── Escolhe o ponto de destino conforme o estado ─────────────────
+    // ── Escolhe o ponto de destino conforme o estado ─────────────────────
     switch (this.state) {
       case STATE.APPROACH:
       case STATE.ATTACK:
@@ -169,7 +169,7 @@ export class EnemyAI {
 
     this._steerTowards(self, this._desired, out);
 
-    // ── Acelerador e boost ──────────────────────────────────
+    // ── Acelerador e boost ───────────────────────────────────────────────
     if (this.state === STATE.BREAK || this.state === STATE.EVADE) {
       out.throttle = 1;
       out.boost = this.stateTime < 1.0;
@@ -186,7 +186,7 @@ export class EnemyAI {
       out.boost = false;
     }
 
-    // ── Decisão de atirar ──────────────────────────────────
+    // ── Decisão de atirar ────────────────────────────────────────────────
     if (this.state === STATE.ATTACK && dist < A.firingRange) {
       // Só atira se o nariz estiver dentro do cone de tiro em relação ao
       // ponto de interceptação. Atirar fora do cone gastaria tiro e, pior,

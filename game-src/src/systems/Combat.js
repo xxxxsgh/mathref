@@ -341,7 +341,7 @@ export class Combat {
   _updatePlayerWeapons(input, dt) {
     const W = CONFIG.weapons.player;
 
-    // ── Calor ───────────────────────────────────────────────────────────────
+    // ── Calor ────────────────────────────────────────────────────────────
     // Superaquecimento existe pra impor RITMO. Sem ele, a estratégia ótima é
     // segurar o gatilho o tempo todo, e a arma deixa de ter decisão.
     if (this.overheatLock > 0) {
@@ -362,7 +362,7 @@ export class Combat {
       this.overheatLock = W.overheatLock;
     }
 
-    // ── Ponto de convergência dos canhões ────────────────────────
+    // ── Ponto de convergência dos canhões ───────────────────────────────
     // Por padrão os tiros saem ao longo do NARIZ, convergindo numa distância
     // fixa à frente — os dois canhões de asa se cruzam nesse ponto, como um
     // caça de verdade é regulado.
@@ -447,7 +447,7 @@ export class Combat {
   }
 
   _resolveHits() {
-    // ── Projéteis inimigos contra o jogador ─────────────────────
+    // ── Projéteis inimigos contra o jogador ──────────────────────────────
     if (!this.playerDead) {
       this.projectiles.collideSphere(
         this.player.position, this.playerHealth.radius, 0,
@@ -460,7 +460,7 @@ export class Combat {
       );
     }
 
-    // ── Projéteis do jogador contra inimigos ─────────────────────
+    // ── Projéteis do jogador contra inimigos ─────────────────────────────
     for (const e of this.enemies) {
       if (!e.active) continue;
       this.projectiles.collideSphere(
@@ -511,7 +511,7 @@ export class Combat {
     if (!field) return;
     if (this.asteroidCooldown > 0) this.asteroidCooldown -= dt;
 
-    // ── Projéteis contra rocha ────────────────────────────────
+    // ── Projéteis contra rocha ──────────────────────────────────────────
     this.projectiles.pool.forEachActive((p) => {
       const idx = field.querySegment(
         p.prevPosition.x, p.prevPosition.y, p.prevPosition.z,
@@ -536,7 +536,7 @@ export class Combat {
       this.projectiles.pool.release(p);
     });
 
-    // ── Nave do jogador contra rocha ──────────────────────────
+    // ── Nave do jogador contra rocha ────────────────────────────────────
     if (!this.playerDead && this.asteroidCooldown <= 0) {
       const hit = field.querySphere(
         this.player.position.x, this.player.position.y, this.player.position.z,
@@ -563,7 +563,7 @@ export class Combat {
       }
     }
 
-    // ── Inimigos contra rocha ───────────────────────────────
+    // ── Inimigos contra rocha ───────────────────────────────────────────
     // Sem isso os caças atravessam o cinturão como fantasmas, e a única
     // tática do jogador (atrair a perseguição pras rochas) deixa de existir.
     for (const e of this.enemies) {
