@@ -1,2 +1,5 @@
 node_modules/
 .DS_Store
+# Saída do Vite quando rodado por engano na raiz do repo.
+# O build correto sai em game/ (ver game-src/vite.config.js).
+dist/

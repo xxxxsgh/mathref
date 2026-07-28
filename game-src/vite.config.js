@@ -34,7 +34,11 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      // Sem `includeAssets`: o `globPatterns` abaixo já cobre svg e png, e
+      // declarar os dois faz cada ícone entrar duas vezes no manifesto de
+      // precache (o Workbox deduplica, mas o número reportado no build fica
+      // enganoso — 16 entradas para 12 arquivos).
+
       manifest: {
         name: 'Starfarer',
         short_name: 'Starfarer',

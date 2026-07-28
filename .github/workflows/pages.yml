@@ -1,0 +1,123 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Publicação no GitHub Pages
+#
+# Serve dois sites a partir do mesmo repositório:
+#   /              → MathRaf  (index.html na raiz, self-contained)
+#   /mathref/game/ → Starfarer (compilado a partir de game-src/)
+#
+# ═══ POR QUE COMPILAR AQUI E NÃO SÓ PUBLICAR A PASTA game/ ═══
+#
+# A pasta `game/` está commitada e o Pages conseguiria servi-la direto
+# ("Deploy from a branch"). O problema é que ela vira uma SEGUNDA fonte da
+# verdade: basta alguém alterar `game-src/` e esquecer de rodar o build para
+# o site publicado ficar divergindo do código em silêncio — sem erro, sem
+# aviso, e sem jeito de perceber a não ser jogando.
+#
+# Compilando aqui, a fonte é sempre `game-src/`. A pasta `game/` continua
+# commitada só como plano B (ver a seção de fallback no README).
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: Publicar no GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Permite rodar manualmente pela aba Actions — útil para republicar sem
+  # precisar de um commit novo.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Uma publicação por vez. `cancel-in-progress: false` de propósito: cancelar
+# um deploy no meio pode deixar o site num estado parcial.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Compilar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: game-src/package-lock.json
+
+      - name: Instalar dependências
+        working-directory: game-src
+        # `npm ci` e não `npm install`: instala exatamente o que está no
+        # lockfile e falha se ele estiver dessincronizado do package.json.
+        run: npm ci
+
+      - name: Compilar o jogo
+        working-directory: game-src
+        run: npm run build
+
+      - name: Verificar o caminho base
+        # O `base` do Vite precisa bater com o caminho do Pages. Se alguém
+        # mexer nele, o site publicado carrega uma tela preta e o erro só
+        # aparece no console do navegador. Falhar aqui é muito mais barato.
+        run: |
+          if ! grep -q '/mathref/game/assets/' game/index.html; then
+            echo "::error::O build não usou o base '/mathref/game/'."
+            echo "Confira 'base' em game-src/vite.config.js."
+            grep -o 'src="[^"]*"' game/index.html || true
+            exit 1
+          fi
+          echo "Base correto."
+
+      - name: Montar o site
+        run: |
+          rm -rf _site && mkdir -p _site
+          # Copia a raiz do repositório, menos o que é fonte ou ferramenta.
+          # A cópia por EXCLUSÃO (em vez de listar o que entra) garante que
+          # qualquer arquivo novo na raiz seja publicado sem precisar mexer
+          # neste workflow.
+          #
+          # `tar` e não `rsync`: o rsync existe no runner do GitHub mas não é
+          # garantido em todo ambiente, e este passo precisa ser reproduzível
+          # localmente para poder ser testado antes de ir pro ar.
+          tar -cf - \
+            --exclude='./.git' \
+            --exclude='./.github' \
+            --exclude='./game-src' \
+            --exclude='./node_modules' \
+            --exclude='./docs' \
+            --exclude='./README.md' \
+            --exclude='./.gitignore' \
+            --exclude='./_site' \
+            . | tar -xf - -C _site
+          # Sem isto o Pages roda o Jekyll, que ignora arquivos e pastas
+          # começando com underscore e pode engasgar com conteúdo inesperado.
+          touch _site/.nojekyll
+          echo "--- conteúdo publicado ---"
+          find _site -maxdepth 2 -not -path '*/assets/*' | sort
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      - name: Enviar artefato
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Publicar
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

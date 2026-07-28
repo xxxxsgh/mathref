@@ -25,8 +25,17 @@ npm run build      # gera ../game/
 npm run preview    # serve o build em http://localhost:4173/mathref/game/
 ```
 
-O build **precisa** ser commitado: o GitHub Pages serve a pasta `game/`
-diretamente, não há passo de CI.
+## Publicação
+
+`.github/workflows/pages.yml` compila e publica a cada push em `main`. A
+única configuração manual é *Settings → Pages → Source = GitHub Actions*.
+
+O workflow tem um passo de verificação do caminho base: se o `base` do Vite
+deixar de bater com `/mathref/game/`, o build falha no CI em vez de publicar
+um site que carrega tela preta e só reclama no console do navegador.
+
+A pasta `game/` continua commitada como plano B (*Deploy from a branch*), mas
+com o workflow ativo ela é regenerada no CI e não precisa estar em dia.
 
 ---
 
