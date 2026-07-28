@@ -104,6 +104,13 @@ jobs:
 
       - name: Configurar Pages
         uses: actions/configure-pages@v5
+        with:
+          # `enablement: true` faz a action LIGAR o Pages no repositório caso
+          # ele ainda esteja desligado, já com a origem definida como GitHub
+          # Actions. Sem isto seria preciso ir em Settings → Pages e escolher
+          # a origem à mão antes do primeiro deploy — e o primeiro deploy
+          # falharia com um erro pouco óbvio ("Get Pages site failed").
+          enablement: true
 
       - name: Enviar artefato
         uses: actions/upload-pages-artifact@v3

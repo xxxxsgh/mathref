@@ -27,8 +27,9 @@ npm run preview    # serve o build em http://localhost:4173/mathref/game/
 
 ## Publicação
 
-`.github/workflows/pages.yml` compila e publica a cada push em `main`. A
-única configuração manual é *Settings → Pages → Source = GitHub Actions*.
+`.github/workflows/pages.yml` compila e publica a cada push em `main`. Não
+há configuração manual: o passo `configure-pages` usa `enablement: true` e
+liga o Pages sozinho na primeira execução.
 
 O workflow tem um passo de verificação do caminho base: se o `base` do Vite
 deixar de bater com `/mathref/game/`, o build falha no CI em vez de publicar

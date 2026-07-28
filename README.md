@@ -13,9 +13,9 @@ O deploy é automático: qualquer push em `main` dispara
 [`.github/workflows/pages.yml`](./.github/workflows/pages.yml), que compila o
 jogo a partir de `game-src/`, monta o site e publica no Pages.
 
-**Configuração inicial (uma vez só):** em *Settings → Pages*, defina
-**Source = GitHub Actions**. É a única etapa que não dá para automatizar de
-fora — a API do Pages não está exposta nas ferramentas do repositório.
+Não há configuração manual: o passo `configure-pages` roda com
+`enablement: true` e liga o Pages no repositório na primeira execução, já
+com a origem definida como GitHub Actions.
 
 Para republicar sem commit novo: aba *Actions* → *Publicar no GitHub Pages* →
 *Run workflow*.
