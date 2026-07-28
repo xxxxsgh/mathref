@@ -543,7 +543,7 @@ export class HUD {
       return;
     }
 
-    // ── Caixa em volta do alvo ──────────────────────────────────
+    // ── Caixa em volta do alvo ────────────────────────────────────────────
     this._proj.copy(target.position).project(camera);
     const onScreen = this._proj.z < 1 &&
       Math.abs(this._proj.x) < 1 && Math.abs(this._proj.y) < 1;
@@ -563,7 +563,7 @@ export class HUD {
       this.el.targetShield.style.transform = `scaleX(${target.health.shieldPct})`;
       this.el.targetHull.style.transform = `scaleX(${target.health.hullPct})`;
     } else {
-      // ── Seta de fora de tela ─────────────────────────────────────
+      // ── Seta de fora de tela ────────────────────────────────────────────
       // Sem isso, perder o alvo de vista significa perdê-lo de vez: em 6DOF
       // não há "virar a cabeça" pra procurar.
       this.el.target.style.opacity = '0';
@@ -584,7 +584,7 @@ export class HUD {
       this.el.offscreen.style.opacity = '1';
     }
 
-    // ── Retículo de predição ────────────────────────────────────────
+    // ── Retículo de predição ──────────────────────────────────────────────
     if (combat.hasLead) {
       this._proj.copy(combat.leadPoint).project(camera);
       if (this._proj.z < 1) {

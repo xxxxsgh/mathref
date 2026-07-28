@@ -217,7 +217,7 @@ export class PlanetSurface {
 
     this._dir.copy(playerPos).sub(p.object.position).normalize();
 
-    // ── Base tangente ────────────────────────────────────────────────────
+    // ── Base tangente ─────────────────────────────────────────────────────
     // Refeita só quando o jogador se afasta bastante do ponto de referência.
     // Como a grade é definida NESSA base, recalculá-la todo frame faria os
     // chunks se reindexarem e reconstruírem sem parar.
@@ -236,7 +236,7 @@ export class PlanetSurface {
       this.centerGX = NaN;
     }
 
-    // ── Coordenadas de grade do jogador ────────────────────────────
+    // ── Coordenadas de grade do jogador ───────────────────────────────────
     this._tmp.copy(playerPos).sub(this.origin);
     const u = this._tmp.dot(this.tangent);
     const v = this._tmp.dot(this.bitangent);
@@ -250,7 +250,7 @@ export class PlanetSurface {
       this._reindexProps();
     }
 
-    // ── Reconstrução limitada por frame ──────────────────────────────
+    // ── Reconstrução limitada por frame ───────────────────────────────────
     // Gerar um chunk custa alguns milissegundos. Fazer todos de uma vez
     // causaria um engasgo de 100ms+ exatamente no momento da descida.
     let budget = S.chunksPerFrame;
@@ -260,7 +260,7 @@ export class PlanetSurface {
       budget--;
     }
 
-    // ── Vegetação, com orçamento próprio ──────────────────────────────
+    // ── Vegetação, com orçamento próprio ──────────────────────────────────
     // Espalhar props num chunk custa ~5 amostras de terreno por candidato.
     // Com 34 candidatos em 25 chunks, refazer tudo de uma vez quando a janela
     // rola seria um engasgo maior que o da própria malha — e viria logo depois

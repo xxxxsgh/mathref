@@ -50,7 +50,7 @@ export class SolarSystem {
     const S = CONFIG.system;
     const baseSeed = hashString(seed);
 
-    // ── Estrela ───────────────────────────────────────────────────────────────────────
+    // ── Estrela ───────────────────────────────────────────────────────────
     const starRng = rngHelpers(createRng(mix(baseSeed, hashString('star'))));
     const starDir = new THREE.Vector3(...CONFIG.world.sunDirection).normalize();
     this.starPosition = starDir.clone().multiplyScalar(S.starDistance);
@@ -69,7 +69,7 @@ export class SolarSystem {
     scene.add(this.star);
     this.starGeometry = starGeo;
 
-    // ── Planetas ──────────────────────────────────────────────────────────────────────
+    // ── Planetas ──────────────────────────────────────────────────────────
     const countRng = rngHelpers(createRng(mix(baseSeed, hashString('count'))));
     const planetCount = countRng.int(S.planetCount[0], S.planetCount[1]);
 
@@ -82,7 +82,7 @@ export class SolarSystem {
       this.planets.push(planet);
     }
 
-    // ── Cinturão de asteroides ──────────────────────────────────────────────
+    // ── Cinturão de asteroides ────────────────────────────────────────────
     const beltRng = rngHelpers(createRng(mix(baseSeed, hashString('belt'))));
     this.asteroids = null;
     if (beltRng.chance(S.belt.chance)) {
@@ -97,7 +97,7 @@ export class SolarSystem {
       };
     }
 
-    // ── Estações ─────────────────────────────────────────────────────
+    // ── Estações ──────────────────────────────────────────────────────────
     const stRng = rngHelpers(createRng(mix(baseSeed, hashString('stations'))));
     const stationCount = Math.min(stRng.int(S.stations[0], S.stations[1]), this.planets.length);
     /** @type {Station[]} */
