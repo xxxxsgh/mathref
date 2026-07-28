@@ -3,3 +3,5 @@ node_modules/
 # Saída do Vite quando rodado por engano na raiz do repo.
 # O build correto sai em game/ (ver game-src/vite.config.js).
 dist/
+# Pasta temporária montada pelo workflow do Pages.
+_site/

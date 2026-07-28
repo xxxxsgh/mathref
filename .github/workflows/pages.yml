@@ -15,6 +15,17 @@
 #
 # Compilando aqui, a fonte é sempre `game-src/`. A pasta `game/` continua
 # commitada só como plano B (ver a seção de fallback no README).
+#
+# ═══ DUAS ORIGENS POSSÍVEIS ═══
+#
+# O Pages pode servir o site de duas maneiras, e o repositório pode estar em
+# qualquer uma delas:
+#
+#   1. "GitHub Actions"        → serve o artefato que este workflow envia.
+#   2. "Deploy from a branch"  → serve uma pasta commitada (aqui: main/docs).
+#
+# O workflow tenta mudar para (1) e, se não conseguir, escreve o site em
+# `docs/` para funcionar em (2). Os dois caminhos levam às mesmas URLs.
 # ═══════════════════════════════════════════════════════════════════════════
 
 name: Publicar no GitHub Pages
@@ -27,7 +38,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # `write` por causa do plano B: quando a origem do Pages está presa numa
+  # branch, o workflow commita o site compilado em docs/ (ver o passo
+  # "Publicar em docs/").
+  contents: write
   pages: write
   id-token: write
 
@@ -111,6 +125,76 @@ jobs:
           # a origem à mão antes do primeiro deploy — e o primeiro deploy
           # falharia com um erro pouco óbvio ("Get Pages site failed").
           enablement: true
+
+      # ═══ O BUG QUE ESTE PASSO CONSERTA ═══
+      #
+      # `enablement: true` no passo acima só LIGA o Pages quando ele está
+      # desligado. Se o repositório já tinha Pages ligado apontando para uma
+      # branch (o modo antigo, "Deploy from a branch"), a action encontra o
+      # site, dá tudo certo, o deploy roda, reporta sucesso — e o site continua
+      # servindo a pasta antiga. Foi exatamente o que aconteceu aqui: seis
+      # deploys verdes e o site respondendo 404, porque a origem configurada
+      # era `main/docs` e o artefato do Actions estava sendo ignorado.
+      #
+      # Nenhum log acusa isso. O sintoma é um 404 com "The site configured at
+      # this address does not contain the requested file" — repare que ele diz
+      # que EXISTE um site, só não com esse arquivo. Um site que não existe dá
+      # outra mensagem ("There isn't a GitHub Pages site here").
+      #
+      # Este passo força a origem para o Actions. Pode falhar por falta de
+      # permissão do GITHUB_TOKEN, e por isso é `continue-on-error`: o passo
+      # seguinte cobre esse caso.
+      - name: Forçar a origem do Pages para o Actions
+        id: origem
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X PUT "repos/${{ github.repository }}/pages" \
+            -f build_type=workflow
+          echo "Origem do Pages agora é o GitHub Actions."
+
+      # ═══ PLANO B ═══
+      #
+      # Se o passo acima não conseguiu trocar a origem, o site publicado
+      # continua sendo a pasta `docs/` da branch. Então escrevemos o site
+      # compilado lá dentro e commitamos de volta.
+      #
+      # Não é bonito — build commitado é sempre uma segunda fonte da verdade —
+      # mas aqui é gerado por CI a partir de `game-src/` a cada push, então
+      # nunca diverge do código. E é a única saída que não depende de alguém
+      # entrar em Settings → Pages.
+      #
+      # Commits feitos com o GITHUB_TOKEN não disparam workflows, então isto
+      # não vira loop infinito.
+      - name: Publicar em docs/ (plano B)
+        if: steps.origem.outcome != 'success' && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p docs
+          # Remove só o que é site publicado. As notas em markdown que moram
+          # em docs/ (FASE-0-STACK.md, STARFARER.md) ficam onde estão.
+          rm -rf docs/game docs/index.html docs/.nojekyll
+          cp -R _site/. docs/
+          git add -A docs
+          # O passo de build reescreveu `game/` na raiz. Ela já foi copiada
+          # para dentro de docs/; deixá-la suja aqui só atrapalharia o rebase
+          # mais abaixo.
+          git checkout -- game || true
+          if git diff --cached --quiet; then
+            echo "docs/ já está atualizado."
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m 'chore: publicar site compilado em docs/ [skip ci]'
+          # A branch pode ter andado enquanto o build rodava.
+          for i in 1 2 3; do
+            git push origin HEAD:main && exit 0
+            git pull --rebase origin main || true
+            sleep $((i * 3))
+          done
+          echo "::error::Não consegui publicar docs/ na main."
+          exit 1
 
       - name: Enviar artefato
         uses: actions/upload-pages-artifact@v3
