@@ -96,8 +96,27 @@ export const CONFIG = {
 
     // ── Translação ──
     maxSpeed: 320,          // u/s no acelerador cheio, sem boost
-    boostMultiplier: 2.35,  // multiplica a velocidade alvo E a aceleração
+    boostMultiplier: 1.9,   // multiplica a velocidade alvo E a aceleração
     minSpeed: 0,            // deixe >0 se quiser que a nave nunca pare
+
+    // ── Boost como RECURSO ──
+    // Antes o boost era infinito, e isso decidia todo combate sozinho: fugir
+    // era gratuito, então nenhuma situação era perigosa. Bastava segurar Shift.
+    //
+    // Com um tanque, fugir passa a custar, e perseguir vira decisão — os dois
+    // lados da mesma mudança. É a alteração mais barata do balanceamento com
+    // maior efeito tático, e nenhum sistema novo precisa existir pra ela.
+    //
+    // 3,4 s de tanque contra 1,1/s de recarga dá um ciclo de ~3 s de espera
+    // por 3,4 s de boost: o bastante pra romper contato uma vez, não o
+    // bastante pra viver acelerado.
+    boostFuel: 3.4,         // segundos de boost com o tanque cheio
+    boostRecharge: 1.1,     // segundos de tanque recuperados por segundo
+    // Piso pra reengatar depois de esvaziar. Sem ele o jogador fica batendo
+    // boost a cada 0,1 s de recarga, o que é pior que não ter boost: vira
+    // ruído no motor e na câmera sem nenhum ganho de velocidade.
+    boostMinToStart: 0.8,
+    boostRechargeDelay: 0.6, // segundos parado antes de o tanque voltar a subir
 
     // Quão rápido a velocidade real alcança a velocidade alvo (aceleração).
     // Assimétrico de propósito: acelerar é mais lento que desacelerar, o que
@@ -193,6 +212,8 @@ export const CONFIG = {
       brake: ['Space'],
       barrelRollLeft: ['KeyZ'],
       barrelRollRight: ['KeyC'],
+      // Botão de aproximar / pousar / decolar — um só, contextual.
+      land: ['KeyL'],
       toggleAssist: ['KeyH'],
       toggleDebug: ['F3', 'Backquote'],
       toggleTuner: ['KeyG'],
@@ -231,6 +252,7 @@ export const CONFIG = {
       buttonBrake: 6,        // LT
       buttonBarrelLeft: 2,   // X
       buttonBarrelRight: 1,  // B
+      buttonLand: 3,         // Y — aproximar / pousar / decolar
       buttonThrottleUp: 12,  // d-pad cima
       buttonThrottleDown: 13,
     },
@@ -331,7 +353,13 @@ export const CONFIG = {
       // pouco", que hitscan não dá.
       projectileSpeed: 900,
       fireInterval: 0.115,     // segundos entre tiros
-      damage: 9,
+      // ⚠ TTK. Dois canhões × 9 ÷ 0,115 s = 156 DPS contra 34+18 = 52 de HP:
+      // o inimigo morria em 0,33 s, menos de um sexto de uma única passagem
+      // de ataque (`attackRunMin` é 2,6 s). Toda a IA de flanco, ruptura e
+      // evasão existia e nunca era vista. Com 7 de dano e o escudo inimigo em
+      // 45, o TTK vai para ~1,7 s — tempo de o inimigo reagir e de o jogador
+      // ver que reagiu.
+      damage: 7,
       life: 2.2,               // segundos até sumir → alcance ~2000u
       spread: 0.0035,          // radianos de dispersão aleatória
       // Canhões nas pontas das asas. Convergem num ponto à frente, senão os
@@ -348,7 +376,7 @@ export const CONFIG = {
       // ali. Com auto-mira, o retículo vira enfeite e o combate fica morno.
       aimAssist: 0,
       color: 0x9dff6b,
-      heatPerShot: 0.055,      // superaquecimento força ritmo em vez de segurar
+      heatPerShot: 0.062,      // superaquecimento força ritmo em vez de segurar
       heatCooling: 0.42,
       overheatLock: 1.35,      // segundos travado ao estourar
     },
@@ -379,9 +407,12 @@ export const CONFIG = {
     },
     enemy: {
       hullMax: 34,
-      shieldMax: 18,
-      shieldRegen: 3.0,
-      shieldRegenDelay: 5.0,
+      // O escudo é a metade do HP que exige fogo SUSTENTADO: com regeneração
+      // rápida e atraso curto, dar meia rajada e sair não mata mais nada. É o
+      // que obriga a manter o alvo na mira em vez de raspar de passagem.
+      shieldMax: 45,
+      shieldRegen: 6.0,
+      shieldRegenDelay: 2.4,
       collisionRadius: 3.4,
     },
     // Colisão nave-contra-nave: dano dos dois lados. Existe pra que voar
@@ -396,6 +427,39 @@ export const CONFIG = {
     spawnSpread: 420,
     waveDelay: 4.5,
     waveSizes: [2, 3, 3, 4, 4, 5],
+
+    // ── Escalonamento por onda ────────────────────────────────────────────
+    //
+    // ⚠ Sem isto o jogo acabava no minuto cinco, e o defeito era pior do que
+    // parece: `waveSizes[Math.min(i, length-1)]` TRAVA em 5. Não ciclava — da
+    // onda 6 ao infinito era literalmente a mesma onda, com os mesmos números.
+    //
+    // O escalonamento é multiplicativo sobre os valores base, nunca sobre o
+    // estado anterior: a onda 20 é calculada direto de `combat.enemy`, então
+    // não há acúmulo nem deriva. `maxWaveScale` existe porque um crescimento
+    // sem teto vira uma parede intransponível em vez de uma curva.
+    scaling: {
+      hullPerWave: 0.09,
+      shieldPerWave: 0.11,
+      damagePerWave: 0.05,
+      // Velocidade cresce MUITO mais devagar que o resto e tem teto próprio:
+      // um inimigo mais rápido que o jogador não é "difícil", é impossível de
+      // desengajar, e transforma cada erro em morte certa.
+      //
+      // ⚠ O teto NÃO é arbitrário: 288 × 1,10 = 317, logo abaixo dos 320 do
+      // jogador. Com os 30% que este número tinha antes, a partir da onda 20 o
+      // inimigo cruzava a 374 e passava a ser mais rápido que o jogador em
+      // velocidade normal — justamente o defeito que o comentário acima
+      // descreve. Se `flight.maxSpeed` ou `enemies.flight.maxSpeed` mudarem,
+      // este teto tem que ser recalculado junto.
+      speedPerWave: 0.015,
+      speedMaxBonus: 0.10,
+      // A IA vai ficando mais precisa: o erro de mira decai geometricamente.
+      // 0.94^20 ≈ 0.29, ou seja, na onda 20 ela erra menos de um terço do que
+      // errava na primeira.
+      aimErrorDecay: 0.94,
+      maxWaveScale: 4.0,
+    },
 
     flight: {
       // Inimigos usam o MESMO modelo de voo do jogador, com números piores.
@@ -594,6 +658,84 @@ export const CONFIG = {
     landingSpeed: 22,
     landingAltitudeFactor: 1.4,
     landingTime: 0.9,            // segundos parado até contar como pousado
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // PILOTO AUTOMÁTICO (botão de aproximar / pousar / decolar)
+  // ───────────────────────────────────────────────────────────────────────
+  // Ele NÃO move a nave: ele escreve no mesmo ControlState que o jogador
+  // escreve. Toda a inércia, a deriva e o arrasto continuam vindo do
+  // FlightModel. Ver systems/Autopilot.js para o porquê.
+  autopilot: {
+    // Distância máxima (até a superfície) em que o botão de aproximação
+    // aparece. Generosa: com as órbitas entre 20k e 78k, qualquer valor menor
+    // deixaria o botão sumindo justo quando ele é mais útil.
+    approachRange: 120000,
+
+    // Ganho da direção: erro angular (rad) → comando -1..1. Com 2.2, o
+    // comando satura a partir de ~26° de erro, então curvas grandes usam
+    // taxa máxima e a aproximação final fica proporcional (sem oscilar).
+    steerGain: 2.2,
+    rollGain: 1.6,
+    // Acima deste erro de rumo (rad) o acelerador recua: acelerar de través
+    // só gera deriva lateral que depois precisa ser desfeita.
+    alignTolerance: 0.5,
+
+    // ── Cruzeiro ──
+    // Sem isto, atravessar 30.000 unidades a 320 u/s levaria 94 segundos de
+    // nada acontecendo, e o botão seria inútil na prática. É o "pulse drive"
+    // do No Man's Sky: só existe enquanto o piloto automático voa, então não
+    // mexe no balanceamento do voo manual.
+    cruiseMultiplier: 4.5,
+    cruiseLambda: 1.4,        // suavização ao ligar/desligar
+    cruiseMinDistance: 5000,  // abaixo desta altitude, volta à velocidade normal
+    // Segundos sem cruzeiro depois de levar dano. A primeira versão bloqueava
+    // por PROXIMIDADE de inimigo, e o resultado foi um cruzeiro que nunca
+    // ligava: as ondas nascem perto do jogador de propósito, então sempre
+    // havia alguém no raio. "Sob fogo" é a regra que de fato queríamos —
+    // e é legível: se estão te acertando, você não foge no piloto automático.
+    cruiseBlockAfterHit: 4,
+
+    // ── Descida ──
+    // Taxa de descida alvo = altitude × descentRate, limitada. Proporcional à
+    // altitude é o que produz uma curva de aproximação suave: rápido no alto,
+    // quase parado ao encostar, sem nenhuma etapa explícita.
+    descentRate: 0.34,
+    descentMin: 4,
+    descentMax: 95,
+
+    // ⚠ A descida tem DOIS regimes, e o motivo é uma limitação real do modelo
+    // de voo: com a assistência ligada, tudo que não é a componente FRONTAL
+    // sofre `lateralDrag`. O propulsor vertical (105 u/s²) contra um
+    // amortecimento de 3 a 7 encontra equilíbrio em 15–35 u/s e não passa
+    // disso — a primeira versão descia a 16 u/s e levava 100 segundos.
+    //
+    // Só o eixo frontal tem autoridade alta (motor até 320 u/s). Então, no
+    // alto, a nave DESCE VOANDO: o nariz aponta na direção da velocidade
+    // desejada e o acelerador dá a intensidade. Perto do chão ela nivela e
+    // passa para os propulsores, que ali sobram.
+    flareAltitude: 180,       // altitude onde nivela e troca para propulsores
+    horizFactor: 0.25,        // velocidade horizontal alvo = altitude × isto
+    horizMax: 140,
+    vsGain: 0.09,             // comando de propulsor por u/s de erro vertical
+
+    // Já nivelado, não encosta no chão enquanto a velocidade horizontal for
+    // maior que landingSpeed × fastFactor: pousar de lado a 100 u/s é bater.
+    fastFactor: 2.5,
+    // Acima deste calor a descida pausa e a nave nivela até esfriar.
+    heatLimit: 0.7,
+
+    // ── Água ──
+    // Sonda o terreno em quatro direções e desvia para o lado mais seco.
+    // Pousar no meio do oceano funciona, mas parece defeito.
+    waterProbe: 1800,
+    waterProbeInterval: 0.4,
+
+    // Tetos de tempo por fase. Um piloto automático travado sem aviso é pior
+    // que não ter piloto automático: ele desengata e diz por quê.
+    timeoutApproach: 240,
+    timeoutLand: 120,
+    timeoutTakeoff: 45,
   },
 
   effects: {
