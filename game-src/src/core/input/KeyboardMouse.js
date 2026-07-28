@@ -149,6 +149,7 @@ export class KeyboardMouseSource {
     if (this._pressed(K.barrelRollLeft)) s.barrelRoll = -1;
     else if (this._pressed(K.barrelRollRight)) s.barrelRoll = 1;
 
+    if (this._pressed(K.land)) actions.land = true;
     if (this._pressed(K.toggleDebug)) actions.toggleDebug = true;
     if (this._pressed(K.toggleTuner)) actions.toggleTuner = true;
     if (this._pressed(K.toggleAssist)) actions.toggleAssist = true;

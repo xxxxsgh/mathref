@@ -50,7 +50,11 @@ export class Input {
     };
 
     /** Ações "de borda" (dispararam neste frame). Consumidas por quem escuta. */
-    this.actions = { toggleDebug: false, toggleTuner: false, toggleAssist: false };
+    this.actions = {
+      toggleDebug: false, toggleTuner: false, toggleAssist: false,
+      /** Botão contextual de aproximar/pousar/decolar. Também setado pela HUD. */
+      land: false,
+    };
 
     const useTouch =
       CONFIG.input.touch.enabled === true ||
@@ -75,9 +79,13 @@ export class Input {
     this.actions.toggleDebug = false;
     this.actions.toggleTuner = false;
     this.actions.toggleAssist = false;
+    // `land` NÃO é zerado aqui: o botão da HUD é um evento de clique, que
+    // chega fora do frame de input. Zerá-lo aqui engoliria o clique metade
+    // das vezes, dependendo de onde ele caísse em relação ao loop. Quem
+    // consome (o Engine) é que limpa.
 
     this.keyboardMouse.apply(s, this.actions, dt);
-    this.gamepad?.apply(s, dt);
+    this.gamepad?.apply(s, this.actions, dt);
     this.touch?.apply(s, dt);
 
     // Clamp final. Somar antes e clampar depois (em vez de clampar cada fonte)

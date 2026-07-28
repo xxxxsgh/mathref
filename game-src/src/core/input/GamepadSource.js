@@ -54,8 +54,8 @@ export class GamepadSource {
     return now && !was;
   }
 
-  /** @param {import('../Input.js').ControlState} s */
-  apply(s, dt) {
+  /** @param {import('../Input.js').ControlState} s @param {object} actions */
+  apply(s, actions, dt) {
     const pad = this._read();
     if (!pad) return;
     const G = CONFIG.input.gamepad;
@@ -101,6 +101,11 @@ export class GamepadSource {
 
     if (this._justPressed(pad, G.buttonBarrelLeft)) { s.barrelRoll = -1; active = true; }
     else if (this._justPressed(pad, G.buttonBarrelRight)) { s.barrelRoll = 1; active = true; }
+
+    // Y: aproximar / pousar / decolar. Ação de borda, não estado contínuo —
+    // segurar não deve reengatar o piloto automático que você acabou de
+    // desligar.
+    if (this._justPressed(pad, G.buttonLand)) { actions.land = true; active = true; }
 
     if (active) s.source = 'gamepad';
 
