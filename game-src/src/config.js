@@ -621,7 +621,52 @@ export const CONFIG = {
     // nave. A primeira tentativa usava 0.012 (47 unidades) e o resultado era
     // uma planície: o terreno existia, mas não dava nenhuma sensação de
     // relevo nem de escala.
-    reliefFactor: 0.031,
+    // ⚠ Medindo: com 0.031 e o perfil elevado ao quadrado, o desnível real de
+    // um planeta era 31 unidades — uma planície. A montanha agora é somada
+    // DEPOIS do quadrado (ver noise.js), e a amplitude subiu junto: 0.055 dá
+    // ~215 unidades num planeta de 3.900 de raio. Uma árvore tem 14 a 34 e a
+    // nave uns 10 — é essa razão que faz a serra parecer serra.
+    reliefFactor: 0.055,
+
+    // ── Vegetação e rochas ──
+    // Sem nada de tamanho conhecido em cena, o olho não consegue estimar a
+    // escala do relevo — e um mundo sem escala aparente parece uma maquete. Ver
+    // procgen/SurfaceProps.js.
+    props: {
+      // Candidatos sorteados por chunk. Nem todos vingam: água, inclinação e
+      // faixa de altitude rejeitam boa parte, que é justamente o que agrupa a
+      // vegetação em vales e deixa as cristas peladas.
+      porChunk: 34,
+      // Raio, em chunks, da região que recebe props. 2 → 5×5 = 25 chunks.
+      // Props só são legíveis de perto; gerá-las nos 49 chunks da grade
+      // gastaria memória e tempo de geração em coisa que vira um pixel.
+      raioEmChunks: 2,
+      passoInclinacao: 12,        // unidades, para a diferença finita
+      inclinacaoAleatoria: 0.16,  // radianos de desaprumo — nada nasce reto
+      porFrame: 2,                // fatias preenchidas por frame
+    },
+
+    // ── Pintura do terreno ──
+    // Estes números decidem se o relevo é LIDO. A versão anterior colorizava
+    // só por altitude, e o resultado era um degradê que não descrevia forma
+    // nenhuma: encosta e planície na mesma altitude ficavam idênticas.
+    paint: {
+      // Faixa de inclinação onde a rocha aparece. 1 - |normal · radial|:
+      // 0 é plano, 1 é paredão. Começar em 0,12 é agressivo de propósito —
+      // é o que faz cada dobra do terreno virar uma faixa de rocha exposta.
+      rockSlopeMin: 0.12,
+      rockSlopeMax: 0.42,
+      rockDesaturate: 0.22,   // rocha = tom alto do planeta, dessaturado…
+      rockDarken: 0.16,       // …e escurecido. Derivar da paleta mantém a família.
+      // Neve: alta E plana. Ver o `1 - r` em _colorChunk — é o que impede a
+      // neve de grudar numa parede vertical.
+      snowMin: 0.62,
+      snowMax: 0.9,
+      snowStrength: 0.85,
+      // Praia: fração da rampa de altitude, a partir da água, que recebe areia.
+      beachBand: 0.06,
+      beachLighten: 0.14,
+    },
 
     // ── Névoa atmosférica ──
     // Além de bonita, ela resolve um problema concreto: esconder a borda da
@@ -736,6 +781,32 @@ export const CONFIG = {
     timeoutApproach: 240,
     timeoutLand: 120,
     timeoutTakeoff: 45,
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // CORRIDAS DE SUPERFÍCIE
+  // ───────────────────────────────────────────────────────────────────────
+  // Um circuito de argolas por planeta, gerado pela semente dele e portanto
+  // sempre no mesmo lugar — é o que permite ter recorde. Ver
+  // systems/SurfaceRace.js para o raciocínio de por que corrida e não combate.
+  race: {
+    maxCheckpoints: 16,
+    checkpoints: [8, 13],      // quantas argolas o circuito sorteia
+    // Espaçamento entre argolas. Grande o bastante pra caber uma correção de
+    // rumo a 300 u/s, pequeno o bastante pra a próxima estar sempre visível
+    // através da névoa.
+    espacamento: 620,
+    curvaMaxima: 1.25,         // radianos de giro máximo entre argolas
+    // Altura acima do TERRENO local. A faixa larga é o que faz o circuito
+    // subir e descer com o relevo em vez de flutuar num plano.
+    altura: [55, 190],
+    raio: 62,                  // raio interno da argola
+    espessura: 5,
+    corAtiva: 0x7dffa8,
+    corProxima: 0x7de8ff,
+    corFeita: 0x44607a,
+    pulsoVelocidade: 3.4,      // a argola ativa pulsa: alvo estático some
+    pulsoAmplitude: 0.06,
   },
 
   effects: {
