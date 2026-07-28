@@ -581,4 +581,4 @@ void main() {
     <div style="margin-top:10px;opacity:.7"><kbd>F3</kbd> debug &nbsp; <kbd>G</kbd> tuning &nbsp; <kbd>H</kbd> assistência de voo</div>
     <div style="margin-top:6px;opacity:.55">Gamepad é detectado automaticamente — aperte qualquer botão nele</div>
   `;var $=null;function ln(){sn.disabled=!0,sn.textContent=`CARREGANDO…`,requestAnimationFrame(()=>requestAnimationFrame(()=>{try{$=new Qt(an)}catch(e){console.error(e),sn.textContent=`ERRO`,cn.innerHTML=`<div style="color:#ff6b5e">Falha ao iniciar o renderer.<br>${String(e?.message??e)}</div>`;return}let e=new rn($);$.onToggleTuner=()=>e.toggle(),$.input.onUserStart(),$.audio.unlock(),$.start(),on.classList.add(`is-hidden`),setTimeout(()=>{on.style.display=`none`},700),window.game=$,console.info("%cStarfarer%c — `window.game` disponível no console. F3 = debug, G = tuning.",`color:#7de8ff;font-weight:bold`,`color:#888`)}))}sn.addEventListener(`click`,ln),window.addEventListener(`keydown`,e=>{$||(e.code===`Enter`||e.code===`Space`)&&(e.preventDefault(),ln())});
-//# sourceMappingURL=index-DO_nQ3nc.js.map
+//# sourceMappingURL=index-DrgZrC0O.js.map
