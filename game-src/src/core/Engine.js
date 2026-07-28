@@ -18,6 +18,9 @@ import { SkyDome } from '../systems/SkyDome.js';
 import { Progression } from '../systems/Progression.js';
 import { Missions } from '../systems/Missions.js';
 import { UpgradePanel } from '../ui/UpgradePanel.js';
+import { AudioSystem } from '../audio/AudioSystem.js';
+import { PauseMenu } from '../ui/PauseMenu.js';
+import { PostProcessing } from './PostProcessing.js';
 
 /**
  * Orquestrador: monta a cena, roda o loop, coordena os sistemas.
@@ -83,11 +86,24 @@ export class Engine {
     this.docking = { station: null, progress: 0, cooldown: 0 };
     this._applyUpgrades();
 
+    this.audio = new AudioSystem(this.renderer.camera);
+    this.post = new PostProcessing(this.renderer, this.scene);
+    this.post.applyQuality(this.quality.index, this.renderer.gl.getPixelRatio());
+    window.addEventListener('resize', () => {
+      this.post.resize(window.innerWidth, window.innerHeight);
+    });
+
+    this.pauseMenu = new PauseMenu(document.getElementById('pause'), this);
+
     this.combat.onOreCollected = () => {
       const taken = this.progression.addCargo(1);
+      this.audio.chime(taken > 0);
       if (taken === 0) this.hud.bigMessage('CARGA CHEIA', 1.2, 'bad');
     };
-    this.combat.onEnemyKilled = () => this.progression.onKill();
+    this.combat.onEnemyKilled = () => {
+      this.progression.onKill();
+      this.audio.explosion(1);
+    };
     this._camUp = new THREE.Vector3(0, 1, 0);
     this._sunDir = new THREE.Vector3();
 
@@ -99,7 +115,10 @@ export class Engine {
     this.hud = new HUD(document.getElementById('hud'));
     this.debug = new DebugPanel(document.getElementById('debug-panel'));
     this.touchUI = this.input.touch
-      ? new TouchUI(document.getElementById('touch-ui'), this.input.touch, () => this.debug.toggle())
+      ? new TouchUI(
+          document.getElementById('touch-ui'), this.input.touch,
+          () => this.debug.toggle(), () => this.pauseMenu?.toggle(),
+        )
       : null;
 
     /** Skybox atual; regerado quando o tier muda de resolução. */
@@ -120,6 +139,7 @@ export class Engine {
       // tier passa a valer na Fase 3, quando planetas e estações existirem.
       this.sunLight.castShadow = false;
       this._ensureSkybox(tier);
+      this.post?.applyQuality(this.quality.index, this.renderer.gl.getPixelRatio());
     });
 
     this.combat.onPlayerDeath = () => {
@@ -127,6 +147,7 @@ export class Engine {
       if (lost > 0) this.hud.bigMessage(`CARGA PERDIDA · ${lost} ⬢`, 2.4, 'bad');
       this.hud.bigMessage('NAVE DESTRUÍDA', CONFIG.combat.player.respawnDelay, 'bad');
       this.hud.flashDamage();
+      this.audio.explosion(1.8);
     };
     this.combat.onPlayerRespawn = () => {
       // A câmera precisa reancorar: a nave "renasce" onde estava, mas o rig
@@ -284,7 +305,7 @@ export class Engine {
     const dt = Math.min(rawMs, 100) / 1000;
 
     this.update(dt);
-    this.renderer.render(this.scene);
+    this.post.render(dt);
 
     this.quality.sample(rawMs);
     this.debug.update(rawMs, this.renderer, this.quality, this.entityCount);
@@ -373,6 +394,9 @@ export class Engine {
     this._updateDocking(dt);
     this._updateSurvey();
     this._updateMissions(dt);
+
+    this._updateAudio(state, dt);
+    this.post.update(state.boost ? 1 : 0, this.planetary.entryEffect, dt);
 
     this.touchUI?.update(state);
     this.hud.update(this.ship, state, this.renderer.camera, this.combat, dt,
@@ -471,6 +495,7 @@ export class Engine {
 
   _dock(station) {
     const gained = this.progression.dock();
+    this.audio.dock();
     // Pausa: escolher upgrade sob fogo inimigo é hostil sem ser interessante.
     this.pause();
     this.upgrades.show(station.spec.name, gained);
@@ -491,12 +516,41 @@ export class Engine {
   _updateMissions(dt) {
     const r = this.missions.update(this.ship.position, dt);
     if (!r.advanced) return;
+    this.audio.chime(true);
     if (r.finished) {
       this.hud.bigMessage('MISSÃO CUMPRIDA', 4, 'good');
       this.progression.save();
     } else {
       this.hud.bigMessage(`${r.title} · CONCLUÍDO`, 2.4, 'good');
     }
+  }
+
+  /** Liga o estado de jogo aos sons. Tudo em um lugar só: sons espalhados
+   *  pelos sistemas viram uma teia impossível de silenciar ou balancear. */
+  _updateAudio(state, dt) {
+    const A = this.audio;
+    if (!A.unlocked) return;
+
+    A.updateEngine(this.ship.flight.throttle, state.boost, dt);
+    A.updateReentry(this.planetary.entryEffect);
+
+    if (state.boost && !this._wasBoosting) A.boostStart();
+    this._wasBoosting = state.boost;
+
+    if (state.barrelRoll !== 0) A.barrelRoll();
+
+    // O disparo é detectado pelo cooldown ter sido rearmado neste frame —
+    // mais confiável que espelhar a lógica de tiro aqui.
+    if (this.combat.playerFireCooldown >= CONFIG.weapons.player.fireInterval - 1e-6) {
+      A.shoot();
+    }
+
+    const h = this.combat.playerHealth;
+    if (h.justHitShield) A.hitShield();
+    if (h.justHitHull) A.hitHull();
+
+    if (this.combat.isOverheated && !this._wasOverheated) A.overheat();
+    this._wasOverheated = this.combat.isOverheated;
   }
 
   /** Avisa o jogador ao pousar e ao decolar. Guardar o estado anterior evita
@@ -524,6 +578,9 @@ export class Engine {
     this.surface.dispose();
     this.skyDome.dispose();
     this.upgrades.dispose();
+    this.audio.dispose();
+    this.post.dispose();
+    this.pauseMenu.dispose();
     this.system.dispose();
     this.combat.dispose();
     this.ship.dispose();

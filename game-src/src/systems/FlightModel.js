@@ -38,6 +38,11 @@ import { clamp, damp, easeInOutCubic } from '../core/MathUtils.js';
  *     dq * q  →  dq aplicado no espaço do MUNDO (giraria em torno dos eixos
  *                globais, ignorando pra onde a nave aponta)
  */
+/** Margem sobre a velocidade máxima teórica antes do teto de segurança
+ *  agir. Folgada de propósito: impulsos legítimos (quique, propulsor,
+ *  manobra) somam acima do cruzeiro, e o teto não deve interferir neles. */
+const SPEED_SAFETY_FACTOR = 1.8;
+
 export class FlightModel {
   constructor() {
     this.position = new THREE.Vector3(0, 0, 0);
@@ -82,6 +87,7 @@ export class FlightModel {
     this.lateralSpeed = 0;
     this.gForce = 0;
     this._prevVelocity = new THREE.Vector3();
+    this._lastGoodPosition = new THREE.Vector3();
   }
 
   /** Vetor "para frente" da nave em espaço de mundo.
@@ -114,6 +120,8 @@ export class FlightModel {
     // forças dependentes de posição (gravidade orbital etc.) que exigiriam um
     // integrador de ordem maior.
     this.position.addScaledVector(this.velocity, dt);
+
+    this._sanitize();
 
     // Métricas.
     this.speed = this.velocity.length();
@@ -272,6 +280,54 @@ export class FlightModel {
 
     // Recompõe.
     this.velocity.copy(this._lateral).addScaledVector(fwd, newVFwd);
+  }
+
+  /**
+   * Rede de segurança contra estado numérico inválido.
+   *
+   * ═══ POR QUE ISTO EXISTE ═══
+   *
+   * Num integrador, um único NaN é permanente: NaN + qualquer coisa é NaN,
+   * então a partir do frame em que ele aparece a nave desaparece e o jogo
+   * fica sem recuperação possível — sem mensagem de erro, sem exceção, sem
+   * nada no console. É o pior tipo de falha.
+   *
+   * As fontes plausíveis são todas de casos degenerados: normalizar um vetor
+   * de comprimento zero, dividir por uma distância que virou zero numa
+   * colisão exatamente concêntrica, ou uma raiz de discriminante negativo que
+   * escapou de uma verificação.
+   *
+   * Além do NaN, há o teto de velocidade. Ele não deveria ser atingível — a
+   * velocidade frontal é limitada por `damp` em direção a um alvo finito —
+   * mas as componentes laterais recebem impulsos de várias fontes (colisão
+   * com rocha, quique no solo, propulsores, manobra), e um empilhamento
+   * patológico entre elas é difícil de descartar por análise. O teto custa
+   * duas comparações por frame e transforma um bug potencialmente fatal num
+   * soluço imperceptível.
+   */
+  _sanitize() {
+    const v = this.velocity;
+    const p = this.position;
+    const finite = Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)
+      && Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+
+    if (!finite) {
+      console.warn('[flight] estado numérico inválido — restaurando');
+      if (!Number.isFinite(p.x + p.y + p.z)) p.copy(this._lastGoodPosition);
+      v.set(0, 0, 0);
+      this.angularVelocity.set(0, 0, 0);
+      return;
+    }
+
+    const speedLimit = CONFIG.flight.maxSpeed * this.speedMul
+      * CONFIG.flight.boostMultiplier * SPEED_SAFETY_FACTOR;
+    const sq = v.lengthSq();
+    if (sq > speedLimit * speedLimit) {
+      v.multiplyScalar(speedLimit / Math.sqrt(sq));
+    }
+
+    // Guarda a última posição sabidamente válida, para poder voltar a ela.
+    this._lastGoodPosition.copy(p);
   }
 
   /** Velocidade máxima teórica atual, para normalizar barras de HUD. */

@@ -62,6 +62,9 @@ function launch() {
     engine.onToggleTuner = () => tuner.toggle();
 
     engine.input.onUserStart();
+    // Destrava o AudioContext DENTRO do gesto do usuário — no iOS não há
+    // outra oportunidade.
+    engine.audio.unlock();
     engine.start();
 
     boot.classList.add('is-hidden');

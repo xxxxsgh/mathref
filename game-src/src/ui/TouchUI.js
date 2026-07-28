@@ -18,7 +18,7 @@ export class TouchUI {
    * @param {import('../core/input/TouchSource.js').TouchSource} source
    * @param {() => void} onToggleDebug
    */
-  constructor(root, source, onToggleDebug) {
+  constructor(root, source, onToggleDebug, onPause) {
     this.root = root;
     this.source = source;
 
@@ -31,6 +31,7 @@ export class TouchUI {
       <div class="touch-btn touch-btn--rollL"  data-touch-ui data-act="barrelL">↺</div>
       <div class="touch-btn touch-btn--rollR"  data-touch-ui data-act="barrelR">↻</div>
       <div class="touch-btn touch-btn--debug"  data-touch-ui data-act="debug">DBG</div>
+      <div class="touch-btn touch-btn--pause"  data-touch-ui data-act="pause">❚❚</div>
     `;
     root.classList.add('is-active');
     root.setAttribute('aria-hidden', 'false');
@@ -46,12 +47,13 @@ export class TouchUI {
         e.stopPropagation();
         btn.classList.add('is-down');
         if (act === 'debug') { onToggleDebug(); return; }
+        if (act === 'pause') { onPause?.(); return; }
         source.setButton(act, true);
       };
       const up = (e) => {
         e.preventDefault();
         btn.classList.remove('is-down');
-        if (act === 'debug') return;
+        if (act === 'debug' || act === 'pause') return;
         source.setButton(act, false);
       };
       btn.addEventListener('pointerdown', down);

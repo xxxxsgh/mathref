@@ -609,6 +609,39 @@ export const CONFIG = {
     offscreenMargin: 56,
   },
 
+  // ───────────────────────────────────────────────────────────────────────
+  // ÁUDIO E PÓS-PROCESSAMENTO (Fase 6)
+  // ───────────────────────────────────────────────────────────────────────
+  audio: {
+    masterVolume: 0.7,
+    sfxVolume: 0.85,
+    engineVolume: 0.34,
+    ambienceVolume: 0.3,
+  },
+
+  post: {
+    // Ligado por tier de qualidade: no tier mínimo o pós-processamento é
+    // desligado inteiro, porque em fill rate ele é o primeiro custo a cortar.
+    enabledFrom: 2,        // índice máximo de tier que ainda tem pós
+    bloom: {
+      intensity: 0.85,
+      luminanceThreshold: 0.62,
+      luminanceSmoothing: 0.28,
+      // Meia resolução: bloom é um borrão, e borrar em resolução cheia é
+      // gastar quatro vezes mais banda de memória por um resultado que
+      // ninguém distingue.
+      resolutionScale: 0.5,
+      mipmapBlur: true,
+    },
+    vignette: { darkness: 0.42, offset: 0.32 },
+    chromaticAberration: 0.0007,
+    // Desfoque de movimento no boost: o efeito é aplicado como escala de
+    // aberração cromática + vinheta, não como motion blur de verdade
+    // (que exigiria velocity buffer e custaria caro no iPad).
+    boostAberration: 0.0035,
+    boostVignette: 0.62,
+  },
+
   debug: {
     startVisible: false,
     graphSamples: 120,

@@ -10,9 +10,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" type="image/svg+xml" href="./favicon.svg">
 <title>Starfarer</title>
-  <script type="module" crossorigin src="/mathref/game/assets/index-BchKKoRb.js"></script>
-  <link rel="stylesheet" crossorigin href="/mathref/game/assets/index-N6mYLYJJ.css">
-</head>
+  <script type="module" crossorigin src="/mathref/game/assets/index-NJg8KXWF.js"></script>
+  <link rel="modulepreload" crossorigin href="/mathref/game/assets/three-Bw96E8hD.js">
+  <link rel="modulepreload" crossorigin href="/mathref/game/assets/postprocessing-BkI8gG7s.js">
+  <link rel="stylesheet" crossorigin href="/mathref/game/assets/index-CeZ2oWfd.css">
+<link rel="manifest" href="/mathref/game/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/mathref/game/registerSW.js"></script></head>
 <body>
   <canvas id="viewport"></canvas>
 
@@ -26,6 +28,9 @@
 
   <!-- Painel de upgrades (abre ao atracar numa estação) -->
   <div id="upgrades" hidden></div>
+
+  <!-- Menu de pausa (Esc) -->
+  <div id="pause" hidden></div>
 
   <!-- Painel de debug (F3 ou botão HUD) -->
   <div id="debug-panel" class="debug-panel" hidden></div>
