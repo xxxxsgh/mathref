@@ -50,7 +50,7 @@ export class SolarSystem {
     const S = CONFIG.system;
     const baseSeed = hashString(seed);
 
-    // ── Estrela ──────────────────────────────────────────────────
+    // ── Estrela ───────────────────────────────────────────────────────────────────────
     const starRng = rngHelpers(createRng(mix(baseSeed, hashString('star'))));
     const starDir = new THREE.Vector3(...CONFIG.world.sunDirection).normalize();
     this.starPosition = starDir.clone().multiplyScalar(S.starDistance);
@@ -69,7 +69,7 @@ export class SolarSystem {
     scene.add(this.star);
     this.starGeometry = starGeo;
 
-    // ── Planetas ────────────────────────────────────────────────────
+    // ── Planetas ──────────────────────────────────────────────────────────────────────
     const countRng = rngHelpers(createRng(mix(baseSeed, hashString('count'))));
     const planetCount = countRng.int(S.planetCount[0], S.planetCount[1]);
 

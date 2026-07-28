@@ -312,7 +312,7 @@ export class Planet {
       this.atmosphere.visible = camDist > this.radius * 1.25;
     }
 
-    // ── Troca de faixa de profundidade ─────────────────────────────────────────────────────
+    // ── Troca de faixa de profundidade ──────────────────────────────
     // Quando a câmera se aproxima, o planeta precisa migrar da faixa distante
     // pra próxima — senão o plano `farNear` o recortaria e ele desapareceria
     // exatamente quando o jogador chega perto.

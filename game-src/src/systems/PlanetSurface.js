@@ -122,7 +122,7 @@ export class PlanetSurface {
    *
    * Ela cumpre duas funções, e a segunda é a que importa mais:
    *  1. perspectiva aérea — dá noção de distância e escala no solo;
-   *  2. esconde a BORDA da grade de chunks. Sem névoa, o terreno acaba numa
+   *  2. esconde a BORDA da grade de chunks. Sem névoa o terreno acaba numa
    *     linha reta no horizonte, e o streaming fica evidente.
    *
    * `FogExp2` e não `Fog` linear: a queda exponencial não tem um ponto de
