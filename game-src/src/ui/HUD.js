@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { clamp } from '../core/MathUtils.js';
 import { Radar } from './Radar.js';
+import { NavMarkers } from './NavMarkers.js';
 
 /**
  * HUD — construída em DOM, atualizada por frame.
@@ -27,6 +28,9 @@ export class HUD {
   constructor(root) {
     this.root = root;
     root.innerHTML = `
+      <!-- Marcadores de navegação (planetas e estações) -->
+      <div class="hud__nav" id="hud-nav"></div>
+
       <div class="hud__center"></div>
 
       <div class="hud__reticle" id="hud-reticle">
@@ -135,6 +139,12 @@ export class HUD {
         <div class="hud__bar"><div class="hud__bar-fill hud__bar-fill--cargo" id="hud-cargo-bar"></div></div>
       </div>
 
+      <!-- Aviso de aproximação de planeta -->
+      <div class="hud__approach" id="hud-approach">
+        <div class="hud__approach-title" id="hud-approach-title"></div>
+        <div class="hud__approach-hint" id="hud-approach-hint"></div>
+      </div>
+
       <div class="hud__status" id="hud-status"></div>
       <div class="hud__bigmsg" id="hud-bigmsg"></div>
     `;
@@ -178,6 +188,10 @@ export class HUD {
     };
 
     this.radar = new Radar(q('hud-radar-canvas'));
+    this.nav = new NavMarkers(q('hud-nav'));
+    this.el.approach = q('hud-approach');
+    this.el.approachTitle = q('hud-approach-title');
+    this.el.approachHint = q('hud-approach-hint');
 
     this._proj = new THREE.Vector3();
     this._tmp = new THREE.Vector3();
@@ -189,6 +203,10 @@ export class HUD {
     this._planetVisible = false;
     this._entryGlow = 0;
     this._invCam = new THREE.Quaternion();
+    this._approachTitle = null;
+    this._approachHint = null;
+    /** Injetado pelo Engine: usado pelo radar pra mostrar corpos celestes. */
+    this._system = null;
   }
 
   show() { this.root.classList.add('is-visible'); }
@@ -215,18 +233,20 @@ export class HUD {
     if (missions) this._updateMission(camera, missions);
     if (progression) this._updateCargo(progression);
 
-    if (planetary) this._updatePlanetary(planetary);
+    if (planetary) { this._updatePlanetary(planetary); this._updateApproach(planetary, ship); }
     this._updateReticle(input);
     this._updateVelocityMarker(f, camera);
     this._updateTargeting(camera, combat);
     this._updateGauges(f, combat);
     this._updateAlerts(f, combat, dt);
 
-    this.radar.update(f.quaternion, f.position, combat.enemies, combat.currentTarget);
+    this.nav.update(camera, f.position);
+    this.radar.update(f.quaternion, f.position, combat.enemies, combat.currentTarget,
+                      this._system);
     this._set('contacts', 'contacts', `${combat.aliveEnemies} contato${combat.aliveEnemies === 1 ? '' : 's'}`);
   }
 
-  // ───────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────
   /** Painel de voo atmosférico + vinheta de reentrada. */
   _updatePlanetary(pf) {
     const show = pf.inAtmosphere;
@@ -309,6 +329,49 @@ export class HUD {
     this.el.cargoBar.classList.toggle('is-critical', progression.cargoFull);
   }
 
+  /**
+   * Aviso de aproximação de planeta.
+   *
+   * Sem isso, chegar perto de um planeta não produz nenhuma resposta da
+   * interface, e o jogador não tem como saber que pousar é possível — muito
+   * menos QUE condições o pouso exige. A dica muda conforme a fase da
+   * aproximação, virando um tutorial passivo.
+   */
+  _updateApproach(pf, ship) {
+    let title = '';
+    let hint = '';
+
+    if (pf.planet && Number.isFinite(pf.altitude)) {
+      const nome = `PLANETA ${pf.planet.spec.name}`;
+      if (pf.landed) {
+        title = `${nome} · POUSADO`;
+        hint = 'Acelerador para decolar';
+      } else if (pf.landingProgress > 0.01) {
+        title = `${nome} · POUSANDO`;
+        hint = 'Mantenha estável';
+      } else if (pf.altitude < 260) {
+        title = nome;
+        hint = 'Para pousar: freie e corte o acelerador perto do solo';
+      } else if (pf.heat > 0.55) {
+        title = `${nome} · REENTRADA`;
+        hint = 'Freie — o casco está aquecendo';
+      } else if (pf.inAtmosphere) {
+        title = `${nome} · ATMOSFERA`;
+        hint = `Altitude ${Math.round(pf.altitude)} · desça devagar`;
+      }
+    }
+
+    if (title !== this._approachTitle) {
+      this._approachTitle = title;
+      this.el.approachTitle.textContent = title;
+      this.el.approachHint.textContent = hint;
+      this.el.approach.classList.toggle('is-on', title !== '');
+    } else if (hint !== this._approachHint) {
+      this._approachHint = hint;
+      this.el.approachHint.textContent = hint;
+    }
+  }
+
   _updateReticle(input) {
     if (input.aimActive && input.source === 'keyboard') {
       const half = Math.min(window.innerWidth, window.innerHeight) * 0.5;
@@ -346,7 +409,7 @@ export class HUD {
       return;
     }
 
-    // ── Caixa em volta do alvo ────────────────────────────────────────────
+    // ── Caixa em volta do alvo ─────────────────────────────────
     this._proj.copy(target.position).project(camera);
     const onScreen = this._proj.z < 1 &&
       Math.abs(this._proj.x) < 1 && Math.abs(this._proj.y) < 1;
@@ -366,7 +429,7 @@ export class HUD {
       this.el.targetShield.style.transform = `scaleX(${target.health.shieldPct})`;
       this.el.targetHull.style.transform = `scaleX(${target.health.hullPct})`;
     } else {
-      // ── Seta de fora de tela ────────────────────────────────────────────
+      // ── Seta de fora de tela ───────────────────────────────────
       // Sem isso, perder o alvo de vista significa perdê-lo de vez: em 6DOF
       // não há "virar a cabeça" pra procurar.
       this.el.target.style.opacity = '0';
@@ -387,7 +450,7 @@ export class HUD {
       this.el.offscreen.style.opacity = '1';
     }
 
-    // ── Retículo de predição ──────────────────────────────────────────────
+    // ── Retículo de predição ──────────────────────────────────
     if (combat.hasLead) {
       this._proj.copy(combat.leadPoint).project(camera);
       if (this._proj.z < 1) {
