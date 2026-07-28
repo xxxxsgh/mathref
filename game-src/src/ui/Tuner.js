@@ -84,6 +84,15 @@ export class Tuner {
     mouse.add(CONFIG.input.mouse, 'recenter', 0, 6).name('recentragem');
     mouse.add(CONFIG.input.mouse, 'invertY').name('inverter Y');
 
+    // Piloto automático: os quatro números que mudam como a aproximação e a
+    // descida SE SENTEM. Os outros do config são limites de segurança.
+    const A = CONFIG.autopilot;
+    const ap = gui.addFolder('Piloto automático');
+    ap.add(A, 'steerGain', 0.6, 6).name('ganho da direção');
+    ap.add(A, 'cruiseMultiplier', 1, 10).name('cruzeiro (×)');
+    ap.add(A, 'descentRate', 0.05, 1).name('taxa de descida');
+    ap.add(A, 'vsGain', 0.02, 0.4).name('ganho vertical');
+
     // Qualidade: forçar um tier serve pra medir o custo de cada nível sem
     // esperar o sistema adaptativo decidir sozinho.
     const q = gui.addFolder('Qualidade');
