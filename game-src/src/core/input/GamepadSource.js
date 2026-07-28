@@ -84,6 +84,9 @@ export class GamepadSource {
     const rr = pad.buttons[G.axisRollPos]?.value ?? 0;
     if (rl || rr) { active = true; s.roll += rr - rl; }
 
+    const fire = deadzone1(pad.buttons[G.buttonFire]?.value ?? 0, 0.2);
+    if (fire > 0.3) { s.fire = true; active = true; }
+
     const boost = deadzone1(pad.buttons[G.buttonBoost]?.value ?? 0, 0.2);
     const brake = deadzone1(pad.buttons[G.buttonBrake]?.value ?? 0, 0.2);
     if (boost > 0.35) { s.boost = true; active = true; }

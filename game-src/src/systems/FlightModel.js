@@ -186,10 +186,24 @@ export class FlightModel {
 
     // Constrói o quaternion de incremento a partir do eixo de rotação
     // instantâneo (a direção da velocidade angular) e do ângulo percorrido
-    // neste frame. Note os sinais: nossa convenção é pitch positivo = nariz
-    // pra cima, o que no espaço local do Three (X pra direita) é rotação
-    // NEGATIVA em torno de X pela regra da mão direita. Mesma coisa pro yaw.
-    this._axis.set(-av.x, -av.y, -av.z).normalize();
+    // neste frame.
+    //
+    // ⚠ OS SINAIS AQUI NÃO SÃO TODOS IGUAIS — e essa assimetria é a causa de
+    // um bug que custou caro. A frente local é -Z, e é isso que quebra a
+    // simetria entre os eixos pela regra da mão direita:
+    //
+    //   pitch (+X): rotação POSITIVA leva (0,0,-1) → (0, senθ, -cosθ).
+    //               O nariz SOBE. Sinal positivo, portanto.
+    //   yaw   (+Y): rotação POSITIVA leva (0,0,-1) → (-senθ, 0, -cosθ).
+    //               O nariz vai pra ESQUERDA. Nossa convenção é yaw positivo
+    //               = direita, então aqui o sinal é NEGATIVO.
+    //   roll  (+Z): rotação POSITIVA inclina o "up" pra +X. Convenção nossa.
+    //
+    // A primeira versão negava os três por analogia, o que invertia o pitch.
+    // O sintoma não foi um controle "estranho" — foi a IA nunca conseguir
+    // mirar em nada que estivesse acima ou abaixo dela, porque o comando de
+    // pitch afastava o nariz do alvo em vez de aproximá-lo.
+    this._axis.set(av.x, -av.y, -av.z).normalize();
     this._dq.setFromAxisAngle(this._axis, angle);
 
     // Multiplicação à DIREITA: aplica no espaço local da nave.

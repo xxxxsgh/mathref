@@ -1,23 +1,26 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { clamp } from '../core/MathUtils.js';
+import { Radar } from './Radar.js';
 
 /**
  * HUD — construída em DOM, atualizada por frame.
  *
  * Duas regras de performance que valem pra toda a UI do projeto:
  *
- *  1. Nada de `innerHTML` no loop. Guardamos referências aos nós de texto na
- *     construção e escrevemos em `textContent`. Recriar HTML 60x/s obriga o
- *     navegador a reparsear e reconstruir a árvore toda vez.
+ *  1. Nada de `innerHTML` no loop. Guardamos referências aos nós na construção
+ *     e escrevemos em `textContent`. Recriar HTML 60x/s obriga o navegador a
+ *     reparsear e reconstruir a árvore toda vez.
  *  2. Barras animam com `transform: scaleX()`, nunca `width`. `width` dispara
- *     recálculo de layout; `transform` é processado no compositor e não toca
- *     no layout.
+ *     recálculo de layout; `transform` é processado no compositor.
  *
- * O elemento mais importante aqui não é o velocímetro: é o MARCADOR DE VETOR
- * DE VELOCIDADE. Ele mostra pra onde a nave está de fato indo, que durante a
- * deriva não é pra onde ela aponta. Sem ele, o "peso" do modelo de voo é
- * sentido mas não é lido — e o jogador não entende por que errou a curva.
+ * Os dois elementos que mais importam pro gameplay não são as barras:
+ *
+ *  • MARCADOR DE VETOR DE VELOCIDADE — mostra pra onde a nave está de fato
+ *    indo, que durante a deriva não é pra onde ela aponta. Sem ele o "peso"
+ *    do modelo de voo é sentido mas não é lido.
+ *  • RETÍCULO DE PREDIÇÃO — onde mirar pra acertar um alvo em movimento.
+ *    Sem ele, liderar o tiro vira adivinhação, e o combate parece injusto.
  */
 export class HUD {
   /** @param {HTMLElement} root */
@@ -45,7 +48,31 @@ export class HUD {
         </svg>
       </div>
 
-      <div class="hud__alert" id="hud-alert">ASSISTÊNCIA DE VOO DESLIGADA</div>
+      <!-- Retículo de predição: para onde atirar, não onde o alvo está. -->
+      <div class="hud__lead" id="hud-lead">
+        <svg viewBox="0 0 34 34">
+          <circle cx="17" cy="17" r="7.5" stroke-width="1.6"/>
+          <circle cx="17" cy="17" r="1.8" fill="currentColor" stroke="none"/>
+        </svg>
+      </div>
+
+      <!-- Caixa de alvo: enquadra o inimigo travado. -->
+      <div class="hud__target" id="hud-target">
+        <svg viewBox="0 0 60 60">
+          <path d="M6 20 V6 H20" /><path d="M40 6 H54 V20" />
+          <path d="M54 40 V54 H40" /><path d="M20 54 H6 V40" />
+        </svg>
+        <div class="hud__target-dist" id="hud-target-dist"></div>
+        <div class="hud__target-bar"><div class="hud__target-bar-fill" id="hud-target-shield"></div></div>
+        <div class="hud__target-bar"><div class="hud__target-bar-fill hud__target-bar-fill--hull" id="hud-target-hull"></div></div>
+      </div>
+
+      <!-- Seta de alvo fora de tela -->
+      <div class="hud__offscreen" id="hud-offscreen">
+        <svg viewBox="0 0 24 24"><path d="M12 2 L22 20 H2 Z"/></svg>
+      </div>
+
+      <div class="hud__alert" id="hud-alert"></div>
 
       <div class="hud__corner hud__corner--bl">
         <div class="hud__label">Velocidade</div>
@@ -60,47 +87,97 @@ export class HUD {
         <div class="hud__bar"><div class="hud__bar-fill hud__bar-fill--boost" id="hud-boost-bar"></div></div>
       </div>
 
+      <!-- Integridade: escudo em cima do casco, como as camadas de fato são -->
       <div class="hud__corner hud__corner--tl">
-        <div class="hud__label">Deriva lateral</div>
-        <div><span class="hud__value" id="hud-drift" style="font-size:18px">0</span><span class="hud__unit">u/s</span></div>
-        <div class="hud__label" style="margin-top:6px">Força G</div>
-        <div><span class="hud__value" id="hud-g" style="font-size:18px">0.0</span></div>
+        <div class="hud__label">Escudo <span id="hud-shield-num" class="hud__mini"></span></div>
+        <div class="hud__bar hud__bar--wide"><div class="hud__bar-fill hud__bar-fill--shield" id="hud-shield-bar"></div></div>
+        <div class="hud__label" style="margin-top:8px">Casco <span id="hud-hull-num" class="hud__mini"></span></div>
+        <div class="hud__bar hud__bar--wide"><div class="hud__bar-fill hud__bar-fill--hull" id="hud-hull-bar"></div></div>
+        <div class="hud__label" style="margin-top:8px">Canhões</div>
+        <div class="hud__bar hud__bar--wide"><div class="hud__bar-fill hud__bar-fill--heat" id="hud-heat-bar"></div></div>
       </div>
+
+      <!-- Radar -->
+      <div class="hud__radar">
+        <canvas id="hud-radar-canvas"></canvas>
+        <div class="hud__radar-label" id="hud-contacts">0 contatos</div>
+      </div>
+
+      <div class="hud__status" id="hud-status"></div>
+      <div class="hud__bigmsg" id="hud-bigmsg"></div>
     `;
 
+    const q = (id) => root.querySelector(`#${id}`);
     this.el = {
-      reticle: root.querySelector('#hud-reticle'),
-      vel: root.querySelector('#hud-vel'),
-      alert: root.querySelector('#hud-alert'),
-      speed: root.querySelector('#hud-speed'),
-      speedBar: root.querySelector('#hud-speed-bar'),
-      throttle: root.querySelector('#hud-throttle'),
-      throttleBar: root.querySelector('#hud-throttle-bar'),
-      boostBar: root.querySelector('#hud-boost-bar'),
-      drift: root.querySelector('#hud-drift'),
-      g: root.querySelector('#hud-g'),
+      reticle: q('hud-reticle'),
+      vel: q('hud-vel'),
+      lead: q('hud-lead'),
+      target: q('hud-target'),
+      targetDist: q('hud-target-dist'),
+      targetShield: q('hud-target-shield'),
+      targetHull: q('hud-target-hull'),
+      offscreen: q('hud-offscreen'),
+      alert: q('hud-alert'),
+      speed: q('hud-speed'),
+      speedBar: q('hud-speed-bar'),
+      throttle: q('hud-throttle'),
+      throttleBar: q('hud-throttle-bar'),
+      boostBar: q('hud-boost-bar'),
+      shieldBar: q('hud-shield-bar'),
+      shieldNum: q('hud-shield-num'),
+      hullBar: q('hud-hull-bar'),
+      hullNum: q('hud-hull-num'),
+      heatBar: q('hud-heat-bar'),
+      contacts: q('hud-contacts'),
+      status: q('hud-status'),
+      bigmsg: q('hud-bigmsg'),
     };
 
-    this._velProj = new THREE.Vector3();
+    this.radar = new Radar(q('hud-radar-canvas'));
+
+    this._proj = new THREE.Vector3();
+    this._tmp = new THREE.Vector3();
+    this._camFwd = new THREE.Vector3();
+    this._cache = {};
     this._lastAlert = null;
-    // Cache dos textos: escrever em `textContent` marca o nó como sujo mesmo
-    // quando o valor não mudou. Comparar antes evita trabalho inútil de layout.
-    this._cache = { speed: -1, throttle: -1, drift: -1, g: -1 };
+    this._bigMsgTimer = 0;
+    this._damageFlash = 0;
   }
 
   show() { this.root.classList.add('is-visible'); }
+
+  /** Mensagem grande e temporária no centro (morte, onda, superaquecimento). */
+  bigMessage(text, duration = 2.2, tone = '') {
+    this.el.bigmsg.textContent = text;
+    this.el.bigmsg.className = `hud__bigmsg is-on ${tone ? `is-${tone}` : ''}`;
+    this._bigMsgTimer = duration;
+  }
+
+  /** Pulso vermelho na borda da tela ao levar dano no casco. */
+  flashDamage() { this._damageFlash = 1; }
 
   /**
    * @param {import('../entities/Ship.js').Ship} ship
    * @param {import('../core/Input.js').ControlState} input
    * @param {THREE.PerspectiveCamera} camera
+   * @param {import('../systems/Combat.js').Combat} combat
+   * @param {number} dt
    */
-  update(ship, input, camera) {
+  update(ship, input, camera, combat, dt) {
     const f = ship.flight;
 
-    // ── Retículo ─────────────────────────────────────────────────────────
-    // Só é mostrado quando o mouse está em uso; no gamepad/touch a mira segue
-    // o nariz da nave e o retículo móvel só confundiria.
+    this._updateReticle(input);
+    this._updateVelocityMarker(f, camera);
+    this._updateTargeting(camera, combat);
+    this._updateGauges(f, combat);
+    this._updateAlerts(f, combat, dt);
+
+    this.radar.update(f.quaternion, f.position, combat.enemies, combat.currentTarget);
+    this._set('contacts', 'contacts', `${combat.aliveEnemies} contato${combat.aliveEnemies === 1 ? '' : 's'}`);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  _updateReticle(input) {
     if (input.aimActive && input.source === 'keyboard') {
       const half = Math.min(window.innerWidth, window.innerHeight) * 0.5;
       this.el.reticle.style.transform =
@@ -109,59 +186,146 @@ export class HUD {
     } else {
       this.el.reticle.style.opacity = '0';
     }
+  }
 
-    // ── Marcador de vetor de velocidade ──────────────────────────────────
+  _updateVelocityMarker(f, camera) {
     // Projeta a direção da velocidade no plano da tela. Se o vetor estiver
-    // atrás da câmera (voando de ré), escondemos — projetar aí produz uma
+    // atrás da câmera (voando de ré), esconde — projetar aí produz uma
     // posição espelhada e sem sentido.
     if (f.speed > 4) {
-      this._velProj.copy(f.velocity).normalize().add(f.position).project(camera);
-      if (this._velProj.z < 1) {
-        const x = this._velProj.x * window.innerWidth * 0.5;
-        const y = -this._velProj.y * window.innerHeight * 0.5;
+      this._proj.copy(f.velocity).normalize().add(f.position).project(camera);
+      if (this._proj.z < 1) {
+        const x = this._proj.x * window.innerWidth * 0.5;
+        const y = -this._proj.y * window.innerHeight * 0.5;
         this.el.vel.style.transform = `translate(${x}px, ${y}px)`;
         this.el.vel.style.opacity = String(clamp(f.lateralSpeed / 22, 0.16, 1));
+        return;
+      }
+    }
+    this.el.vel.style.opacity = '0';
+  }
+
+  _updateTargeting(camera, combat) {
+    const target = combat.currentTarget;
+    if (!target || !target.active) {
+      this.el.target.style.opacity = '0';
+      this.el.lead.style.opacity = '0';
+      this.el.offscreen.style.opacity = '0';
+      return;
+    }
+
+    // ── Caixa em volta do alvo ────────────────────────────────────────────
+    this._proj.copy(target.position).project(camera);
+    const onScreen = this._proj.z < 1 &&
+      Math.abs(this._proj.x) < 1 && Math.abs(this._proj.y) < 1;
+
+    if (onScreen) {
+      const x = this._proj.x * window.innerWidth * 0.5;
+      const y = -this._proj.y * window.innerHeight * 0.5;
+      // A caixa encolhe com a distância, como um objeto real faria. Tamanho
+      // fixo faria um alvo distante parecer estar do lado.
+      const dist = target.position.distanceTo(camera.position);
+      const scale = clamp(360 / dist, 0.42, 1.7);
+      this.el.target.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+      this.el.target.style.opacity = '1';
+      this.el.offscreen.style.opacity = '0';
+
+      this._set('targetDist', 'tdist', `${Math.round(dist)}`);
+      this.el.targetShield.style.transform = `scaleX(${target.health.shieldPct})`;
+      this.el.targetHull.style.transform = `scaleX(${target.health.hullPct})`;
+    } else {
+      // ── Seta de fora de tela ────────────────────────────────────────────
+      // Sem isso, perder o alvo de vista significa perdê-lo de vez: em 6DOF
+      // não há "virar a cabeça" pra procurar.
+      this.el.target.style.opacity = '0';
+      this._tmp.copy(target.position).sub(camera.position);
+      // Leva pro espaço da câmera pra saber se está à frente ou atrás.
+      this._tmp.applyQuaternion(camera.quaternion.clone().conjugate());
+      let ang = Math.atan2(this._tmp.x, -this._tmp.y);
+      // Alvo ATRÁS: a direção na tela é a oposta.
+      if (this._tmp.z > 0) ang = Math.atan2(-this._tmp.x, this._tmp.y);
+
+      const m = CONFIG.hud.offscreenMargin;
+      const rx = window.innerWidth * 0.5 - m;
+      const ry = window.innerHeight * 0.5 - m;
+      const px = Math.sin(ang) * rx;
+      const py = -Math.cos(ang) * ry;
+      this.el.offscreen.style.transform =
+        `translate(${px}px, ${py}px) rotate(${ang}rad)`;
+      this.el.offscreen.style.opacity = '1';
+    }
+
+    // ── Retículo de predição ──────────────────────────────────────────────
+    if (combat.hasLead) {
+      this._proj.copy(combat.leadPoint).project(camera);
+      if (this._proj.z < 1) {
+        const x = this._proj.x * window.innerWidth * 0.5;
+        const y = -this._proj.y * window.innerHeight * 0.5;
+        this.el.lead.style.transform = `translate(${x}px, ${y}px)`;
+        this.el.lead.style.opacity = '1';
       } else {
-        this.el.vel.style.opacity = '0';
+        this.el.lead.style.opacity = '0';
       }
     } else {
-      this.el.vel.style.opacity = '0';
+      this.el.lead.style.opacity = '0';
     }
+  }
 
-    // ── Números ──────────────────────────────────────────────────────────
-    const speed = Math.round(f.speed);
-    if (speed !== this._cache.speed) {
-      this.el.speed.textContent = String(speed);
-      this._cache.speed = speed;
-    }
-    const throttlePct = Math.round(f.throttle * 100);
-    if (throttlePct !== this._cache.throttle) {
-      this.el.throttle.textContent = String(throttlePct);
-      this._cache.throttle = throttlePct;
-    }
-    const drift = Math.round(f.lateralSpeed);
-    if (drift !== this._cache.drift) {
-      this.el.drift.textContent = String(drift);
-      this.el.drift.classList.toggle('is-warn', drift > 45);
-      this._cache.drift = drift;
-    }
-    const g = Math.round(f.gForce * 10) / 10;
-    if (g !== this._cache.g) {
-      this.el.g.textContent = g.toFixed(1);
-      this._cache.g = g;
-    }
+  _updateGauges(f, combat) {
+    const h = combat.playerHealth;
 
-    // ── Barras ───────────────────────────────────────────────────────────
+    this._set('speed', 'speed', String(Math.round(f.speed)));
+    this._set('throttle', 'throttle', String(Math.round(f.throttle * 100)));
+    this._set('shieldNum', 'shieldNum', `${Math.round(h.shield)}`);
+    this._set('hullNum', 'hullNum', `${Math.round(h.hull)}`);
+
     const maxRef = CONFIG.flight.maxSpeed * CONFIG.flight.boostMultiplier;
     this.el.speedBar.style.transform = `scaleX(${clamp(f.speed / maxRef, 0, 1)})`;
     this.el.throttleBar.style.transform = `scaleX(${f.throttle})`;
     this.el.boostBar.style.transform = `scaleX(${f.boosting ? 1 : 0})`;
+    this.el.shieldBar.style.transform = `scaleX(${h.shieldPct})`;
+    this.el.hullBar.style.transform = `scaleX(${h.hullPct})`;
+    this.el.heatBar.style.transform = `scaleX(${combat.heatPct})`;
 
-    // ── Aviso ────────────────────────────────────────────────────────────
-    const alert = !f.assistEnabled ? 'assist' : null;
+    // Casco baixo fica vermelho e pulsa. É o aviso que o jogador vê pela
+    // visão periférica, sem tirar os olhos do centro da tela.
+    this.el.hullBar.classList.toggle('is-critical', h.hullPct < 0.3);
+    this.el.heatBar.classList.toggle('is-critical', combat.isOverheated);
+    // Escudo caído mas em recarga: mostra o progresso do atraso, senão a
+    // mecânica de regeneração é invisível pro jogador.
+    this.el.shieldBar.classList.toggle('is-regen', h.shield < h.shieldMax && h.regenProgress >= 1);
+  }
+
+  _updateAlerts(f, combat, dt) {
+    if (this._bigMsgTimer > 0) {
+      this._bigMsgTimer -= dt;
+      if (this._bigMsgTimer <= 0) this.el.bigmsg.className = 'hud__bigmsg';
+    }
+
+    if (this._damageFlash > 0) {
+      this._damageFlash = Math.max(0, this._damageFlash - dt * 2.6);
+      this.root.style.setProperty('--damage-flash', String(this._damageFlash));
+    }
+
+    let alert = null;
+    if (combat.isOverheated) alert = 'CANHÕES SUPERAQUECIDOS';
+    else if (!f.assistEnabled) alert = 'ASSISTÊNCIA DE VOO DESLIGADA';
+    else if (combat.playerHealth.hullPct < 0.25) alert = 'CASCO CRÍTICO';
+
     if (alert !== this._lastAlert) {
+      this.el.alert.textContent = alert ?? '';
       this.el.alert.classList.toggle('is-on', alert !== null);
       this._lastAlert = alert;
     }
+
+    this._set('status', 'status', `ONDA ${combat.waveIndex}  ·  ABATES ${combat.kills}`);
+  }
+
+  /** Escreve em `textContent` só quando o valor mudou. */
+  _set(key, cacheKey, value) {
+    if (this._cache[cacheKey] === value) return;
+    this._cache[cacheKey] = value;
+    const el = this.el[key];
+    if (el) el.textContent = value;
   }
 }

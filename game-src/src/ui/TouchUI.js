@@ -25,6 +25,7 @@ export class TouchUI {
     root.innerHTML = `
       <div class="touch-stick" id="tstick"><div class="touch-stick__knob" id="tknob"></div></div>
       <div class="touch-throttle"><div class="touch-throttle__fill" id="tthrottle"></div></div>
+      <div class="touch-btn touch-btn--fire"   data-touch-ui data-act="fire">FOGO</div>
       <div class="touch-btn touch-btn--boost"  data-touch-ui data-act="boost">BOOST</div>
       <div class="touch-btn touch-btn--brake"  data-touch-ui data-act="brake">FREIO</div>
       <div class="touch-btn touch-btn--rollL"  data-touch-ui data-act="barrelL">↺</div>

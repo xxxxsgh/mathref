@@ -12,6 +12,7 @@ import { TouchSource } from './input/TouchSource.js';
  * @property {number} throttle  0..1  (absoluto, não delta)
  * @property {number} strafeX  -1..1
  * @property {number} strafeY  -1..1
+ * @property {boolean} fire
  * @property {boolean} boost
  * @property {boolean} brake
  * @property {number} barrelRoll  -1, 0 ou 1 — só no frame em que foi acionado
@@ -42,7 +43,7 @@ export class Input {
       pitch: 0, yaw: 0, roll: 0,
       throttle: CONFIG.flight.throttleInitial,
       strafeX: 0, strafeY: 0,
-      boost: false, brake: false,
+      fire: false, boost: false, brake: false,
       barrelRoll: 0,
       aimX: 0, aimY: 0, aimActive: false,
       source: isMobile ? 'touch' : 'keyboard',
@@ -68,7 +69,7 @@ export class Input {
     // Reinicia os eixos contínuos; cada fonte SOMA sua contribuição.
     s.pitch = 0; s.yaw = 0; s.roll = 0;
     s.strafeX = 0; s.strafeY = 0;
-    s.boost = false; s.brake = false;
+    s.fire = false; s.boost = false; s.brake = false;
     s.barrelRoll = 0;
     s.aimActive = false;
     this.actions.toggleDebug = false;

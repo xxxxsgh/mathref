@@ -161,6 +161,7 @@ export const CONFIG = {
       strafeRight: ['ArrowRight'],
       strafeUp: ['ArrowUp'],
       strafeDown: ['ArrowDown'],
+      fire: ['ControlLeft', 'ControlRight', 'KeyX'],
       boost: ['ShiftLeft', 'ShiftRight'],
       brake: ['Space'],
       barrelRollLeft: ['KeyZ'],
@@ -176,6 +177,7 @@ export const CONFIG = {
       // manche. Funciona com e sem Pointer Lock, e o retículo já é o elemento
       // de HUD que a mira preditiva vai usar na Fase 2.
       usePointerLock: true,
+      fireButton: 0,         // botão esquerdo
       sensitivity: 0.0022,   // só com pointer lock
       deadzone: 0.06,        // raio morto no centro, em unidades de tela
       gain: 1.0,             // multiplicador do comando resultante
@@ -192,7 +194,8 @@ export const CONFIG = {
       axisYaw: 0,
       axisRollNeg: 4,        // botão L1
       axisRollPos: 5,        // botão R1
-      buttonBoost: 7,        // RT
+      buttonFire: 7,         // RT — gatilho principal
+      buttonBoost: 0,        // A
       buttonBrake: 6,        // LT
       buttonBarrelLeft: 2,   // X
       buttonBarrelRight: 1,  // B
@@ -283,6 +286,169 @@ export const CONFIG = {
     upgradeStreak: 8,             // avaliações folgadas seguidas pra subir
     upgradeHeadroom: 0.72,        // só sobe se estiver usando <72% do orçamento
     maxUpgrades: 2,               // evita oscilar pra sempre com throttling
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // COMBATE
+  // ───────────────────────────────────────────────────────────────────────
+  weapons: {
+    player: {
+      // Projétil, não hitscan. Hitscan (acerta no instante do disparo) elimina
+      // a habilidade de liderar o alvo, que é justamente a habilidade central
+      // de um jogo de caça. Projétil visível também dá feedback de "errei por
+      // pouco", que hitscan não dá.
+      projectileSpeed: 900,
+      fireInterval: 0.115,     // segundos entre tiros
+      damage: 9,
+      life: 2.2,               // segundos até sumir → alcance ~2000u
+      spread: 0.0035,          // radianos de dispersão aleatória
+      // Canhões nas pontas das asas. Convergem num ponto à frente, senão os
+      // dois feixes nunca acertam o mesmo alvo.
+      muzzles: [[-3.6, -0.1, -0.9], [3.6, -0.1, -0.9]],
+      convergence: 620,
+      color: 0x9dff6b,
+      heatPerShot: 0.055,      // superaquecimento força ritmo em vez de segurar
+      heatCooling: 0.42,
+      overheatLock: 1.35,      // segundos travado ao estourar
+    },
+    enemy: {
+      projectileSpeed: 620,
+      fireInterval: 0.34,
+      damage: 6,
+      life: 3.0,
+      spread: 0.016,           // pior mira que a do jogador, de propósito
+      muzzles: [[-1.7, 0, -1.2], [1.7, 0, -1.2]],
+      convergence: 500,
+      color: 0xff7a4d,
+    },
+    projectileLength: 9,       // comprimento visual do traço
+    projectileWidth: 0.36,
+    maxProjectiles: 320,       // teto do pool; acima disso o tiro mais antigo cai
+  },
+
+  combat: {
+    player: {
+      hullMax: 100,
+      shieldMax: 80,
+      shieldRegen: 9.5,        // por segundo
+      shieldRegenDelay: 3.2,   // segundos sem levar dano antes de regenerar
+      respawnDelay: 2.6,
+      invulnAfterRespawn: 2.5,
+      collisionRadius: 4.2,
+    },
+    enemy: {
+      hullMax: 34,
+      shieldMax: 18,
+      shieldRegen: 3.0,
+      shieldRegenDelay: 5.0,
+      collisionRadius: 3.4,
+    },
+    // Colisão nave-contra-nave: dano dos dois lados. Existe pra que voar
+    // dentro do inimigo não seja tática dominante.
+    ramDamage: 22,
+    ramCooldown: 0.8,
+  },
+
+  enemies: {
+    maxAlive: 7,
+    spawnDistance: 780,
+    spawnSpread: 420,
+    waveDelay: 4.5,
+    waveSizes: [2, 3, 3, 4, 4, 5],
+
+    flight: {
+      // Inimigos usam o MESMO modelo de voo do jogador, com números piores.
+      // Isso garante que eles se movam de um jeito legível — o jogador
+      // reconhece a física deles porque é a dele.
+      maxPitchRate: 1.28,
+      maxYawRate: 1.18,
+      maxRollRate: 2.1,
+      pitchYawResponse: 6.8,
+      rollResponse: 4.0,
+      angularDamping: 3.4,
+      // ⚠ A velocidade máxima do inimigo TEM que estar perto da do jogador.
+      // Com 250 contra os 320 do jogador, bastava segurar o acelerador cheio
+      // pra nunca mais ser alcançado — não havia combate, só uma fuga. O
+      // inimigo é um pouco mais lento em cruzeiro (o jogador tem vantagem) mas
+      // usa boost pra fechar distância. O boost do jogador (2.35×) continua
+      // sendo escapatória garantida, o que é a intenção.
+      maxSpeed: 288,
+      boostMultiplier: 1.62,
+      accelResponse: 1.25,
+      decelResponse: 2.0,
+      lateralDrag: 2.6,
+    },
+
+    ai: {
+      // Distâncias que definem as transições de comportamento.
+      engageRange: 760,      // começa a atacar
+      breakRange: 95,        // perto demais → rompe o ataque
+      reengageRange: 340,    // depois de romper, volta a partir daqui
+      firingCone: 0.055,     // radianos de erro angular tolerado pra atirar
+      firingRange: 640,
+
+      // Tempo mínimo/máximo numa passada de ataque antes de reposicionar.
+      // Sem isso o inimigo cola atrás do jogador e o combate vira uma
+      // perseguição em linha reta que ninguém ganha.
+      attackRunMin: 2.6,
+      attackRunMax: 4.4,
+      evadeDuration: 2.2,
+      flankOffset: 260,      // o quanto o ponto de flanco sai do eixo
+
+      // Erro de mira: um inimigo com liderança perfeita é impossível de
+      // enfrentar. O erro é um vetor que muda devagar, não ruído por frame —
+      // ruído por frame vira tremor visível e ainda assim acerta na média.
+      aimErrorMax: 46,
+      aimErrorLambda: 0.55,
+
+      // Reação a levar dano: chance de romper imediatamente.
+      evadeOnHitChance: 0.42,
+
+      // Formação: quanto os alas seguem o líder em vez de perseguirem sozinhos.
+      formationSpread: 46,
+      formationLambda: 1.1,
+    },
+  },
+
+  effects: {
+    explosion: {
+      particles: { high: 42, medium: 28, low: 16 },
+      maxActive: 900,
+      speed: 46,
+      speedVariance: 0.75,
+      life: 1.15,
+      lifeVariance: 0.5,
+      drag: 1.35,
+      size: 2.6,
+      colorHot: 0xfff3c4,
+      colorMid: 0xff9a3c,
+      colorCool: 0x8c2f1a,
+      flashDuration: 0.22,
+      flashSize: 26,
+    },
+    shieldHit: {
+      duration: 0.42,
+      size: 9.5,
+      color: 0x7de8ff,
+    },
+    hitSpark: {
+      particles: 7,
+      speed: 22,
+      life: 0.34,
+      size: 1.1,
+      color: 0xffd08a,
+    },
+  },
+
+  hud: {
+    radar: {
+      range: 1400,       // alcance máximo mostrado
+      size: 128,         // px do elemento
+      tilt: 0.62,        // inclinação da elipse (0 = topo, 1 = lateral)
+    },
+    // O marcador de alvo pisca quando o alvo está fora de tela, apontando a
+    // direção. Sem isso, perder o alvo de vista significa perdê-lo de vez.
+    offscreenMargin: 56,
   },
 
   debug: {

@@ -254,6 +254,135 @@ export function createShip() {
   };
 }
 
+/**
+ * Caça inimigo.
+ *
+ * Silhueta deliberadamente OPOSTA à do jogador: onde a nave do jogador é
+ * clara, arredondada e enflechada pra trás, o inimigo é escuro, anguloso e
+ * tem as asas enflechadas pra FRENTE. Isso não é enfeite — num combate a
+ * 300 u/s o jogador precisa distinguir amigo de inimigo por um borrão de
+ * poucos pixels, e a silhueta é a única informação que sobrevive nessa
+ * escala. Cor sozinha não basta (ela muda com a iluminação).
+ *
+ * @returns {{ group: THREE.Group, mesh: THREE.Mesh, nozzles: THREE.Vector3[], dispose: () => void }}
+ */
+export function createEnemyShip() {
+  const parts = [];
+  const matIndex = [];
+  const push = (geo, mat) => { parts.push(geo); matIndex.push(mat); };
+
+  const HULL = 0, GLOW = 1, DARK = 2;
+
+  // Corpo: bloco hexagonal achatado, mais largo que alto.
+  const core = new THREE.CylinderGeometry(1.05, 0.72, 3.2, 6);
+  core.rotateX(-Math.PI / 2);
+  core.rotateZ(Math.PI / 6);
+  core.scale(1.35, 0.62, 1);
+  push(core, HULL);
+
+  // Bico chanfrado, curto e agressivo.
+  const nose = new THREE.ConeGeometry(0.72, 1.5, 6);
+  nose.rotateX(-Math.PI / 2);
+  nose.rotateZ(Math.PI / 6);
+  nose.scale(1.35, 0.62, 1);
+  nose.translate(0, 0, -2.35);
+  push(nose, DARK);
+
+  // "Olho" central emissivo — dá um ponto focal e ajuda a mirar.
+  const eye = new THREE.SphereGeometry(0.3, 8, 6);
+  eye.scale(1.5, 0.5, 0.6);
+  eye.translate(0, 0, -1.9);
+  push(eye, GLOW);
+
+  // Asas enflechadas PRA FRENTE.
+  const span = 2.9;
+  for (const side of [1, -1]) {
+    const wing = new THREE.BoxGeometry(span, 0.22, 2.2, 1, 1, 1);
+    wing.translate(span / 2, 0, 0);
+    const p = wing.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const t = p.getX(i) / span;
+      // Sinal NEGATIVO no deslocamento: a ponta avança em vez de recuar.
+      p.setZ(i, p.getZ(i) * (1 - t * 0.5) - t * 1.35);
+      p.setY(i, p.getY(i) * (1 - t * 0.5));
+    }
+    p.needsUpdate = true;
+    wing.computeVertexNormals();
+    wing.rotateZ(side > 0 ? -0.22 : 0);   // diedro negativo, ar de predador
+    wing.translate(0.55, 0.05, 0.4);
+    if (side < 0) mirrorX(wing);
+    push(wing, HULL);
+
+    const pod = new THREE.CylinderGeometry(0.26, 0.3, 1.5, 6);
+    pod.rotateX(-Math.PI / 2);
+    pod.translate(span * 0.78, -0.05, 0.9);
+    if (side < 0) mirrorX(pod);
+    push(pod, DARK);
+  }
+
+  const nozzles = [
+    new THREE.Vector3(-0.62, 0, 1.75),
+    new THREE.Vector3(0.62, 0, 1.75),
+  ];
+  for (const n of nozzles) {
+    const ring = new THREE.CylinderGeometry(0.26, 0.3, 0.28, 6);
+    ring.rotateX(-Math.PI / 2);
+    ring.translate(n.x, n.y, n.z);
+    push(ring, DARK);
+  }
+
+  const { merged, materials } = mergeByMaterial(parts, matIndex, [
+    new THREE.MeshStandardMaterial({ color: 0x4a4258, roughness: 0.55, metalness: 0.4, flatShading: true }),
+    new THREE.MeshStandardMaterial({
+      color: 0x2a1420, emissive: 0xff5a2a, emissiveIntensity: 2.6,
+      roughness: 0.4, flatShading: true,
+    }),
+    new THREE.MeshStandardMaterial({ color: 0x191722, roughness: 0.35, metalness: 0.65, flatShading: true }),
+  ]);
+
+  const mesh = new THREE.Mesh(merged, materials);
+  const group = new THREE.Group();
+  group.add(mesh);
+  for (const g of parts) g.dispose();
+
+  return {
+    group, mesh, nozzles,
+    dispose: () => { merged.dispose(); for (const m of materials) m.dispose(); },
+  };
+}
+
+/**
+ * Mescla geometrias agrupando-as por material.
+ *
+ * `mergeGeometries(_, true)` cria um grupo por geometria de ENTRADA. Nós
+ * queremos um grupo por MATERIAL, senão um objeto de 15 peças vira 15 grupos
+ * e portanto 15 draw calls — perdendo justamente o motivo de ter mesclado.
+ * Por isso reordenamos as peças por material e reescrevemos os grupos.
+ */
+function mergeByMaterial(parts, matIndex, materials) {
+  const ordered = [];
+  const boundary = [];
+  for (let m = 0; m < materials.length; m++) {
+    for (let i = 0; i < parts.length; i++) {
+      if (matIndex[i] === m) ordered.push(parts[i]);
+    }
+    boundary.push(ordered.length);
+  }
+  const merged = BufferGeometryUtils.mergeGeometries(ordered, true);
+  const groups = [];
+  let start = 0;
+  let cursor = 0;
+  for (let m = 0; m < materials.length; m++) {
+    let count = 0;
+    while (cursor < boundary[m]) { count += merged.groups[cursor].count; cursor++; }
+    groups.push({ start, count, materialIndex: m });
+    start += count;
+  }
+  merged.groups = groups;
+  merged.computeVertexNormals();
+  return { merged, materials };
+}
+
 /** Textura de brilho radial, gerada em canvas.
  *  Usada por chamas de motor, explosões e impactos. Um gradiente radial é
  *  pequeno demais pra justificar um arquivo de imagem, e gerando em código a

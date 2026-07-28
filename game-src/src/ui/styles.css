@@ -281,27 +281,35 @@ html, body {
   background: rgba(125, 232, 255, 0.34);
   transform: scale(0.94);
 }
+.touch-btn--fire {
+  right: calc(28px + var(--safe-r));
+  bottom: calc(34px + var(--safe-b));
+  width: 96px; height: 96px;
+  border-color: rgba(157, 255, 107, 0.55);
+  color: #9dff6b;
+  font-size: 12px;
+}
 .touch-btn--boost {
-  right: calc(24px + var(--safe-r));
-  bottom: calc(130px + var(--safe-b));
-  width: 86px; height: 86px;
+  right: calc(140px + var(--safe-r));
+  bottom: calc(126px + var(--safe-b));
+  width: 78px; height: 78px;
   border-color: rgba(255, 180, 84, 0.5);
   color: var(--hud-amber);
 }
 .touch-btn--brake {
-  right: calc(126px + var(--safe-r));
-  bottom: calc(40px + var(--safe-b));
-  width: 68px; height: 68px;
+  right: calc(148px + var(--safe-r));
+  bottom: calc(36px + var(--safe-b));
+  width: 62px; height: 62px;
 }
 .touch-btn--rollL {
-  right: calc(212px + var(--safe-r));
-  bottom: calc(126px + var(--safe-b));
-  width: 60px; height: 60px;
+  right: calc(232px + var(--safe-r));
+  bottom: calc(112px + var(--safe-b));
+  width: 56px; height: 56px;
 }
 .touch-btn--rollR {
-  right: calc(30px + var(--safe-r));
-  bottom: calc(238px + var(--safe-b));
-  width: 60px; height: 60px;
+  right: calc(46px + var(--safe-r));
+  bottom: calc(212px + var(--safe-b));
+  width: 56px; height: 56px;
 }
 .touch-btn--debug {
   right: calc(14px + var(--safe-r));
@@ -403,4 +411,117 @@ html, body {
 @media (max-height: 480px) {
   .boot__help { display: none; }
   .boot__subtitle { margin-bottom: 20px; }
+}
+
+/* ── Elementos de combate ─────────────────────────────────────────────── */
+
+.hud__mini { color: var(--hud-cyan); font-size: 10px; letter-spacing: 0; }
+.hud__bar--wide { width: 168px; }
+
+.hud__bar-fill--shield { background: var(--hud-cyan); box-shadow: 0 0 10px rgba(125,232,255,.6); }
+.hud__bar-fill--hull   { background: #ffd47d; box-shadow: 0 0 10px rgba(255,212,125,.5); }
+.hud__bar-fill--heat   { background: #9dff6b; box-shadow: 0 0 10px rgba(157,255,107,.5); }
+.hud__bar-fill.is-critical {
+  background: var(--hud-red);
+  box-shadow: 0 0 14px rgba(255,107,94,.8);
+  animation: hud-pulse .6s ease-in-out infinite;
+}
+.hud__bar-fill.is-regen { animation: hud-pulse 1.4s ease-in-out infinite; }
+@keyframes hud-pulse { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
+
+/* Retículo de predição: onde ATIRAR, distinto de onde o alvo está. */
+.hud__lead {
+  position: absolute; left: 50%; top: 50%;
+  width: 34px; height: 34px; margin: -17px 0 0 -17px;
+  color: #9dff6b; opacity: 0;
+  will-change: transform, opacity;
+}
+.hud__lead svg { width: 100%; height: 100%; }
+.hud__lead circle { stroke: currentColor; fill: none; }
+
+/* Caixa do alvo travado. */
+.hud__target {
+  position: absolute; left: 50%; top: 50%;
+  width: 60px; height: 60px; margin: -30px 0 0 -30px;
+  color: var(--hud-amber); opacity: 0;
+  will-change: transform, opacity;
+}
+.hud__target svg { width: 100%; height: 100%; overflow: visible; }
+.hud__target path { stroke: currentColor; stroke-width: 2; fill: none; }
+.hud__target-dist {
+  position: absolute; top: 62px; left: 50%; transform: translateX(-50%);
+  font-size: 10px; color: var(--hud-amber); font-variant-numeric: tabular-nums;
+}
+.hud__target-bar {
+  position: absolute; left: 50%; width: 52px; height: 3px;
+  margin-left: -26px; background: rgba(255,180,84,.16); border-radius: 2px; overflow: hidden;
+}
+.hud__target-bar:nth-of-type(1) { top: -14px; }
+.hud__target-bar:nth-of-type(2) { top: -8px; }
+.hud__target-bar-fill {
+  height: 100%; width: 100%; transform-origin: left center; transform: scaleX(1);
+  background: var(--hud-cyan);
+}
+.hud__target-bar-fill--hull { background: var(--hud-red); }
+
+/* Seta para alvo fora de tela. */
+.hud__offscreen {
+  position: absolute; left: 50%; top: 50%;
+  width: 22px; height: 22px; margin: -11px 0 0 -11px;
+  color: var(--hud-amber); opacity: 0;
+  will-change: transform, opacity;
+}
+.hud__offscreen svg { width: 100%; height: 100%; }
+.hud__offscreen path { fill: currentColor; }
+
+/* Radar, canto inferior central-direito. */
+.hud__radar {
+  position: absolute;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(14px + var(--safe-b));
+  text-align: center;
+}
+.hud__radar canvas { display: block; opacity: .92; }
+.hud__radar-label {
+  font-size: 9px; letter-spacing: .16em; color: var(--hud-dim);
+  text-transform: uppercase; margin-top: 2px;
+}
+
+/* Linha de status (onda / abates). */
+.hud__status {
+  position: absolute; left: 50%; top: calc(16px + var(--safe-t));
+  transform: translateX(-50%);
+  font-size: 10px; letter-spacing: .22em; color: var(--hud-dim);
+}
+
+/* Mensagem grande e temporária. */
+.hud__bigmsg {
+  position: absolute; left: 50%; top: 38%;
+  transform: translate(-50%, -50%) scale(.94);
+  font-size: clamp(20px, 4vw, 34px); font-weight: 800; letter-spacing: .2em;
+  color: #fff; text-shadow: 0 0 30px rgba(125,232,255,.7);
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
+  white-space: nowrap;
+}
+.hud__bigmsg.is-on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.hud__bigmsg.is-bad { color: var(--hud-red); text-shadow: 0 0 30px rgba(255,107,94,.8); }
+.hud__bigmsg.is-good { color: var(--hud-green); text-shadow: 0 0 30px rgba(125,255,168,.8); }
+
+/* Vinheta vermelha de dano. Um pseudo-elemento sobre a HUD inteira, com a
+   opacidade dirigida por uma custom property escrita pelo JS — assim o
+   navegador anima no compositor sem tocar no layout. */
+.hud::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center,
+              rgba(255,40,30,0) 45%, rgba(255,40,30,.55) 100%);
+  opacity: var(--damage-flash, 0);
+}
+
+/* Em telas baixas (iPad paisagem) o radar sobe pra não brigar com os botões. */
+@media (max-height: 500px) {
+  .hud__radar { bottom: calc(6px + var(--safe-b)); }
+  .hud__radar canvas { transform: scale(.8); transform-origin: bottom center; }
 }

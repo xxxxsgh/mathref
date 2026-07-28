@@ -28,6 +28,7 @@ export class KeyboardMouseSource {
     this.aimX = 0;
     this.aimY = 0;
     this.pointerLocked = false;
+    this.firing = false;
     this.mouseMovedRecently = false;
     this._idleTimer = 0;
 
@@ -66,6 +67,15 @@ export class KeyboardMouseSource {
       this._idleTimer = 0;
     };
 
+    // Botão do mouse. Usamos mousedown/mouseup em vez de `click` porque
+    // precisamos do estado CONTÍNUO (segurar o gatilho), não do evento.
+    this._onMouseDown = (e) => {
+      if (e.button === CONFIG.input.mouse.fireButton) this.firing = true;
+    };
+    this._onMouseUp = (e) => {
+      if (e.button === CONFIG.input.mouse.fireButton) this.firing = false;
+    };
+
     this._onPointerLockChange = () => {
       this.pointerLocked = document.pointerLockElement === this.canvas;
     };
@@ -77,6 +87,10 @@ export class KeyboardMouseSource {
     window.addEventListener('keyup', this._onKeyUp);
     window.addEventListener('blur', this._onBlur);
     window.addEventListener('mousemove', this._onMouseMove);
+    window.addEventListener('mousedown', this._onMouseDown);
+    window.addEventListener('mouseup', this._onMouseUp);
+    // Ao perder o foco o mouseup pode nunca chegar, e o gatilho fica preso.
+    window.addEventListener('blur', () => { this.firing = false; });
     document.addEventListener('pointerlockchange', this._onPointerLockChange);
     canvas.addEventListener('click', this._onCanvasClick);
   }
@@ -128,6 +142,7 @@ export class KeyboardMouseSource {
       usedKeyboard = true;
     }
 
+    if (this._any(K.fire) || this.firing) s.fire = true;
     if (this._any(K.boost)) s.boost = true;
     if (this._any(K.brake)) s.brake = true;
 
@@ -171,6 +186,8 @@ export class KeyboardMouseSource {
     window.removeEventListener('keyup', this._onKeyUp);
     window.removeEventListener('blur', this._onBlur);
     window.removeEventListener('mousemove', this._onMouseMove);
+    window.removeEventListener('mousedown', this._onMouseDown);
+    window.removeEventListener('mouseup', this._onMouseUp);
     document.removeEventListener('pointerlockchange', this._onPointerLockChange);
     this.canvas.removeEventListener('click', this._onCanvasClick);
   }

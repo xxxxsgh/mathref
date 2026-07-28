@@ -10,6 +10,7 @@ import { SpaceDust } from '../procgen/SpaceDust.js';
 import { HUD } from '../ui/HUD.js';
 import { DebugPanel } from '../ui/DebugPanel.js';
 import { TouchUI } from '../ui/TouchUI.js';
+import { Combat } from '../systems/Combat.js';
 
 /**
  * Orquestrador: monta a cena, roda o loop, coordena os sistemas.
@@ -36,6 +37,13 @@ import { TouchUI } from '../ui/TouchUI.js';
  * anterior e adiciona um frame de atraso perceptível), e a HUD depois da
  * câmera (porque projeta vetores usando a matriz da câmera deste frame).
  */
+/** Controle neutro: usado enquanto o jogador está morto, pra que a nave
+ *  continue integrando (desacelerando por arrasto) sem obedecer ao input. */
+const NEUTRAL_CONTROL = {
+  pitch: 0, yaw: 0, roll: 0, throttle: 0,
+  strafeX: 0, strafeY: 0, fire: false, boost: false, brake: false, barrelRoll: 0,
+};
+
 export class Engine {
   /** @param {HTMLCanvasElement} canvas */
   constructor(canvas) {
@@ -51,6 +59,7 @@ export class Engine {
     this.ship = new Ship(this.scene);
     this.cameraRig = new CameraRig(this.renderer.camera);
     this.dust = new SpaceDust(this.scene);
+    this.combat = new Combat(this.scene, this.ship);
 
     this.hud = new HUD(document.getElementById('hud'));
     this.debug = new DebugPanel(document.getElementById('debug-panel'));
@@ -68,12 +77,25 @@ export class Engine {
       this.renderer.applyQuality(tier);
       this.dust.setQuality(tier);
       this.dust.setPixelRatio(this.renderer.gl.getPixelRatio());
+      this.combat.setQuality(tier);
+      this.combat.explosions.setPixelRatio(this.renderer.gl.getPixelRatio());
       // Sombra desligada nesta fase: o iPad renderiza um shadow map inteiro
       // por frame e no espaço vazio não há NADA pra receber sombra. O flag do
       // tier passa a valer na Fase 3, quando planetas e estações existirem.
       this.sunLight.castShadow = false;
       this._ensureSkybox(tier);
     });
+
+    this.combat.onPlayerDeath = () => {
+      this.hud.bigMessage('NAVE DESTRUÍDA', CONFIG.combat.player.respawnDelay, 'bad');
+      this.hud.flashDamage();
+    };
+    this.combat.onPlayerRespawn = () => {
+      // A câmera precisa reancorar: a nave "renasce" onde estava, mas o rig
+      // tem estado acumulado (sway, âncora de rotação) da morte.
+      this.cameraRig.snapTo(this.ship.flight);
+      this.hud.bigMessage('SISTEMAS RESTAURADOS', 1.6, 'good');
+    };
 
     this.running = false;
     this._lastTime = 0;
@@ -209,24 +231,39 @@ export class Engine {
     }
     if (this.input.actions.toggleTuner) this.onToggleTuner?.();
 
-    this.ship.update(state, dt);
+    // Morto: a nave não responde a controle, mas a câmera e os efeitos
+    // continuam rodando — é o que faz a morte ter peso em vez de virar um
+    // corte seco pra tela de respawn.
+    if (!this.combat.playerDead) {
+      this.ship.update(state, dt);
+    } else {
+      this.ship.flight.update(NEUTRAL_CONTROL, dt);
+    }
+
     this.cameraRig.update(this.ship.flight, dt);
     // Depois da câmera: a luz de preenchimento é definida em relação a ela.
     this._updateFillLight();
+
+    // O combate depende da câmera (escolha de alvo usa o eixo de visão), por
+    // isso vem depois dela e antes da HUD.
+    this.combat.update(state, this.renderer.camera, dt);
+    if (this.combat.playerHealth.justHitHull) this.hud.flashDamage();
+
     this.dust.update(this.ship.position, this.ship.speed, dt);
 
     this.touchUI?.update(state);
-    this.hud.update(this.ship, state, this.renderer.camera);
+    this.hud.update(this.ship, state, this.renderer.camera, this.combat, dt);
   }
 
-  /** Contagem de entidades ativas — cresce nas fases seguintes. */
+  /** Contagem de entidades ativas (nave, inimigos, projéteis, partículas). */
   get entityCount() {
-    return 1;
+    return this.combat.entityCount;
   }
 
   dispose() {
     this.pause();
     this.input.dispose();
+    this.combat.dispose();
     this.ship.dispose();
     this.dust.dispose();
     this._skybox?.dispose();

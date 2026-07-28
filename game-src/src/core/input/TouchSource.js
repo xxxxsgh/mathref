@@ -23,7 +23,7 @@ export class TouchSource {
     /** Slider direito de acelerador (arrasto vertical na área do acelerador). */
     this.throttleDrag = { active: false, id: -1, startY: 0, startValue: 0 };
     /** Botões virtuais: preenchidos pelo TouchUI via `setButton`. */
-    this.buttons = { boost: false, brake: false, rollL: false, rollR: false };
+    this.buttons = { fire: false, boost: false, brake: false, rollL: false, rollR: false };
     /** Borda de subida dos botões de manobra. */
     this.pendingBarrel = 0;
 
@@ -126,6 +126,7 @@ export class TouchSource {
     // de saltar (o arrasto é relativo, não absoluto).
     this._throttleRef = s.throttle;
 
+    if (this.buttons.fire) { s.fire = true; active = true; }
     if (this.buttons.boost) { s.boost = true; active = true; }
     if (this.buttons.brake) { s.brake = true; active = true; }
     if (this.buttons.rollL) { s.roll -= 1; active = true; }
