@@ -204,7 +204,8 @@ export class Planet {
     this.object.add(this.mesh);
 
     if (spec.hasAtmosphere) {
-      const atmoGeo = new THREE.SphereGeometry(spec.radius * 1.035, 40, 26);
+      this.atmosphereRadius = spec.radius * 1.035;
+      const atmoGeo = new THREE.SphereGeometry(this.atmosphereRadius, 40, 26);
       this.atmoMaterial = new THREE.ShaderMaterial({
         vertexShader: ATMO_VERT,
         fragmentShader: ATMO_FRAG,
@@ -261,6 +262,25 @@ export class Planet {
     this._toStar.copy(starPosition).sub(this.object.position).normalize();
     this.surfaceMaterial.uniforms.uSunDir.value.copy(this._toStar);
     if (this.atmoMaterial) this.atmoMaterial.uniforms.uSunDir.value.copy(this._toStar);
+
+    // ⚠ A casca de atmosfera é desenhada pelo lado de DENTRO (BackSide) com
+    // blending aditivo, o que é correto quando ela é vista de fora: produz o
+    // halo na borda do disco. Mas quando a câmera ENTRA na casca, essa mesma
+    // face passa a cobrir a tela inteira com laranja aditivo, e o terreno
+    // some atrás de um véu. Dentro da atmosfera o efeito certo é névoa
+    // (perspectiva aérea), não uma casca — então simplesmente escondemos a
+    // casca e deixamos o fog da cena assumir.
+    //
+    // O limiar é o raio × 1.25, não o raio da própria casca (× 1.035). A
+    // casca é fina de propósito — ela existe pra desenhar o halo na BORDA do
+    // disco visto do espaço, e engrossá-la estragaria essa silhueta. Mas a
+    // atmosfera de JOGO (onde há névoa, gravidade e céu) vai muito mais alto.
+    // Esconder a casca já em 1.25 entrega a transição pro domo de céu numa
+    // altitude em que ela ainda não é vista de perto.
+    if (this.atmosphere) {
+      const camDist = cameraPosition.distanceTo(this.object.position);
+      this.atmosphere.visible = camDist > this.radius * 1.25;
+    }
 
     // ── Troca de faixa de profundidade ───────────────────────────────────
     // Quando a câmera se aproxima, o planeta precisa migrar da faixa distante

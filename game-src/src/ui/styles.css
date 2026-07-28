@@ -525,3 +525,63 @@ html, body {
   .hud__radar { bottom: calc(6px + var(--safe-b)); }
   .hud__radar canvas { transform: scale(.8); transform-origin: bottom center; }
 }
+
+/* ── Painel de voo planetário ─────────────────────────────────────────── */
+
+.hud__planet {
+  position: absolute;
+  right: calc(18px + var(--safe-r));
+  top: calc(18px + var(--safe-t));
+  padding: 10px 14px;
+  background: var(--hud-bg);
+  border: 1px solid rgba(125, 232, 255, 0.18);
+  border-radius: 4px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0;
+  transform: translateX(12px);
+  transition: opacity .35s ease, transform .35s ease;
+  pointer-events: none;
+}
+.hud__planet.is-on { opacity: 1; transform: translateX(0); }
+
+.hud__landing {
+  margin-top: 10px;
+  font-size: 9px;
+  letter-spacing: .18em;
+  color: var(--hud-green);
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.hud__landing.is-on { opacity: 1; }
+.hud__landing-ring {
+  width: 132px; height: 4px; margin-bottom: 3px;
+  background: rgba(125, 255, 168, .15); border-radius: 2px; overflow: hidden;
+}
+.hud__landing-fill {
+  height: 100%; width: 100%;
+  transform-origin: left center; transform: scaleX(0);
+  background: var(--hud-green);
+  box-shadow: 0 0 10px rgba(125, 255, 168, .7);
+}
+
+/* Vinheta de reentrada. Um segundo pseudo-elemento (o ::after já é o pulso
+   de dano), com gradiente laranja vindo das bordas — a leitura de "plasma
+   envolvendo a nave" sem custo nenhum de GPU na cena 3D. */
+.hud::before {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 120% 80% at 50% 120%,
+      rgba(255, 150, 40, .75) 0%, rgba(255, 90, 20, .3) 35%, rgba(255,60,10,0) 65%),
+    radial-gradient(ellipse at center,
+      rgba(255, 120, 30, 0) 40%, rgba(255, 90, 20, .5) 100%);
+  opacity: var(--entry-glow, 0);
+  mix-blend-mode: screen;
+}
+
+@media (max-height: 500px) {
+  .hud__planet { padding: 7px 10px; }
+  .hud__landing-ring { width: 104px; }
+}

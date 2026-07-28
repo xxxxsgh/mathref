@@ -103,6 +103,20 @@ export class HUD {
         <div class="hud__radar-label" id="hud-contacts">0 contatos</div>
       </div>
 
+      <!-- Painel planetário: só aparece dentro da atmosfera. -->
+      <div class="hud__planet" id="hud-planet">
+        <div class="hud__label">Altitude</div>
+        <div><span class="hud__value" id="hud-alt" style="font-size:22px">0</span><span class="hud__unit">u</span></div>
+        <div class="hud__label" style="margin-top:6px">Vertical</div>
+        <div><span class="hud__value" id="hud-vspeed" style="font-size:16px">0</span><span class="hud__unit">u/s</span></div>
+        <div class="hud__label" style="margin-top:8px">Casco térmico</div>
+        <div class="hud__bar"><div class="hud__bar-fill hud__bar-fill--heat" id="hud-thermal"></div></div>
+        <div class="hud__landing" id="hud-landing">
+          <div class="hud__landing-ring"><div class="hud__landing-fill" id="hud-landing-fill"></div></div>
+          <span id="hud-landing-text">POUSO</span>
+        </div>
+      </div>
+
       <div class="hud__status" id="hud-status"></div>
       <div class="hud__bigmsg" id="hud-bigmsg"></div>
     `;
@@ -129,6 +143,12 @@ export class HUD {
       hullNum: q('hud-hull-num'),
       heatBar: q('hud-heat-bar'),
       contacts: q('hud-contacts'),
+      planet: q('hud-planet'),
+      alt: q('hud-alt'),
+      vspeed: q('hud-vspeed'),
+      thermal: q('hud-thermal'),
+      landing: q('hud-landing'),
+      landingFill: q('hud-landing-fill'),
       status: q('hud-status'),
       bigmsg: q('hud-bigmsg'),
     };
@@ -142,6 +162,8 @@ export class HUD {
     this._lastAlert = null;
     this._bigMsgTimer = 0;
     this._damageFlash = 0;
+    this._planetVisible = false;
+    this._entryGlow = 0;
   }
 
   show() { this.root.classList.add('is-visible'); }
@@ -163,9 +185,10 @@ export class HUD {
    * @param {import('../systems/Combat.js').Combat} combat
    * @param {number} dt
    */
-  update(ship, input, camera, combat, dt) {
+  update(ship, input, camera, combat, dt, planetary) {
     const f = ship.flight;
 
+    if (planetary) this._updatePlanetary(planetary);
     this._updateReticle(input);
     this._updateVelocityMarker(f, camera);
     this._updateTargeting(camera, combat);
@@ -177,6 +200,45 @@ export class HUD {
   }
 
   // ───────────────────────────────────────────────────────────────────────
+  /** Painel de voo atmosférico + vinheta de reentrada. */
+  _updatePlanetary(pf) {
+    const show = pf.inAtmosphere;
+    if (show !== this._planetVisible) {
+      this._planetVisible = show;
+      this.el.planet.classList.toggle('is-on', show);
+    }
+    if (!show) {
+      if (this._entryGlow !== 0) {
+        this._entryGlow = 0;
+        this.root.style.setProperty('--entry-glow', '0');
+      }
+      return;
+    }
+
+    const alt = Math.round(pf.altitude);
+    this._set('alt', 'alt', String(alt));
+    const vs = Math.round(pf.verticalSpeed);
+    this._set('vspeed', 'vspeed', (vs > 0 ? '+' : '') + vs);
+    this.el.vspeed.classList.toggle('is-bad', vs < -CONFIG.surface.crashSpeed);
+
+    this.el.thermal.style.transform = `scaleX(${Math.min(1, pf.heat)})`;
+    this.el.thermal.classList.toggle('is-critical', pf.heat > 0.85);
+
+    // Indicador de pouso: um anel que preenche enquanto as condições são
+    // mantidas. Sem ele, "por que não pousou ainda?" não tem resposta visível.
+    const lp = pf.landingProgress;
+    this.el.landing.classList.toggle('is-on', lp > 0.01);
+    this.el.landingFill.style.transform = `scaleX(${lp})`;
+
+    // Vinheta de reentrada dirigida por custom property — o navegador anima
+    // no compositor, sem tocar no layout.
+    const glow = pf.entryEffect;
+    if (Math.abs(glow - this._entryGlow) > 0.01) {
+      this._entryGlow = glow;
+      this.root.style.setProperty('--entry-glow', String(glow));
+    }
+  }
+
   _updateReticle(input) {
     if (input.aimActive && input.source === 'keyboard') {
       const half = Math.min(window.innerWidth, window.innerHeight) * 0.5;

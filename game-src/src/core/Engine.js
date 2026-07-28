@@ -12,6 +12,9 @@ import { DebugPanel } from '../ui/DebugPanel.js';
 import { TouchUI } from '../ui/TouchUI.js';
 import { Combat } from '../systems/Combat.js';
 import { SolarSystem } from '../procgen/SolarSystem.js';
+import { PlanetSurface } from '../systems/PlanetSurface.js';
+import { PlanetaryFlight } from '../systems/PlanetaryFlight.js';
+import { SkyDome } from '../systems/SkyDome.js';
 
 /**
  * Orquestrador: monta a cena, roda o loop, coordena os sistemas.
@@ -63,6 +66,11 @@ export class Engine {
     this.system = new SolarSystem(this.scene, CONFIG.world.seed);
     this.combat = new Combat(this.scene, this.ship);
     this.combat.asteroidsProvider = () => this.system.asteroids;
+    this.surface = new PlanetSurface(this.scene);
+    this.planetary = new PlanetaryFlight();
+    this.skyDome = new SkyDome(this.scene);
+    this._camUp = new THREE.Vector3(0, 1, 0);
+    this._sunDir = new THREE.Vector3();
 
     // Começa perto do cinturão em vez da origem: a origem é o centro da
     // estrela e não tem nada por perto. Nascer com um planeta e o cinturão à
@@ -281,6 +289,18 @@ export class Engine {
       this.ship.flight.update(NEUTRAL_CONTROL, dt);
     }
 
+    // ── Referência de "para cima" da câmera ─────────────────────────────
+    // No espaço é o +Y do mundo; num planeta é a normal da superfície. A
+    // interpolação pela densidade atmosférica é o que faz o horizonte "se
+    // endireitar" durante a descida em vez de saltar.
+    const rho = this.planetary.atmosphereDensity;
+    if (rho > 0.001 && this.planetary.planet) {
+      this._camUp.set(0, 1, 0).lerp(this.planetary.up, Math.min(1, rho * 2.2)).normalize();
+    } else {
+      this._camUp.set(0, 1, 0);
+    }
+    this.cameraRig.upReference.copy(this._camUp);
+
     this.cameraRig.update(this.ship.flight, dt);
     // A câmera distante espelha a próxima; precisa ser sincronizada DEPOIS
     // do rig e ANTES de qualquer coisa que dependa da matriz de projeção.
@@ -288,6 +308,39 @@ export class Engine {
     // Depois da câmera: a luz de preenchimento é definida em relação a ela.
     this._updateFillLight();
     this.system.update(this.renderer.camera.position, dt);
+
+    // ── Voo planetário ──────────────────────────────────────────────────
+    // Precisa rodar DEPOIS da nave (usa a posição já integrada) e ANTES do
+    // combate (o dano de reentrada e de batida entra no mesmo frame).
+    if (!this.combat.playerDead) {
+      const r = this.planetary.update(
+        this.ship.flight, this.surface, this.system, state, dt,
+      );
+      if (r.damage > 0) {
+        const res = this.combat.playerHealth.applyDamage(r.damage);
+        if (r.crashed) {
+          this.combat.explosions.sparks(this.ship.position, this.planetary.up);
+          this.hud.flashDamage();
+        }
+        if (res.destroyed) this.combat._killPlayer();
+      }
+      this._trackLandingState();
+      this._emitReentryTrail(dt);
+    }
+    this.surface.update(this.ship.position, dt);
+    this.surface.applyFog(this.planetary.atmosphereDensity);
+    if (this.planetary.planet) {
+      this._sunDir.copy(this.system.starPosition).sub(this.ship.position).normalize();
+      this.skyDome.update(
+        this.renderer.camera.position,
+        this.planetary.atmosphereDensity,
+        this.planetary.up,
+        this._sunDir,
+        this.planetary.planet.spec.colors.atmosphere,
+      );
+    } else {
+      this.skyDome.update(this.renderer.camera.position, 0, this._camUp, this._sunDir, 0);
+    }
 
     // O combate depende da câmera (escolha de alvo usa o eixo de visão), por
     // isso vem depois dela e antes da HUD.
@@ -297,7 +350,48 @@ export class Engine {
     this.dust.update(this.ship.position, this.ship.speed, dt);
 
     this.touchUI?.update(state);
-    this.hud.update(this.ship, state, this.renderer.camera, this.combat, dt);
+    this.hud.update(this.ship, state, this.renderer.camera, this.combat, dt, this.planetary);
+  }
+
+  /** Rastro de plasma da reentrada.
+   *  As partículas nascem ATRÁS da nave e herdam parte da velocidade dela, o
+   *  que produz a esteira alongada característica em vez de uma nuvem que
+   *  fica pra trás de forma estática. */
+  _emitReentryTrail(dt) {
+    const heat = this.planetary.entryEffect;
+    if (heat < 0.12) return;
+    this._reentryAccum = (this._reentryAccum ?? 0) + heat * 90 * dt;
+    let n = Math.floor(this._reentryAccum);
+    if (n <= 0) return;
+    this._reentryAccum -= n;
+    n = Math.min(n, 6);   // teto por frame, pra não estourar o pool
+
+    const f = this.ship.flight;
+    for (let i = 0; i < n; i++) {
+      this._trailPos ??= new THREE.Vector3();
+      this._trailPos.copy(f.position)
+        .addScaledVector(f.getForward(this._trailDir ??= new THREE.Vector3()), -6 - Math.random() * 10)
+        .add(this._trailJitter ??= new THREE.Vector3());
+      this._trailJitter.set(
+        (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8,
+      );
+      this._trailPos.add(this._trailJitter);
+      this.combat.explosions.sparks(this._trailPos, null);
+    }
+  }
+
+  /** Avisa o jogador ao pousar e ao decolar. Guardar o estado anterior evita
+   *  disparar a mensagem em todo frame enquanto ele está pousado. */
+  _trackLandingState() {
+    const landed = this.planetary.landed;
+    if (landed === this._wasLanded) return;
+    this._wasLanded = landed;
+    if (landed) {
+      const p = this.planetary.planet;
+      this.hud.bigMessage(`POUSADO · ${p?.spec.type.toUpperCase() ?? ''}`, 2.4, 'good');
+    } else {
+      this.hud.bigMessage('DECOLANDO', 1.2);
+    }
   }
 
   /** Contagem de entidades ativas (nave, inimigos, projéteis, partículas). */
@@ -308,6 +402,8 @@ export class Engine {
   dispose() {
     this.pause();
     this.input.dispose();
+    this.surface.dispose();
+    this.skyDome.dispose();
     this.system.dispose();
     this.combat.dispose();
     this.ship.dispose();

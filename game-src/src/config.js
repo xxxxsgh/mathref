@@ -486,6 +486,67 @@ export const CONFIG = {
     collisionCooldown: 0.7,
   },
 
+  // ───────────────────────────────────────────────────────────────────────
+  // SUPERFÍCIE PLANETÁRIA (Fase 4)
+  // ───────────────────────────────────────────────────────────────────────
+  surface: {
+    // Grade de chunks em volta do jogador. 7×7 = 49 chunks.
+    // Ímpar de propósito: existe um chunk central, sob os pés.
+    gridSize: 7,
+    chunkSize: 900,        // lado de um chunk, em unidades
+    resolution: 24,        // subdivisões por lado → 24²×2 = 1152 triângulos
+    // Quantos chunks podem ser gerados por frame. Gerar um custa ~2ms; fazer
+    // os 49 de uma vez seria um engasgo de 100ms bem na hora da descida.
+    chunksPerFrame: 2,
+    // Cosseno do ângulo além do qual a base tangente local é refeita. Como
+    // toda a grade é definida nessa base, refazê-la invalida tudo — então o
+    // limiar precisa ser folgado (~8° de arco).
+    baseRefreshCos: 0.99,
+
+    // Amplitude do relevo, como fração do raio do planeta. Num planeta de
+    // 3900 unidades isto dá picos de ~120 — treze vezes o comprimento da
+    // nave. A primeira tentativa usava 0.012 (47 unidades) e o resultado era
+    // uma planície: o terreno existia, mas não dava nenhuma sensação de
+    // relevo nem de escala.
+    reliefFactor: 0.031,
+
+    // ── Névoa atmosférica ──
+    // Além de bonita, ela resolve um problema concreto: esconder a borda da
+    // grade de chunks. Sem névoa, o terreno termina numa linha reta no
+    // horizonte e denuncia o streaming.
+    // Calibrado pela distância do horizonte: a ~100 unidades de altitude num
+    // planeta de 3900, o horizonte fica a ~880 unidades. A névoa deve cobrir
+    // uns 40% ali — o bastante pra dar profundidade, longe de apagar o
+    // terreno. 0.0016 apagava tudo além de 700 unidades.
+    fogDensityAtGround: 0.0007,
+
+    // ── Entrada atmosférica ──
+    // ⚠ Estes quatro números formam um balanço, e a primeira versão errou:
+    // com heatRate 0.85 e heatCooling 0.42 o resfriamento vencia o
+    // aquecimento em qualquer velocidade plausível, e o calor NUNCA saía de
+    // zero. A reentrada não existia.
+    //
+    // Como calibrar: o aquecimento é (v/ref)³ · densidade · heatRate. Some o
+    // resultado ao longo do tempo de travessia da atmosfera e subtraia
+    // heatCooling · tempo. Descer a ~150 u/s deve terminar com calor ~0;
+    // mergulhar a 400 u/s deve estourar 1.0 e custar escudo.
+    entryAltitudeFactor: 0.55,   // fração do raio onde a atmosfera começa
+    airDrag: 0.55,
+    heatReferenceSpeed: 320,
+    heatRate: 1.5,
+    heatCooling: 0.3,
+    heatDamage: 30,              // dano/s quando o calor passa de 1
+
+    // ── Solo ──
+    hullClearance: 7,            // altura mínima do centro da nave ao solo
+    groundFriction: 2.4,
+    crashSpeed: 55,              // acima disso, bater no chão causa dano
+    crashDamagePerSpeed: 1.5,
+    landingSpeed: 22,
+    landingAltitudeFactor: 1.4,
+    landingTime: 0.9,            // segundos parado até contar como pousado
+  },
+
   effects: {
     explosion: {
       particles: { high: 42, medium: 28, low: 16 },

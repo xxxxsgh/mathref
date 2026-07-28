@@ -56,6 +56,19 @@ export class CameraRig {
     this._origin = new THREE.Vector3();
     this._prevShipPos = new THREE.Vector3();
     this._shipDelta = new THREE.Vector3();
+
+    /**
+     * Referência de "para cima" do mundo.
+     *
+     * No espaço é o +Y global — uma escolha arbitrária, mas estável, que dá
+     * ao jogador uma noção de horizonte. Num planeta ela precisa ser a
+     * NORMAL DA SUPERFÍCIE, senão o horizonte aparece inclinado num ângulo
+     * aleatório (o que quer que sobre do +Y global naquele ponto do globo) e
+     * voar baixo fica desorientador.
+     *
+     * O Engine interpola entre os dois conforme a densidade atmosférica.
+     */
+    this.upReference = new THREE.Vector3(0, 1, 0);
   }
 
   /** @param {import('./FlightModel.js').FlightModel} ship @param {number} dt */
@@ -188,7 +201,8 @@ export class CameraRig {
     // Caso degenerado: nariz apontando exatamente pro up do mundo. Aí não há
     // "sem roll" bem definido (qualquer roll é equivalente), então mantemos a
     // âncora como está em vez de produzir uma base instável.
-    if (Math.abs(this._rollFwd.y) > 0.999) {
+    // Caso degenerado: nariz alinhado com a própria referência de "cima".
+    if (Math.abs(this._rollFwd.dot(this.upReference)) > 0.999) {
       this._flatQuat.copy(this.anchorQuat);
       return;
     }
@@ -197,7 +211,7 @@ export class CameraRig {
     // direção frontal da âncora, mas com o up preso ao mundo — ou seja, sem
     // roll nenhum.
     this._origin.set(0, 0, 0);
-    this._rollUp.set(0, 1, 0);
+    this._rollUp.copy(this.upReference);
     this._m.lookAt(this._origin, this._rollFwd, this._rollUp);
     this._flatQuat.setFromRotationMatrix(this._m);
     // Interpola de volta em direção à âncora completa: 0 = sem roll nenhum,
