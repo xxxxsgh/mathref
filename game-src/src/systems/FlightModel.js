@@ -151,7 +151,7 @@ export class FlightModel {
    *
    * ═══ POR QUE UM PISO PARA RELIGAR ═══
    *
-   * A implementação ingnêua é `boosting = input.boost && fuel > 0`. O problema
+   * A implementação ingênua é `boosting = input.boost && fuel > 0`. O problema
    * aparece com o tanque vazio: no primeiro frame em que a recarga devolve
    * qualquer coisa acima de zero, o boost liga, gasta e desliga. Segurando o
    * botão isso vira uma oscilação a 60 Hz — o motor pisca, a câmera treme, o
@@ -198,7 +198,7 @@ export class FlightModel {
     return CONFIG.flight.boostFuel > 0 ? this.boostFuel / CONFIG.flight.boostFuel : 0;
   }
 
-  // ─────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────
   _updateManeuver(input, dt) {
     const B = CONFIG.flight.barrelRoll;
     const m = this.maneuver;
@@ -360,13 +360,13 @@ export class FlightModel {
    * colisão exatamente concêntrica, ou uma raiz de discriminante negativo que
    * escapou de uma verificação.
    *
-   * Além do NaN, há o teto de velocidade. Ele não deveria ser atingivel — a
+   * Além do NaN, há o teto de velocidade. Ele não deveria ser atingível — a
    * velocidade frontal é limitada por `damp` em direção a um alvo finito —
    * mas as componentes laterais recebem impulsos de várias fontes (colisão
    * com rocha, quique no solo, propulsores, manobra), e um empilhamento
    * patológico entre elas é difícil de descartar por análise. O teto custa
    * duas comparações por frame e transforma um bug potencialmente fatal num
-   * soluço imperceptivel.
+   * soluço imperceptível.
    */
   _sanitize() {
     const v = this.velocity;

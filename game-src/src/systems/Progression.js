@@ -154,7 +154,7 @@ export class Progression {
     this.load();
   }
 
-  // ── Multiplicadores derivados ────────────────────────────
+  // ── Multiplicadores derivados ────────────────────────────────────────
   get engineMul() { return UPGRADES.engine.levels[this.levels.engine]; }
   get shieldMul() { return UPGRADES.shield.levels[this.levels.shield]; }
   get weaponMul() { return UPGRADES.weapons.levels[this.levels.weapons]; }
@@ -233,7 +233,7 @@ export class Progression {
     return true;
   }
 
-  // ── Persistência ────────────────────────────────────────────────
+  // ── Persistência ─────────────────────────────────────────────────────
   save() {
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
