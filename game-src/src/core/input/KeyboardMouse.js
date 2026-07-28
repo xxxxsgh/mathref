@@ -1,5 +1,5 @@
 import { CONFIG } from '../../config.js';
-import { clamp, damp } from '../MathUtils.js';
+import { clamp, damp, applyExpo } from '../MathUtils.js';
 
 /**
  * Teclado + mouse (desktop).
@@ -166,8 +166,13 @@ export class KeyboardMouseSource {
 
       const mag = Math.hypot(this.aimX, this.aimY);
       if (mag > M.deadzone) {
-        // Reescala pra que o comando comece em 0 na borda da deadzone.
-        const k = ((mag - M.deadzone) / (1 - M.deadzone) / mag) * M.gain;
+        // Reescala pra que o comando comece em 0 na borda da deadzone, e
+        // aplica a curva expo na MAGNITUDE (não em cada eixo separado): assim
+        // a direção do comando é preservada e as diagonais não ficam mais
+        // fracas que os eixos puros.
+        const linear = (mag - M.deadzone) / (1 - M.deadzone);
+        const curved = applyExpo(linear, M.expo ?? 1) * M.gain;
+        const k = curved / mag;
         s.yaw += clamp(this.aimX * k, -1, 1);
         s.pitch += clamp(-this.aimY * k * (M.invertY ? -1 : 1), -1, 1);
       }

@@ -27,7 +27,7 @@ export class Ship {
     this._disposeModel = built.dispose;
     scene.add(this.object);
 
-    // ── Chamas de motor ──────────────────────────────────────────────────
+    // ── Chamas de motor ──────────────────────────────────────────────────────────────
     // Duas peças por bocal:
     //  - um sprite de brilho (sempre virado pra câmera) = o núcleo quente
     //  - um plano esticado ao longo de -Z = o rastro direcional
@@ -82,6 +82,9 @@ export class Ship {
 
     this._trailLength = CONFIG.ship.trailLengthBase;
     this._glow = CONFIG.ship.engineGlowMin;
+    /** Inclinação visual acumulada (radianos). Ver _updateBank. */
+    this._bank = 0;
+    this._bankPitch = 0;
   }
 
   get position() { return this.flight.position; }
@@ -97,7 +100,34 @@ export class Ship {
     this.object.position.copy(this.flight.position);
     this.object.quaternion.copy(this.flight.quaternion);
 
+    this._updateBank(input, dt);
     this._updateEngines(dt);
+  }
+
+  /**
+   * Inclinação da nave para dentro da curva.
+   *
+   * ═══ POR QUE SÓ A MALHA, E NÃO O VOO ═══
+   *
+   * A tentação é rolar o quaternion de voo de verdade. Não dá: isso gira os
+   * EIXOS DE CONTROLE junto. Depois de inclinar 40°, o comando de "cabrar"
+   * do jogador passaria a apontar 40° para o lado, e ele perderia a noção de
+   * onde é para cima. É desorientador e, pior, imprevisível.
+   *
+   * Inclinar apenas a malha dá toda a leitura visual — a nave "deita" na
+   * curva, como um caça — sem tocar em nada da física. É o mesmo truque do
+   * Star Fox, e a razão de ele funcionar lá.
+   */
+  _updateBank(input, dt) {
+    const F = CONFIG.flight;
+    // Durante o barrel roll a malha não deve inclinar: a manobra já é uma
+    // rotação completa e somar inclinação a ela vira tremor.
+    const target = this.flight.maneuver.active ? 0 : -input.yaw * F.autoBank;
+    const targetPitch = this.flight.maneuver.active ? 0 : input.pitch * F.autoBankPitch;
+    this._bank = damp(this._bank, target, F.autoBankLambda, dt);
+    this._bankPitch = damp(this._bankPitch, targetPitch, F.autoBankLambda, dt);
+    this.mesh.rotation.z = this._bank;
+    this.mesh.rotation.x = this._bankPitch;
   }
 
   _updateEngines(dt) {

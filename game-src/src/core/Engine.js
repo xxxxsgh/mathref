@@ -72,11 +72,13 @@ export class Engine {
     this.system = new SolarSystem(this.scene, CONFIG.world.seed);
     this.combat = new Combat(this.scene, this.ship);
     this.combat.asteroidsProvider = () => this.system.asteroids;
+    this.combat.planetaryProvider = () => this.planetary;
+    this.combat.surfaceProvider = () => (this.surface.active ? this.surface : null);
     this.surface = new PlanetSurface(this.scene);
     this.planetary = new PlanetaryFlight();
     this.skyDome = new SkyDome(this.scene);
 
-    // ── Progressão ────────────────────────────────────────────────────────
+    // ── Progressão ─────────────────────────────────────────────────────────────────────
     this.progression = new Progression();
     this.missions = new Missions(this.system, this.progression);
     this.upgrades = new UpgradePanel(document.getElementById('upgrades'), this.progression);
@@ -113,6 +115,12 @@ export class Engine {
     this._placeStartingPosition();
 
     this.hud = new HUD(document.getElementById('hud'));
+    // Marcadores de navegação: um elemento por planeta e por estação. Tem que
+    // vir depois da HUD existir — e é a peça que torna os planetas
+    // ALCANÇÁVEIS, não só existentes.
+    this.hud.nav.build(this.system);
+    this.hud._system = this.system;
+
     this.debug = new DebugPanel(document.getElementById('debug-panel'));
     this.touchUI = this.input.touch
       ? new TouchUI(
@@ -331,7 +339,7 @@ export class Engine {
       this.ship.flight.update(NEUTRAL_CONTROL, dt);
     }
 
-    // ── Referência de "para cima" da câmera ─────────────────────────────
+    // ── Referência de "para cima" da câmera ──────────────────────────────
     // No espaço é o +Y do mundo; num planeta é a normal da superfície. A
     // interpolação pela densidade atmosférica é o que faz o horizonte "se
     // endireitar" durante a descida em vez de saltar.
@@ -351,7 +359,7 @@ export class Engine {
     this._updateFillLight();
     this.system.update(this.renderer.camera.position, dt);
 
-    // ── Voo planetário ──────────────────────────────────────────────────
+    // ── Voo planetário ────────────────────────────────────────
     // Precisa rodar DEPOIS da nave (usa a posição já integrada) e ANTES do
     // combate (o dano de reentrada e de batida entra no mesmo frame).
     if (!this.combat.playerDead) {
