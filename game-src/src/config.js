@@ -630,7 +630,7 @@ export const CONFIG = {
 
     // ── Vegetação e rochas ──
     // Sem nada de tamanho conhecido em cena, o olho não consegue estimar a
-    // escala do relevo — e um mundo sem escala aparente parece uma maquete. Ver
+    // escala do relevo — e um mundo sem escala aparente parece maquete. Ver
     // procgen/SurfaceProps.js.
     props: {
       // Candidatos sorteados por chunk. Nem todos vingam: água, inclinação e
