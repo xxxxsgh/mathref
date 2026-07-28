@@ -1,0 +1,296 @@
+/**
+ * config.js — TODAS as constantes de gameplay num lugar só.
+ *
+ * Regra do projeto: nenhum número mágico de gameplay pode viver dentro de um
+ * sistema. Se você precisa caçar um valor pra ajustar o feel, ele está errado
+ * de lugar. Tudo aqui é editável em runtime pelo painel lil-gui (tecla G).
+ *
+ * Unidades:
+ *   distância = "unidades de mundo" (u). 1u ≈ 1 metro na escala da nave.
+ *   ângulo    = radianos, sempre.
+ *   tempo     = segundos.
+ *   "lambda"  = taxa de suavização exponencial (ver MathUtils.damp).
+ *               Intuição: quanto MAIOR, mais rápido/mais grudado.
+ *               O valor é ~ "quantos e-folds por segundo".
+ */
+
+import { MathUtils as TM } from 'three';
+
+const DEG = TM.degToRad;
+
+export const CONFIG = {
+  // ───────────────────────────────────────────────────────────────────────
+  // MUNDO
+  // ───────────────────────────────────────────────────────────────────────
+  world: {
+    seed: 'starfarer-01',
+    // Near/far da câmera. Far grande demais destrói a precisão do depth buffer
+    // (z-fighting). 100k com near 0.5 já é agressivo; nas fases planetárias
+    // vamos precisar de logarithmicDepthBuffer ou renderização em camadas.
+    near: 0.5,
+    far: 100000,
+    fov: 68,
+    // Direção de onde vem a luz da estrela do sistema (normalizada no uso).
+    // O skybox desenha o disco solar exatamente nessa direção, então mudar
+    // aqui move a luz E o sol visível juntos.
+    sunDirection: [0.45, 0.28, -0.85],
+    sunColor: 0xfff0d8,
+    sunIntensity: 3.1,
+    ambientColor: 0x2a3a6b,
+    ambientIntensity: 0.55,
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // MODELO DE VOO
+  // ───────────────────────────────────────────────────────────────────────
+  // Filosofia: "arcade com peso". A nave NÃO é um corpo rígido newtoniano.
+  // A rotação é comandada por velocidade angular alvo (não por torque), e a
+  // velocidade linear é puxada pra uma velocidade alvo. O "peso" vem de dois
+  // lugares: (1) o tempo que a velocidade angular leva pra alcançar o alvo,
+  // (2) a deriva lateral que sobra quando você vira rápido.
+  flight: {
+    // Velocidade angular MÁXIMA em cada eixo local (rad/s).
+    // pitch = nariz sobe/desce, yaw = nariz esquerda/direita, roll = giro.
+    maxPitchRate: DEG(105),
+    maxYawRate: DEG(78),
+    maxRollRate: DEG(190),
+
+    // Quão rápido a velocidade angular alcança o alvo. Este é O parâmetro do
+    // feel de curva. Alto (>14) = responsivo/nervoso tipo Star Fox.
+    // Baixo (<5) = pesado/lento tipo cargueiro. Roll costuma querer ser mais
+    // frouxo que pitch/yaw pra dar sensação de massa.
+    pitchYawResponse: 9.0,
+    rollResponse: 6.5,
+
+    // Amortecimento quando você SOLTA o controle. Separado do de cima porque
+    // "parar de virar" deve ser um pouco mais lento que "começar a virar" —
+    // é isso que dá a sensação de inércia rotacional.
+    angularDamping: 5.0,
+
+    // ── Translação ──
+    maxSpeed: 320,          // u/s no acelerador cheio, sem boost
+    boostMultiplier: 2.35,  // multiplica a velocidade alvo E a aceleração
+    minSpeed: 0,            // deixe >0 se quiser que a nave nunca pare
+
+    // Quão rápido a velocidade real alcança a velocidade alvo (aceleração).
+    // Assimétrico de propósito: acelerar é mais lento que desacelerar, o que
+    // faz o boost "carregar" e o freio morder na hora.
+    accelResponse: 1.5,
+    decelResponse: 2.6,
+    brakeResponse: 5.2,     // com Space segurado
+
+    // ── Deriva lateral (o coração do "peso") ──
+    // Quando você vira, a velocidade continua apontando pro lado antigo por um
+    // instante. lateralDrag alto = nave "gruda" no trilho (arcade puro).
+    // lateralDrag baixo = drift estilo nave espacial (mais escorregadio).
+    // 3.0 é o meio-termo: você VÊ o drift, mas ele resolve rápido.
+    lateralDrag: 3.0,
+    brakeLateralDrag: 7.0,  // freio também mata o drift
+
+    // Aceleração dos propulsores laterais/verticais (6DOF real).
+    strafeAccel: 105,
+    strafeDrag: 3.4,
+
+    // ── Acelerador ──
+    throttleRate: 1.35,     // quanto o acelerador varia por segundo na tecla
+    throttleInitial: 0.55,
+
+    // ── Barrel roll (manobra do Star Fox) ──
+    barrelRoll: {
+      duration: 0.52,       // segundos pra completar 360°
+      cooldown: 0.28,
+      lateralKick: 78,      // impulso lateral (u/s) — é o que faz desviar
+      kickDecay: 3.2,
+    },
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // CÂMERA DE PERSEGUIÇÃO
+  // ───────────────────────────────────────────────────────────────────────
+  // A câmera não gruda na nave. Ela persegue um "âncora" que interpola em
+  // direção à orientação da nave — é isso que produz o balanço nas curvas.
+  camera: {
+    offset: [0, 2.35, 11.0],  // atrás e acima, no espaço LOCAL da âncora
+    lookAhead: 26,            // olha à frente da nave, não pra ela
+
+    // Suavização. positionLambda alto = câmera colada. Baixo = arrastada.
+    positionLambda: 7.5,
+    // Quão rápido a âncora acompanha a rotação da nave. MENOR que o de posição
+    // de propósito: a câmera demora a alinhar, e é isso que faz a nave "sair
+    // de quadro" numa curva forte — o efeito mais barato de sensação de força.
+    rotationLambda: 5.2,
+
+    // Fração do roll da nave que a câmera copia. 1.0 = enjoo garantido,
+    // 0.0 = barrel roll não lê. 0.62 é o ponto onde a manobra é legível sem
+    // embrulhar o estômago.
+    rollFollow: 0.62,
+
+    // A câmera recua e o FOV abre com velocidade. Isso é a "sensação de
+    // velocidade" — o valor absoluto de u/s não significa nada pro jogador.
+    fovBase: 68,
+    fovSpeedGain: 15,     // graus adicionais na velocidade máxima
+    fovBoostGain: 13,     // graus adicionais no boost
+    fovLambda: 4.2,
+    pullbackSpeedGain: 2.4,  // recuo (u) na velocidade máxima
+    pullbackBoostGain: 4.0,
+
+    // Deslocamento lateral proporcional à velocidade angular. Vende a curva.
+    swayGain: 1.5,
+    swayLambda: 6.0,
+
+    // Tremor no boost. Sutil: acima de ~0.35 vira ruído visual.
+    boostShake: 0.16,
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // CONTROLES
+  // ───────────────────────────────────────────────────────────────────────
+  input: {
+    keyboard: {
+      // Mapa de teclas → ação. Use os códigos do KeyboardEvent.code
+      // (independente de layout: 'KeyW' é a tecla física, funciona em ABNT2).
+      pitchUp: ['KeyS'],
+      pitchDown: ['KeyW'],
+      yawLeft: ['KeyA'],
+      yawRight: ['KeyD'],
+      rollLeft: ['KeyQ'],
+      rollRight: ['KeyE'],
+      throttleUp: ['KeyR', 'ShiftLeft'],
+      throttleDown: ['KeyF'],
+      strafeLeft: ['ArrowLeft'],
+      strafeRight: ['ArrowRight'],
+      strafeUp: ['ArrowUp'],
+      strafeDown: ['ArrowDown'],
+      boost: ['ShiftLeft', 'ShiftRight'],
+      brake: ['Space'],
+      barrelRollLeft: ['KeyZ'],
+      barrelRollRight: ['KeyC'],
+      toggleAssist: ['KeyH'],
+      toggleDebug: ['F3', 'Backquote'],
+      toggleTuner: ['KeyG'],
+    },
+    mouse: {
+      enabled: true,
+      // O mouse move um retículo virtual (não é câmera livre). O deslocamento
+      // do retículo em relação ao centro vira comando de pitch/yaw — como um
+      // manche. Funciona com e sem Pointer Lock, e o retículo já é o elemento
+      // de HUD que a mira preditiva vai usar na Fase 2.
+      usePointerLock: true,
+      sensitivity: 0.0022,   // só com pointer lock
+      deadzone: 0.06,        // raio morto no centro, em unidades de tela
+      gain: 1.0,             // multiplicador do comando resultante
+      // Recentragem lenta do retículo quando o mouse para. 0 = desligado.
+      recenter: 0.9,
+      invertY: false,
+    },
+    gamepad: {
+      enabled: true,
+      deadzone: 0.14,        // deadzone RADIAL (no vetor), não por eixo
+      expo: 1.6,             // curva de resposta: >1 dá precisão no centro
+      // Índices do "standard gamepad mapping" do navegador.
+      axisPitch: 1,
+      axisYaw: 0,
+      axisRollNeg: 4,        // botão L1
+      axisRollPos: 5,        // botão R1
+      buttonBoost: 7,        // RT
+      buttonBrake: 6,        // LT
+      buttonBarrelLeft: 2,   // X
+      buttonBarrelRight: 1,  // B
+      buttonThrottleUp: 12,  // d-pad cima
+      buttonThrottleDown: 13,
+    },
+    touch: {
+      enabled: 'auto',       // 'auto' | true | false
+      stickRadius: 82,       // px
+      stickDeadzone: 0.10,
+      expo: 1.5,
+      // O manche touch é "flutuante": ele nasce onde o dedo encosta na metade
+      // esquerda da tela, em vez de ficar fixo num canto. Isso é o que faz a
+      // diferença entre jogável e bom no iPad.
+      floatingStick: true,
+    },
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // AMBIENTE VISUAL
+  // ───────────────────────────────────────────────────────────────────────
+  skybox: {
+    // O skybox é gerado UMA vez num cube render target e vira scene.background.
+    // Custo por frame depois disso: um blit. Rodar o shader de ruído todo frame
+    // numa tela cheia mataria o iPad.
+    size: { high: 1024, medium: 768, low: 512 },
+    nebulaColorA: [0.94, 0.36, 0.20],   // laranja queimado
+    nebulaColorB: [0.35, 0.22, 0.78],   // roxo
+    nebulaColorC: [0.10, 0.62, 0.86],   // ciano
+    nebulaIntensity: 1.45,
+    nebulaScale: 1.35,
+    // Plano da "via láctea": concentra nebulosa e estrelas numa faixa.
+    // É o que dá a cara de capa de livro de ficção dos anos 70.
+    bandNormal: [0.24, 0.94, 0.24],
+    bandTightness: 1.9,
+    starDensity: 165,
+    starBrightness: 1.0,
+    sunDiscSize: 0.9985,   // cos do ângulo — quanto mais perto de 1, menor
+    sunGlowFalloff: 320,
+  },
+
+  dust: {
+    // Poeira espacial: sem ela, voar no vazio não tem referência de movimento
+    // e o jogo parece travado mesmo a 300 u/s. É o efeito com melhor
+    // custo-benefício de sensação de velocidade que existe.
+    count: { high: 2600, medium: 1600, low: 900 },
+    boxSize: 260,      // cubo que acompanha a nave; partículas dão wrap nele
+    size: 0.55,
+    opacity: 0.5,
+    speedFadeIn: 18,   // abaixo dessa velocidade a poeira some
+    color: 0x9fc4ff,
+  },
+
+  ship: {
+    engineGlowMin: 0.28,
+    engineGlowMax: 1.35,
+    trailLengthBase: 3.4,
+    trailLengthBoost: 13.0,
+    trailLambda: 8.0,
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // PERFORMANCE / QUALIDADE ADAPTATIVA
+  // ───────────────────────────────────────────────────────────────────────
+  // Antecipado da Fase 6 de propósito: o iPad segura 60fps por poucos minutos
+  // e depois cai por temperatura. Se cada sistema não nascer sabendo ler um
+  // nível de qualidade, adicionar isso depois vira refactor geral.
+  quality: {
+    // Tiers do melhor pro pior. O jogo começa no tier sugerido pelo device e
+    // desce sozinho se o frame time estourar.
+    tiers: [
+      { name: 'alto',  pixelRatio: 2.0, skybox: 'high',   dust: 'high',   shadows: true },
+      { name: 'médio', pixelRatio: 1.5, skybox: 'medium', dust: 'medium', shadows: true },
+      { name: 'baixo', pixelRatio: 1.0, skybox: 'medium', dust: 'low',    shadows: false },
+      { name: 'mínimo',pixelRatio: 0.75,skybox: 'low',    dust: 'low',    shadows: false },
+    ],
+    startTierDesktop: 0,
+    startTierMobile: 1,
+    // Teto absoluto de devicePixelRatio. No iPad o DPR nativo é 2.0, o que
+    // significa 4x o custo de fill rate. Este é o botão de performance mais
+    // eficaz que existe no projeto.
+    maxPixelRatio: 2.0,
+    // Orçamento de frame time (ms). Acima disso por N amostras → cai de tier.
+    targetFrameMsDesktop: 17.5,   // ~57fps
+    targetFrameMsMobile: 22.0,    // ~45fps, com meta dura de 30
+    sampleWindow: 90,             // frames por avaliação
+    downgradeStreak: 2,           // avaliações ruins seguidas pra descer
+    upgradeStreak: 8,             // avaliações folgadas seguidas pra subir
+    upgradeHeadroom: 0.72,        // só sobe se estiver usando <72% do orçamento
+    maxUpgrades: 2,               // evita oscilar pra sempre com throttling
+  },
+
+  debug: {
+    startVisible: false,
+    graphSamples: 120,
+  },
+};
+
+/** Congela para pegar typo de escrita em runtime? Não: o lil-gui precisa
+ *  escrever aqui. Mantemos mutável de propósito. */
+export default CONFIG;

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<!-- viewport-fit=cover + user-scalable=no: evita zoom por duplo toque e pinça
+     durante o jogo no iPad, e deixa o canvas ocupar a área do notch. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06080f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" type="image/svg+xml" href="./favicon.svg">
+<title>Starfarer</title>
+<link rel="stylesheet" href="./src/ui/styles.css">
+</head>
+<body>
+  <canvas id="viewport"></canvas>
+
+  <!-- Camada de HUD: DOM/CSS sobreposto ao canvas.
+       É mais barato e mais legível que renderizar texto em 3D, e reflow de
+       algumas dezenas de elementos por frame é irrelevante perto do custo de GPU. -->
+  <div id="hud" class="hud" aria-hidden="true"></div>
+
+  <!-- Controles touch (só aparecem em dispositivos com toque) -->
+  <div id="touch-ui" class="touch-ui" aria-hidden="true"></div>
+
+  <!-- Painel de debug (F3 ou botão HUD) -->
+  <div id="debug-panel" class="debug-panel" hidden></div>
+
+  <!-- Tela inicial: além de ser menu, ela existe por um motivo técnico —
+       o AudioContext do iOS só destrava com um gesto do usuário, e o Pointer
+       Lock também exige interação. O botão resolve os dois de uma vez. -->
+  <div id="boot" class="boot">
+    <div class="boot__panel">
+      <h1 class="boot__title">STARFARER</h1>
+      <p class="boot__subtitle">Fase 1 — Vertical slice de voo</p>
+      <button id="boot-start" class="boot__button" type="button">INICIAR</button>
+      <div id="boot-help" class="boot__help"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
