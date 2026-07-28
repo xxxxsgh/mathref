@@ -80,7 +80,7 @@ export class Engine {
     this.autopilot = new Autopilot();
     this.skyDome = new SkyDome(this.scene);
 
-    // ── Progressão ────────────────────────────────────────────────────────────────
+    // ── Progressão ────────────────────────────────────────────────────────
     this.progression = new Progression();
     this.missions = new Missions(this.system, this.progression);
     this.upgrades = new UpgradePanel(document.getElementById('upgrades'), this.progression);
@@ -213,7 +213,7 @@ export class Engine {
     this.scene.add(this.rimLight);
     lightAllLayers(this.rimLight);
 
-    // ── Luz de preenchimento presa à CÂMERA ────────────────────────
+    // ── Luz de preenchimento presa à CÂMERA ──────────────────────────────
     // Problema real que isso resolve: a estrela tem uma posição fixa no mundo,
     // mas o jogador vira a nave pra qualquer lado. Sempre que ele voa NA
     // DIREÇÃO da estrela, a traseira da nave — que é a vista que ele tem 95%
@@ -335,7 +335,7 @@ export class Engine {
     }
     if (this.input.actions.toggleTuner) this.onToggleTuner?.();
 
-    // ── Piloto automático ─────────────────────────────────────────
+    // ── Piloto automático ───────────────────────────────────────────────
     // Roda ANTES da nave, porque ele escreve no MESMO `state` que a nave lê
     // logo abaixo. Depois seria tarde: o comando só valeria no frame
     // seguinte, e a direção ficaria com um quadro de atraso permanente.
@@ -364,7 +364,7 @@ export class Engine {
       this.ship.flight.update(NEUTRAL_CONTROL, dt);
     }
 
-    // ── Referência de "para cima" da câmera ─────────────────────
+    // ── Referência de "para cima" da câmera ─────────────────────────────
     // No espaço é o +Y do mundo; num planeta é a normal da superfície. A
     // interpolação pela densidade atmosférica é o que faz o horizonte "se
     // endireitar" durante a descida em vez de saltar.
@@ -384,7 +384,7 @@ export class Engine {
     this._updateFillLight();
     this.system.update(this.renderer.camera.position, dt);
 
-    // ── Voo planetário ─────────────────────────────────────────────────────────
+    // ── Voo planetário ──────────────────────────────────────────────────
     // Precisa rodar DEPOIS da nave (usa a posição já integrada) e ANTES do
     // combate (o dano de reentrada e de batida entra no mesmo frame).
     if (!this.combat.playerDead) {

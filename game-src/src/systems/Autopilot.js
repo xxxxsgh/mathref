@@ -125,7 +125,7 @@ export class Autopilot {
     this._updateUnderFire(combat, dt);
     this._updateAvailableAction(flight, pf, system);
 
-    // ── Retomada manual ──────────────────────────────────────────────────────────
+    // ── Retomada manual ───────────────────────────────────────────────────
     // Qualquer comando de voo desengata. O gatilho de tiro NÃO entra na
     // lista: querer atirar durante uma aproximação é legítimo, e no touch o
     // botão de tiro costuma ficar pressionado.
@@ -134,7 +134,7 @@ export class Autopilot {
     // meio da tela toda vez que a pessoa encosta no manche seria ruído.
     if (this.active && this._playerIsFlying(s)) this.disengage(null);
 
-    // ── Botão ─────────────────────────────────────────────────────────────────
+    // ── Botão ─────────────────────────────────────────────────────────────
     if (this._request) {
       this._request = false;
       if (this.active) {
@@ -158,7 +158,7 @@ export class Autopilot {
       return out;
     }
 
-    // ── Tetos de tempo ─────────────────────────────────────────────────────────────
+    // ── Tetos de tempo ────────────────────────────────────────────────────
     this._timer += dt;
     const limit = this.mode === AP.APPROACH ? A.timeoutApproach
       : this.mode === AP.LAND ? A.timeoutLand : A.timeoutTakeoff;
