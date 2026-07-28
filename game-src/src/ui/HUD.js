@@ -145,6 +145,20 @@ export class HUD {
         <div class="hud__approach-hint" id="hud-approach-hint"></div>
       </div>
 
+      <!-- Botão contextual: aproximar / pousar / decolar / cancelar.
+           'data-touch-ui' faz o TouchSource ignorar o toque aqui — sem isso,
+           tocar o botão também nasceria um manche flutuante embaixo dele. -->
+      <button class="hud__action" id="hud-action" type="button" data-touch-ui>
+        <span class="hud__action-glyph" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 3 L12 15 M6 11 L12 17 L18 11 M4 21 L20 21"/></svg>
+        </span>
+        <span class="hud__action-text">
+          <b id="hud-action-label"></b>
+          <span id="hud-action-hint"></span>
+        </span>
+        <kbd class="hud__action-key" id="hud-action-key">L</kbd>
+      </button>
+
       <div class="hud__status" id="hud-status"></div>
       <div class="hud__bigmsg" id="hud-bigmsg"></div>
     `;
@@ -192,6 +206,20 @@ export class HUD {
     this.el.approach = q('hud-approach');
     this.el.approachTitle = q('hud-approach-title');
     this.el.approachHint = q('hud-approach-hint');
+    this.el.action = q('hud-action');
+    this.el.actionLabel = q('hud-action-label');
+    this.el.actionHint = q('hud-action-hint');
+    this.el.actionKey = q('hud-action-key');
+
+    /** Preenchido pelo Engine. Chamado no clique/toque do botão contextual. */
+    this.onAction = null;
+    // `pointerdown` e não `click`: no iPad o `click` sintético chega ~300ms
+    // depois do toque em alguns contextos, e num botão de pouso essa demora é
+    // sentida como "não funcionou".
+    this.el.action.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.onAction?.();
+    });
 
     this._proj = new THREE.Vector3();
     this._tmp = new THREE.Vector3();
@@ -205,6 +233,10 @@ export class HUD {
     this._invCam = new THREE.Quaternion();
     this._approachTitle = null;
     this._approachHint = null;
+    this._actionLabel = null;
+    this._actionHint = null;
+    this._actionKey = null;
+    this._actionOn = false;
     /** Injetado pelo Engine: usado pelo radar pra mostrar corpos celestes. */
     this._system = null;
   }
@@ -238,7 +270,7 @@ export class HUD {
     this._updateVelocityMarker(f, camera);
     this._updateTargeting(camera, combat);
     this._updateGauges(f, combat);
-    this._updateAlerts(f, combat, dt);
+    this._updateAlerts(f, combat, dt, progression);
 
     this.nav.update(camera, f.position);
     this.radar.update(f.quaternion, f.position, combat.enemies, combat.currentTarget,
@@ -246,7 +278,7 @@ export class HUD {
     this._set('contacts', 'contacts', `${combat.aliveEnemies} contato${combat.aliveEnemies === 1 ? '' : 's'}`);
   }
 
-  // ────────────────────────────────────────────────────────────────────────
+  // ───────────────────────────────────────────────────────────────────────
   /** Painel de voo atmosférico + vinheta de reentrada. */
   _updatePlanetary(pf) {
     const show = pf.inAtmosphere;
@@ -351,7 +383,7 @@ export class HUD {
         hint = 'Mantenha estável';
       } else if (pf.altitude < 260) {
         title = nome;
-        hint = 'Para pousar: freie e corte o acelerador perto do solo';
+        hint = 'Freie e corte o acelerador — ou use POUSAR';
       } else if (pf.heat > 0.55) {
         title = `${nome} · REENTRADA`;
         hint = 'Freie — o casco está aquecendo';
@@ -369,6 +401,60 @@ export class HUD {
     } else if (hint !== this._approachHint) {
       this._approachHint = hint;
       this.el.approachHint.textContent = hint;
+    }
+  }
+
+  /**
+   * Botão contextual de aproximar / pousar / decolar.
+   *
+   * Um botão só, e o rótulo muda conforme a situação. A alternativa — três
+   * botões, dois deles sempre inúteis — ocuparia o triplo do espaço numa tela
+   * de iPad em paisagem e ainda obrigaria o jogador a decidir qual apertar,
+   * quando em qualquer momento só existe uma resposta certa.
+   *
+   * @param {import('../systems/Autopilot.js').Autopilot} ap
+   * @param {import('../core/Input.js').ControlState} input
+   */
+  setAutopilot(ap, input) {
+    let label = '';
+    let hint = '';
+
+    if (ap.active) {
+      label = 'CANCELAR';
+      hint = ap.mode === 'approach'
+        ? `APROXIMANDO · ${formatDistance(ap.targetDistance)}`
+        : ap.mode === 'land'
+          ? `POUSANDO · ${formatDistance(ap.targetDistance)}`
+          : 'DECOLANDO';
+    } else if (ap.action) {
+      label = ap.action.label;
+      hint = ap.action.hint;
+    }
+
+    const on = label !== '';
+    if (on !== this._actionOn) {
+      this._actionOn = on;
+      this.el.action.classList.toggle('is-on', on);
+    }
+    this.el.action.classList.toggle('is-engaged', ap.active);
+    if (!on) return;
+
+    if (label !== this._actionLabel) {
+      this._actionLabel = label;
+      this.el.actionLabel.textContent = label;
+    }
+    if (hint !== this._actionHint) {
+      this._actionHint = hint;
+      this.el.actionHint.textContent = hint;
+    }
+
+    // A dica de tecla depende do que o jogador está usando AGORA. No touch ela
+    // some: o botão é o controle, e mostrar "L" ao lado dele seria ruído.
+    const key = input.source === 'gamepad' ? 'Y' : input.source === 'touch' ? '' : 'L';
+    if (key !== this._actionKey) {
+      this._actionKey = key;
+      this.el.actionKey.textContent = key;
+      this.el.actionKey.style.display = key ? '' : 'none';
     }
   }
 
@@ -409,7 +495,7 @@ export class HUD {
       return;
     }
 
-    // ── Caixa em volta do alvo ─────────────────────────────────
+    // ── Caixa em volta do alvo ───────────────────────────────────
     this._proj.copy(target.position).project(camera);
     const onScreen = this._proj.z < 1 &&
       Math.abs(this._proj.x) < 1 && Math.abs(this._proj.y) < 1;
@@ -429,7 +515,7 @@ export class HUD {
       this.el.targetShield.style.transform = `scaleX(${target.health.shieldPct})`;
       this.el.targetHull.style.transform = `scaleX(${target.health.hullPct})`;
     } else {
-      // ── Seta de fora de tela ───────────────────────────────────
+      // ── Seta de fora de tela ──────────────────────────────────
       // Sem isso, perder o alvo de vista significa perdê-lo de vez: em 6DOF
       // não há "virar a cabeça" pra procurar.
       this.el.target.style.opacity = '0';
@@ -450,7 +536,7 @@ export class HUD {
       this.el.offscreen.style.opacity = '1';
     }
 
-    // ── Retículo de predição ──────────────────────────────────
+    // ── Retículo de predição ───────────────────────────────────
     if (combat.hasLead) {
       this._proj.copy(combat.leadPoint).project(camera);
       if (this._proj.z < 1) {
@@ -477,7 +563,11 @@ export class HUD {
     const maxRef = CONFIG.flight.maxSpeed * CONFIG.flight.boostMultiplier;
     this.el.speedBar.style.transform = `scaleX(${clamp(f.speed / maxRef, 0, 1)})`;
     this.el.throttleBar.style.transform = `scaleX(${f.throttle})`;
-    this.el.boostBar.style.transform = `scaleX(${f.boosting ? 1 : 0})`;
+    // A barra mostra o TANQUE, não se o boost está ligado. Um indicador
+    // aceso/apagado não responde à única pergunta que importa no meio de uma
+    // fuga: quanto ainda dá pra correr.
+    this.el.boostBar.style.transform = `scaleX(${f.boostPct})`;
+    this.el.boostBar.classList.toggle('is-critical', f.boostPct < 0.25);
     this.el.shieldBar.style.transform = `scaleX(${h.shieldPct})`;
     this.el.hullBar.style.transform = `scaleX(${h.hullPct})`;
     this.el.heatBar.style.transform = `scaleX(${combat.heatPct})`;
@@ -491,7 +581,7 @@ export class HUD {
     this.el.shieldBar.classList.toggle('is-regen', h.shield < h.shieldMax && h.regenProgress >= 1);
   }
 
-  _updateAlerts(f, combat, dt) {
+  _updateAlerts(f, combat, dt, progression) {
     if (this._bigMsgTimer > 0) {
       this._bigMsgTimer -= dt;
       if (this._bigMsgTimer <= 0) this.el.bigmsg.className = 'hud__bigmsg';
@@ -513,7 +603,10 @@ export class HUD {
       this._lastAlert = alert;
     }
 
-    this._set('status', 'status', `ONDA ${combat.waveIndex}  ·  ABATES ${combat.kills}`);
+    const recorde = progression?.stats.bestWave ?? 0;
+    this._set('status', 'status',
+      `ONDA ${combat.waveIndex}  ·  ABATES ${combat.kills}`
+      + (recorde > 0 ? `  ·  RECORDE ${recorde}` : ''));
   }
 
   /** Escreve em `textContent` só quando o valor mudou. */
@@ -523,4 +616,13 @@ export class HUD {
     const el = this.el[key];
     if (el) el.textContent = value;
   }
+}
+
+/** Distância legível. Números de cinco dígitos no HUD viram ruído: o que o
+ *  jogador precisa saber é a ordem de grandeza, não a unidade. */
+function formatDistance(d) {
+  if (!Number.isFinite(d)) return '—';
+  if (d <= 0) return 'CHEGANDO';
+  if (d >= 1000) return `${(d / 1000).toFixed(1)} km`;
+  return `${Math.round(d)} u`;
 }
