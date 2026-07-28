@@ -52,6 +52,34 @@ export class Missions {
     /** @type {Array<object>} */
     const list = [];
 
+    // ⚠ EXPLORAR VEM PRIMEIRO, e isso é deliberado. A ordem anterior começava
+    // pela mineração, o que mandava o jogador ficar no cinturão atirando em
+    // pedra — e ele terminava a partida sem descobrir que dava para descer num
+    // planeta. A primeira missão é a que define o que o jogo "é"; se ela não
+    // aponta para um planeta, os planetas viram cenário.
+    if (landable.length > 0) {
+      const goal = Math.min(CONFIG.progression.missionPlanetTarget, landable.length);
+      list.push({
+        id: 'explore',
+        title: 'RECONHECIMENTO',
+        brief: `Voe até ${goal > 1 ? `${goal} planetas` : 'um planeta'} e sobrevoe em baixa altitude.`,
+        target: goal,
+        // O marcador aponta pro planeta ainda NÃO visitado mais próximo —
+        // resolvido dinamicamente, senão a seta continuaria apontando pra um
+        // planeta que o jogador já visitou.
+        dynamicMarker: (ctx) => {
+          let best = null, bestD = Infinity;
+          for (const p of landable) {
+            if (ctx.progression.stats.planetsVisited.includes(p.spec.name)) continue;
+            const d = ctx.playerPos.distanceToSquared(p.object.position);
+            if (d < bestD) { bestD = d; best = p; }
+          }
+          return best ? { pos: best.object.position, label: `PLANETA ${best.spec.name}` } : null;
+        },
+        measure: (ctx) => ctx.progression.stats.planetsVisited.length,
+      });
+    }
+
     list.push({
       id: 'mine',
       title: 'EXTRAÇÃO',
@@ -85,29 +113,6 @@ export class Missions {
       markerLabel: '',
       measure: (ctx) => ctx.progression.stats.kills,
     });
-
-    if (landable.length > 0) {
-      const goal = Math.min(CONFIG.progression.missionPlanetTarget, landable.length);
-      list.push({
-        id: 'explore',
-        title: 'RECONHECIMENTO',
-        brief: `Sobrevoe ${goal} planeta${goal > 1 ? 's' : ''} em baixa altitude.`,
-        target: goal,
-        // O marcador aponta pro planeta ainda NÃO visitado mais próximo —
-        // resolvido dinamicamente, senão a seta continuaria apontando pra um
-        // planeta que o jogador já visitou.
-        dynamicMarker: (ctx) => {
-          let best = null, bestD = Infinity;
-          for (const p of landable) {
-            if (ctx.progression.stats.planetsVisited.includes(p.spec.name)) continue;
-            const d = ctx.playerPos.distanceToSquared(p.object.position);
-            if (d < bestD) { bestD = d; best = p; }
-          }
-          return best ? { pos: best.object.position, label: `PLANETA ${best.spec.name}` } : null;
-        },
-        measure: (ctx) => ctx.progression.stats.planetsVisited.length,
-      });
-    }
 
     // Alvo final: a estação mais distante do ponto de partida vira o objetivo
     // de encerramento. Dá um "fim de partida" concreto sem precisar de chefe.

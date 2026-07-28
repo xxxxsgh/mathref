@@ -50,8 +50,9 @@ export class Radar {
    * @param {THREE.Vector3} shipPos
    * @param {Array<{position: THREE.Vector3, active: boolean}>} contacts
    * @param {object|null} target contato destacado
+   * @param {object|null} system sistema solar, para desenhar corpos celestes
    */
-  update(shipQuat, shipPos, contacts, target) {
+  update(shipQuat, shipPos, contacts, target, system) {
     const R = CONFIG.hud.radar;
     const ctx = this.ctx;
     const s = this.size;
@@ -62,7 +63,7 @@ export class Radar {
 
     ctx.clearRect(0, 0, s, s);
 
-    // ── Grade do disco ────────────────────────────────────────────────────
+    // ── Grade do disco ──────────────────────────────────────────────────
     ctx.strokeStyle = 'rgba(125, 232, 255, 0.28)';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -88,7 +89,7 @@ export class Radar {
     ctx.closePath();
     ctx.fill();
 
-    // ── Contatos ──────────────────────────────────────────────────────────
+    // ── Contatos ─────────────────────────────────────────────────────────────
     // Conjugado do quaternion = inverso (ele é unitário). Aplicá-lo leva um
     // vetor do mundo pro espaço da nave, que é onde o radar faz sentido.
     this._inv.copy(shipQuat).conjugate();
@@ -144,6 +145,53 @@ export class Radar {
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
+    }
+
+    // ── Corpos celestes ───────────────────────────────────────────────────
+    // Planetas e estações usam um alcance MUITO maior que o dos caças: eles
+    // ficam a dezenas de milhares de unidades, e no alcance de combate
+    // simplesmente não apareceriam. Sem isso o radar não ajuda a navegar,
+    // que é justamente quando o jogador mais precisa dele.
+    if (system) {
+      this._inv.copy(shipQuat).conjugate();
+      const bodies = [
+        ...system.planets.map((p) => ({
+          pos: p.object.position, r: p.radius,
+          cor: p.spec.landable ? '#7dffa8' : '#ffb454',
+          forma: 'planeta',
+        })),
+        ...system.stations.map((s) => ({
+          pos: s.object.position, r: s.radius, cor: '#7de8ff', forma: 'estacao',
+        })),
+      ];
+
+      for (const b of bodies) {
+        this._local.copy(b.pos).sub(shipPos);
+        const dist = this._local.length();
+        if (dist > R.bodyRange) continue;
+        this._local.applyQuaternion(this._inv);
+
+        // Escala logarítmica: o alcance de corpos é 40× o de combate, e numa
+        // escala linear tudo se amontoaria na borda do disco.
+        const norm = Math.min(1, Math.log10(1 + dist / 400) / Math.log10(1 + R.bodyRange / 400));
+        const len = Math.hypot(this._local.x, this._local.z) || 1;
+        const px = cx + (this._local.x / len) * norm * rx;
+        const py = cy - (-this._local.z / len) * norm * ry;
+
+        ctx.globalAlpha = 0.9;
+        ctx.strokeStyle = b.cor;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(px, py, b.forma === 'estacao' ? 3 : 4, 0, Math.PI * 2);
+        ctx.stroke();
+        if (b.forma === 'estacao') {
+          ctx.fillStyle = b.cor;
+          ctx.beginPath();
+          ctx.arc(px, py, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
     }
   }
 }

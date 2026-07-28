@@ -79,6 +79,11 @@ export class Combat {
     /** Injetados pelo Engine. */
     this.onOreCollected = null;
     this.onEnemyKilled = null;
+    /** Injetados pelo Engine: contexto de voo planetário, para o combate
+     *  atmosférico saber onde é "para cima" e onde está o chão. */
+    this.planetaryProvider = () => null;
+    this.surfaceProvider = () => null;
+    this._surfaceUp = new THREE.Vector3();
 
     // Scratch.
     this._tmp = new THREE.Vector3();
@@ -126,13 +131,26 @@ export class Combat {
     this._updateRespawn(dt);
   }
 
-  // ───────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────
   _updateWaves(dt) {
     if (this.playerDead) return;
     if (this.aliveEnemies > 0) return;
 
+    // Na atmosfera as ondas são menores e mais espaçadas: perto do solo o
+    // jogador tem menos espaço de manobra e precisa dividir a atenção com o
+    // terreno, então o mesmo número de caças fica muito mais pesado.
+    const naSuperficie = this._inAtmosphere();
+    const S = CONFIG.enemies.surface;
+
     this.waveTimer -= dt;
     if (this.waveTimer > 0) return;
+
+    if (naSuperficie) {
+      this.spawnSurfaceWave(S.maxAlive);
+      this.waveIndex++;
+      this.waveTimer = S.waveDelay;
+      return;
+    }
 
     const sizes = CONFIG.enemies.waveSizes;
     const count = Math.min(
@@ -142,6 +160,47 @@ export class Combat {
     this.spawnWave(count);
     this.waveIndex++;
     this.waveTimer = CONFIG.enemies.waveDelay;
+  }
+
+  _inAtmosphere() {
+    const pf = this.planetaryProvider();
+    return !!(pf && pf.inAtmosphere && pf.planet);
+  }
+
+  /**
+   * Onda atmosférica: caças surgindo ACIMA do terreno, em volta do jogador.
+   *
+   * Não dá pra reaproveitar `spawnWave`: ela posiciona no espaço livre à
+   * frente do jogador, o que na superfície colocaria metade dos caças dentro
+   * de uma montanha.
+   */
+  spawnSurfaceWave(count) {
+    const pf = this.planetaryProvider();
+    const surface = this.surfaceProvider();
+    if (!pf?.planet || !surface) return;
+
+    const S = CONFIG.enemies.surface;
+    const free = this.enemies.filter((e) => !e.active).slice(0, count);
+    const centro = pf.planet.object.position;
+
+    free.forEach((e, i) => {
+      // Distribui em torno do jogador, no plano tangente à superfície.
+      const ang = (i / Math.max(1, free.length)) * Math.PI * 2 + Math.random();
+      this._tmp.copy(this.player.flight.getRight(this._tmp2)).multiplyScalar(Math.cos(ang));
+      this._tmp.addScaledVector(this.player.flight.getForward(this._tmp2), Math.sin(ang));
+      this._spawnPos.copy(this.player.position)
+        .addScaledVector(this._tmp, S.spawnDistance * (0.7 + Math.random() * 0.6));
+
+      // Recoloca na altitude pedida ACIMA do terreno daquele ponto, não do
+      // ponto onde o jogador está — o relevo muda em poucas centenas de
+      // unidades e um caça nasceria enterrado.
+      const alvo = S.spawnAltitude[0]
+        + Math.random() * (S.spawnAltitude[1] - S.spawnAltitude[0]);
+      const amostra = surface.sample(this._spawnPos, this._surfaceUp);
+      this._spawnPos.copy(centro).addScaledVector(this._surfaceUp, amostra.ground + alvo);
+
+      e.spawn(this._spawnPos, this.player.position);
+    });
   }
 
   /** Cria uma formação: um líder e alas com deslocamento fixo em relação a ele. */
@@ -192,7 +251,7 @@ export class Combat {
     });
   }
 
-  // ───────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────
   /**
    * Escolhe o alvo travado.
    *
@@ -249,7 +308,7 @@ export class Combat {
   _updatePlayerWeapons(input, dt) {
     const W = CONFIG.weapons.player;
 
-    // ── Calor ────────────────────────────────────────────────────────────
+    // ── Calor ─────────────────────────────────────────────────────────────────
     // Superaquecimento existe pra impor RITMO. Sem ele, a estratégia ótima é
     // segurar o gatilho o tempo todo, e a arma deixa de ter decisão.
     if (this.overheatLock > 0) {
@@ -270,12 +329,22 @@ export class Combat {
       this.overheatLock = W.overheatLock;
     }
 
-    // Converge no ponto de interceptação do alvo, se houver um. Sem alvo,
-    // converge na distância padrão à frente. Isso faz os dois canhões de asa
-    // acertarem o mesmo ponto em vez de passarem raspando dos dois lados.
-    if (this.hasLead) this._aimPoint.copy(this.leadPoint);
-    else this._aimPoint.set(0, 0, -W.convergence)
+    // ── Ponto de convergência dos canhões ───────────────────────
+    // Por padrão os tiros saem ao longo do NARIZ, convergindo numa distância
+    // fixa à frente — os dois canhões de asa se cruzam nesse ponto, como um
+    // caça de verdade é regulado.
+    //
+    // ⚠ Deliberadamente NÃO miramos no ponto de interceptação do alvo. Fazer
+    // isso (era o comportamento anterior) transforma a arma em mira
+    // automática: ela lidera o alvo sozinha e acerta sem o jogador fazer
+    // nada. O retículo verde da HUD já mostra onde mirar; a habilidade do
+    // jogo é pôr o nariz ali. `aimAssist` no config permite reintroduzir a
+    // ajuda de forma gradual, se um dia fizer sentido.
+    this._aimPoint.set(0, 0, -W.convergence)
       .applyQuaternion(this.player.quaternion).add(this.player.position);
+    if (W.aimAssist > 0 && this.hasLead) {
+      this._aimPoint.lerp(this.leadPoint, Math.min(1, W.aimAssist));
+    }
 
     this.projectiles.fire(
       this.player.position, this.player.quaternion, this.player.flight.velocity,
@@ -303,10 +372,49 @@ export class Combat {
         e.despawn();
       }
     }
+
+    this._keepEnemiesAboveGround(dt);
+  }
+
+  /**
+   * Impede que os caças atravessem o terreno.
+   *
+   * A IA raciocina em espaço livre: ela persegue um ponto e não sabe que
+   * existe chão. Perseguindo o jogador em voo rasante, ela simplesmente
+   * mergulha na montanha e desaparece dentro dela — o combate acaba sozinho e
+   * parece bug.
+   *
+   * A correção é um PISO: abaixo de uma altura mínima, o caça é empurrado
+   * para cima e a componente de velocidade que aponta para baixo é anulada.
+   * Não é uma solução elegante de navegação, mas é a certa aqui: o custo é
+   * uma amostra de terreno por inimigo por frame, e o resultado é
+   * indistinguível de um piloto que evita o solo.
+   */
+  _keepEnemiesAboveGround(dt) {
+    if (!this._inAtmosphere()) return;
+    const surface = this.surfaceProvider();
+    const pf = this.planetaryProvider();
+    if (!surface || !pf?.planet) return;
+
+    const S = CONFIG.enemies.surface;
+    const centro = pf.planet.object.position;
+
+    for (const e of this.enemies) {
+      if (!e.active) continue;
+      const amostra = surface.sample(e.position, this._surfaceUp);
+      const folga = amostra.altitude - S.minAltitude;
+      if (folga >= 0) continue;
+
+      // Reposiciona no piso e mata a descida.
+      e.flight.position.copy(centro)
+        .addScaledVector(this._surfaceUp, amostra.ground + S.minAltitude);
+      const vn = e.flight.velocity.dot(this._surfaceUp);
+      if (vn < 0) e.flight.velocity.addScaledVector(this._surfaceUp, -vn * S.liftStrength);
+    }
   }
 
   _resolveHits() {
-    // ── Projéteis inimigos contra o jogador ──────────────────────────────
+    // ── Projéteis inimigos contra o jogador ───────────────────────
     if (!this.playerDead) {
       this.projectiles.collideSphere(
         this.player.position, this.playerHealth.radius, 0,
@@ -319,7 +427,7 @@ export class Combat {
       );
     }
 
-    // ── Projéteis do jogador contra inimigos ─────────────────────────────
+    // ── Projéteis do jogador contra inimigos ─────────────────────
     for (const e of this.enemies) {
       if (!e.active) continue;
       this.projectiles.collideSphere(
@@ -370,7 +478,7 @@ export class Combat {
     if (!field) return;
     if (this.asteroidCooldown > 0) this.asteroidCooldown -= dt;
 
-    // ── Projéteis contra rocha ──────────────────────────────────────────
+    // ── Projéteis contra rocha ───────────────────────────────
     this.projectiles.pool.forEachActive((p) => {
       const idx = field.querySegment(
         p.prevPosition.x, p.prevPosition.y, p.prevPosition.z,
@@ -395,7 +503,7 @@ export class Combat {
       this.projectiles.pool.release(p);
     });
 
-    // ── Nave do jogador contra rocha ────────────────────────────────────
+    // ── Nave do jogador contra rocha ───────────────────────
     if (!this.playerDead && this.asteroidCooldown <= 0) {
       const hit = field.querySphere(
         this.player.position.x, this.player.position.y, this.player.position.z,
@@ -422,7 +530,7 @@ export class Combat {
       }
     }
 
-    // ── Inimigos contra rocha ───────────────────────────────────────────
+    // ── Inimigos contra rocha ────────────────────────────
     // Sem isso os caças atravessam o cinturão como fantasmas, e a única
     // tática do jogador (atrair a perseguição pras rochas) deixa de existir.
     for (const e of this.enemies) {
