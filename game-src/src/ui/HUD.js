@@ -477,7 +477,7 @@ export class HUD {
   /**
    * Painel da corrida.
    *
-   * Fica no alto à esquerda do centro e não num canto: num circuito você está
+   * Fica no alto à esquerda do centro e não no canto: num circuito você está
    * olhando pra frente o tempo todo, e um cronômetro num canto da tela obriga
    * a desviar o olhar exatamente quando não dá.
    *
