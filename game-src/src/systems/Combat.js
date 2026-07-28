@@ -73,6 +73,13 @@ export class Combat {
     this.resources = [0, 0, 0, 0];
     this.asteroidsDestroyed = 0;
 
+    /** Multiplicadores de upgrade (ver Progression.js). */
+    this.damageMul = 1;
+    this.heatMul = 1;
+    /** Injetados pelo Engine. */
+    this.onOreCollected = null;
+    this.onEnemyKilled = null;
+
     // Scratch.
     this._tmp = new THREE.Vector3();
     this._tmp2 = new THREE.Vector3();
@@ -257,7 +264,7 @@ export class Combat {
     if (this.overheatLock > 0 || this.playerFireCooldown > 0) return;
 
     this.playerFireCooldown = W.fireInterval;
-    this.playerHeat += W.heatPerShot;
+    this.playerHeat += W.heatPerShot * this.heatMul;
     if (this.playerHeat >= 1) {
       this.playerHeat = 1;
       this.overheatLock = W.overheatLock;
@@ -272,7 +279,7 @@ export class Combat {
 
     this.projectiles.fire(
       this.player.position, this.player.quaternion, this.player.flight.velocity,
-      'player', 0, this._aimPoint,
+      'player', 0, this._aimPoint, this.damageMul,
     );
   }
 
@@ -380,7 +387,7 @@ export class Combat {
         // não deveria encher a carga dele.
         if (res.resource > 0 && p.faction === 0) {
           this.resources[res.resource] = (this.resources[res.resource] ?? 0) + 1;
-          this.onResourceCollected?.(res.resource);
+          this.onOreCollected?.(res.resource);
         }
       } else {
         this.explosions.sparks(p.position, null);
@@ -432,6 +439,7 @@ export class Combat {
     this.explosions.explode(e.position, e.velocity, 1, this.qualityTier);
     e.despawn();
     this.kills++;
+    this.onEnemyKilled?.();
     if (this.currentTarget === e) this.currentTarget = null;
   }
 

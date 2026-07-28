@@ -53,6 +53,15 @@ export class FlightModel {
     /** Assistência de voo: desligada, a deriva lateral não é amortecida. */
     this.assistEnabled = true;
 
+    /**
+     * Multiplicadores de upgrade. Ficam AQUI, e não somados às constantes de
+     * `CONFIG`, por dois motivos: o config continua sendo o balanceamento
+     * base editável no painel de tuning, e reaplicar um upgrade não acumula
+     * efeito (o que aconteceria se mexêssemos no config direto).
+     */
+    this.speedMul = 1;
+    this.accelMul = 1;
+
     /** Estado da manobra de barrel roll. */
     this.maneuver = { active: false, dir: 0, t: 0, cooldown: 0 };
     /** Impulso lateral do barrel roll, em espaço local; decai sozinho. */
@@ -227,8 +236,8 @@ export class FlightModel {
 
     // ── Componente frontal: persegue a velocidade alvo do acelerador ──
     const boostMul = this.boosting ? F.boostMultiplier : 1;
-    let targetSpeed = this.throttle * F.maxSpeed * boostMul;
-    let lambda = targetSpeed > vFwd ? F.accelResponse : F.decelResponse;
+    let targetSpeed = this.throttle * F.maxSpeed * this.speedMul * boostMul;
+    let lambda = (targetSpeed > vFwd ? F.accelResponse : F.decelResponse) * this.accelMul;
     // O boost acelera mais rápido, senão o "chute" não é sentido.
     if (this.boosting) lambda *= 1.7;
 
@@ -267,7 +276,8 @@ export class FlightModel {
 
   /** Velocidade máxima teórica atual, para normalizar barras de HUD. */
   get maxSpeedNow() {
-    return CONFIG.flight.maxSpeed * (this.boosting ? CONFIG.flight.boostMultiplier : 1);
+    return CONFIG.flight.maxSpeed * this.speedMul
+      * (this.boosting ? CONFIG.flight.boostMultiplier : 1);
   }
 
   /** Progresso do barrel roll em 0..1 (0 quando inativo). */

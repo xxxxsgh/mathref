@@ -98,8 +98,9 @@ export class Projectiles {
    * @param {number} faction
    * @param {THREE.Vector3} [aimPoint] ponto de convergência; se ausente, usa
    *        a distância de convergência do config ao longo do nariz
+   * @param {number} [damageMul] multiplicador de upgrade de canhões
    */
-  fire(origin, orientation, inheritVelocity, kind, faction, aimPoint) {
+  fire(origin, orientation, inheritVelocity, kind, faction, aimPoint, damageMul = 1) {
     const W = CONFIG.weapons[kind];
 
     // Ponto de convergência: sem ele, canhões nas pontas das asas disparam
@@ -132,7 +133,7 @@ export class Projectiles {
       // ao jogador se acertar.
       p.velocity.copy(this._dir).multiplyScalar(W.projectileSpeed).add(inheritVelocity);
       p.life = W.life;
-      p.damage = W.damage;
+      p.damage = W.damage * damageMul;
       p.faction = faction;
     }
   }

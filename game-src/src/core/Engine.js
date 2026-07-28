@@ -15,6 +15,9 @@ import { SolarSystem } from '../procgen/SolarSystem.js';
 import { PlanetSurface } from '../systems/PlanetSurface.js';
 import { PlanetaryFlight } from '../systems/PlanetaryFlight.js';
 import { SkyDome } from '../systems/SkyDome.js';
+import { Progression } from '../systems/Progression.js';
+import { Missions } from '../systems/Missions.js';
+import { UpgradePanel } from '../ui/UpgradePanel.js';
 
 /**
  * Orquestrador: monta a cena, roda o loop, coordena os sistemas.
@@ -69,6 +72,22 @@ export class Engine {
     this.surface = new PlanetSurface(this.scene);
     this.planetary = new PlanetaryFlight();
     this.skyDome = new SkyDome(this.scene);
+
+    // ── Progressão ────────────────────────────────────────────────────────
+    this.progression = new Progression();
+    this.missions = new Missions(this.system, this.progression);
+    this.upgrades = new UpgradePanel(document.getElementById('upgrades'), this.progression);
+    this.upgrades.onPurchase = () => this._applyUpgrades();
+    this.upgrades.onClose = () => { this.docking.cooldown = 3; this.resume(); };
+
+    this.docking = { station: null, progress: 0, cooldown: 0 };
+    this._applyUpgrades();
+
+    this.combat.onOreCollected = () => {
+      const taken = this.progression.addCargo(1);
+      if (taken === 0) this.hud.bigMessage('CARGA CHEIA', 1.2, 'bad');
+    };
+    this.combat.onEnemyKilled = () => this.progression.onKill();
     this._camUp = new THREE.Vector3(0, 1, 0);
     this._sunDir = new THREE.Vector3();
 
@@ -104,6 +123,8 @@ export class Engine {
     });
 
     this.combat.onPlayerDeath = () => {
+      const lost = this.progression.onDeath();
+      if (lost > 0) this.hud.bigMessage(`CARGA PERDIDA · ${lost} ⬢`, 2.4, 'bad');
       this.hud.bigMessage('NAVE DESTRUÍDA', CONFIG.combat.player.respawnDelay, 'bad');
       this.hud.flashDamage();
     };
@@ -349,8 +370,13 @@ export class Engine {
 
     this.dust.update(this.ship.position, this.ship.speed, dt);
 
+    this._updateDocking(dt);
+    this._updateSurvey();
+    this._updateMissions(dt);
+
     this.touchUI?.update(state);
-    this.hud.update(this.ship, state, this.renderer.camera, this.combat, dt, this.planetary);
+    this.hud.update(this.ship, state, this.renderer.camera, this.combat, dt,
+      this.planetary, this.missions, this.progression);
   }
 
   /** Rastro de plasma da reentrada.
@@ -380,6 +406,99 @@ export class Engine {
     }
   }
 
+  /**
+   * Aplica os multiplicadores de upgrade.
+   *
+   * Chamado uma vez na inicialização e a cada compra. Ele SEMPRE parte dos
+   * valores base do config e multiplica — nunca acumula sobre o estado
+   * anterior. Isso é o que permite chamar a função quantas vezes quiser sem
+   * inflar os números.
+   */
+  _applyUpgrades() {
+    const P = this.progression;
+    const f = this.ship.flight;
+    f.speedMul = P.engineMul.speed;
+    f.accelMul = P.engineMul.accel;
+
+    const h = this.combat.playerHealth;
+    const wasFullShield = h.shield >= h.shieldMax;
+    const hullPct = h.hullPct;
+    h.shieldMax = CONFIG.combat.player.shieldMax * P.shieldMul.capacity;
+    h.regenRate = CONFIG.combat.player.shieldRegen * P.shieldMul.regen;
+    h.hullMax = CONFIG.combat.player.hullMax * P.hullMul.integrity;
+    // Preserva a PROPORÇÃO de vida ao aumentar o máximo. Preservar o valor
+    // absoluto faria um upgrade de casco parecer que tirou vida (a barra
+    // encolheria); preservar a proporção faz o upgrade ser sentido como ganho.
+    h.hull = h.hullMax * hullPct;
+    if (wasFullShield) h.shield = h.shieldMax;
+
+    this.combat.damageMul = P.weaponMul.damage;
+    this.combat.heatMul = P.weaponMul.heat;
+  }
+
+  /**
+   * Atracação em estação.
+   *
+   * Condições: perto, devagar, e mantidas por um tempo. O tempo é o que
+   * impede que passar voando por uma estação abra o menu na cara do jogador.
+   */
+  _updateDocking(dt) {
+    const D = CONFIG.progression;
+    if (this.docking.cooldown > 0) { this.docking.cooldown -= dt; return; }
+    if (this.combat.playerDead || this.upgrades.open) return;
+
+    let near = null;
+    let nearDist = Infinity;
+    for (const st of this.system.stations) {
+      const d = this.ship.position.distanceTo(st.object.position);
+      if (d < nearDist) { nearDist = d; near = st; }
+    }
+
+    const canDock = near && nearDist < D.dockDistance
+      && this.ship.flight.speed < D.dockSpeed;
+
+    if (canDock) {
+      this.docking.progress += dt;
+      this.docking.station = near;
+      if (this.docking.progress >= D.dockTime) {
+        this.docking.progress = 0;
+        this._dock(near);
+      }
+    } else {
+      this.docking.progress = Math.max(0, this.docking.progress - dt * 2);
+    }
+  }
+
+  _dock(station) {
+    const gained = this.progression.dock();
+    // Pausa: escolher upgrade sob fogo inimigo é hostil sem ser interessante.
+    this.pause();
+    this.upgrades.show(station.spec.name, gained);
+  }
+
+  /** Sobrevoo de reconhecimento: voar baixo sobre um planeta o marca como
+   *  visitado. É o objetivo da missão de exploração. */
+  _updateSurvey() {
+    const pf = this.planetary;
+    if (!pf.planet || !Number.isFinite(pf.altitude)) return;
+    const limit = pf.planet.radius * CONFIG.progression.surveyAltitudeFactor;
+    if (pf.altitude > limit) return;
+    if (this.progression.visitPlanet(pf.planet.spec.name)) {
+      this.hud.bigMessage(`PLANETA ${pf.planet.spec.name} MAPEADO`, 2.2, 'good');
+    }
+  }
+
+  _updateMissions(dt) {
+    const r = this.missions.update(this.ship.position, dt);
+    if (!r.advanced) return;
+    if (r.finished) {
+      this.hud.bigMessage('MISSÃO CUMPRIDA', 4, 'good');
+      this.progression.save();
+    } else {
+      this.hud.bigMessage(`${r.title} · CONCLUÍDO`, 2.4, 'good');
+    }
+  }
+
   /** Avisa o jogador ao pousar e ao decolar. Guardar o estado anterior evita
    *  disparar a mensagem em todo frame enquanto ele está pousado. */
   _trackLandingState() {
@@ -404,6 +523,7 @@ export class Engine {
     this.input.dispose();
     this.surface.dispose();
     this.skyDome.dispose();
+    this.upgrades.dispose();
     this.system.dispose();
     this.combat.dispose();
     this.ship.dispose();

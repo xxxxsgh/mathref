@@ -117,6 +117,24 @@ export class HUD {
         </div>
       </div>
 
+      <!-- Missão atual -->
+      <div class="hud__mission">
+        <div class="hud__mission-title" id="hud-mission"></div>
+        <div class="hud__mission-brief" id="hud-mission-brief"></div>
+      </div>
+
+      <!-- Marcador de destino da missão -->
+      <div class="hud__waypoint" id="hud-waypoint">
+        <svg viewBox="0 0 26 26"><path d="M13 2 L24 13 L13 24 L2 13 Z"/></svg>
+        <div class="hud__waypoint-label" id="hud-waypoint-label"></div>
+      </div>
+
+      <!-- Carga -->
+      <div class="hud__cargo">
+        <div class="hud__label">Carga <span class="hud__mini" id="hud-cargo-num"></span></div>
+        <div class="hud__bar"><div class="hud__bar-fill hud__bar-fill--cargo" id="hud-cargo-bar"></div></div>
+      </div>
+
       <div class="hud__status" id="hud-status"></div>
       <div class="hud__bigmsg" id="hud-bigmsg"></div>
     `;
@@ -149,6 +167,12 @@ export class HUD {
       thermal: q('hud-thermal'),
       landing: q('hud-landing'),
       landingFill: q('hud-landing-fill'),
+      mission: q('hud-mission'),
+      missionBrief: q('hud-mission-brief'),
+      waypoint: q('hud-waypoint'),
+      waypointLabel: q('hud-waypoint-label'),
+      cargoNum: q('hud-cargo-num'),
+      cargoBar: q('hud-cargo-bar'),
       status: q('hud-status'),
       bigmsg: q('hud-bigmsg'),
     };
@@ -164,6 +188,7 @@ export class HUD {
     this._damageFlash = 0;
     this._planetVisible = false;
     this._entryGlow = 0;
+    this._invCam = new THREE.Quaternion();
   }
 
   show() { this.root.classList.add('is-visible'); }
@@ -185,8 +210,10 @@ export class HUD {
    * @param {import('../systems/Combat.js').Combat} combat
    * @param {number} dt
    */
-  update(ship, input, camera, combat, dt, planetary) {
+  update(ship, input, camera, combat, dt, planetary, missions, progression) {
     const f = ship.flight;
+    if (missions) this._updateMission(camera, missions);
+    if (progression) this._updateCargo(progression);
 
     if (planetary) this._updatePlanetary(planetary);
     this._updateReticle(input);
@@ -237,6 +264,49 @@ export class HUD {
       this._entryGlow = glow;
       this.root.style.setProperty('--entry-glow', String(glow));
     }
+  }
+
+  /** Linha de missão + marcador de destino projetado na tela. */
+  _updateMission(camera, missions) {
+    this._set('mission', 'mission', missions.statusText);
+    const m = missions.current;
+    this._set('missionBrief', 'missionBrief', m?.brief ?? '');
+
+    if (!missions.hasMarker || missions.completed) {
+      this.el.waypoint.style.opacity = '0';
+      return;
+    }
+
+    this._proj.copy(missions.marker).project(camera);
+    const onScreen = this._proj.z < 1 &&
+      Math.abs(this._proj.x) < 0.94 && Math.abs(this._proj.y) < 0.94;
+
+    const dist = Math.round(missions.marker.distanceTo(camera.position));
+    this._set('waypointLabel', 'wpLabel', `${missions.markerLabel} · ${dist}`);
+
+    if (onScreen) {
+      const x = this._proj.x * window.innerWidth * 0.5;
+      const y = -this._proj.y * window.innerHeight * 0.5;
+      this.el.waypoint.style.transform = `translate(${x}px, ${y}px)`;
+    } else {
+      // Fora de tela: gruda na borda, na direção correta. Mesma matemática do
+      // marcador de alvo — sem isso, "voe até tal lugar" não diz pra onde.
+      this._tmp.copy(missions.marker).sub(camera.position);
+      this._tmp.applyQuaternion(this._invCam.copy(camera.quaternion).conjugate());
+      let ang = Math.atan2(this._tmp.x, -this._tmp.y);
+      if (this._tmp.z > 0) ang = Math.atan2(-this._tmp.x, this._tmp.y);
+      const mgn = CONFIG.hud.offscreenMargin;
+      const px = Math.sin(ang) * (window.innerWidth * 0.5 - mgn);
+      const py = -Math.cos(ang) * (window.innerHeight * 0.5 - mgn);
+      this.el.waypoint.style.transform = `translate(${px}px, ${py}px)`;
+    }
+    this.el.waypoint.style.opacity = '1';
+  }
+
+  _updateCargo(progression) {
+    this._set('cargoNum', 'cargoNum', `${progression.cargo}/${progression.cargoCapacity}`);
+    this.el.cargoBar.style.transform = `scaleX(${progression.cargoPct})`;
+    this.el.cargoBar.classList.toggle('is-critical', progression.cargoFull);
   }
 
   _updateReticle(input) {
@@ -302,7 +372,7 @@ export class HUD {
       this.el.target.style.opacity = '0';
       this._tmp.copy(target.position).sub(camera.position);
       // Leva pro espaço da câmera pra saber se está à frente ou atrás.
-      this._tmp.applyQuaternion(camera.quaternion.clone().conjugate());
+      this._tmp.applyQuaternion(this._invCam.copy(camera.quaternion).conjugate());
       let ang = Math.atan2(this._tmp.x, -this._tmp.y);
       // Alvo ATRÁS: a direção na tela é a oposta.
       if (this._tmp.z > 0) ang = Math.atan2(-this._tmp.x, this._tmp.y);

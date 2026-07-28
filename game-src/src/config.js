@@ -577,6 +577,27 @@ export const CONFIG = {
     },
   },
 
+  // ───────────────────────────────────────────────────────────────────────
+  // PROGRESSÃO (Fase 5)
+  // ───────────────────────────────────────────────────────────────────────
+  progression: {
+    creditsPerOre: 1,
+    // Distância pra atracar. Generosa de propósito: mirar um ponto exato de
+    // atracação em 6DOF é frustrante, e a graça está em CHEGAR lá, não em
+    // encaixar a nave num buraco.
+    dockDistance: 900,
+    dockSpeed: 60,            // precisa estar devagar
+    dockTime: 1.2,            // segundos dentro das condições
+
+    // Sobrevoo que conta como "planeta visitado".
+    surveyAltitudeFactor: 0.14,   // fração do raio
+
+    missionOreTarget: 6,
+    missionKillTarget: 5,
+    missionPlanetTarget: 2,
+    missionArriveDistance: 2600,
+  },
+
   hud: {
     radar: {
       range: 1400,       // alcance máximo mostrado
