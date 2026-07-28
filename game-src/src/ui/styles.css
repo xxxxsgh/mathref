@@ -53,7 +53,7 @@ html, body {
   touch-action: none;
 }
 
-/* ── HUD ─────────────────────────────────────────────────────────────── */
+/* ── HUD ───────────────────────────────────────────────────────────────────────────── */
 
 .hud {
   position: fixed;
@@ -117,7 +117,7 @@ html, body {
 .hud__bar-fill--boost { background: var(--hud-amber); box-shadow: 0 0 10px rgba(255, 180, 84, 0.6); }
 .hud__bar-fill--throttle { background: var(--hud-green); box-shadow: 0 0 10px rgba(125, 255, 168, 0.5); }
 
-/* ── Retículo ─────────────────────────────────────────────────────────── */
+/* ── Retículo ─────────────────────────────────────────────────────────────────── */
 
 .hud__reticle {
   position: absolute;
@@ -168,7 +168,7 @@ html, body {
   fill: none;
 }
 
-/* ── Avisos centrais ─────────────────────────────────────────────────── */
+/* ── Avisos centrais ────────────────────────────────────────────────────── */
 .hud__alert {
   position: absolute;
   left: 50%;
@@ -183,7 +183,7 @@ html, body {
 }
 .hud__alert.is-on { opacity: 1; }
 
-/* ── Painel de debug ──────────────────────────────────────────────────── */
+/* ── Painel de debug ─────────────────────────────────────────────────────────── */
 
 .debug-panel {
   position: fixed;
@@ -220,7 +220,7 @@ html, body {
 .is-warn { color: var(--hud-amber) !important; }
 .is-bad { color: var(--hud-red) !important; }
 
-/* ── Controles touch ──────────────────────────────────────────────────── */
+/* ── Controles touch ──────────────────────────────────────────────────────── */
 
 .touch-ui {
   position: fixed;
@@ -342,7 +342,7 @@ html, body {
   box-shadow: 0 0 10px rgba(125, 255, 168, 0.5);
 }
 
-/* ── Tela inicial ────────────────────────────────────────────────────── */
+/* ── Tela inicial ───────────────────────────────────────────────────── */
 
 .boot {
   position: fixed;
@@ -413,7 +413,7 @@ html, body {
   .boot__subtitle { margin-bottom: 20px; }
 }
 
-/* ── Elementos de combate ─────────────────────────────────────────────── */
+/* ── Elementos de combate ────────────────────────────────────────────────── */
 
 .hud__mini { color: var(--hud-cyan); font-size: 10px; letter-spacing: 0; }
 .hud__bar--wide { width: 168px; }
@@ -526,7 +526,7 @@ html, body {
   .hud__radar canvas { transform: scale(.8); transform-origin: bottom center; }
 }
 
-/* ── Painel de voo planetário ─────────────────────────────────────────── */
+/* ── Painel de voo planetário ──────────────────────────────────────────────── */
 
 .hud__planet {
   position: absolute;
@@ -586,7 +586,7 @@ html, body {
   .hud__landing-ring { width: 104px; }
 }
 
-/* ── Painel de upgrades ───────────────────────────────────────────────── */
+/* ── Painel de upgrades ────────────────────────────────────────────────── */
 
 .upgrades {
   position: fixed; inset: 0; z-index: 40;
@@ -673,7 +673,7 @@ html, body {
   padding: 1px 5px; font-size: 10px;
 }
 
-/* ── Missão e carga na HUD ────────────────────────────────────────────── */
+/* ── Missão e carga na HUD ──────────────────────────────────────────────── */
 
 .hud__mission {
   position: absolute;
@@ -719,7 +719,7 @@ html, body {
 .hud__bar-fill--cargo { background: #ffd47d; box-shadow: 0 0 10px rgba(255,212,125,.5); }
 .hud__bar-fill--cargo.is-critical { background: var(--hud-amber); }
 
-/* ── Menu de pausa ────────────────────────────────────────────────────── */
+/* ── Menu de pausa ──────────────────────────────────────────────────── */
 
 .pause {
   position: fixed; inset: 0; z-index: 45;
@@ -796,4 +796,68 @@ html, body {
   left: calc(14px + var(--safe-l));
   top: calc(14px + var(--safe-t));
   width: 44px; height: 44px; font-size: 14px; opacity: .55;
+}
+
+/* ── Marcadores de navegação (planetas e estações) ──────────────────── */
+
+.hud__nav { position: absolute; inset: 0; pointer-events: none; }
+
+.nav {
+  position: absolute; left: 50%; top: 50%;
+  width: 22px; height: 22px; margin: -11px 0 0 -11px;
+  will-change: transform;
+}
+.nav__glyph { width: 100%; height: 100%; display: block; }
+.nav__glyph circle { fill: none; stroke: currentColor; stroke-width: 1.4; }
+
+.nav--planet  { color: rgba(125, 255, 168, .75); }
+.nav--gas     { color: rgba(255, 180, 84, .7); }
+.nav--station { color: rgba(125, 232, 255, .8); }
+
+/* Fora de tela: vira uma seta presa à borda, apontando na direção certa.
+   `--nav-rot` é escrita pelo JS a cada frame. */
+.nav.is-offscreen .nav__glyph { transform: rotate(var(--nav-rot, 0rad)); }
+.nav.is-offscreen .nav__glyph circle:first-child { stroke-dasharray: 3 4; }
+.nav.is-offscreen { opacity: .62; }
+
+.nav__label {
+  position: absolute; top: 24px; left: 50%; transform: translateX(-50%);
+  white-space: nowrap; text-align: center;
+  opacity: 0; transition: opacity .18s ease;
+}
+.nav__label.is-on { opacity: 1; }
+.nav__label b {
+  display: block; font-size: 10px; letter-spacing: .18em; color: currentColor;
+  text-shadow: 0 0 8px rgba(0, 0, 0, .95);
+}
+.nav__label span {
+  display: block; font-size: 9px; letter-spacing: .1em;
+  color: rgba(219, 234, 255, .6); margin-top: 1px;
+  text-shadow: 0 0 8px rgba(0, 0, 0, .95);
+}
+
+/* ── Aviso de aproximação de planeta ──────────────────────────────── */
+
+.hud__approach {
+  /* Abaixo da linha de missão, no topo. Ficava embaixo, centralizado, e
+     caía exatamente em cima da nave — o texto competia com a coisa que o
+     jogador precisa olhar para pilotar. */
+  position: absolute; left: 50%; top: calc(84px + var(--safe-t));
+  transform: translate(-50%, -8px);
+  text-align: center;
+  opacity: 0; transition: opacity .3s ease, transform .3s ease;
+  pointer-events: none;
+}
+.hud__approach.is-on { opacity: 1; transform: translate(-50%, 0); }
+.hud__approach-title {
+  font-size: 12px; letter-spacing: .22em; color: var(--hud-green);
+  text-shadow: 0 0 14px rgba(125, 255, 168, .55);
+}
+.hud__approach-hint {
+  font-size: 10px; letter-spacing: .06em; color: rgba(219, 234, 255, .62);
+  margin-top: 3px;
+}
+
+@media (max-height: 500px) {
+  .hud__approach { top: calc(72px + var(--safe-t)); }
 }
