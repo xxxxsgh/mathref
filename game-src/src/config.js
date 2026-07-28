@@ -27,8 +27,22 @@ export const CONFIG = {
     // Near/far da câmera. Far grande demais destrói a precisão do depth buffer
     // (z-fighting). 100k com near 0.5 já é agressivo; nas fases planetárias
     // vamos precisar de logarithmicDepthBuffer ou renderização em camadas.
-    near: 0.5,
-    far: 100000,
+    // Faixa PRÓXIMA: nave, inimigos, projéteis, asteroides, partículas —
+    // e planetas/estações quando estão perto o bastante.
+    // `near: 1.0` e não 0.5: a câmera fica 12 unidades atrás da nave, então
+    // não há nada a ganhar com um plano mais próximo, e dobrar o `near`
+    // dobra a precisão do depth buffer em toda a faixa.
+    near: 1.0,
+    nearFar: 32000,
+    // Faixa DISTANTE: estrela, planetas e estações longe.
+    farNear: 16000,
+    far: 400000,
+    // Um corpo só pode trocar de faixa quando cabe INTEIRO na faixa de
+    // destino, senão ele seria recortado por um dos planos durante a
+    // transição. Como as duas condições usam o raio do corpo, elas também
+    // funcionam como histerese e evitam alternância a cada frame.
+    depthSwitchToNear: 28000,   // dist + raio abaixo disto → faixa próxima
+    depthSwitchToFar: 22000,    // dist - raio acima disto → faixa distante
     fov: 68,
     // Direção de onde vem a luz da estrela do sistema (normalizada no uso).
     // O skybox desenha o disco solar exatamente nessa direção, então mudar
@@ -408,6 +422,68 @@ export const CONFIG = {
       formationSpread: 46,
       formationLambda: 1.1,
     },
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // SISTEMA SOLAR PROCEDURAL
+  // ───────────────────────────────────────────────────────────────────────
+  // Escala COMPRIMIDA, não realista. Em escala real um sistema solar tem
+  // 10^12 unidades e você passaria a partida inteira sem chegar a lugar
+  // nenhum. Aqui as distâncias são escolhidas pelo TEMPO DE VIAGEM: ~40 a 90
+  // segundos entre corpos com boost, que é longo o bastante pra dar sensação
+  // de escala e curto o bastante pra não ser tédio.
+  system: {
+    // ⚠ ESCALA CALIBRADA PELO TEMPO DE VIAGEM, e a primeira versão errou por
+    // ~6×. Com órbitas de até 380.000 unidades, atravessar o sistema a 750
+    // u/s (velocidade de boost) levava 8 minutos — e o cinturão, espalhado
+    // por um anel dessa circunferência, tinha densidade média de um
+    // asteroide a cada 6.000 unidades: espaço vazio com nome de cinturão.
+    //
+    // Regra pra reajustar: distância ÷ 750 = segundos de viagem com boost.
+    // O alvo é 20 a 80 segundos entre corpos vizinhos.
+    starRadius: 9000,
+    starDistance: 120000,
+    planetCount: [3, 6],          // faixa sorteada
+    orbitInner: 20000,
+    orbitOuter: 78000,
+    planetRadius: [1400, 4200],
+    gasGiantChance: 0.3,
+    ringChance: 0.28,
+    atmosphereChance: 0.72,
+    moonChance: 0.45,
+
+    belt: {
+      chance: 0.85,
+      // Faixa radial ESTREITA. O que define se o cinturão é jogável não é a
+      // contagem de asteroides, é a DENSIDADE: contagem ÷ volume do anel.
+      // Espalhar 3200 rochas por uma faixa radial larga dá espaço vazio;
+      // concentrá-las numa faixa fina dá um campo por onde se costura.
+      // Com estes números a distância média entre rochas fica em ~1000
+      // unidades, e ~140 ficam visíveis dentro do alcance de renderização.
+      innerFactor: 0.45,          // fração da faixa orbital
+      outerFactor: 0.52,
+      thickness: 1200,
+    },
+
+    stations: [1, 3],
+    stationOrbitOffset: 4200,     // distância do planeta que a estação orbita
+  },
+
+  asteroids: {
+    count: { high: 4400, medium: 2600, low: 1400 },
+    minSize: 14,
+    maxSize: 105,
+    maxSpin: 0.55,
+    baseHp: 0.9,                  // multiplicado pela escala
+    resourceChance: 0.14,
+    // Distâncias de troca de LOD. Ajuste o primeiro valor se o painel de
+    // debug mostrar contagem de triângulos alta com poucos draw calls.
+    lodDistances: [900, 2600],
+    viewDistance: 7000,
+    // Dano ao raspar num asteroide. Alto de propósito: o cinturão precisa
+    // ser perigoso, senão ele é só cenário.
+    collisionDamage: 26,
+    collisionCooldown: 0.7,
   },
 
   effects: {

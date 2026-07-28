@@ -1,6 +1,22 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 
+/** Layers de renderização. Ver o comentário do construtor. */
+export const LAYER_NEAR = 0;
+export const LAYER_FAR = 1;
+
+/** Marca um objeto e todos os seus filhos para a faixa distante. */
+export function setFarLayer(object) {
+  object.traverse((o) => o.layers.set(LAYER_FAR));
+}
+
+/** Luzes precisam alcançar as DUAS faixas: no Three, uma luz só ilumina
+ *  objetos cujas layers ela também tem habilitadas. */
+export function lightAllLayers(light) {
+  light.layers.enable(LAYER_NEAR);
+  light.layers.enable(LAYER_FAR);
+}
+
 /**
  * Criação e gestão do renderer.
  *
@@ -44,12 +60,43 @@ export class Renderer {
       requestAnimationFrame(() => requestAnimationFrame(this._onResize));
     });
 
+    // ═══ DUAS CÂMERAS, DOIS INTERVALOS DE PROFUNDIDADE ═══
+    //
+    // Problema: o sistema solar tem planetas a centenas de milhares de
+    // unidades, e a nave tem detalhes de meia unidade. Um único par
+    // near/far cobrindo 0.5 → 300000 tem razão de 600.000:1, e o depth
+    // buffer (24 bits, com precisão distribuída de forma NÃO linear —
+    // concentrada perto do `near`) simplesmente não tem resolução pra isso.
+    // O sintoma é z-fighting: superfícies piscando uma sobre a outra.
+    //
+    // As saídas usuais e por que não as escolhi:
+    //   • logarithmicDepthBuffer do Three — resolve, mas escreve gl_FragDepth
+    //     em todo fragmento, o que desliga o early-Z da GPU. Num dispositivo
+    //     móvel, com fill rate como gargalo, isso é caro demais.
+    //   • aumentar o `near` — perderia o detalhe próximo da nave.
+    //
+    // A solução aqui é dividir a cena em duas FAIXAS de profundidade e
+    // renderizar cada uma com sua própria câmera, limpando o depth buffer
+    // entre elas. Cada faixa tem razão near/far modesta (~1000:1), que o
+    // buffer resolve com folga. As duas câmeras compartilham posição e
+    // orientação — são a mesma câmera, com "alcances" diferentes.
+    //
+    // A separação é feita por LAYER do Three:
+    //   layer 0 = perto (nave, inimigos, projéteis, asteroides, partículas)
+    //   layer 1 = longe (estrela, planetas, estações distantes)
     this.camera = new THREE.PerspectiveCamera(
-      CONFIG.world.fov,
-      1,
-      CONFIG.world.near,
-      CONFIG.world.far,
+      CONFIG.world.fov, 1, CONFIG.world.near, CONFIG.world.nearFar,
     );
+    this.camera.layers.set(LAYER_NEAR);
+
+    this.farCamera = new THREE.PerspectiveCamera(
+      CONFIG.world.fov, 1, CONFIG.world.farNear, CONFIG.world.far,
+    );
+    this.farCamera.layers.set(LAYER_FAR);
+
+    // Não limpamos automaticamente: o ciclo de duas passadas precisa
+    // controlar exatamente quando o color e o depth buffer são zerados.
+    this.gl.autoClear = false;
 
     this._onResize();
   }
@@ -75,10 +122,42 @@ export class Renderer {
     this.gl.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    if (this.farCamera) {
+      this.farCamera.aspect = w / h;
+      this.farCamera.updateProjectionMatrix();
+    }
   }
 
+  /**
+   * Renderiza em duas passadas de profundidade.
+   *
+   * Ordem: limpa tudo → desenha a faixa DISTANTE (que também traz o
+   * skybox como background) → limpa SÓ o depth → desenha a faixa próxima.
+   *
+   * Limpar o depth entre as passadas é o que garante que qualquer objeto
+   * próximo apareça na frente de qualquer objeto distante — o que é
+   * fisicamente correto aqui, já que as faixas não se sobrepõem.
+   */
   render(scene) {
+    this.gl.clear(true, true, false);
+
+    // A passada distante desenha o background. Se ela for pulada, o skybox
+    // some — por isso o background fica sempre nela.
+    this.gl.render(scene, this.farCamera);
+
+    this.gl.clearDepth();
     this.gl.render(scene, this.camera);
+  }
+
+  /** Mantém a câmera distante sincronizada com a próxima. Chamado depois do
+   *  rig de câmera, todo frame. */
+  syncCameras() {
+    this.farCamera.position.copy(this.camera.position);
+    this.farCamera.quaternion.copy(this.camera.quaternion);
+    if (this.farCamera.fov !== this.camera.fov) {
+      this.farCamera.fov = this.camera.fov;
+      this.farCamera.updateProjectionMatrix();
+    }
   }
 
   /** Estatísticas cruas do frame anterior, para o painel de debug.

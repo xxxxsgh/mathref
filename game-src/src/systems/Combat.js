@@ -7,6 +7,9 @@ import { Health } from '../entities/Health.js';
 import { computeLead } from './EnemyAI.js';
 import { clamp } from '../core/MathUtils.js';
 
+/** Velocidade nula reutilizada — explosões de asteroide não herdam movimento. */
+const ZERO = new THREE.Vector3();
+
 /**
  * Sistema de combate: dono das armas, dos inimigos, das colisões e da morte.
  *
@@ -63,6 +66,13 @@ export class Combat {
 
     this.qualityTier = 'high';
 
+    /** Injetado pelo Engine: devolve o AsteroidField ativo (ou null). */
+    this.asteroidsProvider = () => null;
+    this.asteroidCooldown = 0;
+    /** Recursos coletados nesta sessão, por tipo. Consumidos na Fase 5. */
+    this.resources = [0, 0, 0, 0];
+    this.asteroidsDestroyed = 0;
+
     // Scratch.
     this._tmp = new THREE.Vector3();
     this._tmp2 = new THREE.Vector3();
@@ -82,7 +92,8 @@ export class Combat {
   }
 
   get entityCount() {
-    return 1 + this.aliveEnemies + this.projectiles.activeCount + this.explosions.activeCount;
+    return 1 + this.aliveEnemies + this.projectiles.activeCount
+      + this.explosions.activeCount + (this.asteroidsProvider()?.visibleCount ?? 0);
   }
 
   /**
@@ -101,6 +112,7 @@ export class Combat {
 
     this.projectiles.update(dt);
     this._resolveHits();
+    this._resolveAsteroids(dt);
     this._resolveRamming(dt);
     this.explosions.update(dt);
 
@@ -336,6 +348,83 @@ export class Combat {
       if (eRes.destroyed) this._killEnemy(e);
       if (pRes.destroyed) this._killPlayer();
       break;
+    }
+  }
+
+  /**
+   * Colisões contra o cinturão de asteroides.
+   *
+   * Aqui a broadphase por spatial hash paga: são milhares de corpos estáticos
+   * consultados por poucos móveis. Sem ela, cada projétil testaria 3200
+   * asteroides por frame.
+   */
+  _resolveAsteroids(dt) {
+    const field = this.asteroidsProvider();
+    if (!field) return;
+    if (this.asteroidCooldown > 0) this.asteroidCooldown -= dt;
+
+    // ── Projéteis contra rocha ──────────────────────────────────────────
+    this.projectiles.pool.forEachActive((p) => {
+      const idx = field.querySegment(
+        p.prevPosition.x, p.prevPosition.y, p.prevPosition.z,
+        p.position.x, p.position.y, p.position.z,
+      );
+      if (idx < 0) return;
+
+      field.getPosition(idx, this._tmp);
+      const res = field.damage(idx, p.damage);
+      if (res.destroyed) {
+        this.explosions.explode(this._tmp, ZERO, Math.min(1.4, field.getScale(idx) / 45), this.qualityTier);
+        this.asteroidsDestroyed++;
+        // Só o tiro do JOGADOR credita recurso. Um inimigo destruindo rocha
+        // não deveria encher a carga dele.
+        if (res.resource > 0 && p.faction === 0) {
+          this.resources[res.resource] = (this.resources[res.resource] ?? 0) + 1;
+          this.onResourceCollected?.(res.resource);
+        }
+      } else {
+        this.explosions.sparks(p.position, null);
+      }
+      this.projectiles.pool.release(p);
+    });
+
+    // ── Nave do jogador contra rocha ────────────────────────────────────
+    if (!this.playerDead && this.asteroidCooldown <= 0) {
+      const hit = field.querySphere(
+        this.player.position.x, this.player.position.y, this.player.position.z,
+        this.playerHealth.radius,
+      );
+      if (hit >= 0) {
+        this.asteroidCooldown = CONFIG.asteroids.collisionCooldown;
+        const r = this.playerHealth.applyDamage(CONFIG.asteroids.collisionDamage);
+        field.getPosition(hit, this._tmp);
+        this.explosions.sparks(this.player.position, null);
+        // Empurra a nave pra fora da rocha. Sem isso ela fica presa dentro e
+        // toma dano em ciclo até morrer, o que o jogador lê como travamento.
+        this._tmp2.copy(this.player.position).sub(this._tmp);
+        const d = this._tmp2.length();
+        if (d > 1e-3) {
+          this._tmp2.multiplyScalar(1 / d);
+          const overlap = field.getRadius(hit) + this.playerHealth.radius - d;
+          this.player.flight.position.addScaledVector(this._tmp2, overlap + 1.5);
+          // Componente da velocidade contra a rocha é refletida e amortecida.
+          const vn = this.player.flight.velocity.dot(this._tmp2);
+          if (vn < 0) this.player.flight.velocity.addScaledVector(this._tmp2, -vn * 1.35);
+        }
+        if (r.destroyed) this._killPlayer();
+      }
+    }
+
+    // ── Inimigos contra rocha ───────────────────────────────────────────
+    // Sem isso os caças atravessam o cinturão como fantasmas, e a única
+    // tática do jogador (atrair a perseguição pras rochas) deixa de existir.
+    for (const e of this.enemies) {
+      if (!e.active) continue;
+      const hit = field.querySphere(e.position.x, e.position.y, e.position.z, e.health.radius);
+      if (hit < 0) continue;
+      const r = e.health.applyDamage(CONFIG.asteroids.collisionDamage * 1.6);
+      e.onHit();
+      if (r.destroyed) this._killEnemy(e);
     }
   }
 

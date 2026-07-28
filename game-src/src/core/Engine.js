@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import { Renderer } from './Renderer.js';
+import { Renderer, lightAllLayers } from './Renderer.js';
 import { Quality, detectMobile } from './Quality.js';
 import { Input } from './Input.js';
 import { Ship } from '../entities/Ship.js';
@@ -11,6 +11,7 @@ import { HUD } from '../ui/HUD.js';
 import { DebugPanel } from '../ui/DebugPanel.js';
 import { TouchUI } from '../ui/TouchUI.js';
 import { Combat } from '../systems/Combat.js';
+import { SolarSystem } from '../procgen/SolarSystem.js';
 
 /**
  * Orquestrador: monta a cena, roda o loop, coordena os sistemas.
@@ -59,7 +60,14 @@ export class Engine {
     this.ship = new Ship(this.scene);
     this.cameraRig = new CameraRig(this.renderer.camera);
     this.dust = new SpaceDust(this.scene);
+    this.system = new SolarSystem(this.scene, CONFIG.world.seed);
     this.combat = new Combat(this.scene, this.ship);
+    this.combat.asteroidsProvider = () => this.system.asteroids;
+
+    // Começa perto do cinturão em vez da origem: a origem é o centro da
+    // estrela e não tem nada por perto. Nascer com um planeta e o cinturão à
+    // vista é o que faz o jogador entender que existe um mundo.
+    this._placeStartingPosition();
 
     this.hud = new HUD(document.getElementById('hud'));
     this.debug = new DebugPanel(document.getElementById('debug-panel'));
@@ -79,6 +87,7 @@ export class Engine {
       this.dust.setPixelRatio(this.renderer.gl.getPixelRatio());
       this.combat.setQuality(tier);
       this.combat.explosions.setPixelRatio(this.renderer.gl.getPixelRatio());
+      this.system.buildAsteroids(tier.dust);
       // Sombra desligada nesta fase: o iPad renderiza um shadow map inteiro
       // por frame e no espaço vazio não há NADA pra receber sombra. O flag do
       // tier passa a valer na Fase 3, quando planetas e estações existirem.
@@ -128,12 +137,18 @@ export class Engine {
     // justificar um preenchimento azulado.
     this.ambient = new THREE.AmbientLight(W.ambientColor, W.ambientIntensity);
     this.scene.add(this.ambient);
+    // Luzes só iluminam objetos cujas layers elas têm habilitadas. Como a
+    // cena é dividida em faixa próxima e distante, toda luz precisa alcançar
+    // as duas — senão os planetas ficariam pretos.
+    lightAllLayers(this.sunLight);
+    lightAllLayers(this.ambient);
 
     // Luz de contorno vinda do lado oposto, pra separar a silhueta da nave do
     // fundo escuro. É truque de iluminação de cinema, não de física.
     this.rimLight = new THREE.DirectionalLight(0x6d8fd0, 0.4);
     this.rimLight.position.copy(dir).multiplyScalar(-800);
     this.scene.add(this.rimLight);
+    lightAllLayers(this.rimLight);
 
     // ── Luz de preenchimento presa à CÂMERA ──────────────────────────────
     // Problema real que isso resolve: a estrela tem uma posição fixa no mundo,
@@ -147,6 +162,7 @@ export class Engine {
     // garante que o volume da nave seja sempre legível, sem apagar a direção
     // dramática que a estrela dá.
     this.fillLight = new THREE.DirectionalLight(0xdce8ff, 0.85);
+    lightAllLayers(this.fillLight);
     this.scene.add(this.fillLight);
     this.scene.add(this.fillLight.target);
     this._fillOffset = new THREE.Vector3();
@@ -162,6 +178,31 @@ export class Engine {
     this.fillLight.position.copy(cam.position).addScaledVector(this._fillOffset, 40);
     this.fillLight.target.position.copy(this.ship.position);
     this.fillLight.target.updateMatrixWorld();
+  }
+
+  /** Posiciona a nave num ponto interessante do sistema no início da partida. */
+  _placeStartingPosition() {
+    const S = CONFIG.system;
+    const belt = this.system.beltSpec;
+    const start = new THREE.Vector3();
+    if (belt) {
+      // Logo dentro da borda interna do cinturão, com o centro do sistema
+      // (e a estrela) à frente.
+      const r = belt.innerRadius - 2600;
+      start.set(r, 900, 0);
+    } else {
+      start.set(S.orbitInner, 0, 0);
+    }
+    this.ship.flight.position.copy(start);
+
+    // Aponta pro planeta mais próximo: dá um destino visível de saída.
+    const { planet } = this.system.nearestPlanet(start);
+    if (planet) {
+      const m = new THREE.Matrix4();
+      m.lookAt(start, planet.object.position, new THREE.Vector3(0, 1, 0));
+      this.ship.flight.quaternion.setFromRotationMatrix(m);
+    }
+    this.cameraRig.snapTo(this.ship.flight);
   }
 
   _ensureSkybox(tier) {
@@ -241,8 +282,12 @@ export class Engine {
     }
 
     this.cameraRig.update(this.ship.flight, dt);
+    // A câmera distante espelha a próxima; precisa ser sincronizada DEPOIS
+    // do rig e ANTES de qualquer coisa que dependa da matriz de projeção.
+    this.renderer.syncCameras();
     // Depois da câmera: a luz de preenchimento é definida em relação a ela.
     this._updateFillLight();
+    this.system.update(this.renderer.camera.position, dt);
 
     // O combate depende da câmera (escolha de alvo usa o eixo de visão), por
     // isso vem depois dela e antes da HUD.
@@ -263,6 +308,7 @@ export class Engine {
   dispose() {
     this.pause();
     this.input.dispose();
+    this.system.dispose();
     this.combat.dispose();
     this.ship.dispose();
     this.dust.dispose();
