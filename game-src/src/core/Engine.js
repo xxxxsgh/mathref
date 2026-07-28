@@ -15,6 +15,7 @@ import { SolarSystem } from '../procgen/SolarSystem.js';
 import { PlanetSurface } from '../systems/PlanetSurface.js';
 import { PlanetaryFlight } from '../systems/PlanetaryFlight.js';
 import { Autopilot } from '../systems/Autopilot.js';
+import { SurfaceRace, formatarTempo } from '../systems/SurfaceRace.js';
 import { SkyDome } from '../systems/SkyDome.js';
 import { Progression } from '../systems/Progression.js';
 import { Missions } from '../systems/Missions.js';
@@ -78,9 +79,10 @@ export class Engine {
     this.surface = new PlanetSurface(this.scene);
     this.planetary = new PlanetaryFlight();
     this.autopilot = new Autopilot();
+    this.race = new SurfaceRace(this.scene);
     this.skyDome = new SkyDome(this.scene);
 
-    // ── Progressão ────────────────────────────────────────────────────────
+    // ── Progressão ─────────────────────────────────────────────────────────
     this.progression = new Progression();
     this.missions = new Missions(this.system, this.progression);
     this.upgrades = new UpgradePanel(document.getElementById('upgrades'), this.progression);
@@ -213,7 +215,7 @@ export class Engine {
     this.scene.add(this.rimLight);
     lightAllLayers(this.rimLight);
 
-    // ── Luz de preenchimento presa à CÂMERA ──────────────────────────────
+    // ── Luz de preenchimento presa à CÂMERA ────────────────────────
     // Problema real que isso resolve: a estrela tem uma posição fixa no mundo,
     // mas o jogador vira a nave pra qualquer lado. Sempre que ele voa NA
     // DIREÇÃO da estrela, a traseira da nave — que é a vista que ele tem 95%
@@ -335,7 +337,7 @@ export class Engine {
     }
     if (this.input.actions.toggleTuner) this.onToggleTuner?.();
 
-    // ── Piloto automático ───────────────────────────────────────────────
+    // ── Piloto automático ────────────────────────────────────────
     // Roda ANTES da nave, porque ele escreve no MESMO `state` que a nave lê
     // logo abaixo. Depois seria tarde: o comando só valeria no frame
     // seguinte, e a direção ficaria com um quadro de atraso permanente.
@@ -364,7 +366,7 @@ export class Engine {
       this.ship.flight.update(NEUTRAL_CONTROL, dt);
     }
 
-    // ── Referência de "para cima" da câmera ─────────────────────────────
+    // ── Referência de "para cima" da câmera ──────────────────────
     // No espaço é o +Y do mundo; num planeta é a normal da superfície. A
     // interpolação pela densidade atmosférica é o que faz o horizonte "se
     // endireitar" durante a descida em vez de saltar.
@@ -384,7 +386,7 @@ export class Engine {
     this._updateFillLight();
     this.system.update(this.renderer.camera.position, dt);
 
-    // ── Voo planetário ──────────────────────────────────────────────────
+    // ── Voo planetário ───────────────────────────────────────
     // Precisa rodar DEPOIS da nave (usa a posição já integrada) e ANTES do
     // combate (o dano de reentrada e de batida entra no mesmo frame).
     if (!this.combat.playerDead) {
@@ -404,6 +406,7 @@ export class Engine {
     }
     this.surface.update(this.ship.position, dt);
     this.surface.applyFog(this.planetary.atmosphereDensity);
+    this._updateRace(dt);
     if (this.planetary.planet) {
       this._sunDir.copy(this.system.starPosition).sub(this.ship.position).normalize();
       this.skyDome.update(
@@ -440,6 +443,46 @@ export class Engine {
     this.hud.update(this.ship, state, this.renderer.camera, this.combat, dt,
       this.planetary, this.missions, this.progression);
     this.hud.setAutopilot(this.autopilot, state);
+    this.hud.setRace(this.race, formatarTempo);
+  }
+
+  /**
+   * Corrida de superfície.
+   *
+   * O circuito é montado quando o jogador entra na atmosfera de um planeta e
+   * desmontado quando ele sai. Não há botão de "começar": cruzar a primeira
+   * argola inicia o cronômetro. É a regra que exige menos interface e que
+   * qualquer pessoa entende sem ler nada — a argola pulsa, você atravessa,
+   * o relógio anda.
+   */
+  _updateRace(dt) {
+    const pf = this.planetary;
+    if (!pf.inAtmosphere || !pf.planet || !this.surface.active) {
+      if (this.race.estado !== 'inativa') this.race.desmontar();
+      return;
+    }
+    if (this.race.planet !== pf.planet) {
+      this.race.montar(pf.planet, this.surface,
+                       this.progression.raceRecord(pf.planet.spec.name));
+    }
+
+    const r = this.race.update(this.ship.position, dt);
+    if (r.iniciou) {
+      this.hud.bigMessage('CORRIDA INICIADA', 1.2, 'good');
+      this.audio.chime(true);
+    } else if (r.cruzou > 0 && !r.concluiu) {
+      this.audio.chime(true);
+    }
+    if (r.concluiu) {
+      const nome = pf.planet.spec.name;
+      const recorde = this.progression.recordRace(nome, this.race.ultimoTempo);
+      this.hud.bigMessage(
+        recorde ? `RECORDE · ${formatarTempo(this.race.ultimoTempo)}`
+                : `CIRCUITO CONCLUÍDO · ${formatarTempo(this.race.ultimoTempo)}`,
+        3.2, 'good',
+      );
+      this.audio.chime(true);
+    }
   }
 
   /** Rastro de plasma da reentrada.

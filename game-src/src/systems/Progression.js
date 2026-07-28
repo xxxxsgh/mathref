@@ -37,7 +37,7 @@ import { CONFIG } from '../config.js';
 
 const SAVE_KEY = 'starfarer:save:v1';
 const BACKUP_KEY = 'starfarer:save:backup';
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 
 /**
  * Transformações de formato. A chave é a versão DE ONDE se sai.
@@ -53,6 +53,12 @@ const MIGRATIONS = {
     ...d,
     version: 2,
     stats: { ...(d.stats ?? {}), bestWave: 0 },
+  }),
+  // v2 → v3: recordes das corridas de superfície, uma entrada por planeta.
+  2: (d) => ({
+    ...d,
+    version: 3,
+    raceRecords: {},
   }),
 };
 
@@ -151,10 +157,12 @@ export class Progression {
 
     this.stats = { kills: 0, deaths: 0, asteroidsMined: 0, planetsVisited: [],
                    stationsDocked: 0, bestWave: 0 };
+    /** Melhor tempo de corrida por planeta, em segundos. */
+    this.raceRecords = {};
     this.load();
   }
 
-  // ── Multiplicadores derivados ────────────────────────────────────────
+  // ── Multiplicadores derivados ────────────────────────────
   get engineMul() { return UPGRADES.engine.levels[this.levels.engine]; }
   get shieldMul() { return UPGRADES.shield.levels[this.levels.shield]; }
   get weaponMul() { return UPGRADES.weapons.levels[this.levels.weapons]; }
@@ -217,6 +225,22 @@ export class Progression {
 
   onKill() { this.stats.kills++; }
 
+  /** Melhor tempo de corrida neste planeta, ou null se nunca foi corrido. */
+  raceRecord(planetName) {
+    const t = this.raceRecords[planetName];
+    return typeof t === 'number' ? t : null;
+  }
+
+  /** Grava um tempo de corrida se ele for melhor que o anterior.
+   *  @returns {boolean} se virou recorde */
+  recordRace(planetName, segundos) {
+    const anterior = this.raceRecord(planetName);
+    if (anterior !== null && segundos >= anterior) return false;
+    this.raceRecords[planetName] = segundos;
+    this.save();
+    return true;
+  }
+
   /** Recorde de onda alcançada. Salva só quando o recorde de fato sobe —
    *  gravar no localStorage a cada onda seria escrita à toa. */
   recordWave(wave) {
@@ -233,7 +257,7 @@ export class Progression {
     return true;
   }
 
-  // ── Persistência ─────────────────────────────────────────────────────
+  // ── Persistência ───────────────────────────────────────
   save() {
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
@@ -242,6 +266,7 @@ export class Progression {
         credits: this.credits,
         cargo: this.cargo,
         stats: this.stats,
+        raceRecords: this.raceRecords,
       }));
     } catch (e) {
       // localStorage pode estar cheio, desabilitado, ou em modo privado do
@@ -271,6 +296,7 @@ export class Progression {
       this.credits = Number(data.credits) || 0;
       this.cargo = Number(data.cargo) || 0;
       Object.assign(this.stats, data.stats ?? {});
+      Object.assign(this.raceRecords, data.raceRecords ?? {});
       // Clampa níveis: um save adulterado não deve indexar fora do array.
       for (const k of Object.keys(this.levels)) {
         const max = UPGRADES[k].levels.length - 1;
@@ -287,6 +313,7 @@ export class Progression {
     this.credits = 0;
     this.stats = { kills: 0, deaths: 0, asteroidsMined: 0, planetsVisited: [],
                    stationsDocked: 0, bestWave: 0 };
+    this.raceRecords = {};
     try { localStorage.removeItem(SAVE_KEY); } catch { /* ignora */ }
   }
 }
