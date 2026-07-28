@@ -14,14 +14,76 @@ import { CONFIG } from '../config.js';
  *
  * ═══ SAVE ═══
  *
- * `localStorage`, sem backend. O objeto salvo tem `version`; ao carregar, um
- * save de versão diferente é DESCARTADO em vez de migrado. Migração de save
- * é o tipo de complexidade que só se paga quando há jogadores reais com
- * partidas longas — antes disso, ela só esconde bugs.
+ * `localStorage`, sem backend.
+ *
+ * ⚠ A primeira versão descartava saves de versão diferente, com um comentário
+ * dizendo que migração "só se paga quando há jogadores reais". O raciocínio
+ * está invertido: quando existem jogadores reais, já é tarde. O descarte é
+ * SILENCIOSO — a pessoa abre o jogo depois de um deploy e simplesmente não
+ * tem mais nada, sem erro, sem aviso, sem como recuperar. E o gatilho não é
+ * uma decisão consciente: é qualquer commit futuro que mude o formato.
+ *
+ * Agora há uma cadeia de migrações. Cada versão sabe transformar o formato
+ * anterior no seu, e `migrate` aplica quantas forem necessárias em sequência.
+ * Antes de qualquer transformação o save original vai para uma chave de
+ * backup — se uma migração tiver bug, os dados ainda existem.
+ *
+ * Duas rotas de escape, ambas preservando o original:
+ *   • versão desconhecida (sem migração cadastrada) → começa do zero
+ *   • versão MAIOR que a atual → começa do zero. Acontece de verdade: o
+ *     service worker pode servir um build antigo depois de um deploy, e ler
+ *     um save do futuro com código velho corrompe o que ainda está bom.
  */
 
 const SAVE_KEY = 'starfarer:save:v1';
-const SAVE_VERSION = 1;
+const BACKUP_KEY = 'starfarer:save:backup';
+const SAVE_VERSION = 2;
+
+/**
+ * Transformações de formato. A chave é a versão DE ONDE se sai.
+ *
+ * Cada função recebe o objeto salvo e devolve o formato da versão seguinte.
+ * Elas não podem lançar exceção nem depender de nada fora do próprio objeto —
+ * rodam antes de o jogo existir.
+ */
+const MIGRATIONS = {
+  // v1 → v2: `stats.bestWave` passou a existir com o escalonamento de
+  // dificuldade. Saves antigos não têm recorde, então começam em zero.
+  1: (d) => ({
+    ...d,
+    version: 2,
+    stats: { ...(d.stats ?? {}), bestWave: 0 },
+  }),
+};
+
+/**
+ * @param {object} data save cru vindo do localStorage
+ * @returns {object|null} save no formato atual, ou null se não der pra migrar
+ */
+function migrate(data) {
+  let v = Number(data?.version);
+  if (!Number.isFinite(v)) return null;
+  if (v > SAVE_VERSION) return null;          // save do futuro
+  if (v === SAVE_VERSION) return data;
+
+  // Só copia o backup quando há transformação de fato a fazer.
+  try {
+    localStorage.setItem(BACKUP_KEY, JSON.stringify(data));
+  } catch { /* sem backup é ruim, mas não impede a migração */ }
+
+  let out = data;
+  while (v < SAVE_VERSION) {
+    const step = MIGRATIONS[v];
+    if (!step) return null;                   // buraco na cadeia
+    out = step(out);
+    const next = Number(out?.version);
+    // Uma migração que não avança a versão daria loop infinito. Preferimos
+    // perder o save (que está em backup) a travar o carregamento do jogo.
+    if (!Number.isFinite(next) || next <= v) return null;
+    v = next;
+  }
+  return out;
+}
 
 /** Definição dos upgrades. Cada nível custa mais e dá menos: a curva impede
  *  que maximizar uma coisa só seja sempre a jogada certa. */
@@ -87,11 +149,12 @@ export class Progression {
     /** Créditos: minério entregue numa estação. Não se perde. */
     this.credits = 0;
 
-    this.stats = { kills: 0, deaths: 0, asteroidsMined: 0, planetsVisited: [], stationsDocked: 0 };
+    this.stats = { kills: 0, deaths: 0, asteroidsMined: 0, planetsVisited: [],
+                   stationsDocked: 0, bestWave: 0 };
     this.load();
   }
 
-  // ── Multiplicadores derivados ────────────────────────────────────────
+  // ── Multiplicadores derivados ────────────────────────────
   get engineMul() { return UPGRADES.engine.levels[this.levels.engine]; }
   get shieldMul() { return UPGRADES.shield.levels[this.levels.shield]; }
   get weaponMul() { return UPGRADES.weapons.levels[this.levels.weapons]; }
@@ -154,6 +217,15 @@ export class Progression {
 
   onKill() { this.stats.kills++; }
 
+  /** Recorde de onda alcançada. Salva só quando o recorde de fato sobe —
+   *  gravar no localStorage a cada onda seria escrita à toa. */
+  recordWave(wave) {
+    if (wave <= this.stats.bestWave) return false;
+    this.stats.bestWave = wave;
+    this.save();
+    return true;
+  }
+
   visitPlanet(name) {
     if (this.stats.planetsVisited.includes(name)) return false;
     this.stats.planetsVisited.push(name);
@@ -161,7 +233,7 @@ export class Progression {
     return true;
   }
 
-  // ── Persistência ─────────────────────────────────────────────────────
+  // ── Persistência ────────────────────────────────────────────────
   save() {
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
@@ -183,8 +255,16 @@ export class Progression {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return;
-      const data = JSON.parse(raw);
-      if (data.version !== SAVE_VERSION) return;   // descarta, não migra
+      const data = migrate(JSON.parse(raw));
+      if (!data) {
+        // O original já foi copiado para BACKUP_KEY dentro de `migrate` (ou
+        // continua intacto em SAVE_KEY, se nem chegou a migrar). Avisar no
+        // console é o mínimo: silêncio aqui foi exatamente o bug.
+        console.warn('[save] formato não reconhecido — começando do zero. '
+          + `Cópia do original em "${BACKUP_KEY}".`);
+        try { localStorage.setItem(BACKUP_KEY, raw); } catch { /* ignora */ }
+        return;
+      }
       // Mescla campo a campo em vez de substituir o objeto: assim um save
       // antigo sem uma chave nova não deixa `undefined` circulando pelo jogo.
       Object.assign(this.levels, data.levels ?? {});
@@ -205,7 +285,8 @@ export class Progression {
     this.levels = { engine: 0, shield: 0, weapons: 0, hull: 0, cargo: 0 };
     this.cargo = 0;
     this.credits = 0;
-    this.stats = { kills: 0, deaths: 0, asteroidsMined: 0, planetsVisited: [], stationsDocked: 0 };
+    this.stats = { kills: 0, deaths: 0, asteroidsMined: 0, planetsVisited: [],
+                   stationsDocked: 0, bestWave: 0 };
     try { localStorage.removeItem(SAVE_KEY); } catch { /* ignora */ }
   }
 }

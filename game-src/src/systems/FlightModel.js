@@ -55,6 +55,9 @@ export class FlightModel {
     this.throttle = CONFIG.flight.throttleInitial;
     this.boosting = false;
     this.braking = false;
+    /** Tanque de boost, em segundos de uso restante. Ver _updateBoost. */
+    this.boostFuel = CONFIG.flight.boostFuel;
+    this._boostIdle = 0;
     /** Assistência de voo: desligada, a deriva lateral não é amortecida. */
     this.assistEnabled = true;
 
@@ -66,6 +69,14 @@ export class FlightModel {
      */
     this.speedMul = 1;
     this.accelMul = 1;
+
+    /**
+     * Multiplicador TEMPORÁRIO de velocidade, usado só pelo piloto automático
+     * durante o cruzeiro entre corpos. Separado de `speedMul` de propósito:
+     * aquele guarda os upgrades comprados, e escrever nele faria o cruzeiro
+     * apagar a melhoria de motor do jogador quando desengatasse.
+     */
+    this.cruiseMul = 1;
 
     /** Estado da manobra de barrel roll. */
     this.maneuver = { active: false, dir: 0, t: 0, cooldown: 0 };
@@ -108,8 +119,8 @@ export class FlightModel {
    */
   update(input, dt) {
     this.throttle = clamp(input.throttle, 0, 1);
-    this.boosting = input.boost;
     this.braking = input.brake;
+    this._updateBoost(input, dt);
 
     this._updateManeuver(input, dt);
     this._updateAngular(input, dt);
@@ -135,7 +146,59 @@ export class FlightModel {
     this._prevVelocity.copy(this.velocity);
   }
 
-  // ─────────────────────────────────────────────────────────────────────
+  /**
+   * Boost como recurso, não como interruptor.
+   *
+   * ═══ POR QUE UM PISO PARA RELIGAR ═══
+   *
+   * A implementação ingnêua é `boosting = input.boost && fuel > 0`. O problema
+   * aparece com o tanque vazio: no primeiro frame em que a recarga devolve
+   * qualquer coisa acima de zero, o boost liga, gasta e desliga. Segurando o
+   * botão isso vira uma oscilação a 60 Hz — o motor pisca, a câmera treme, o
+   * FOV pulsa, e o jogador não ganha velocidade nenhuma.
+   *
+   * `boostMinToStart` resolve com histerese: para COMEÇAR a acelerar é preciso
+   * um mínimo no tanque; para CONTINUAR, basta ter sobrado alguma coisa.
+   *
+   * Mas histerese sozinha não basta. Medindo, segurar o botão com o tanque
+   * vazio ainda produzia um ciclo de ~1,1 s (recarrega até o piso, gasta,
+   * repete) — 9 trocas de estado em 10 s e 40% de boost sustentado só por
+   * segurar. O tanque então só recarrega com o botão SOLTO. Assim segurar dá
+   * exatamente uma rajada, e recuperar exige parar de pedir — que é a decisão
+   * que o recurso deveria criar.
+   *
+   * O atraso (`boostRechargeDelay`) faz o mesmo pelo outro lado: soltar e
+   * reapertar na hora não devolve combustível, então pulsos curtos não são
+   * mais eficientes que usar o boost de uma vez.
+   */
+  _updateBoost(input, dt) {
+    const F = CONFIG.flight;
+    const querBoost = !!input.boost && !this.braking;
+    const podeComecar = this.boostFuel >= F.boostMinToStart;
+    const podeSeguir = this.boostFuel > 0;
+
+    this.boosting = querBoost && (this.boosting ? podeSeguir : podeComecar);
+
+    if (this.boosting) {
+      this.boostFuel = Math.max(0, this.boostFuel - dt);
+      this._boostIdle = 0;
+    } else if (querBoost) {
+      // Botão pedido mas sem combustível: nada acontece, e o tanque NÃO sobe.
+      this._boostIdle = 0;
+    } else {
+      this._boostIdle += dt;
+      if (this._boostIdle >= F.boostRechargeDelay) {
+        this.boostFuel = Math.min(F.boostFuel, this.boostFuel + F.boostRecharge * dt);
+      }
+    }
+  }
+
+  /** 0..1 — para a barra da HUD. */
+  get boostPct() {
+    return CONFIG.flight.boostFuel > 0 ? this.boostFuel / CONFIG.flight.boostFuel : 0;
+  }
+
+  // ─────────────────────────────────────────────────────────
   _updateManeuver(input, dt) {
     const B = CONFIG.flight.barrelRoll;
     const m = this.maneuver;
@@ -244,7 +307,7 @@ export class FlightModel {
 
     // ── Componente frontal: persegue a velocidade alvo do acelerador ──
     const boostMul = this.boosting ? F.boostMultiplier : 1;
-    let targetSpeed = this.throttle * F.maxSpeed * this.speedMul * boostMul;
+    let targetSpeed = this.throttle * F.maxSpeed * this.speedMul * this.cruiseMul * boostMul;
     let lambda = (targetSpeed > vFwd ? F.accelResponse : F.decelResponse) * this.accelMul;
     // O boost acelera mais rápido, senão o "chute" não é sentido.
     if (this.boosting) lambda *= 1.7;
@@ -297,13 +360,13 @@ export class FlightModel {
    * colisão exatamente concêntrica, ou uma raiz de discriminante negativo que
    * escapou de uma verificação.
    *
-   * Além do NaN, há o teto de velocidade. Ele não deveria ser atingível — a
+   * Além do NaN, há o teto de velocidade. Ele não deveria ser atingivel — a
    * velocidade frontal é limitada por `damp` em direção a um alvo finito —
    * mas as componentes laterais recebem impulsos de várias fontes (colisão
    * com rocha, quique no solo, propulsores, manobra), e um empilhamento
    * patológico entre elas é difícil de descartar por análise. O teto custa
    * duas comparações por frame e transforma um bug potencialmente fatal num
-   * soluço imperceptível.
+   * soluço imperceptivel.
    */
   _sanitize() {
     const v = this.velocity;
@@ -319,7 +382,9 @@ export class FlightModel {
       return;
     }
 
-    const speedLimit = CONFIG.flight.maxSpeed * this.speedMul
+    // O teto acompanha o cruzeiro, senão ele cortaria a velocidade justamente
+    // quando ela é intencional — e o corte seria um solavanco visível.
+    const speedLimit = CONFIG.flight.maxSpeed * this.speedMul * this.cruiseMul
       * CONFIG.flight.boostMultiplier * SPEED_SAFETY_FACTOR;
     const sq = v.lengthSq();
     if (sq > speedLimit * speedLimit) {
