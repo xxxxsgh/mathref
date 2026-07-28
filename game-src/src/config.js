@@ -65,21 +65,34 @@ export const CONFIG = {
   flight: {
     // Velocidade angular MÁXIMA em cada eixo local (rad/s).
     // pitch = nariz sobe/desce, yaw = nariz esquerda/direita, roll = giro.
-    maxPitchRate: DEG(105),
-    maxYawRate: DEG(78),
-    maxRollRate: DEG(190),
+    maxPitchRate: DEG(122),
+    maxYawRate: DEG(96),
+    maxRollRate: DEG(210),
 
     // Quão rápido a velocidade angular alcança o alvo. Este é O parâmetro do
     // feel de curva. Alto (>14) = responsivo/nervoso tipo Star Fox.
     // Baixo (<5) = pesado/lento tipo cargueiro. Roll costuma querer ser mais
     // frouxo que pitch/yaw pra dar sensação de massa.
-    pitchYawResponse: 9.0,
-    rollResponse: 6.5,
+    pitchYawResponse: 12.5,
+    rollResponse: 8.0,
 
     // Amortecimento quando você SOLTA o controle. Separado do de cima porque
     // "parar de virar" deve ser um pouco mais lento que "começar a virar" —
     // é isso que dá a sensação de inércia rotacional.
-    angularDamping: 5.0,
+    angularDamping: 7.0,
+
+    // ── Inclinação automática na curva (só visual) ──
+    // A nave INCLINA para dentro da curva, como um caça faz. É puramente
+    // cosmético: inclina a MALHA, não o referencial de voo. Fazer o contrário
+    // (rolar o quaternion de verdade) giraria os eixos de controle debaixo do
+    // jogador e o pitch passaria a apontar para um lado inesperado.
+    //
+    // Sem isso, virar no espaço parece deslizar de lado — a nave gira sobre o
+    // eixo mas o corpo continua nivelado, e o cérebro não lê aquilo como uma
+    // curva.
+    autoBank: 0.62,          // radianos no yaw máximo
+    autoBankPitch: 0.16,     // leve inclinação também no pitch
+    autoBankLambda: 5.5,
 
     // ── Translação ──
     maxSpeed: 320,          // u/s no acelerador cheio, sem boost
@@ -192,9 +205,14 @@ export const CONFIG = {
       // de HUD que a mira preditiva vai usar na Fase 2.
       usePointerLock: true,
       fireButton: 0,         // botão esquerdo
-      sensitivity: 0.0022,   // só com pointer lock
-      deadzone: 0.06,        // raio morto no centro, em unidades de tela
+      sensitivity: 0.0026,   // só com pointer lock
+      deadzone: 0.045,       // raio morto no centro, em unidades de tela
       gain: 1.0,             // multiplicador do comando resultante
+      // Curva de resposta do retículo. >1 comprime o centro: movimentos
+      // pequenos viram comandos pequenos, o que dá precisão para mirar, sem
+      // perder o alcance máximo nas bordas. Linear (1.0) faz a nave parecer
+      // nervosa perto do centro e é a queixa nº1 de mira com mouse.
+      expo: 1.7,
       // Recentragem lenta do retículo quando o mouse para. 0 = desligado.
       recenter: 0.9,
       invertY: false,
@@ -320,6 +338,15 @@ export const CONFIG = {
       // dois feixes nunca acertam o mesmo alvo.
       muzzles: [[-3.6, -0.1, -0.9], [3.6, -0.1, -0.9]],
       convergence: 620,
+      // ⚠ MIRA MANUAL. 0 = os tiros saem sempre ao longo do nariz; 1 = eles
+      // convergem no ponto de interceptação calculado, ou seja, a arma mira
+      // sozinha e acerta um alvo em movimento sem o jogador liderar nada.
+      //
+      // A primeira versão usava 1 "para os dois canhões acertarem o mesmo
+      // ponto", mas o efeito colateral era eliminar a habilidade central do
+      // jogo: o retículo verde já mostra ONDE mirar, e a graça é pôr o nariz
+      // ali. Com auto-mira, o retículo vira enfeite e o combate fica morno.
+      aimAssist: 0,
       color: 0x9dff6b,
       heatPerShot: 0.055,      // superaquecimento força ritmo em vez de segurar
       heatCooling: 0.42,
@@ -393,6 +420,25 @@ export const CONFIG = {
       lateralDrag: 2.6,
     },
 
+    // ── Combate atmosférico ──
+    // Inimigos que aparecem quando o jogador está na atmosfera de um planeta.
+    // Sem isso, descer até a superfície é um passeio: bonito na primeira vez,
+    // vazio na segunda. É o que dá razão para explorar em vez de sobrevoar.
+    surface: {
+      maxAlive: 4,
+      spawnDistance: 900,
+      spawnAltitude: [180, 620],   // faixa de altitude do surgimento
+      waveDelay: 6.0,
+      // Altura mínima acima do terreno. A IA não conhece o relevo; sem um
+      // piso, os caças mergulham no chão perseguindo o jogador e somem
+      // dentro da montanha.
+      minAltitude: 45,
+      // Quão forte o inimigo é empurrado para cima ao furar o piso. Alto o
+      // bastante para nunca afundar, baixo o bastante para ele ainda parecer
+      // que está voando e não flutuando num trilho.
+      liftStrength: 2.4,
+    },
+
     ai: {
       // Distâncias que definem as transições de comportamento.
       engageRange: 760,      // começa a atacar
@@ -443,11 +489,14 @@ export const CONFIG = {
     // O alvo é 20 a 80 segundos entre corpos vizinhos.
     starRadius: 9000,
     starDistance: 120000,
-    planetCount: [3, 6],          // faixa sorteada
+    planetCount: [6, 9],          // faixa sorteada
     orbitInner: 20000,
     orbitOuter: 78000,
     planetRadius: [1400, 4200],
-    gasGiantChance: 0.3,
+    // Gigantes gasosos não são pousáveis, então cada um é um planeta a menos
+    // para explorar. Mantido baixo de propósito: eles existem para dar
+    // variedade na paisagem, não para ocupar vagas de destino.
+    gasGiantChance: 0.16,
     ringChance: 0.28,
     atmosphereChance: 0.72,
     moonChance: 0.45,
@@ -590,17 +639,21 @@ export const CONFIG = {
     dockTime: 1.2,            // segundos dentro das condições
 
     // Sobrevoo que conta como "planeta visitado".
-    surveyAltitudeFactor: 0.14,   // fração do raio
+    surveyAltitudeFactor: 0.22,   // fração do raio
 
     missionOreTarget: 6,
     missionKillTarget: 5,
-    missionPlanetTarget: 2,
+    missionPlanetTarget: 3,
     missionArriveDistance: 2600,
   },
 
   hud: {
     radar: {
-      range: 1400,       // alcance máximo mostrado
+      range: 1400,       // alcance máximo de contatos hostis
+      // Alcance separado, muito maior, para planetas e estações: eles ficam a
+      // dezenas de milhares de unidades e no alcance de combate nunca
+      // apareceriam — e é exatamente na navegação que o radar mais serve.
+      bodyRange: 140000,
       size: 128,         // px do elemento
       tilt: 0.62,        // inclinação da elipse (0 = topo, 1 = lateral)
     },
