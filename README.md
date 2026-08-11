@@ -1,11 +1,12 @@
 # mathref
 
-Repositório com dois sites estáticos publicados pelo GitHub Pages.
+Repositório com três sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
 | [`/`](https://xxxxsgh.github.io/mathref/) | **MathRaf** — hub de matemática (`index.html` na raiz) |
 | [`/game/`](https://xxxxsgh.github.io/mathref/game/) | **Starfarer** — jogo 3D de nave espacial |
+| [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
 
 ## Publicação
 
@@ -24,7 +25,8 @@ Para republicar sem commit novo: aba *Actions* → *Publicar no GitHub Pages* �
 
 O workflow copia a raiz do repositório **por exclusão** — qualquer arquivo
 novo na raiz é publicado sem precisar editar o workflow. Ficam de fora:
-`game-src/`, `docs/`, `.github/`, `README.md`, `.gitignore` e `node_modules/`.
+`game-src/`, `drone-src/`, `docs/`, `.github/`, `README.md`, `.gitignore` e
+`node_modules/`.
 
 ### Plano B, sem Actions
 
@@ -55,3 +57,25 @@ npm run preview  # serve o build em /mathref/game/
 ```
 
 O `index.html` da raiz (MathRaf) não é tocado pelo build do jogo.
+
+## Dronefarer
+
+Simulador arcade de drone FPV em Three.js: voo com modos ANGLE e ACRO, câmera
+FPV com pós-processamento de feed analógico, circuitos cronometrados com
+fantasma da melhor volta, mundo aberto em três zonas com pontos de interesse,
+cinco tipos de missão, hangar com upgrades de trade-off real, dano por partes,
+clima e áudio inteiramente sintetizado. Roda no navegador, sem backend, e é
+instalável como PWA.
+
+- Fonte: [`drone-src/`](./drone-src)
+- Build: `drone/` (gerado pelo workflow; commitado como plano B)
+- **Documentação técnica:** [`docs/DRONEFARER.md`](./docs/DRONEFARER.md)
+- **Decisões de projeto:** [`drone-src/DECISOES.md`](./drone-src/DECISOES.md)
+
+```bash
+cd drone-src
+npm install
+npm run dev          # desenvolvimento
+npm run build        # gera ../drone/
+npm run test:aceite  # 46 critérios de aceite executáveis
+```

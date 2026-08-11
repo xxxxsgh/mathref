@@ -821,6 +821,105 @@ if (audio.unavailable) {
   );
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// FASE 8 — entrega
+// ══════════════════════════════════════════════════════════════════════════
+const pwa = await page.evaluate(async () => {
+  const link = document.querySelector('link[rel="manifest"]');
+  if (!link) return { manifest: false };
+  const manifest = await fetch(link.href).then((r) => r.json());
+  return {
+    manifest: true,
+    standalone: manifest.display === 'standalone',
+    icons: manifest.icons?.length ?? 0,
+    scope: manifest.scope,
+    hasServiceWorker: 'serviceWorker' in navigator,
+    swRegistered: (await navigator.serviceWorker?.getRegistrations?.())?.length > 0,
+  };
+});
+check(
+  'PWA instalável: manifest, ícones e service worker registrado',
+  pwa.manifest && pwa.standalone && pwa.icons >= 3 && pwa.swRegistered,
+  `manifest ${pwa.manifest}, display standalone ${pwa.standalone}, ${pwa.icons} ícones, ` +
+    `scope ${pwa.scope}, SW registrado ${pwa.swRegistered}`,
+);
+
+const cached = await page.evaluate(async () => {
+  const names = await caches.keys();
+  let total = 0;
+  for (const name of names) total += (await (await caches.open(name)).keys()).length;
+  return { names: names.length, total };
+});
+check(
+  'O service worker pré-cacheia o jogo (abre offline)',
+  cached.total > 5,
+  `${cached.total} recursos em ${cached.names} cache(s)`,
+);
+
+// Opções: mexer tem que persistir, senão o menu é decorativo.
+await page.evaluate(() => {
+  const g = globalThis.__DRONEFARER.game;
+  g.options.toggle(true);
+  const slider = document.querySelector('[data-field="tilt"]');
+  slider.value = '41';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  g.options.toggle(false);
+});
+await page.reload({ waitUntil: 'load' });
+await page.waitForTimeout(2200);
+const tilt = await page.evaluate(() => globalThis.__DRONEFARER.game.camera.tiltDeg);
+check(
+  'As opções persistem entre sessões',
+  tilt === 41,
+  `inclinação da câmera depois de recarregar: ${tilt}°`,
+);
+
+// Killcam: só nas batidas feias, e ela congela a simulação.
+await page.evaluate(() => {
+  const g = globalThis.__DRONEFARER.game;
+  g.save.progress.noRisk = false;
+  g.killcam.clear();
+  // Enche o buffer com material suficiente pra repetição valer.
+  for (let i = 0; i < 200; i++) {
+    g.killcam.record(1 / 30, i / 30, g.drone.position, g.drone.quaternion);
+  }
+  g.drone.crashed = false;
+  g._onCollision({ hard: true, impact: 26, normal: { y: 0.8 }, kind: 'terrain' });
+});
+await page.waitForTimeout(500);
+const kill = await state();
+check(
+  'Crash forte dispara a killcam e ela pausa a simulação',
+  kill.polish.killcam && kill.polish.paused,
+  `killcam ${kill.polish.killcam}, pausado ${kill.polish.paused}`,
+);
+
+await page.evaluate(() => globalThis.__DRONEFARER.game.killcam.stop());
+await page.waitForTimeout(200);
+
+// Photo mode: câmera livre com o jogo parado.
+await page.keyboard.press('KeyP');
+await page.waitForTimeout(400);
+const photo = await state();
+check(
+  'P entra no photo mode, some com a HUD e pausa o jogo',
+  photo.polish.photo && photo.polish.paused,
+  `photo ${photo.polish.photo}, pausado ${photo.polish.paused}`,
+);
+await page.keyboard.press('KeyP');
+await page.waitForTimeout(200);
+
+// Painel de debug: existe com ?debug e NÃO existe sem.
+const debugOff = await page.evaluate(() => Boolean(document.getElementById('debug')));
+await page.goto(`http://127.0.0.1:${PORT}${BASE}?q=minimo&debug=1`, { waitUntil: 'load' });
+await page.waitForTimeout(2200);
+const debugOn = await page.evaluate(() => Boolean(document.getElementById('debug')));
+check(
+  'Painel de debug só existe atrás do query param',
+  debugOn && !debugOff,
+  `sem ?debug: ${debugOff} · com ?debug: ${debugOn}`,
+);
+
 await browser.close();
 server.close();
 

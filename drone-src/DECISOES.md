@@ -295,3 +295,47 @@ difícil-mas-justo, 60 fps num iPad real) — aqui só há GPU por software.
 - Vento segue a velocidade do ar. ✅
 - Eco de parede aparece com obstáculo próximo e some longe. ✅
 - Música troca de camada por contexto. ✅
+
+## Fase 8 — Performance, PWA e entrega
+
+- **Auditoria de bundle: o barrel do Three fica.** A regra era trocar por imports
+  específicos *se* o gzip passasse de ~250 KB. Total baixado: **183 KB**
+  (Three 135,1 + jogo 45,3 + CSS 2,9). O Rolldown já faz tree-shaking do barrel —
+  o Three inteiro seria ~170 KB gzip — então a troca custaria legibilidade em 23
+  arquivos sem ganho mensurável.
+- **`lil-gui` por import dinâmico.** São 8,1 KB gzip que viram um chunk separado
+  e nunca são baixados por quem não usa `?debug=1`.
+- **Terreno com orçamento por frame em vez de Web Worker.** A função de altura é
+  pura e barata (~2 ms por chunk), e o streaming já gera no máximo 2 chunks por
+  frame. Um worker acrescentaria serialização de malha e um segundo caminho de
+  código pra resolver um custo que não aparece no perfil. O `world/noise.js` foi
+  escrito sem imports justamente pra que essa porta continue aberta se um dia o
+  perfil mudar.
+- **Killcam mostra 3,5 s dos 8 s gravados, e qualquer comando pula.** 8 s a 0,6×
+  seriam 13 s parado depois de cada batida — isso destruiria o loop de "mais uma
+  tentativa" que a Fase 2 inteira existe pra proteger.
+- **Opções gravam com `flush`, não com o `write` agrupado.** São ações raras do
+  usuário, e recarregar a página logo depois de mexer num controle perdia a
+  escolha (pego pelo teste de aceite).
+- **O primeiro passo do tutorial exige subir a 25 m, não 8 m.** O drone já nasce
+  a ~14 m na largada, e um passo que se completa sozinho ensina que o tutorial
+  pode ser ignorado.
+- **Photo mode reaproveita os eixos do voo.** Quem acabou de pilotar não precisa
+  reaprender nada pra enquadrar; e o "DOF" é bruma atrás do foco, porque um
+  desfoque real custaria um passe com buffer de profundidade pra um efeito que
+  só precisa separar assunto do fundo numa imagem parada.
+- **`preserveDrawingBuffer` fica desligado.** Ligá-lo custa desempenho o tempo
+  todo; o PNG é lido logo depois de um render forçado.
+- **O painel de debug não existe sem `?debug=1`** — nem o DOM é criado.
+
+### Aceite verificado (`npm run test:aceite`, 46/46)
+
+- PWA instalável: manifest `standalone`, 3 ícones, service worker registrado e
+  15 recursos em pré-cache — abre offline. ✅
+- As opções persistem entre sessões. ✅
+- Crash forte dispara a killcam, que pausa a simulação e é pulável. ✅
+- `P` entra no photo mode, some com a HUD e pausa o jogo. ✅
+- Painel de debug só existe atrás do query param. ✅
+
+Os 60 fps num iPad real continuam dependendo de um iPad real: aqui só há GPU por
+software.

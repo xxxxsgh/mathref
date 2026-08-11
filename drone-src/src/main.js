@@ -25,6 +25,11 @@ import { Hangar } from './ui/Hangar.js';
 import { computeSpec, buyUpgrade, setEquipped } from './meta/Loadout.js';
 import { Damage } from './flight/Damage.js';
 import { AudioSystem } from './audio/AudioSystem.js';
+import { Options } from './ui/Options.js';
+import { Tutorial } from './ui/Tutorial.js';
+import { DebugPanel } from './ui/DebugPanel.js';
+import { Killcam } from './camera/Killcam.js';
+import { PhotoMode } from './camera/PhotoMode.js';
 import { Weather, WEATHER_PRESETS } from './world/Weather.js';
 import { HUD, toKmh } from './ui/HUD.js';
 
@@ -145,6 +150,24 @@ class Game {
     this.hangar = new Hangar(this.ui, this.save, () => this.applyLoadout());
     this.applyLoadout();
 
+    this.killcam = new Killcam(this.scene, this.model);
+    this.photo = new PhotoMode(this.renderer, this.scene, this.quality);
+    this.options = new Options(this.ui, {
+      save: this.save,
+      quality: this.quality,
+      audio: this.audio,
+      camera: this.camera,
+      post: this.post,
+      input: this.input,
+      onQuality: () => {
+        applyShadowSettings(this.renderer, this.quality.settings);
+        this.post.applyTier(this.quality.settings);
+      },
+    });
+    this.options.applySaved();
+    this.tutorial = new Tutorial(this.ui, this.save, this.input.touch.enabled);
+    this.debug = new DebugPanel(this.ui, this);
+
     this.spawn();
     // Os circuitos são ancorados na origem do mundo, não em onde o drone está:
     // o traçado precisa cair sempre no mesmo lugar pro recorde fazer sentido.
@@ -200,6 +223,18 @@ class Game {
     this.camera.zoom = this.spec.zoom;
   }
 
+  /** Telas que congelam a simulação. Photo mode e killcam também param. */
+  get paused() {
+    return (
+      this.map.open ||
+      this.board.open ||
+      this.hangar.open ||
+      this.options.open ||
+      this.photo.active ||
+      this.killcam.playing
+    );
+  }
+
   /** Reinício instantâneo da volta: uma tecla, sem menu e sem carregamento. */
   restartRun() {
     const pose = this.race.restart();
@@ -252,7 +287,7 @@ class Game {
 
     // Com o mapa aberto o jogo para. Sem isso, consultar o mapa em voo é
     // sinônimo de bater — e o jogador aprende a nunca abrir o mapa.
-    if (this.map.open || this.board.open || this.hangar.open) return;
+    if (this.paused) return;
 
     this.radio.update(dt, this.drone.position);
     this.radio.applyTo(axes, this.engine.elapsed);
@@ -297,6 +332,7 @@ class Game {
     // de recomeçar continua sendo do jogador.
     if (this.drone.canRespawn) this._respawn();
 
+    this.killcam.record(dt, this.engine.elapsed, this.drone.position, this.drone.quaternion);
     this.race.update(dt, this.drone, this._prevPosition, this.drone.position);
     this.pois.update(dt, this.drone.position, this.weather.visibility());
     this.missions.update(dt);
@@ -307,6 +343,15 @@ class Game {
   }
 
   _handleActions() {
+    // Qualquer comando pula a repetição. Killcam é explicação, não punição:
+    // no instante em que o jogador quiser voltar a voar, ela sai da frente.
+    if (this.killcam.playing) {
+      const axes = this.input.axes;
+      const moving =
+        Math.abs(axes.pitch) > 0.2 || Math.abs(axes.roll) > 0.2 || Math.abs(axes.yaw) > 0.2;
+      if (this.input.pressed.size > 0 || moving) this.killcam.stop();
+    }
+
     if (this.input.took('toggleMode')) {
       const mode = this.drone.toggleMode();
       this.hud.banner(mode === 'ACRO' ? 'ACRO' : 'ANGLE', 1.1, mode === 'ACRO' ? 'acro' : '');
@@ -320,6 +365,29 @@ class Game {
     if (this.input.took('missions')) this.board.toggle();
     if (this.input.took('hangar')) this.hangar.toggle();
     if (this.input.took('weather')) this._cycleWeather();
+    if (this.input.took('pause')) {
+      // ESC fecha o que estiver aberto antes de abrir as opções: é o que a
+      // tecla faz em todo lugar, e contrariar isso irrita.
+      if (this.photo.active) this.photo.exit();
+      else if (this.killcam.playing) this.killcam.stop();
+      else if (this.map.open || this.board.open || this.hangar.open) {
+        this.map.toggle(false);
+        this.board.toggle(false);
+        this.hangar.toggle(false);
+      } else this.options.toggle();
+    }
+    if (this.input.took('photo')) {
+      if (this.photo.active) {
+        this.photo.exit();
+      } else {
+        this.photo.enter(this.camera.camera);
+        this.hud.banner('PHOTO MODE — P sai, E salva PNG', 2.6);
+      }
+    }
+    if (this.photo.active && this.input.took('action')) {
+      const name = this.photo.capture(() => this._renderFrame(this.photo.camera, 0));
+      this.hud.banner(name, 2.0);
+    }
     if (this.input.took('noRisk')) {
       this.save.progress.noRisk = !this.save.progress.noRisk;
       if (this.save.progress.noRisk) this.damage.clear();
@@ -435,6 +503,11 @@ class Game {
         this.camera.addShake(CONFIG.CAMERA.shakeCrash);
         this.post.flash(0.35, 0xff4d5e);
         this.audio.play('crash');
+        // Killcam só nas batidas feias: repetir toda encostada viraria
+        // interrupção constante em vez de explicação.
+        if (hit.impact > CONFIG.DRONE.crashSpeed * 1.8 && !this.save.progress.noRisk) {
+          this.killcam.start();
+        }
 
         // O risco real: quebra peça, derruba a carga e gera conta de reparo.
         const broken = this.damage.applyCrash(hit.impact, hit.normal.y);
@@ -519,8 +592,24 @@ class Game {
 
     this.map.draw(this.drone.position, this.drone.heading, this.home);
     this._updateAudio(dt);
+    this.debug.update(dt);
+    this.tutorial.update(dt, {
+      altitude: Math.max(0, this.drone.position.y - ground),
+      speedKmh: toKmh(this.drone.horizontalSpeed),
+      mode: this.drone.mode,
+      raceState: this.race.state,
+    });
 
-    this.post.render(this.scene, this.camera.camera, dt);
+    // Killcam e photo mode substituem a câmera do voo; nos dois casos o feed
+    // FPV sai de cena, porque nenhum dos dois é o que o drone está vendo.
+    const aspect = window.innerWidth / window.innerHeight;
+    const replay = this.killcam.update(dt, aspect);
+    const free = this.photo.update(dt, this.input.axes, aspect);
+    const camera = replay ?? free ?? this.camera.camera;
+
+    this.hud.setVisible(!free);
+    this.model.visible = this.camera.thirdPerson || Boolean(replay) || Boolean(free);
+    this._renderFrame(camera, dt);
 
     this._uiClock += dt;
     if (this._uiClock > 0.25) {
@@ -585,6 +674,23 @@ class Game {
     this._signalWasLost = this.radio.critical;
   }
 
+  /**
+   * Desenha um frame com a câmera dada. Isolado porque o photo mode precisa
+   * forçar um render logo antes de ler o canvas: `preserveDrawingBuffer` é
+   * falso (ligá-lo custa desempenho o tempo todo), então o buffer só existe
+   * no instante seguinte ao desenho.
+   */
+  _renderFrame(camera, dt) {
+    if (camera === this.camera.camera) {
+      this.post.render(this.scene, camera, dt);
+    } else {
+      // Sem pós-processamento na repetição e na foto: barril e ruído são o
+      // feed do drone, não a imagem do jogo.
+      this.renderer.setRenderTarget(null);
+      this.renderer.render(this.scene, camera);
+    }
+  }
+
   /** Espelho de estado pra inspeção externa (testes e painel de debug). */
   debugState() {
     return {
@@ -631,6 +737,13 @@ class Game {
         payloadKg: this.payloadKg,
         boardOpen: this.board.open,
         done: this.save.progress.missionsDone.length,
+      },
+      polish: {
+        killcam: this.killcam.playing,
+        photo: this.photo.active,
+        options: this.options.open,
+        tutorialStep: this.tutorial.finished ? null : this.tutorial.step,
+        paused: this.paused,
       },
       audio: {
         ready: this.audio.ready,

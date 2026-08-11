@@ -352,6 +352,33 @@ export const CONFIG = {
   },
 
   // ══════════════════════════════════════════════════════════════════════
+  // KILLCAM — repetição da batida, pra entender o erro
+  // ══════════════════════════════════════════════════════════════════════
+  KILLCAM: {
+    seconds: 8,
+    /** Quanto do buffer vai ao ar. O resto é contexto que ninguém quer ver. */
+    replaySeconds: 3.5,
+    /** Taxa de gravação. 30 Hz basta: a reprodução interpola. */
+    hz: 30,
+    /** Devagar de propósito — é o que torna o erro legível. */
+    timeScale: 0.6,
+    distance: 9,
+    height: 3.4,
+    orbitSpeed: 0.55,
+  },
+
+  // ══════════════════════════════════════════════════════════════════════
+  // PHOTO — câmera livre pra screenshot
+  // ══════════════════════════════════════════════════════════════════════
+  PHOTO: {
+    speed: 26,
+    turnSpeed: 1.6,
+    halfLife: 0.18,
+    /** Onde a bruma fecha em relação ao foco — o "desfoque" do fundo. */
+    blurFalloff: 2.6,
+  },
+
+  // ══════════════════════════════════════════════════════════════════════
   // AUDIO — o motor é metade da sensação de pilotar. Fase 7.
   // ══════════════════════════════════════════════════════════════════════
   AUDIO: {

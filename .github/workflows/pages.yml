@@ -2,8 +2,9 @@
 # Publicação no GitHub Pages
 #
 # Serve dois sites a partir do mesmo repositório:
-#   /              → MathRaf  (index.html na raiz, self-contained)
-#   /mathref/game/ → Starfarer (compilado a partir de game-src/)
+#   /               → MathRaf    (index.html na raiz, self-contained)
+#   /mathref/game/  → Starfarer  (compilado a partir de game-src/)
+#   /mathref/drone/ → Dronefarer (compilado a partir de drone-src/)
 #
 # ═══ POR QUE COMPILAR AQUI E NÃO SÓ PUBLICAR A PASTA game/ ═══
 #
@@ -64,30 +65,45 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: game-src/package-lock.json
+          cache-dependency-path: |
+            game-src/package-lock.json
+            drone-src/package-lock.json
 
-      - name: Instalar dependências
+      - name: Instalar dependências (Starfarer)
         working-directory: game-src
         # `npm ci` e não `npm install`: instala exatamente o que está no
         # lockfile e falha se ele estiver dessincronizado do package.json.
         run: npm ci
 
-      - name: Compilar o jogo
+      - name: Compilar o Starfarer
         working-directory: game-src
         run: npm run build
 
-      - name: Verificar o caminho base
+      - name: Instalar dependências (Dronefarer)
+        working-directory: drone-src
+        run: npm ci
+
+      - name: Compilar o Dronefarer
+        working-directory: drone-src
+        run: npm run build
+
+      - name: Verificar os caminhos base
         # O `base` do Vite precisa bater com o caminho do Pages. Se alguém
         # mexer nele, o site publicado carrega uma tela preta e o erro só
         # aparece no console do navegador. Falhar aqui é muito mais barato.
         run: |
-          if ! grep -q '/mathref/game/assets/' game/index.html; then
-            echo "::error::O build não usou o base '/mathref/game/'."
-            echo "Confira 'base' em game-src/vite.config.js."
-            grep -o 'src="[^"]*"' game/index.html || true
-            exit 1
-          fi
-          echo "Base correto."
+          fail=0
+          for pair in "game:/mathref/game/assets/" "drone:/mathref/drone/assets/"; do
+            dir="${pair%%:*}"
+            needle="${pair#*:}"
+            if ! grep -q "$needle" "$dir/index.html"; then
+              echo "::error::O build de $dir não usou o base '$needle'."
+              echo "Confira 'base' em ${dir}-src/vite.config.js."
+              grep -o 'src="[^"]*"' "$dir/index.html" || true
+              fail=1
+            fi
+          done
+          [ "$fail" = 0 ] && echo "Bases corretos." || exit 1
 
       - name: Montar o site
         run: |
@@ -104,6 +120,7 @@ jobs:
             --exclude='./.git' \
             --exclude='./.github' \
             --exclude='./game-src' \
+            --exclude='./drone-src' \
             --exclude='./node_modules' \
             --exclude='./docs' \
             --exclude='./README.md' \

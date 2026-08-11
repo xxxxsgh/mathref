@@ -708,6 +708,161 @@ body {
   color: var(--dim);
 }
 
+/* ─── Opções ──────────────────────────────────────────────────────────── */
+#options {
+  position: absolute;
+  inset: 0;
+  background: #05070aee;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(16px + var(--safe-t)) 14px calc(16px + var(--safe-b));
+}
+
+#options .panel {
+  width: min(520px, 96vw);
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+#options header,
+#options footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+#options footer {
+  border-bottom: none;
+  border-top: 1px solid var(--line);
+}
+
+#options h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+
+#options .hint {
+  font-size: 11px;
+  color: var(--dim);
+}
+
+#options .rows {
+  padding: 6px 18px 14px;
+}
+
+#options h3 {
+  margin: 16px 0 6px;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  color: var(--dim);
+}
+
+#options .row {
+  display: grid;
+  grid-template-columns: 1fr 150px 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 12px;
+}
+
+#options .row b {
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--accent);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#options input[type='range'] {
+  width: 100%;
+  accent-color: #35e0c8;
+}
+
+#options input[type='checkbox'] {
+  justify-self: start;
+  accent-color: #35e0c8;
+  width: 16px;
+  height: 16px;
+}
+
+#options button {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--danger);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 7px 11px;
+  cursor: pointer;
+}
+
+/* ─── Tutorial ────────────────────────────────────────────────────────── */
+#tutorial {
+  position: absolute;
+  left: 50%;
+  bottom: calc(112px + var(--safe-b));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--warn);
+  border-radius: 4px;
+  padding: 9px 12px;
+  max-width: 92vw;
+  pointer-events: auto;
+}
+
+.tut-step {
+  font-size: 10px;
+  color: var(--warn);
+  letter-spacing: 0.1em;
+}
+
+.tut-text {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#tutorial button {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 4px 8px;
+  cursor: pointer;
+  flex: none;
+}
+
+/* ─── Debug ───────────────────────────────────────────────────────────── */
+#debug {
+  position: absolute;
+  left: calc(14px + var(--safe-l));
+  bottom: calc(78px + var(--safe-b));
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--dim);
+  white-space: pre;
+  text-shadow: 0 1px 3px #000c;
+  pointer-events: none;
+}
+
 /* ─── Corrida ─────────────────────────────────────────────────────────── */
 #hud-race {
   position: absolute;

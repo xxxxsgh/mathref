@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/mathref/drone/sw.js', { scope: '/mathref/drone/' })})}
