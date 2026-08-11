@@ -220,6 +220,21 @@ export const CONFIG = {
   },
 
   // ══════════════════════════════════════════════════════════════════════
+  // RADIO — alcance do link. Mecânica de tensão, não parede invisível.
+  // ══════════════════════════════════════════════════════════════════════
+  RADIO: {
+    /** Distância (m) em que o sinal chega a zero. */
+    range: 1500,
+    /** Fração do alcance em que a degradação começa (0.65 = 65%). */
+    fadeStart: 0.65,
+    warnSignal: 0.6,
+    lostSignal: 0.22,
+    /** Ponto de recarga: raio de atuação e velocidade. */
+    padRadius: 14,
+    rechargePerSecond: 26,
+  },
+
+  // ══════════════════════════════════════════════════════════════════════
   // WIND — vento base + rajadas. Desligável.
   // ══════════════════════════════════════════════════════════════════════
   WIND: {

@@ -14,6 +14,10 @@ import { FPVPost } from './camera/FPVPost.js';
 import { World } from './world/World.js';
 import { Save } from './core/Save.js';
 import { Race, CIRCUITS } from './race/Race.js';
+import { POIs } from './world/POIs.js';
+import { Radio } from './flight/Radio.js';
+import { dominantZone } from './world/Zones.js';
+import { MapScreen } from './ui/MapScreen.js';
 import { HUD, toKmh } from './ui/HUD.js';
 
 /**
@@ -73,6 +77,16 @@ class Game {
     this._renderQuaternion = new THREE.Quaternion();
     this._windAt = new THREE.Vector3();
     this._env = {};
+
+    this.pois = new POIs(this.scene, this.world.terrain, this.save, (event, payload) =>
+      this._onPoiEvent(event, payload),
+    );
+    // A base é a origem do mundo: é dela que sai o sinal e é pra ela que a
+    // bateria manda voltar.
+    this.home = new THREE.Vector3(0, 0, 0);
+    this.radio = new Radio(this.home);
+    this.world.registerThermals(this.wind);
+    this.map = new MapScreen(this.ui, this.world.terrain, this.pois, this.save);
 
     this.spawn();
     // Os circuitos são ancorados na origem do mundo, não em onde o drone está:
@@ -164,6 +178,13 @@ class Game {
     const axes = this.input.update(dt);
     this._handleActions();
 
+    // Com o mapa aberto o jogo para. Sem isso, consultar o mapa em voo é
+    // sinônimo de bater — e o jogador aprende a nunca abrir o mapa.
+    if (this.map.open) return;
+
+    this.radio.update(dt, this.drone.position);
+    this.radio.applyTo(axes, this.engine.elapsed);
+
     this._prevPosition.copy(this.drone.position);
     this._prevQuaternion.copy(this.drone.quaternion);
 
@@ -189,7 +210,10 @@ class Game {
     if (this.drone.canRespawn) this._respawn();
 
     this.race.update(dt, this.drone, this._prevPosition, this.drone.position);
+    this.pois.update(dt, this.drone.position, this.scene.fog?.far ?? 900);
     this.world.update(dt, this.drone.position, this.drone.velocity);
+    this.world.updateZone(dt, this.drone.position, this.wind);
+    this._updateRecharge(dt);
   }
 
   _handleActions() {
@@ -201,6 +225,51 @@ class Game {
     if (this.input.took('thirdPerson')) this.camera.toggleThirdPerson();
     if (this.input.took('nextCircuit')) this._switchCircuit(1);
     if (this.input.took('prevCircuit')) this._switchCircuit(-1);
+    if (this.input.took('map')) this.map.toggle();
+
+    if (this.input.took('action')) {
+      const poi = this.pois.nearestAvailable(this.drone.position);
+      if (this.pois.active) this.pois.cancelChallenge();
+      else if (poi) this.pois.startChallenge(poi);
+    }
+  }
+
+  /**
+   * Recarga na base. A bateria só vira recurso de verdade se existir um lugar
+   * pra onde voltar — senão "acabou a bateria" é só uma falha, não uma decisão
+   * de quão longe dá pra ir.
+   */
+  _updateRecharge(dt) {
+    const distance = Math.hypot(this.drone.position.x - this.home.x, this.drone.position.z - this.home.z);
+    const agl = this.drone.position.y - this.world.groundHeight(this.drone.position.x, this.drone.position.z);
+    const onPad = distance < CONFIG.RADIO.padRadius && agl < 6;
+    if (onPad && !this.battery.empty) {
+      this.battery.recharge(dt, CONFIG.RADIO.rechargePerSecond);
+    }
+    this._onPad = onPad;
+  }
+
+  _onPoiEvent(event, payload) {
+    switch (event) {
+      case 'poiFound':
+        this.hud.banner(`DESCOBERTO: ${payload.poi.def.name}`, 2.4);
+        break;
+      case 'challengeStart':
+        this.hud.banner(payload.poi.def.challenge, 2.8);
+        break;
+      case 'checkpoint':
+        this.post.flash(0.2, 0x9dfff0);
+        break;
+      case 'challengeDone':
+        this.post.flash(0.5, 0xffcf49);
+        this.hud.banner(`DESAFIO CONCLUÍDO +${payload.reward} cr`, 2.4, 'gold');
+        break;
+      case 'challengeFail':
+        this.hud.banner('TEMPO ESGOTADO', 1.6, 'danger');
+        break;
+      default:
+        break;
+    }
   }
 
   _onCollision(hit) {
@@ -257,6 +326,23 @@ class Game {
     );
     this.hud.updateRace(this.race.hudState(this.drone.position), this.camera.camera);
 
+    // A perda de sinal é a MESMA degradação usada pela câmera avariada da
+    // Fase 6 — um caminho só pro feed piorar, seja qual for a causa.
+    this.post.setSignal(this.radio.signal);
+    this.camera.setSignal(this.radio.signal);
+
+    const poi = this.pois.hudState(this.drone.position);
+    this.hud.updateWorld({
+      zone: dominantZone(this.drone.position.x, this.drone.position.z).zone.name,
+      signal: this.radio.signal,
+      onPad: this._onPad,
+      objective: poi
+        ? `${poi.challenge} — ${poi.index + 1}/${poi.total}, ${poi.remaining.toFixed(0)}s, ${Math.round(poi.distance)}m`
+        : null,
+    });
+
+    this.map.draw(this.drone.position, this.drone.heading, this.home);
+
     this.post.render(this.scene, this.camera.camera, dt);
 
     this._uiClock += dt;
@@ -302,6 +388,14 @@ class Game {
         best: this.save.circuit(this.race.circuit?.id ?? 'aberto').bestTime,
         hasGhost: this.race.ghost.hasGhost,
         credits: this.save.progress.credits,
+      },
+      world: {
+        zone: dominantZone(this.drone.position.x, this.drone.position.z).zone.id,
+        signal: +this.radio.signal.toFixed(3),
+        distanceFromHome: Math.round(this.drone.position.distanceTo(this.home)),
+        poisFound: this.pois.discovered.length,
+        mapOpen: this.map.open,
+        challenge: this.pois.active ? this.pois.active.poi.def.id : null,
       },
     };
   }

@@ -248,6 +248,132 @@ body {
   }
 }
 
+/* ─── Zona, sinal e objetivo ──────────────────────────────────────────── */
+.zone {
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  text-shadow: 0 1px 4px #000b;
+}
+
+.signal {
+  margin-top: 6px;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--dim);
+  width: 84px;
+  transition: opacity 0.3s ease;
+}
+
+.signal span {
+  display: block;
+  height: 3px;
+  background: var(--accent);
+  margin-bottom: 3px;
+  transition: width 0.2s linear;
+}
+
+.signal.warn span {
+  background: var(--warn);
+}
+
+.signal.critical {
+  color: var(--danger);
+}
+
+.signal.critical span {
+  background: var(--danger);
+  animation: pulse 0.5s ease-in-out infinite;
+}
+
+/* Uma linha só, sempre. Objetivo que não cabe numa linha é objetivo mal
+   comunicado, não falta de espaço. */
+#objective {
+  position: absolute;
+  left: 50%;
+  bottom: calc(72px + var(--safe-b));
+  transform: translateX(-50%);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  border-radius: 3px;
+  padding: 6px 12px;
+  white-space: nowrap;
+  max-width: 92vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+#objective.on {
+  opacity: 1;
+}
+
+/* ─── Mapa ────────────────────────────────────────────────────────────── */
+#map {
+  position: absolute;
+  inset: 0;
+  background: #05070ae8;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(20px + var(--safe-t)) 20px calc(20px + var(--safe-b));
+}
+
+.map-frame {
+  position: relative;
+  width: min(92vw, 92vh, 900px);
+  aspect-ratio: 1;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #0a0d12;
+}
+
+.map-frame canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.map-head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 12px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  background: linear-gradient(#05070ac9, transparent);
+}
+
+.map-zone {
+  color: var(--accent);
+}
+
+.map-hint {
+  color: var(--dim);
+}
+
+.map-legend {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 9px 12px;
+  font-size: 11px;
+  color: var(--dim);
+  background: linear-gradient(transparent, #05070ac9);
+}
+
 /* ─── Corrida ─────────────────────────────────────────────────────────── */
 #hud-race {
   position: absolute;

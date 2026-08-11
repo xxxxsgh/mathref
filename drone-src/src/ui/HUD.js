@@ -17,7 +17,13 @@ export class HUD {
     this.root = document.createElement('div');
     this.root.id = 'hud';
     this.root.innerHTML = `
-      <div id="hud-mode"><span class="tag" data-el="mode">ANGLE</span></div>
+      <div id="hud-mode">
+        <span class="tag" data-el="mode">ANGLE</span>
+        <div class="zone" data-el="zone"></div>
+        <div class="signal" data-el="signal"><span></span>SINAL</div>
+      </div>
+
+      <div id="objective" data-el="objective"></div>
 
       <div id="hud-race">
         <div class="race-line">
@@ -170,6 +176,29 @@ export class HUD {
     marker.classList.add('on');
     this.els['marker-dist'].textContent =
       race.gateDistance != null ? `${Math.round(race.gateDistance)}m` : '';
+  }
+
+  /**
+   * Camada de mundo: zona, sinal de rádio e o objetivo corrente.
+   *
+   * O objetivo é UMA linha, sempre. Se não der pra entender o que fazer em dois
+   * segundos, o problema é a missão — não o espaço no HUD.
+   */
+  updateWorld({ zone, signal, objective, onPad }) {
+    this.els.zone.textContent = zone ?? '';
+
+    const bar = this.els.signal;
+    bar.firstElementChild.style.width = `${clamp(signal * 100, 0, 100)}%`;
+    bar.className = `signal ${signal < 0.22 ? 'critical' : signal < 0.6 ? 'warn' : ''}`;
+    // Com sinal cheio o indicador some: informação que nunca muda vira ruído.
+    bar.style.opacity = signal > 0.985 ? '0' : '1';
+
+    const text = objective ?? (onPad ? 'RECARREGANDO NA BASE' : '');
+    if (text !== this._lastObjective) {
+      this._lastObjective = text;
+      this.els.objective.textContent = text;
+      this.els.objective.classList.toggle('on', Boolean(text));
+    }
   }
 
   /** Split ao cruzar um gate: verde ganhou, vermelho perdeu. */

@@ -121,3 +121,42 @@ difícil-mas-justo, 60 fps num iPad real) — aqui só há GPU por software.
 - Recorde, ghost e créditos gravados no fim e **sobrevivem ao recarregar**. ✅
 - Cruzar um gate fora de ordem é ignorado. ✅
 - `]` troca de circuito e rearma. ✅
+
+## Fase 3 — Mundo aberto
+
+- **Zonas por peso, não por fronteira.** Cada zona tem centro e raio, e os
+  parâmetros de relevo/props/atmosfera são a média ponderada. Fronteira dura
+  desenharia uma linha reta no terreno e denunciaria o truque.
+- **As zonas mudam a PILOTAGEM, não a cor.** No vale o relevo é liso e a
+  dificuldade é a estrutura grande (vento canalizado, gaps). Na floresta a
+  densidade de tronco fecha a visibilidade e obriga voo lento e baixo. Na costa o
+  relevo é `ridged` (crista afiada em vez de duna) com térmicas subindo pelas
+  paredes e o dobro de vento — voo alto e longo, onde o adversário é o ar.
+- **Direção do vento interpolada em vetor, não em graus.** A média de 350° com
+  10° dá 180° — exatamente o contrário do certo.
+- **Água em disco, não em plano infinito.** O nível do mar da costa alagaria o
+  vale industrial, cujo relevo oscila em torno do zero. Um disco em volta do
+  centro da zona resolve sem máscara nem shader especial.
+- **Cinco desafios de POI, uma mecânica só:** tocar checkpoints em ordem dentro
+  de um tempo. É a geometria do marco que os diferencia — um checkpoint debaixo
+  do arco vira "passe por baixo da ponte", três descendo o poço viram "entre na
+  mina".
+- **Perda de sinal atenua o comando, não o randomiza.** Um link ruim de verdade
+  para de entregar; o drone segue obedecendo ao último comando que chegou. E o
+  acelerador cai pro ponto de pairar em vez de zerar, porque desligar os motores
+  mataria o drone toda vez — isso seria injusto, não tenso.
+- **A degradação é sempre reversível** e suavizada no tempo: voltar 50 m devolve
+  o sinal, e uma rajada que empurra o drone dois metros não faz a imagem piscar.
+- **O mapa PAUSA o jogo.** Sem pausa, consultar o mapa em voo é sinônimo de
+  bater, e o jogador aprende a nunca abrir o mapa. O relevo é rasterizado uma vez
+  e só a camada dinâmica é redesenhada.
+- **A antena é repetidor.** Descobri-la amplia a cobertura de rádio — explorar
+  compra alcance, o que dá motivo pra ir longe antes de conseguir ir longe.
+
+### Aceite verificado (`npm run test:aceite`, 23/23)
+
+- As três zonas diferem em relevo E em densidade de props (costa 35 m de
+  desnível contra 10 m do vale; floresta com 7,5× mais árvores). ✅
+- Sinal degrada a 1424 m (0.21) e **volta** ao chegar perto da base. ✅
+- Avistar um marco o registra no mapa; cada um oferece um desafio curto. ✅
+- TAB abre o mapa e o jogo pausa (altura idêntica antes e depois). ✅

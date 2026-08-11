@@ -343,6 +343,104 @@ check(
   `recorde ${reloaded.race.best}s, ghost ${reloaded.race.hasGhost}, ${reloaded.race.credits} créditos`,
 );
 
+// ══════════════════════════════════════════════════════════════════════════
+// FASE 3 — mundo aberto
+// ══════════════════════════════════════════════════════════════════════════
+const teleport = async (x, z, y = 60) => {
+  await page.evaluate(
+    ({ x, y, z }) => {
+      const g = globalThis.__DRONEFARER.game;
+      g.drone.position.set(x, g.world.groundHeight(x, z) + y, z);
+      g.drone.velocity.set(0, 0, 0);
+      g.drone.crashed = false;
+    },
+    { x, y, z },
+  );
+  await page.waitForTimeout(700);
+};
+
+// As zonas precisam ser diferentes no TERRENO e no que nasce nele, não só na
+// cor. Comparar densidade de props e relevo é o jeito de medir isso.
+const sampleZone = async (x, z) =>
+  page.evaluate(
+    ({ x, z }) => {
+      const g = globalThis.__DRONEFARER.game;
+      const t = g.world.terrain;
+      // Desvio de altura numa amostra em cruz: mede o quão acidentado é.
+      let min = Infinity;
+      let max = -Infinity;
+      for (let i = -8; i <= 8; i++) {
+        for (const [dx, dz] of [
+          [i * 40, 0],
+          [0, i * 40],
+        ]) {
+          const h = t.heightAt(x + dx, z + dz);
+          min = Math.min(min, h);
+          max = Math.max(max, h);
+        }
+      }
+      const mix = g.world.props.mixAt(x, z);
+      return { relief: +(max - min).toFixed(1), trees: +mix.tree.toFixed(2), containers: +mix.container.toFixed(2) };
+    },
+    { x, z },
+  );
+
+const vale = await sampleZone(0, 0);
+const floresta = await sampleZone(-320, -980);
+const costa = await sampleZone(1180, 240);
+check(
+  'As três zonas diferem em relevo E no que nasce nelas',
+  floresta.trees > vale.trees * 4 && vale.containers > floresta.containers * 4 && costa.relief > vale.relief * 2,
+  `vale ${vale.relief}m/${vale.containers} cont · floresta ${floresta.relief}m/${floresta.trees} árv · costa ${costa.relief}m`,
+);
+
+await teleport(1100, -900, 90); // longe da base, longe de tudo
+const far = await state();
+check(
+  'O sinal degrada com a distância da base em vez de parede invisível',
+  far.world.signal < 0.5 && far.world.distanceFromHome > 1200,
+  `sinal ${far.world.signal} a ${far.world.distanceFromHome} m`,
+);
+
+await teleport(0, 0, 30);
+// O sinal é suavizado no tempo (meia-vida ~0,4 s) pra não piscar a cada rajada
+// que empurra o drone dois metros; recuperar não é instantâneo, e não deve ser.
+await page.waitForTimeout(1600);
+const back = await state();
+check(
+  'Voltar recupera o sinal (a degradação é reversível)',
+  back.world.signal > 0.9,
+  `sinal ${back.world.signal} a ${back.world.distanceFromHome} m da base`,
+);
+
+await teleport(340, -420, 40); // torre
+const nearPoi = await state();
+check(
+  'Avistar um ponto de interesse o registra no mapa',
+  nearPoi.world.poisFound > 0,
+  `${nearPoi.world.poisFound} ponto(s) encontrado(s), zona ${nearPoi.world.zone}`,
+);
+
+await page.keyboard.press('Space'); // inicia o desafio do POI
+await page.waitForTimeout(400);
+check(
+  'Cada ponto de interesse oferece um desafio curto',
+  (await state()).world.challenge === 'torre',
+  `desafio ativo: ${(await state()).world.challenge}`,
+);
+
+const beforeMap = await state();
+await page.keyboard.press('Tab');
+await page.waitForTimeout(900);
+const withMap = await state();
+check(
+  'TAB abre o mapa e o jogo pausa enquanto ele está aberto',
+  withMap.world.mapOpen && Math.abs(withMap.altitude - beforeMap.altitude) < 0.5,
+  `mapa ${withMap.world.mapOpen}, altura ${beforeMap.altitude} → ${withMap.altitude} m`,
+);
+await page.keyboard.press('Tab');
+await page.waitForTimeout(200);
+
 await browser.close();
 server.close();
 
