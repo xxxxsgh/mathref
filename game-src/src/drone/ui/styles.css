@@ -1,0 +1,545 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   DRONE — OSD e interface
+
+   O visual imita um OSD analógico de verdade: monocromático, fonte fixa,
+   contorno preto duro em vez de sombra suave. Isso não é escolha estética
+   arbitrária — é o que um controlador de voo consegue desenhar por cima de
+   um sinal de vídeo PAL, e é por isso que os números continuam legíveis
+   quando a imagem está cheia de chuvisco.
+
+   Regra de performance, igual à do jogo de nave: só `transform` e `opacity`
+   mudam por frame. As duas são resolvidas no compositor sem recalcular
+   layout. Animar `width` ou `top` a 60 fps derruba o framerate mais rápido
+   que qualquer coisa em 3D.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --osd: #e9f6ff;
+  --osd-dim: rgba(233, 246, 255, 0.55);
+  --osd-green: #6bff9d;
+  --osd-amber: #ffc14d;
+  --osd-red: #ff5f4d;
+  --osd-cyan: #7de8ff;
+  --font: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  /* Contorno preto em quatro direções. É o que o OSD analógico faz para não
+     sumir sobre um céu claro — e funciona aqui pelo mesmo motivo. */
+  --outline: -1px 0 0 #000, 1px 0 0 #000, 0 -1px 0 #000, 0 1px 0 #000,
+             0 0 6px rgba(0, 0, 0, 0.55);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0a1016;
+  color: var(--osd);
+  font-family: var(--font);
+  /* Impede o puxão elástico e o zoom por gesto no iOS durante o voo. */
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#viewport {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* ── OSD ─────────────────────────────────────────────────────────────── */
+
+.osd {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-shadow: var(--outline);
+}
+.osd.is-visible { opacity: 1; }
+
+.osd__row {
+  position: absolute;
+  left: calc(16px + var(--safe-l));
+  right: calc(16px + var(--safe-r));
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.osd__row--top { top: calc(14px + var(--safe-t)); }
+.osd__row--bottom { bottom: calc(14px + var(--safe-b)); align-items: flex-end; }
+
+.osd__cell { min-width: 120px; }
+.osd__cell--center { text-align: center; }
+.osd__cell--right { text-align: right; }
+
+.osd__big {
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.osd__big.is-warn { color: var(--osd-amber); }
+.osd__big.is-critical { color: var(--osd-red); animation: osd-blink 0.9s steps(2) infinite; }
+.osd__u { font-size: 11px; color: var(--osd-dim); margin-left: 2px; }
+.osd__sub {
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--osd-dim);
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+}
+
+.osd__state {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--osd-red);
+}
+.osd__state.is-armed { color: var(--osd-green); }
+
+@keyframes osd-blink { 50% { opacity: 0.25; } }
+
+/* ── Barra do acelerador ─────────────────────────────────────────────── */
+/* A parte que se move é um filho com `scaleX` — nunca `width`, que causaria
+   reflow a cada frame. */
+
+.osd__throttle {
+  position: relative;
+  width: 190px;
+  height: 7px;
+  margin: 0 auto 4px;
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(233, 246, 255, 0.35);
+}
+.osd__throttle-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: var(--osd);
+}
+/* Marca do acelerador de pairar. Acima dela o drone sobe, abaixo desce — é
+   a referência que torna a barra útil em vez de decorativa. */
+.osd__throttle-hover {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--osd-amber);
+  left: 0;
+}
+
+/* ── Horizonte artificial ────────────────────────────────────────────── */
+
+.osd__horizon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 420px;
+  margin-left: -210px;
+  height: 0;
+  will-change: transform;
+}
+.osd__horizon-bar {
+  position: absolute;
+  left: 0; right: 0; top: -1px;
+  height: 2px;
+  background: linear-gradient(to right,
+    transparent 0%, var(--osd) 14%, var(--osd) 38%,
+    transparent 44%, transparent 56%,
+    var(--osd) 62%, var(--osd) 86%, transparent 100%);
+}
+/* Ganchos nas pontas, apontando para baixo: é assim que se lê de relance de
+   que lado o horizonte está quando ele sai da tela. */
+.osd__horizon-tick {
+  position: absolute;
+  top: -1px;
+  width: 2px;
+  height: 10px;
+  background: var(--osd);
+}
+.osd__horizon-tick--l { left: 0; }
+.osd__horizon-tick--r { right: 0; }
+
+.osd__crosshair {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 40px; height: 40px;
+  margin: -20px 0 0 -20px;
+}
+.osd__crosshair svg { width: 100%; height: 100%; }
+.osd__crosshair path {
+  stroke: var(--osd);
+  stroke-width: 1.6;
+  fill: none;
+  filter: drop-shadow(0 0 2px #000);
+}
+
+/* ── Marcador do próximo gate ────────────────────────────────────────── */
+
+.osd__gate {
+  position: absolute;
+  left: 0; top: 0;
+  width: 0; height: 0;
+  will-change: transform;
+}
+.osd__gate-box {
+  position: absolute;
+  left: -19px; top: -19px;
+  width: 38px; height: 38px;
+  border: 2px solid var(--osd-green);
+  filter: drop-shadow(0 0 3px #000);
+  animation: osd-pulse 1.1s ease-in-out infinite;
+}
+.osd__gate-label {
+  position: absolute;
+  left: -19px; top: 22px;
+  width: 38px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--osd-green);
+}
+/* Fora da tela: o quadrado vira um losango, para não ser confundido com um
+   gate que está de fato à frente. */
+.osd__gate.is-off .osd__gate-box {
+  transform: rotate(45deg) scale(0.7);
+  border-color: var(--osd-amber);
+}
+.osd__gate.is-off .osd__gate-label { color: var(--osd-amber); }
+
+@keyframes osd-pulse { 50% { opacity: 0.35; } }
+
+/* ── Avisos e mensagens ──────────────────────────────────────────────── */
+
+.osd__warn {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  opacity: 0;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+.osd__warn.is-visible { opacity: 1; }
+.osd__warn--warn { color: var(--osd-amber); }
+.osd__warn--bad { color: var(--osd-red); animation: osd-blink 0.8s steps(2) infinite; }
+
+.osd__msg {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translateX(-50%);
+  font-size: clamp(20px, 4vw, 34px);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  opacity: 0;
+  transition: opacity 0.25s;
+  white-space: nowrap;
+}
+.osd__msg.is-visible { opacity: 1; }
+.osd__msg--good { color: var(--osd-green); }
+.osd__msg--bad { color: var(--osd-red); }
+
+.osd__rth {
+  position: absolute;
+  left: 50%;
+  top: 14%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: var(--osd-cyan);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.osd__rth.is-visible { opacity: 1; }
+
+.osd__tricks {
+  position: absolute;
+  left: 50%;
+  bottom: 22%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--osd-cyan);
+}
+
+/* ── Vídeo analógico: chuvisco e vinheta ─────────────────────────────── */
+/* O chuvisco é uma imagem SVG estática com ruído; o que muda por frame é a
+   opacidade e um deslocamento por `transform`. Redesenhar ruído num canvas a
+   cada frame custaria mais que toda a interface junta. */
+
+.osd__grain {
+  position: absolute;
+  inset: -8px;
+  opacity: 0;
+  mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+  will-change: transform, opacity;
+}
+
+/* Vinheta: uma lente de FPV escurece as bordas, e o olho lê isso como
+   "estou olhando por uma câmera" antes de qualquer outra pista. */
+.osd__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center,
+    rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, 0.30) 82%, rgba(0, 0, 0, 0.62) 100%);
+}
+
+/* ── Controles touch ─────────────────────────────────────────────────── */
+
+.touch-ui { position: fixed; inset: 0; z-index: 20; display: none; }
+.touch-ui.is-active { display: block; }
+
+.tstick {
+  position: absolute;
+  left: 0; top: 0;
+  width: 0; height: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.tstick.is-active { opacity: 1; }
+.tstick::before {
+  content: '';
+  position: absolute;
+  left: -78px; top: -78px;
+  width: 156px; height: 156px;
+  border: 2px solid rgba(233, 246, 255, 0.28);
+  border-radius: 50%;
+  background: rgba(4, 12, 20, 0.22);
+}
+.tstick__knob {
+  position: absolute;
+  left: -26px; top: -26px;
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: rgba(233, 246, 255, 0.30);
+  border: 2px solid rgba(233, 246, 255, 0.7);
+}
+.tstick__label {
+  position: absolute;
+  left: -78px; top: 84px;
+  width: 156px;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: rgba(233, 246, 255, 0.55);
+  text-shadow: var(--outline);
+}
+
+.tbtn {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 78px;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(233, 246, 255, 0.4);
+  border-radius: 4px;
+  background: rgba(6, 16, 24, 0.5);
+  color: var(--osd);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  touch-action: none;
+}
+.tbtn.is-down { background: rgba(125, 232, 255, 0.35); transform: scale(0.96); }
+.tbtn.is-armed { border-color: var(--osd-green); color: var(--osd-green); }
+
+.tbtn--arm   { right: calc(16px + var(--safe-r)); top: calc(96px + var(--safe-t)); }
+.tbtn--mode  { right: calc(16px + var(--safe-r)); top: calc(148px + var(--safe-t)); }
+.tbtn--cam   { right: calc(16px + var(--safe-r)); top: calc(200px + var(--safe-t)); }
+.tbtn--rth   { right: calc(16px + var(--safe-r)); top: calc(252px + var(--safe-t)); }
+.tbtn--pause { left: calc(16px + var(--safe-l)); top: calc(96px + var(--safe-t)); min-width: 46px; }
+
+/* ── Tela inicial ────────────────────────────────────────────────────── */
+
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 40%, #16304a 0%, #060b12 72%);
+  transition: opacity 0.5s ease;
+  overflow: auto;
+}
+.boot.is-hidden { opacity: 0; pointer-events: none; }
+.boot__panel { text-align: center; padding: 24px; max-width: 640px; }
+.boot__title {
+  font-size: clamp(36px, 9vw, 74px);
+  font-weight: 800;
+  letter-spacing: 0.26em;
+  color: #fff;
+  text-shadow: 0 0 38px rgba(125, 232, 255, 0.55);
+}
+.boot__subtitle {
+  margin: 6px 0 30px;
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  color: rgba(233, 246, 255, 0.55);
+  text-transform: uppercase;
+}
+.boot__button {
+  padding: 15px 50px;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: #061019;
+  background: var(--osd-green);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  box-shadow: 0 0 32px rgba(107, 255, 157, 0.4);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  touch-action: manipulation;
+}
+.boot__button:hover { transform: translateY(-2px); box-shadow: 0 0 46px rgba(107, 255, 157, 0.65); }
+.boot__button:active { transform: translateY(0); }
+.boot__button:disabled { opacity: 0.6; cursor: default; }
+
+.boot__help {
+  margin-top: 26px;
+  font-size: 11px;
+  line-height: 1.9;
+  color: rgba(200, 224, 245, 0.66);
+}
+.boot__help b { color: var(--osd); font-weight: 700; }
+.boot__help kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 6px;
+  margin: 0 2px;
+  border: 1px solid rgba(125, 232, 255, 0.32);
+  border-radius: 3px;
+  background: rgba(125, 232, 255, 0.08);
+  font-size: 10px;
+  color: var(--osd-cyan);
+}
+.boot__note {
+  margin-top: 18px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: rgba(200, 224, 245, 0.42);
+}
+.boot__note a { color: var(--osd-cyan); }
+
+/* Em telas baixas (iPad em paisagem, celular) a ajuda encolhe para o botão
+   não sair da área visível. */
+@media (max-height: 520px) {
+  .boot__help { font-size: 10px; line-height: 1.6; margin-top: 16px; }
+  .boot__subtitle { margin-bottom: 18px; }
+}
+
+/* ── Menu de pausa ───────────────────────────────────────────────────── */
+
+.pause {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 9, 15, 0.82);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+.pause[hidden] { display: none; }
+.pause__panel {
+  min-width: 300px;
+  padding: 26px 32px;
+  border: 1px solid rgba(125, 232, 255, 0.25);
+  background: rgba(8, 16, 24, 0.9);
+  text-align: center;
+}
+.pause__title {
+  font-size: 16px;
+  letter-spacing: 0.3em;
+  margin-bottom: 18px;
+  color: var(--osd-cyan);
+}
+.pause__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 12px;
+  padding: 5px 0;
+  color: var(--osd-dim);
+}
+.pause__row span:last-child { color: var(--osd); font-variant-numeric: tabular-nums; }
+.pause__btn {
+  margin-top: 18px;
+  width: 100%;
+  padding: 11px;
+  font-family: var(--font);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: #061019;
+  background: var(--osd-cyan);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.pause__btn--ghost {
+  margin-top: 8px;
+  background: transparent;
+  border: 1px solid rgba(125, 232, 255, 0.35);
+  color: var(--osd-cyan);
+}
+
+/* ── Painel de debug ─────────────────────────────────────────────────── */
+
+.debug-panel {
+  position: fixed;
+  left: calc(14px + var(--safe-l));
+  top: calc(50% - 90px);
+  z-index: 30;
+  min-width: 172px;
+  padding: 9px 11px;
+  background: rgba(4, 10, 16, 0.78);
+  border: 1px solid rgba(125, 232, 255, 0.2);
+  font-size: 10px;
+  line-height: 1.65;
+  color: var(--osd-cyan);
+}
+.debug-panel[hidden] { display: none; }
+.debug-panel__row { display: flex; justify-content: space-between; gap: 12px; }
+.debug-panel__row span:first-child { color: rgba(125, 232, 255, 0.5); }
+.debug-panel__row span:last-child { font-variant-numeric: tabular-nums; }
+
+/* Em tela pequena o OSD encolhe: os números precisam caber sem cobrir a
+   imagem, que é o que o piloto está de fato olhando. */
+@media (max-width: 760px), (max-height: 460px) {
+  .osd { font-size: 11px; }
+  .osd__big { font-size: 21px; }
+  .osd__throttle { width: 140px; }
+  .osd__horizon { width: 300px; margin-left: -150px; }
+  .osd__cell { min-width: 90px; }
+}

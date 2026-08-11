@@ -995,3 +995,21 @@ html, body {
   .hud__race { top: calc(96px + var(--safe-t)); }
   .hud__race-time { font-size: 24px; }
 }
+
+/* ── Link para o modo drone ──────────────────────────────────────────── */
+/* Fica na tela inicial porque é o único lugar por onde todo jogador passa.
+   Discreto de propósito: é uma porta lateral, não uma chamada. */
+
+.boot__alt {
+  margin-top: 22px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: rgba(169, 214, 255, 0.45);
+}
+.boot__alt a {
+  color: var(--hud-green);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(125, 255, 168, 0.35);
+  padding-bottom: 1px;
+}
+.boot__alt a:hover { color: #fff; border-bottom-color: #fff; }

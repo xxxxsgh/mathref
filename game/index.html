@@ -10,10 +10,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" type="image/svg+xml" href="./favicon.svg">
 <title>Starfarer</title>
-  <script type="module" crossorigin src="/mathref/game/assets/index-NJg8KXWF.js"></script>
-  <link rel="modulepreload" crossorigin href="/mathref/game/assets/three-Bw96E8hD.js">
-  <link rel="modulepreload" crossorigin href="/mathref/game/assets/postprocessing-BkI8gG7s.js">
-  <link rel="stylesheet" crossorigin href="/mathref/game/assets/index-CeZ2oWfd.css">
+  <script type="module" crossorigin src="/mathref/game/assets/main-uRdfJRcN.js"></script>
+  <link rel="modulepreload" crossorigin href="/mathref/game/assets/three-D_hjQTNq.js">
+  <link rel="modulepreload" crossorigin href="/mathref/game/assets/noise-BV0sATMK.js">
+  <link rel="modulepreload" crossorigin href="/mathref/game/assets/postprocessing-DWEUKZu-.js">
+  <link rel="stylesheet" crossorigin href="/mathref/game/assets/main-D6_AGm6m.css">
 <link rel="manifest" href="/mathref/game/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/mathref/game/registerSW.js"></script></head>
 <body>
   <canvas id="viewport"></canvas>
@@ -44,6 +45,12 @@
       <p class="boot__subtitle">Fase 1 — Vertical slice de voo</p>
       <button id="boot-start" class="boot__button" type="button">INICIAR</button>
       <div id="boot-help" class="boot__help"></div>
+      <!-- Modo drone: outro jogo, mesmo motor. O link fica aqui e não num
+           menu porque a tela inicial é o único lugar por onde todo mundo
+           passa — um menu que ninguém abre não descobre nada. -->
+      <p class="boot__alt">
+        <a href="./drone/">▸ VERSÃO DRONE</a> — simulador FPV no mesmo motor
+      </p>
     </div>
   </div>
 

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
@@ -15,6 +16,21 @@ export default defineConfig({
     target: 'es2022',
     sourcemap: true,
     rolldownOptions: {
+      // ═══ DUAS PÁGINAS, UM BUILD ═══
+      //
+      // `index.html` é o Starfarer e `drone/index.html` é a versão drone.
+      // Declarar as duas como entradas faz o Vite compilar cada uma com seu
+      // próprio grafo de módulos e, o que importa mais, COMPARTILHAR os
+      // chunks comuns entre elas: o Three é baixado uma vez só, e quem já
+      // jogou um dos dois abre o outro sem baixar 600 KB de novo.
+      //
+      // Sem isto, o Vite só enxerga `index.html` (a raiz) e a pasta
+      // `drone/` simplesmente não sairia no build — sem erro nenhum, o que é
+      // o pior jeito de descobrir.
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        drone: fileURLToPath(new URL('./drone/index.html', import.meta.url)),
+      },
       output: {
         // Separa o Three num chunk próprio. Ele é grande e praticamente
         // imutável entre versões do jogo; num chunk separado, uma atualização

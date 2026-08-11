@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<!-- viewport-fit=cover + user-scalable=no: evita zoom por duplo toque e por
+     pinça durante o voo, e deixa o canvas ocupar a área do notch. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a1016">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Simulador de drone FPV em 3D: quadricóptero com física de empuxo, modos acro e angle, circuito de gates e OSD analógico.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<title>Drone · FPV</title>
+  <script type="module" crossorigin src="/mathref/game/assets/drone-BPYaRe7T.js"></script>
+  <link rel="modulepreload" crossorigin href="/mathref/game/assets/three-D_hjQTNq.js">
+  <link rel="modulepreload" crossorigin href="/mathref/game/assets/noise-BV0sATMK.js">
+  <link rel="stylesheet" crossorigin href="/mathref/game/assets/drone-CwBlzK6Q.css">
+<link rel="manifest" href="/mathref/game/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/mathref/game/registerSW.js"></script></head>
+<body>
+  <canvas id="viewport"></canvas>
+
+  <!-- OSD: DOM/CSS sobreposto ao canvas. Num drone de verdade os números são
+       desenhados pelo controlador de voo no sinal de vídeo — aqui a camada
+       cumpre o mesmo papel, e é de graça em nitidez e em custo de GPU. -->
+  <div id="osd" class="osd" aria-hidden="true"></div>
+
+  <!-- Manches virtuais (só em dispositivos com toque) -->
+  <div id="touch-ui" class="touch-ui" aria-hidden="true"></div>
+
+  <!-- Telemetria (F3) -->
+  <div id="telemetry" class="debug-panel" hidden></div>
+
+  <!-- Menu de pausa (Esc) -->
+  <div id="pause" class="pause" hidden></div>
+
+  <!-- Tela inicial. Existe por dois motivos técnicos: o AudioContext do iOS
+       só destrava dentro de um gesto do usuário, e gerar o mundo leva
+       algumas centenas de milissegundos que é melhor gastar atrás de um
+       botão do que num primeiro frame travado. -->
+  <div id="boot" class="boot">
+    <div class="boot__panel">
+      <h1 class="boot__title">DRONE</h1>
+      <p class="boot__subtitle">Simulador FPV · vale do Starfarer</p>
+      <button id="boot-start" class="boot__button" type="button">DECOLAR</button>
+      <div id="boot-help" class="boot__help"></div>
+      <p class="boot__note">
+        Versão drone de <a href="../">Starfarer</a> — mesmo motor, outra
+        aeronave.
+      </p>
+    </div>
+  </div>
+
+</body>
+</html>
