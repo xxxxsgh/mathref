@@ -21,6 +21,8 @@ import { MapScreen } from './ui/MapScreen.js';
 import { Missions } from './missions/Missions.js';
 import { Stage } from './missions/Stage.js';
 import { MissionBoard } from './ui/MissionBoard.js';
+import { Hangar } from './ui/Hangar.js';
+import { computeSpec, buyUpgrade, setEquipped } from './meta/Loadout.js';
 import { HUD, toKmh } from './ui/HUD.js';
 
 /**
@@ -121,6 +123,8 @@ class Game {
     this.board = new MissionBoard(this.ui, this.missions, this.save, (id) =>
       this.missions.start(id),
     );
+    this.hangar = new Hangar(this.ui, this.save, () => this.applyLoadout());
+    this.applyLoadout();
 
     this.spawn();
     // Os circuitos são ancorados na origem do mundo, não em onde o drone está:
@@ -162,6 +166,19 @@ class Game {
     for (let i = 0; i < 200; i++) {
       if (this.world.terrain.update(this.drone.position, 8) === 0) break;
     }
+  }
+
+  /**
+   * Traduz a build montada no hangar para o que o resto do jogo entende.
+   * Chamado na abertura e a cada mudança — nunca por frame.
+   */
+  applyLoadout() {
+    this.spec = computeSpec(this.save.progress);
+    this.battery.setCapacity(CONFIG.BATTERY.capacity * this.spec.batteryScale);
+    this.radio.range = CONFIG.RADIO.range * this.spec.radioScale;
+    // O zoom da câmera é um FOV menor: lente mais longa enxerga mais longe e
+    // enquadra menos, que é o custo real de uma teleobjetiva.
+    this.camera.zoom = this.spec.zoom;
   }
 
   /** Reinício instantâneo da volta: uma tecla, sem menu e sem carregamento. */
@@ -214,7 +231,7 @@ class Game {
 
     // Com o mapa aberto o jogo para. Sem isso, consultar o mapa em voo é
     // sinônimo de bater — e o jogador aprende a nunca abrir o mapa.
-    if (this.map.open || this.board.open) return;
+    if (this.map.open || this.board.open || this.hangar.open) return;
 
     this.radio.update(dt, this.drone.position);
     this.radio.applyTo(axes, this.engine.elapsed);
@@ -225,14 +242,24 @@ class Game {
     this.wind.update(dt);
     this.wind.sample(this.drone.position, this._windAt);
 
+    // O vento é sentido conforme a estabilidade da build: hélices agressivas e
+    // chassi leve são sacudidos muito mais que um cargueiro.
+    this._windAt.multiplyScalar(this.spec.windScale);
+
     this._env.wind = this._windAt;
-    this._env.thrustScale = this.battery.thrustScale;
+    this._env.rateScale = this.spec.rateScale;
+    this._env.dragScale = this.spec.dragScale;
+    this._env.thrustScale = this.battery.thrustScale * this.spec.thrustScale;
     // Carga entra como massa: mais inércia de rotação, menos empuxo por quilo e
     // menos autoridade pra corrigir — exatamente o que um drone carregado sente.
-    this._env.massScale = 1 + this.payloadKg / CONFIG.DRONE.massKg / 4;
+    this._env.massScale = this.spec.massScale * (1 + this.payloadKg / CONFIG.DRONE.massKg / 4);
 
     this.drone.update(dt, axes, this._env);
-    this.battery.update(dt, this.drone.crashed ? 0 : this.drone.throttle, this.payloadKg);
+    this.battery.update(
+      dt,
+      this.drone.crashed ? 0 : this.drone.throttle * this.spec.drainScale,
+      this.payloadKg,
+    );
 
     const hit = this.world.collision.resolve(this.drone);
     if (hit) this._onCollision(hit);
@@ -265,6 +292,7 @@ class Game {
       else this.restartRun();
     }
     if (this.input.took('missions')) this.board.toggle();
+    if (this.input.took('hangar')) this.hangar.toggle();
     if (this.board.open) {
       for (let i = 1; i <= 5; i++) {
         if (this.input.took(`pick${i}`)) this.board.pickByIndex(i - 1);
@@ -483,6 +511,21 @@ class Game {
         boardOpen: this.board.open,
         done: this.save.progress.missionsDone.length,
       },
+      loadout: {
+        chassis: this.save.progress.chassis,
+        upgrades: { ...this.save.progress.upgrades },
+        equipped: { ...this.save.progress.equipped },
+        spec: {
+          thrust: +this.spec.thrustScale.toFixed(3),
+          mass: +this.spec.massScale.toFixed(3),
+          rate: +this.spec.rateScale.toFixed(3),
+          drag: +this.spec.dragScale.toFixed(3),
+          wind: +this.spec.windScale.toFixed(3),
+          battery: +this.spec.batteryScale.toFixed(3),
+          radio: +this.spec.radioScale.toFixed(3),
+        },
+        hangarOpen: this.hangar.open,
+      },
     };
   }
 }
@@ -490,4 +533,11 @@ class Game {
 const game = new Game(document.getElementById('app'));
 game.start();
 
-globalThis.__DRONEFARER = { game, debugState: () => game.debugState() };
+// Superfície de inspeção: usada pelo painel de debug e pelos testes de aceite.
+// Fica fora da classe de propósito — nada do jogo lê daqui.
+globalThis.__DRONEFARER = {
+  game,
+  debugState: () => game.debugState(),
+  buyUpgrade,
+  setEquipped,
+};

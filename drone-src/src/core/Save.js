@@ -30,7 +30,8 @@ function emptySave() {
       credits: 0,
       chassis: 'equilibrado',
       unlockedChassis: ['equilibrado'],
-      upgrades: {}, // linha → tier
+      upgrades: {}, // linha → tier COMPRADO (permanente)
+      equipped: {}, // linha → tier INSTALADO agora (≤ comprado)
       builds: {}, // nome → preset
       poisFound: [],
       missionsDone: [],

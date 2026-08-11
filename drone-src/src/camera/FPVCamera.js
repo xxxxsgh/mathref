@@ -63,7 +63,9 @@ export class FPVCamera {
     // Sobe rápido e volta com easing: o "puxão" de acelerar fica marcado, e
     // desacelerar não dá a sensação de zoom pra dentro.
     const speedFactor = clamp(drone.horizontalSpeed / C.fovSpeedRef, 0, 1);
-    const targetFov = C.fovBase + (C.fovMax - C.fovBase) * speedFactor;
+    // O zoom da câmera (upgrade da Fase 5) é um FOV menor: a lente longa
+    // enxerga mais longe e enquadra menos — o custo real de uma teleobjetiva.
+    const targetFov = (C.fovBase + (C.fovMax - C.fovBase) * speedFactor) / (this.zoom ?? 1);
     this.fov = damp(this.fov, targetFov, C.fovHalfLife, dt);
     if (Math.abs(this.camera.fov - this.fov) > 0.01) {
       this.camera.fov = this.fov;

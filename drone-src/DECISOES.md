@@ -192,3 +192,32 @@ difícil-mas-justo, 60 fps num iPad real) — aqui só há GPU por software.
   numa linha só. ✅
 - Aceitar pelo número começa a missão na hora. ✅
 - Pegar a carga muda o peso do drone de verdade; abortar devolve ao normal. ✅
+
+## Fase 5 — Economia e upgrades
+
+- **Comprar ≠ instalar.** `upgrades` guarda o tier comprado (permanente) e
+  `equipped` o que está no drone agora. Essa separação é o que faz o trade-off
+  existir: dá pra tirar a antena tier 3 antes de uma corrida porque o arrasto
+  dela custa velocidade de ponta. Sem poder desinstalar, um upgrade com
+  desvantagem viraria arrependimento permanente — e ninguém compraria.
+- **Nenhuma linha é só vantagem.** Verificado em teste, não só no papel: motores
+  +empuxo/−autonomia, bateria +autonomia/−inércia, hélices +agilidade/−estabilidade
+  no vento, câmera +zoom/−peso na frente, antena +alcance/−arrasto.
+- **Tiers substituem, não empilham.** O tier 3 já é o valor final da linha; somar
+  os três faria a curva explodir.
+- **Multiplicativo, não aditivo.** Dois ganhos de 20% dão 44% e nenhuma
+  combinação zera um multiplicador por acidente.
+- **O modelo de voo não sabe o que é um upgrade.** Tudo vira escala (`rateScale`,
+  `dragScale`, `massScale`…) passada no `env` — a mesma porta por onde a carga da
+  Fase 4 já entrava.
+- **Cada linha mostra o número E uma frase em português.** "+18% de empuxo" não
+  ensina ninguém a decidir; "sai de qualquer buraco — se houver bateria" ensina.
+- **Zoom da câmera é FOV menor,** não escala de imagem: a lente longa enxerga mais
+  longe e enquadra menos, que é o custo real de uma teleobjetiva.
+
+### Aceite verificado (`npm run test:aceite`, 31/31)
+
+- As cinco linhas têm ganho E custo medidos nas escalas de voo. ✅
+- Leve × cargueiro: 90° de rolagem em 0,23 s contra 0,40 s — **1,72× mais
+  lento**, medido rodando o modelo de voo de verdade, não uma fórmula paralela. ✅
+- Desinstalar devolve o arrasto ao normal e mantém o tier comprado. ✅

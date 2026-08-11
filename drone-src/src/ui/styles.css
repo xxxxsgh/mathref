@@ -499,6 +499,215 @@ body {
   color: var(--dim);
 }
 
+/* ─── Hangar ──────────────────────────────────────────────────────────── */
+#hangar {
+  position: absolute;
+  inset: 0;
+  background: #05070aee;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(16px + var(--safe-t)) 14px calc(16px + var(--safe-b));
+}
+
+#hangar .panel {
+  width: min(820px, 96vw);
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+#hangar header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+#hangar h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+
+#hangar .credits {
+  font-size: 13px;
+  color: var(--gold);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  gap: 8px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.stats span {
+  display: block;
+}
+
+.stats i {
+  display: block;
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+
+.stats b {
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.chassis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chassis-card {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 10px;
+}
+
+.chassis-card.active {
+  border-color: var(--accent);
+}
+
+.chassis-card b {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chassis-card i {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--dim);
+  margin: 4px 0 8px;
+  line-height: 1.35;
+}
+
+#hangar ul {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+}
+
+#hangar li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+#hangar .body {
+  flex: 1;
+  min-width: 0;
+}
+
+#hangar .body b {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+#hangar .body em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--warn);
+  letter-spacing: 0.04em;
+}
+
+/* A frase em português é o que ensina a decidir. O número sozinho não. */
+#hangar .body i {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 3px;
+}
+
+.pips {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.pip {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.pip.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Comprado mas desinstalado: existe, está pago, e está fora do drone. */
+.pip.owned {
+  background: #35e0c840;
+  border-color: var(--accent);
+}
+
+.pip:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.builds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+}
+
+#hangar button,
+.builds button {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 7px 11px;
+  cursor: pointer;
+}
+
+#hangar button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#hangar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+#hangar footer {
+  padding: 10px 18px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--dim);
+}
+
 /* ─── Corrida ─────────────────────────────────────────────────────────── */
 #hud-race {
   position: absolute;

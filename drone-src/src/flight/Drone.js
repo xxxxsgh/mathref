@@ -99,8 +99,9 @@ export class Drone {
     this.throttle = clamp(axes.throttle, 0, 1);
 
     // ── 1. Taxas de rotação pedidas ──────────────────────────────────────
-    if (this.mode === 'ACRO') this._acroRates(axes, this._target);
-    else this._angleRates(axes, this._target);
+    const rateScale = env.rateScale ?? 1;
+    if (this.mode === 'ACRO') this._acroRates(axes, this._target, rateScale);
+    else this._angleRates(axes, this._target, rateScale);
 
     // Desvio por hélice quebrada (Fase 6): entra como taxa parasita constante.
     if (env.torqueBias) this._target.add(env.torqueBias);
@@ -159,8 +160,10 @@ export class Drone {
     if (env.wind) this._rel.addScaledVector(env.wind, -CONFIG.WIND.influence);
     const airSpeed = this._rel.length();
     if (airSpeed > 1e-4) {
-      const kH = D.dragHorizontal / massScale;
-      const kV = D.dragVertical / massScale;
+      // A antena (Fase 5) acrescenta arrasto: mais alcance, menos ponta.
+      const dragScale = env.dragScale ?? 1;
+      const kH = (D.dragHorizontal * dragScale) / massScale;
+      const kV = (D.dragVertical * dragScale) / massScale;
       this._accel.x -= kH * airSpeed * this._rel.x;
       this._accel.z -= kH * airSpeed * this._rel.z;
       this._accel.y -= kV * airSpeed * this._rel.y;
@@ -181,8 +184,15 @@ export class Drone {
   }
 
   /** ACRO: o stick pede TAXA. Solto, o drone mantém a atitude que estiver. */
-  _acroRates(axes, out) {
-    const r = CONFIG.DRONE.rates;
+  _acroRates(axes, out, rateScale = 1) {
+    const base = CONFIG.DRONE.rates;
+    // As hélices e o chassi mexem na velocidade de rotação (Fase 5). O modelo
+    // de voo não sabe o que é um upgrade — recebe uma escala.
+    const r = {
+      pitch: base.pitch * rateScale,
+      yaw: base.yaw * rateScale,
+      roll: base.roll * rateScale,
+    };
     // Sinais: pitch +1 do stick = nariz pra baixo; roll +1 = rola pra direita;
     // yaw +1 = gira pra direita. Todos invertem em relação ao sentido positivo
     // da rotação nos eixos locais, daí os menos.
@@ -200,7 +210,7 @@ export class Drone {
    * certo o caso de estar de cabeça pra baixo depois de uma recuperação feia —
    * o controlador acha o caminho curto de volta em vez de rodar o longo.
    */
-  _angleRates(axes, out) {
+  _angleRates(axes, out, rateScale = 1) {
     const D = CONFIG.DRONE;
     const maxAngle = asRadians(D.maxAngleDeg);
 

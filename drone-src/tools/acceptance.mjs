@@ -497,6 +497,124 @@ check(
   'carga zerada',
 );
 
+// ══════════════════════════════════════════════════════════════════════════
+// FASE 5 — economia e upgrades
+// ══════════════════════════════════════════════════════════════════════════
+// Nenhum upgrade pode ser só vantagem: todo tier tem que piorar alguma coisa.
+const tradeoffs = await page.evaluate(() => {
+  const g = globalThis.__DRONEFARER.game;
+  const save = g.save;
+  const before = { ...save.progress };
+  const results = [];
+  // "Pior" depende do eixo: mais massa, arrasto, consumo e sensibilidade ao
+  // vento são custos; mais empuxo, giro, bateria e alcance são ganhos.
+  const worseIfUp = ['mass', 'drag', 'wind', 'drain'];
+  const lines = ['motores', 'bateria', 'helices', 'camera', 'antena'];
+
+  for (const line of lines) {
+    save.progress.credits = 999999;
+    save.progress.upgrades = {};
+    save.progress.equipped = {};
+    g.applyLoadout();
+    const base = { ...g.spec };
+
+    // Compra os três tiers e olha o topo da linha.
+    for (let i = 0; i < 3; i++) globalThis.__DRONEFARER.buyUpgrade(save, line);
+    g.applyLoadout();
+    const top = { ...g.spec };
+
+    const gains = [];
+    const costs = [];
+    for (const key of Object.keys(base)) {
+      if (typeof base[key] !== 'number' || Math.abs(top[key] - base[key]) < 1e-6) continue;
+      const up = top[key] > base[key];
+      const short = key.replace('Scale', '');
+      if (worseIfUp.includes(short) === up) costs.push(short);
+      else gains.push(short);
+    }
+    results.push({ line, gains, costs });
+  }
+
+  Object.assign(save.progress, before);
+  g.applyLoadout();
+  return results;
+});
+
+check(
+  'Toda linha de upgrade tem ganho E custo — nenhuma é só vantagem',
+  tradeoffs.length === 5 && tradeoffs.every((t) => t.gains.length > 0 && t.costs.length > 0),
+  tradeoffs.map((t) => `${t.line}: +${t.gains.join(',')} / −${t.costs.join(',')}`).join('\n     '),
+);
+
+// Duas builds têm que VOAR diferente, não só exibir números diferentes.
+const builds = await page.evaluate(() => {
+  const g = globalThis.__DRONEFARER.game;
+  const save = g.save;
+  const snapshot = JSON.parse(JSON.stringify(save.progress));
+  const measure = (chassis) => {
+    save.progress.chassis = chassis;
+    save.progress.unlockedChassis = ['leve', 'equilibrado', 'cargueiro'];
+    g.applyLoadout();
+    // Tempo pra girar 90° com o stick no talo, integrando o mesmo modelo de voo
+    // que o jogo usa — não uma fórmula paralela.
+    const drone = g.drone;
+    drone.quaternion.identity();
+    drone.angularVelocity.set(0, 0, 0);
+    drone.mode = 'ACRO';
+    let angle = 0;
+    let t = 0;
+    const axes = { throttle: 0.33, pitch: 0, roll: 1, yaw: 0 };
+    while (angle < Math.PI / 2 && t < 5) {
+      drone.update(1 / 60, axes, {
+        rateScale: g.spec.rateScale,
+        massScale: g.spec.massScale,
+        thrustScale: g.spec.thrustScale,
+        dragScale: g.spec.dragScale,
+      });
+      angle += Math.abs(drone.angularVelocity.z) / 60;
+      t += 1 / 60;
+    }
+    return +t.toFixed(3);
+  };
+  const leve = measure('leve');
+  const cargueiro = measure('cargueiro');
+  Object.assign(save.progress, snapshot);
+  g.applyLoadout();
+  return { leve, cargueiro };
+});
+
+check(
+  'Chassis diferentes voam de forma perceptivelmente diferente',
+  builds.cargueiro > builds.leve * 1.25,
+  `90° de rolagem: leve ${builds.leve}s · cargueiro ${builds.cargueiro}s (${(builds.cargueiro / builds.leve).toFixed(2)}× mais lento)`,
+);
+
+// Comprado ≠ instalado: é o que permite tirar a antena antes de uma corrida.
+const equipping = await page.evaluate(() => {
+  const g = globalThis.__DRONEFARER.game;
+  const save = g.save;
+  const snapshot = JSON.parse(JSON.stringify(save.progress));
+  save.progress.credits = 99999;
+  save.progress.upgrades = {};
+  save.progress.equipped = {};
+  globalThis.__DRONEFARER.buyUpgrade(save, 'antena');
+  g.applyLoadout();
+  const equipped = g.spec.dragScale;
+  globalThis.__DRONEFARER.setEquipped(save, 'antena', 0);
+  g.applyLoadout();
+  const removed = g.spec.dragScale;
+  const owned = save.progress.upgrades.antena;
+  Object.assign(save.progress, snapshot);
+  g.applyLoadout();
+  return { equipped: +equipped.toFixed(3), removed: +removed.toFixed(3), owned };
+});
+
+check(
+  'Dá pra desinstalar um upgrade sem perdê-lo (comprado ≠ instalado)',
+  equipping.equipped > equipping.removed && equipping.owned === 1,
+  `arrasto instalado ×${equipping.equipped} → desinstalado ×${equipping.removed}, tier comprado ainda ${equipping.owned}`,
+);
+
 await browser.close();
 server.close();
 
