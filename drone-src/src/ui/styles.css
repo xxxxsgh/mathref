@@ -1,0 +1,86 @@
+/* ══════════════════════════════════════════════════════════════════════
+   DRONEFARER — UI. Tudo em DOM sobreposto ao canvas: texto nítido em
+   qualquer DPI e zero custo de draw call.
+   ══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --bg: #0a0d12;
+  --fg: #dfe8f2;
+  --dim: #7d8b9c;
+  --accent: #35e0c8;
+  --accent-soft: #35e0c855;
+  --warn: #ffb545;
+  --danger: #ff4d5e;
+  --gold: #ffcf49;
+  --silver: #cfd8e3;
+  --bronze: #d08a4a;
+  --panel: #0d1219e6;
+  --line: #ffffff1f;
+  --mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+  /* Sem realce azul de toque nem seleção acidental durante o voo. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+#view {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Camada de UI: não intercepta ponteiro por padrão. Cada controle que
+   precisa de toque religa `pointer-events` em si mesmo. */
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  padding: calc(12px + var(--safe-t)) calc(14px + var(--safe-r)) calc(12px + var(--safe-b))
+    calc(14px + var(--safe-l));
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ─── Contador de FPS / debug ─────────────────────────────────────────── */
+#fps {
+  position: absolute;
+  top: calc(10px + var(--safe-t));
+  right: calc(14px + var(--safe-r));
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dim);
+  text-align: right;
+  text-shadow: 0 1px 3px #000a;
+  white-space: pre;
+}
+
+#fps b {
+  color: var(--fg);
+  font-weight: 600;
+}
