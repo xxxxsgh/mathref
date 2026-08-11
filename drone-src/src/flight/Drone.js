@@ -266,5 +266,11 @@ export class Drone {
     this.crashTimer = 0;
     this.throttle = 0;
     this.rpm = 0;
+
+    // O ponto seguro passa a ser aqui. Sem isto, bater logo depois de um
+    // reinício jogaria o drone de volta pro meio da volta anterior.
+    this.safePoint.position.copy(this.position);
+    this.safePoint.heading = this.heading;
+    this._safeCooldown = 0;
   }
 }

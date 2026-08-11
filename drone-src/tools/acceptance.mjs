@@ -246,6 +246,103 @@ check(
   `crashed = ${after.crashed}, altura ${after.altitude} m`,
 );
 
+// ══════════════════════════════════════════════════════════════════════════
+// FASE 2 — corrida
+//
+// Pilotar a volta inteira por script exigiria um piloto automático, que testaria
+// o piloto e não a corrida. Em vez disso o drone é teleportado de um lado ao
+// outro do plano de cada gate: é exatamente o que a detecção enxerga (o segmento
+// entre dois passos de física), e isola a lógica de corrida do voo.
+// ══════════════════════════════════════════════════════════════════════════
+/**
+ * Põe o drone alguns metros ATRÁS do gate com velocidade de atravessá-lo, e
+ * deixa a física levar.
+ *
+ * Teleportar direto pro outro lado não funciona: a detecção olha o segmento
+ * entre dois passos de física, e um teleporte acontece ENTRE os passos — os dois
+ * extremos acabam do mesmo lado do plano e o cruzamento nunca existe. Empurrar
+ * com velocidade real é o que a corrida enxerga de verdade.
+ */
+const crossGate = async (index) => {
+  await page.evaluate((index) => {
+    const g = globalThis.__DRONEFARER.game;
+    const gate = g.race.gates.gates[index];
+    g.drone.position.copy(gate.position).addScaledVector(gate.normal, -5);
+    g.drone.velocity.copy(gate.normal).multiplyScalar(25);
+    g.drone.crashed = false;
+  }, index);
+  await page.waitForTimeout(320);
+};
+
+await page.keyboard.press('KeyR');
+await page.waitForTimeout(300);
+const armed = await state();
+check(
+  'R reinicia a volta na hora: cronômetro zerado e gate 1 ativo',
+  armed.race.state === 'armed' && armed.race.elapsed === 0 && armed.race.gate === 0,
+  `estado ${armed.race.state}, tempo ${armed.race.elapsed}, gate ${armed.race.gate + 1}`,
+);
+
+await crossGate(0);
+const started = await state();
+check(
+  'Cruzar o gate 1 larga o cronômetro',
+  started.race.state === 'running' && started.race.elapsed > 0,
+  `estado ${started.race.state}, tempo ${started.race.elapsed}s, gate ${started.race.gate + 1}`,
+);
+
+for (let i = 1; i < started.race.gates; i++) await crossGate(i);
+const finished = await state();
+check(
+  'Passar por todos os gates na ordem termina a volta',
+  finished.race.state === 'finished' && finished.race.splits === finished.race.gates,
+  `estado ${finished.race.state}, ${finished.race.splits} splits de ${finished.race.gates} gates`,
+);
+check(
+  'Melhor tempo e ghost gravados no fim da volta',
+  finished.race.best != null && finished.race.hasGhost,
+  `recorde ${finished.race.best}s, ghost ${finished.race.hasGhost}`,
+);
+check(
+  'Passar no centro com combo rende créditos',
+  finished.race.credits > 0,
+  `${finished.race.credits} créditos`,
+);
+
+// ── Ordem obrigatória: pular gate não conta ─────────────────────────────
+await page.keyboard.press('KeyR');
+await page.waitForTimeout(250);
+await crossGate(0);
+const gateBefore = (await state()).race.gate;
+// Atravessa o gate 5 estando no 2: deve ser ignorado.
+await crossGate(4);
+const gateAfter = (await state()).race.gate;
+check(
+  'A ordem é obrigatória: cruzar um gate fora de vez não conta',
+  gateAfter === gateBefore,
+  `continuou no gate ${gateAfter + 1} depois de atravessar o 5`,
+);
+
+// ── Troca de circuito ───────────────────────────────────────────────────
+await page.keyboard.press('BracketRight');
+await page.waitForTimeout(400);
+const switched = await state();
+check(
+  'A tecla ] troca de circuito e rearma a volta',
+  switched.race.circuit !== 'aberto' && switched.race.state === 'armed',
+  `circuito ${switched.race.circuit}, estado ${switched.race.state}`,
+);
+
+// ── Persistência ────────────────────────────────────────────────────────
+await page.reload({ waitUntil: 'load' });
+await page.waitForTimeout(2200);
+const reloaded = await state();
+check(
+  'Recorde e ghost sobrevivem ao recarregar (localStorage versionado)',
+  reloaded.race.best != null && reloaded.race.hasGhost && reloaded.race.credits > 0,
+  `recorde ${reloaded.race.best}s, ghost ${reloaded.race.hasGhost}, ${reloaded.race.credits} créditos`,
+);
+
 await browser.close();
 server.close();
 

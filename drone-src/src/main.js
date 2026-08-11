@@ -12,6 +12,8 @@ import { buildDroneModel, spinRotors } from './flight/DroneModel.js';
 import { FPVCamera } from './camera/FPVCamera.js';
 import { FPVPost } from './camera/FPVPost.js';
 import { World } from './world/World.js';
+import { Save } from './core/Save.js';
+import { Race, CIRCUITS } from './race/Race.js';
 import { HUD, toKmh } from './ui/HUD.js';
 
 /**
@@ -37,7 +39,12 @@ class Game {
     this.fpsEl.id = 'fps';
     this.ui.appendChild(this.fpsEl);
 
-    this.input = new Input(this.ui);
+    this.save = new Save();
+    this.input = new Input(this.ui, {
+      expoScale: this.save.options.expoScale,
+      invertPitch: this.save.options.invertPitch,
+      invertRoll: this.save.options.invertRoll,
+    });
     this.hud = new HUD(this.ui);
 
     this.world = new World(this.scene, this.quality);
@@ -51,6 +58,13 @@ class Game {
     this.model = buildDroneModel();
     this.scene.add(this.model);
 
+    this.race = new Race({
+      scene: this.scene,
+      terrain: this.world.terrain,
+      save: this.save,
+      onEvent: (event, payload) => this._onRaceEvent(event, payload),
+    });
+
     // Pose do passo anterior: o render interpola entre ela e a atual, senão a
     // 60 Hz fixos com tela de 120 Hz a imagem anda em degraus.
     this._prevPosition = new THREE.Vector3();
@@ -61,6 +75,10 @@ class Game {
     this._env = {};
 
     this.spawn();
+    // Os circuitos são ancorados na origem do mundo, não em onde o drone está:
+    // o traçado precisa cair sempre no mesmo lugar pro recorde fazer sentido.
+    this.race.setCircuit(CIRCUITS[0].id, new THREE.Vector3(0, 0, 0));
+    this.restartRun();
 
     this.quality.onChange((settings) => {
       applyShadowSettings(this.renderer, settings);
@@ -98,6 +116,50 @@ class Game {
     }
   }
 
+  /** Reinício instantâneo da volta: uma tecla, sem menu e sem carregamento. */
+  restartRun() {
+    const pose = this.race.restart();
+    this.drone.respawn(pose);
+    this.battery.refill();
+    this.input.neutralize();
+    this.hud.hideFinish();
+    // O terreno na largada pode não estar carregado se o jogador se afastou.
+    this.world.terrain.update(this.drone.position, 12);
+  }
+
+  _onRaceEvent(event, payload) {
+    switch (event) {
+      case 'circuit':
+        this.hud.banner(payload.circuit.name.toUpperCase(), 2.2);
+        break;
+
+      case 'start':
+        this.hud.hideFinish();
+        this.hud.banner('VAI', 0.8);
+        break;
+
+      case 'gate': {
+        // Feedback forte e imediato: clarão, sacudida e o split na cara. É o
+        // que separa "passei no gate" de "passei BEM no gate".
+        this.post.flash(payload.perfect ? 0.5 : payload.scrape ? 0.3 : 0.22,
+          payload.scrape ? 0xff4d5e : payload.perfect ? 0x9dfff0 : 0xffffff);
+        this.camera.addShake(payload.scrape ? 0.35 : 0.12);
+        this.hud.showDelta(payload.delta);
+        if (payload.scrape) this.hud.banner('RASPOU', 0.7, 'danger');
+        else if (payload.perfect) this.hud.banner('CENTRO', 0.6);
+        break;
+      }
+
+      case 'finish':
+        this.post.flash(0.55, payload.medal === 'ouro' ? 0xffcf49 : 0xffffff);
+        this.hud.showFinish(payload);
+        break;
+
+      default:
+        break;
+    }
+  }
+
   fixedUpdate(dt) {
     const axes = this.input.update(dt);
     this._handleActions();
@@ -122,8 +184,11 @@ class Game {
     if (!hit && agl > 2 && this.drone.speed < 22) this.drone.markSafe();
 
     // Respawn automático: sem menu, sem tela de game over. Bateu, volta.
+    // O respawn NÃO reinicia a volta: o cronômetro segue correndo e a decisão
+    // de recomeçar continua sendo do jogador.
     if (this.drone.canRespawn) this._respawn();
 
+    this.race.update(dt, this.drone, this._prevPosition, this.drone.position);
     this.world.update(dt, this.drone.position, this.drone.velocity);
   }
 
@@ -132,8 +197,10 @@ class Game {
       const mode = this.drone.toggleMode();
       this.hud.banner(mode === 'ACRO' ? 'ACRO' : 'ANGLE', 1.1, mode === 'ACRO' ? 'acro' : '');
     }
-    if (this.input.took('restart')) this._respawn();
+    if (this.input.took('restart')) this.restartRun();
     if (this.input.took('thirdPerson')) this.camera.toggleThirdPerson();
+    if (this.input.took('nextCircuit')) this._switchCircuit(1);
+    if (this.input.took('prevCircuit')) this._switchCircuit(-1);
   }
 
   _onCollision(hit) {
@@ -152,7 +219,11 @@ class Game {
   _respawn() {
     this.drone.respawn();
     this.input.neutralize();
-    this.camera.addShake(0);
+  }
+
+  _switchCircuit(step) {
+    this.race.cycleCircuit(step);
+    this.restartRun();
   }
 
   render(dt, alpha) {
@@ -184,6 +255,7 @@ class Game {
       },
       dt,
     );
+    this.hud.updateRace(this.race.hudState(this.drone.position), this.camera.camera);
 
     this.post.render(this.scene, this.camera.camera, dt);
 
@@ -219,6 +291,18 @@ class Game {
       angularSpeed: +this.drone.angularVelocity.length().toFixed(3),
       throttle: +this.drone.throttle.toFixed(2),
       fov: +this.camera.fov.toFixed(1),
+      race: {
+        circuit: this.race.circuit?.id ?? null,
+        state: this.race.state,
+        elapsed: +this.race.elapsed.toFixed(2),
+        gate: this.race.gates.active,
+        gates: this.race.gates.gates.length,
+        combo: this.race.combo,
+        splits: this.race.splits.length,
+        best: this.save.circuit(this.race.circuit?.id ?? 'aberto').bestTime,
+        hasGhost: this.race.ghost.hasGhost,
+        credits: this.save.progress.credits,
+      },
     };
   }
 }

@@ -248,6 +248,162 @@ body {
   }
 }
 
+/* ─── Corrida ─────────────────────────────────────────────────────────── */
+#hud-race {
+  position: absolute;
+  top: calc(8px + var(--safe-t));
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  text-shadow: 0 1px 5px #000c;
+  min-width: 220px;
+}
+
+.race-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+}
+
+.race-line .circuit {
+  color: var(--accent);
+}
+
+.timer {
+  font-size: clamp(26px, 3.6vw, 38px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+}
+
+/* Antes de largar o cronômetro fica apagado: zerado e branco ele parece que
+   já está contando, e o jogador acha que perdeu tempo parado. */
+.timer.armed {
+  color: var(--dim);
+}
+
+.timer.finished {
+  color: var(--gold);
+}
+
+.delta.good {
+  color: var(--accent);
+}
+
+.delta.bad {
+  color: var(--danger);
+}
+
+.combo {
+  font-size: 15px;
+  color: var(--warn);
+  letter-spacing: 0.08em;
+  transition: opacity 0.18s ease;
+  height: 18px;
+}
+
+/* Seta-guia pro gate atual. */
+.gate-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gate-marker.on {
+  opacity: 0.9;
+}
+
+.gate-marker b {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--accent);
+  transform: translateY(30px);
+  text-shadow: 0 1px 4px #000d;
+  white-space: nowrap;
+}
+
+/* Fora da tela vira triângulo apontando pra onde virar. */
+.gate-marker.off-screen {
+  border-radius: 0;
+  border: none;
+  width: 0;
+  height: 0;
+  border-left: 13px solid transparent;
+  border-right: 13px solid transparent;
+  border-bottom: 22px solid var(--accent);
+}
+
+.gate-marker.off-screen b {
+  display: none;
+}
+
+#finish {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%) scale(0.96);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px 28px;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+#finish.on {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+#finish .medal {
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  color: var(--dim);
+}
+
+#finish .medal.ouro {
+  color: var(--gold);
+}
+#finish .medal.prata {
+  color: var(--silver);
+}
+#finish .medal.bronze {
+  color: var(--bronze);
+}
+
+#finish .finish-time {
+  font-size: 40px;
+  font-variant-numeric: tabular-nums;
+  margin: 4px 0 6px;
+}
+
+#finish .finish-detail {
+  font-size: 12px;
+  color: var(--fg);
+}
+
+#finish .finish-hint {
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 10px;
+}
+
 /* ─── Controles de toque ──────────────────────────────────────────────── */
 #touch {
   position: absolute;

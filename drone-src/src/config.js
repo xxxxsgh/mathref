@@ -184,8 +184,12 @@ export const CONFIG = {
     comboWindow: 4.0, // segundos pra encadear gates e manter o combo
     comboMax: 8,
 
-    /** Penalidade visual ao raspar a borda (não mata). */
-    scrapePenaltySeconds: 0.35,
+    /**
+     * Raspar o aro não mata e não tira tempo do cronômetro — o roadmap pede
+     * penalidade VISUAL. O custo real é perder o combo acumulado, que é o que
+     * transforma "passei raspando" numa decisão em vez de um detalhe.
+     */
+    scrapeComboLoss: 3,
 
     /** Amostragem do ghost (Hz). Mais que isso é desperdício de localStorage. */
     ghostHz: 20,

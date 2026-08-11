@@ -81,3 +81,43 @@ físicas por trás dela sim. O script pilota pelo teclado e mede:
 
 Falta um humano para os critérios 1, 3 e 4 (sentir velocidade sem HUD, mergulho
 difícil-mas-justo, 60 fps num iPad real) — aqui só há GPU por software.
+
+## Fase 2 — Corrida e progressão
+
+- **Passagem por interseção de plano, não por proximidade.** A 130 km/h o drone
+  anda 60 cm por passo de física; um teste de "está perto do gate?" deixaria
+  passar batido em metade das tentativas. Guardamos a posição do passo anterior e
+  vemos se o segmento cruzou o plano — e no sentido certo.
+- **Só o gate ativo é testado.** A ordem é obrigatória, então testar todos seria
+  trabalho jogado fora e deixaria o jogador "passar" no gate 7 por acidente
+  enquanto procura o 3.
+- **Raspar não tira tempo, tira combo.** O roadmap pediu penalidade visual; somar
+  segundos ao cronômetro tornaria o recorde uma mentira. Perder o combo acumulado
+  é um custo real que mantém o relógio honesto.
+- **O cronômetro nunca é "ajudado".** Centro e ritmo pagam em créditos (a moeda
+  da Fase 5), não em desconto de tempo. Tempo é tempo.
+- **Só o fantasma da MELHOR volta é guardado.** Guardar a última faria o jogador
+  correr contra a própria volta ruim.
+- **Ghost em array plano de números arredondados**, não objetos: uma volta de 60 s
+  a 20 Hz cabe em ~35 KB no localStorage em vez de ~140 KB. Cursor que só anda
+  pra frente na reprodução.
+- **Bater NÃO reinicia a volta.** O respawn é automático e o cronômetro continua;
+  a decisão de recomeçar é sempre do jogador, apertando R.
+- **Gate orientado pela bissetriz** entre o traçado que chega e o que sai.
+  Apontá-lo só pro próximo deixaria gates atravessados na cara de quem chega nas
+  curvas, impossíveis de cruzar sem raspar.
+- **Save com migrações incrementais** (1→2→3) e quota tratada: se o localStorage
+  encher, os ghosts são descartados primeiro porque são o maior item e o mais
+  descartável. Falha de escrita nunca quebra o jogo.
+- **Os três circuitos cobram coisas diferentes:** Aberto premia velocidade de
+  ponta, Técnico troca de direção rasante, e Vertical exige ACRO — em ANGLE o
+  limite de 38° trava o mergulho antes de dar tempo de ouro.
+
+### Aceite verificado (`npm run test:aceite`, 17/17)
+
+- R rearma a volta na hora: cronômetro zerado, gate 1 ativo, sem menu. ✅
+- Cruzar o gate 1 larga o cronômetro; passar por todos termina a volta com um
+  split por gate. ✅
+- Recorde, ghost e créditos gravados no fim e **sobrevivem ao recarregar**. ✅
+- Cruzar um gate fora de ordem é ignorado. ✅
+- `]` troca de circuito e rearma. ✅
