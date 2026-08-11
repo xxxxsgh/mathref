@@ -441,6 +441,62 @@ check(
 await page.keyboard.press('Tab');
 await page.waitForTimeout(200);
 
+// ══════════════════════════════════════════════════════════════════════════
+// FASE 4 — missões
+// ══════════════════════════════════════════════════════════════════════════
+await page.keyboard.press('KeyJ');
+await page.waitForTimeout(400);
+check('J abre o quadro de missões', (await state()).mission.boardOpen, 'quadro aberto');
+
+await page.keyboard.press('Digit1');
+await page.waitForTimeout(500);
+const mission = await state();
+check(
+  'Aceitar uma missão pelo número começa ela na hora',
+  mission.mission.id === 'insp-torre' && !mission.mission.boardOpen,
+  `missão ${mission.mission.id}`,
+);
+
+// O critério do roadmap: dá pra entender o objetivo em 2 s. O que dá pra medir
+// é a forma — uma linha só, curta, sem lista de tarefas.
+const objectives = await page.evaluate(() => {
+  const g = globalThis.__DRONEFARER.game;
+  const out = {};
+  for (const def of g.missions.list) {
+    g.missions.start(def.id);
+    out[def.type] = g.missions.objective();
+  }
+  g.missions.abort();
+  return out;
+});
+const types = Object.keys(objectives);
+check(
+  'Os cinco tipos de missão existem e cada um comunica o objetivo em uma linha',
+  types.length === 5 &&
+    Object.values(objectives).every((o) => typeof o === 'string' && o.length > 0 && o.length < 90 && !o.includes('\n')),
+  types.map((t) => `${t}: "${objectives[t]}"`).join('\n     '),
+);
+
+// Entrega: pegar a carga tem que MUDAR o voo, não só marcar um objetivo.
+await page.evaluate(() => globalThis.__DRONEFARER.game.missions.start('entrega-vale'));
+await page.waitForTimeout(200);
+await teleport(60, 40, 3);
+await page.waitForTimeout(400);
+const carrying = await state();
+check(
+  'Pegar a carga acrescenta peso de verdade ao drone',
+  carrying.mission.payloadKg > 0,
+  `${carrying.mission.payloadKg} kg a bordo`,
+);
+
+await page.evaluate(() => globalThis.__DRONEFARER.game.missions.abort());
+await page.waitForTimeout(200);
+check(
+  'Abortar a missão devolve o drone ao peso normal e limpa a cena',
+  (await state()).mission.payloadKg === 0,
+  'carga zerada',
+);
+
 await browser.close();
 server.close();
 

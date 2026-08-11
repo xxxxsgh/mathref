@@ -160,3 +160,35 @@ difícil-mas-justo, 60 fps num iPad real) — aqui só há GPU por software.
 - Sinal degrada a 1424 m (0.21) e **volta** ao chegar perto da base. ✅
 - Avistar um marco o registra no mapa; cada um oferece um desafio curto. ✅
 - TAB abre o mapa e o jogo pausa (altura idêntica antes e depois). ✅
+
+## Fase 4 — Missões
+
+- **Conteúdo, não sistema novo.** As cinco missões usam o voo, o mundo e a
+  câmera que já existiam. A corrida contratada simplesmente delega pro sistema
+  da Fase 2 e observa o resultado.
+- **A câmera vira mecânica na inspeção.** Não basta chegar perto: é preciso
+  estar na faixa de distância certa E com o ponto centralizado por 1,4 s. É o
+  trabalho real de um drone de inspeção, e a única missão que usa para onde a
+  lente aponta.
+- **O peso da entrega é sentido, não anunciado.** A carga entra como massa no
+  modelo de voo: mais inércia de rotação, menos empuxo por quilo, menos
+  autoridade pra corrigir, e bateria drenando mais rápido.
+- **Pousar exige chegar devagar.** Sem limite de velocidade de toque, "entregar"
+  seria despencar em cima do alvo.
+- **O alvo da busca NÃO é marcado.** A pista é térmica (barra que esquenta com a
+  proximidade) mais fumaça visível só de perto. Marcar no mapa mataria a missão
+  inteira — a busca é o conteúdo.
+- **Na filmagem, sair do enquadramento drena o contador em vez de zerar.** Perder
+  dois segundos numa curva não pode apagar meio minuto de trabalho.
+- **Objetivo é sempre UMA linha que muda de estado** ("aproxime", "centralize",
+  "segurando…") em vez de lista de tarefas. Se não couber numa linha, a missão
+  está mal comunicada — não falta espaço no HUD.
+- **Falhar não abre tela de derrota:** R recomeça a missão na hora. Dentro de uma
+  missão, R reinicia a missão; fora, reinicia a volta.
+
+### Aceite verificado (`npm run test:aceite`, 28/28)
+
+- Os cinco tipos existem e cada um resume o objetivo em menos de 90 caracteres,
+  numa linha só. ✅
+- Aceitar pelo número começa a missão na hora. ✅
+- Pegar a carga muda o peso do drone de verdade; abortar devolve ao normal. ✅

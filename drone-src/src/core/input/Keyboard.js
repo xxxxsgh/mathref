@@ -30,6 +30,12 @@ const ACTION_KEYS = {
   tuner: ['KeyG'],
   nextCircuit: ['BracketRight'],
   prevCircuit: ['BracketLeft'],
+  // Números aceitam a missão correspondente com o quadro aberto.
+  pick1: ['Digit1'],
+  pick2: ['Digit2'],
+  pick3: ['Digit3'],
+  pick4: ['Digit4'],
+  pick5: ['Digit5'],
 };
 
 export class KeyboardSource {

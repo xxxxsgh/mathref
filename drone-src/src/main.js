@@ -18,6 +18,9 @@ import { POIs } from './world/POIs.js';
 import { Radio } from './flight/Radio.js';
 import { dominantZone } from './world/Zones.js';
 import { MapScreen } from './ui/MapScreen.js';
+import { Missions } from './missions/Missions.js';
+import { Stage } from './missions/Stage.js';
+import { MissionBoard } from './ui/MissionBoard.js';
 import { HUD, toKmh } from './ui/HUD.js';
 
 /**
@@ -87,6 +90,37 @@ class Game {
     this.radio = new Radio(this.home);
     this.world.registerThermals(this.wind);
     this.map = new MapScreen(this.ui, this.world.terrain, this.pois, this.save);
+
+    // Carga transportada (kg). Entra no modelo de voo como massa e no consumo
+    // de bateria — o peso é sentido no ar, não anunciado por texto.
+    this.payloadKg = 0;
+    this.stage = new Stage(this.scene, this.world.terrain);
+    this.missions = new Missions({
+      save: this.save,
+      world: this.world,
+      drone: this.drone,
+      camera: this.camera.camera,
+      spawnMarker: (position, color, radius) => this.stage.spawnMarker(position, color, radius),
+      spawnSmoke: (position) => this.stage.spawnSmoke(position),
+      spawnVehicle: () => this.stage.spawnVehicle(),
+      removeMarker: (object) => this.stage.remove(object),
+      setPayload: (kg) => {
+        this.payloadKg = kg;
+      },
+      startRace: (circuitId) => {
+        this.race.setCircuit(circuitId, new THREE.Vector3(0, 0, 0));
+        this.restartRun();
+      },
+      raceState: () => ({
+        state: this.race.state,
+        elapsed: this.race.elapsed,
+        finish: this.race.finishInfo,
+      }),
+      event: (name, payload) => this._onMissionEvent(name, payload),
+    });
+    this.board = new MissionBoard(this.ui, this.missions, this.save, (id) =>
+      this.missions.start(id),
+    );
 
     this.spawn();
     // Os circuitos são ancorados na origem do mundo, não em onde o drone está:
@@ -180,7 +214,7 @@ class Game {
 
     // Com o mapa aberto o jogo para. Sem isso, consultar o mapa em voo é
     // sinônimo de bater — e o jogador aprende a nunca abrir o mapa.
-    if (this.map.open) return;
+    if (this.map.open || this.board.open) return;
 
     this.radio.update(dt, this.drone.position);
     this.radio.applyTo(axes, this.engine.elapsed);
@@ -193,10 +227,12 @@ class Game {
 
     this._env.wind = this._windAt;
     this._env.thrustScale = this.battery.thrustScale;
-    this._env.massScale = 1;
+    // Carga entra como massa: mais inércia de rotação, menos empuxo por quilo e
+    // menos autoridade pra corrigir — exatamente o que um drone carregado sente.
+    this._env.massScale = 1 + this.payloadKg / CONFIG.DRONE.massKg / 4;
 
     this.drone.update(dt, axes, this._env);
-    this.battery.update(dt, this.drone.crashed ? 0 : this.drone.throttle);
+    this.battery.update(dt, this.drone.crashed ? 0 : this.drone.throttle, this.payloadKg);
 
     const hit = this.world.collision.resolve(this.drone);
     if (hit) this._onCollision(hit);
@@ -211,6 +247,7 @@ class Game {
 
     this.race.update(dt, this.drone, this._prevPosition, this.drone.position);
     this.pois.update(dt, this.drone.position, this.scene.fog?.far ?? 900);
+    this.missions.update(dt);
     this.world.update(dt, this.drone.position, this.drone.velocity);
     this.world.updateZone(dt, this.drone.position, this.wind);
     this._updateRecharge(dt);
@@ -221,7 +258,18 @@ class Game {
       const mode = this.drone.toggleMode();
       this.hud.banner(mode === 'ACRO' ? 'ACRO' : 'ANGLE', 1.1, mode === 'ACRO' ? 'acro' : '');
     }
-    if (this.input.took('restart')) this.restartRun();
+    if (this.input.took('restart')) {
+      // Numa missão, R recomeça a MISSÃO; fora dela, recomeça a volta. Nos dois
+      // casos é instantâneo e não passa por menu nenhum.
+      if (this.missions.active) this.missions.restart();
+      else this.restartRun();
+    }
+    if (this.input.took('missions')) this.board.toggle();
+    if (this.board.open) {
+      for (let i = 1; i <= 5; i++) {
+        if (this.input.took(`pick${i}`)) this.board.pickByIndex(i - 1);
+      }
+    }
     if (this.input.took('thirdPerson')) this.camera.toggleThirdPerson();
     if (this.input.took('nextCircuit')) this._switchCircuit(1);
     if (this.input.took('prevCircuit')) this._switchCircuit(-1);
@@ -247,6 +295,30 @@ class Game {
       this.battery.recharge(dt, CONFIG.RADIO.rechargePerSecond);
     }
     this._onPad = onPad;
+  }
+
+  _onMissionEvent(event, payload) {
+    switch (event) {
+      case 'missionStart':
+        this.hud.banner(payload.def.title.toUpperCase(), 2.4);
+        break;
+      case 'photo':
+        this.post.flash(0.45, 0xffffff); // estouro de flash: a foto saiu
+        this.hud.banner(`FOTO ${payload.index + 1}/${payload.total}`, 1.0);
+        break;
+      case 'cargoTaken':
+        this.hud.banner(`CARGA A BORDO — ${payload.kg} kg`, 2.0, 'acro');
+        break;
+      case 'missionDone':
+        this.post.flash(0.5, 0xffcf49);
+        this.hud.banner(`MISSÃO CUMPRIDA +${payload.reward} cr`, 2.8, 'gold');
+        break;
+      case 'missionFail':
+        this.hud.banner('MISSÃO FALHOU — R reinicia', 2.4, 'danger');
+        break;
+      default:
+        break;
+    }
   }
 
   _onPoiEvent(event, payload) {
@@ -332,13 +404,19 @@ class Game {
     this.camera.setSignal(this.radio.signal);
 
     const poi = this.pois.hudState(this.drone.position);
+    // A missão tem prioridade sobre o desafio de POI na linha de objetivo: são
+    // duas coisas que o jogador aceitou, e a que ele aceitou por último manda.
+    const objective =
+      this.missions.objective() ??
+      (poi
+        ? `${poi.challenge} — ${poi.index + 1}/${poi.total}, ${poi.remaining.toFixed(0)}s, ${Math.round(poi.distance)}m`
+        : null);
+
     this.hud.updateWorld({
       zone: dominantZone(this.drone.position.x, this.drone.position.z).zone.name,
       signal: this.radio.signal,
       onPad: this._onPad,
-      objective: poi
-        ? `${poi.challenge} — ${poi.index + 1}/${poi.total}, ${poi.remaining.toFixed(0)}s, ${Math.round(poi.distance)}m`
-        : null,
+      objective,
     });
 
     this.map.draw(this.drone.position, this.drone.heading, this.home);
@@ -396,6 +474,14 @@ class Game {
         poisFound: this.pois.discovered.length,
         mapOpen: this.map.open,
         challenge: this.pois.active ? this.pois.active.poi.def.id : null,
+      },
+      mission: {
+        id: this.missions.definition?.id ?? null,
+        type: this.missions.definition?.type ?? null,
+        objective: this.missions.objective(),
+        payloadKg: this.payloadKg,
+        boardOpen: this.board.open,
+        done: this.save.progress.missionsDone.length,
       },
     };
   }
