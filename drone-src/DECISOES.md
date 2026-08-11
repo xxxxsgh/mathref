@@ -259,3 +259,39 @@ difícil-mas-justo, 60 fps num iPad real) — aqui só há GPU por software.
 - Modo sem risco não avaria nem cobra. ✅
 - Os cinco climas diferem em visibilidade (48–252 m), vento (×0,35–×2,6) e luz
   simultaneamente. ✅
+
+## Fase 7 — Áudio
+
+- **Motor somado de harmônicas, não loop com pitch shift.** Quatro osciladores
+  (serra nas graves, quadrada nas agudas) mais ruído filtrado das hélices
+  cortando o ar. É por isso que acelerar soa como esforço e não como um botão de
+  volume: de 71 Hz/760 Hz de corte em marcha lenta para 240 Hz/5700 Hz no talo,
+  as harmônicas altas entrando antes.
+- **Um passa-baixa aberto pelo RPM.** Só o tom subindo soa a brinquedo; é o
+  brilho que dá o esforço.
+- **Vento pela velocidade DO AR, não do solo.** Parado com vento forte na cara
+  também assobia (0,011 → 0,333 de ganho a 30 m/s).
+- **"Parede perto muda o som" é um delay curto realimentado** que só aparece com
+  geometria próxima — reverb de fenda barato, e passar rente a um container é
+  imediatamente reconhecível (0 → 0,50 de eco).
+- **A proximidade sai da consulta de altura que a colisão já faz.** Nenhum
+  raycast novo por frame só pra decidir som.
+- **Música em camadas de ganho, não faixas trocadas.** A transição nunca corta.
+  A camada "tensa" desafina 3% de propósito: dissonância pequena é lida como
+  "algo está errado" sem nenhum aviso na tela. Bateria crítica tem prioridade
+  sobre tudo.
+- **O alerta de bateria carrega a informação no RITMO, não no timbre.** Bipe a
+  cada 1,25 s no aviso e a cada 0,42 s no crítico — vira urgência mesmo pra quem
+  não sabe o que o som significa, e é o que o roadmap pede: reconhecer sem olhar.
+- **Compressor no barramento final.** Motor + vento + música + alerta somados
+  estouram, e estourado soa sujo, não intenso.
+- **Áudio é alimentado no render, não no passo fixo.** Os parâmetros são
+  suavizados por `setTargetAtTime`; amostrar 60 vezes por segundo não melhora
+  nada e só custa chamadas.
+
+### Aceite verificado (`npm run test:aceite`, 40/40)
+
+- Motor sobe de tom E de brilho com o RPM. ✅
+- Vento segue a velocidade do ar. ✅
+- Eco de parede aparece com obstáculo próximo e some longe. ✅
+- Música troca de camada por contexto. ✅

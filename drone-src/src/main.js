@@ -24,8 +24,12 @@ import { MissionBoard } from './ui/MissionBoard.js';
 import { Hangar } from './ui/Hangar.js';
 import { computeSpec, buyUpgrade, setEquipped } from './meta/Loadout.js';
 import { Damage } from './flight/Damage.js';
+import { AudioSystem } from './audio/AudioSystem.js';
 import { Weather, WEATHER_PRESETS } from './world/Weather.js';
 import { HUD, toKmh } from './ui/HUD.js';
+
+/** Atalho local: usado só pelo cálculo de proximidade do áudio. */
+const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /**
  * DRONEFARER — montagem e laço principal.
@@ -126,6 +130,17 @@ class Game {
       this.missions.start(id),
     );
     this.damage = new Damage(this.save);
+    this.audio = new AudioSystem(this.save);
+    // O AudioContext nasce suspenso e só destrava com gesto do usuário; por
+    // isso a inicialização é pendurada no primeiro toque ou tecla.
+    const unlock = () => {
+      if (this.audio.unlock()) {
+        window.removeEventListener('pointerdown', unlock);
+        window.removeEventListener('keydown', unlock);
+      }
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
     this.weather = new Weather(this.scene, this.world, this.quality);
     this.hangar = new Hangar(this.ui, this.save, () => this.applyLoadout());
     this.applyLoadout();
@@ -214,12 +229,14 @@ class Game {
           payload.scrape ? 0xff4d5e : payload.perfect ? 0x9dfff0 : 0xffffff);
         this.camera.addShake(payload.scrape ? 0.35 : 0.12);
         this.hud.showDelta(payload.delta);
+        this.audio.play(payload.scrape ? 'scrape' : payload.perfect ? 'gatePerfect' : 'gate');
         if (payload.scrape) this.hud.banner('RASPOU', 0.7, 'danger');
         else if (payload.perfect) this.hud.banner('CENTRO', 0.6);
         break;
       }
 
       case 'finish':
+        this.audio.play('finish');
         this.post.flash(0.55, payload.medal === 'ouro' ? 0xffcf49 : 0xffffff);
         this.hud.showFinish(payload);
         break;
@@ -367,6 +384,7 @@ class Game {
         this.hud.banner(payload.def.title.toUpperCase(), 2.4);
         break;
       case 'photo':
+        this.audio.play('checkpoint');
         this.post.flash(0.45, 0xffffff); // estouro de flash: a foto saiu
         this.hud.banner(`FOTO ${payload.index + 1}/${payload.total}`, 1.0);
         break;
@@ -374,6 +392,7 @@ class Game {
         this.hud.banner(`CARGA A BORDO — ${payload.kg} kg`, 2.0, 'acro');
         break;
       case 'missionDone':
+        this.audio.play('reward');
         this.post.flash(0.5, 0xffcf49);
         this.hud.banner(`MISSÃO CUMPRIDA +${payload.reward} cr`, 2.8, 'gold');
         break;
@@ -394,9 +413,11 @@ class Game {
         this.hud.banner(payload.poi.def.challenge, 2.8);
         break;
       case 'checkpoint':
+        this.audio.play('checkpoint');
         this.post.flash(0.2, 0x9dfff0);
         break;
       case 'challengeDone':
+        this.audio.play('reward');
         this.post.flash(0.5, 0xffcf49);
         this.hud.banner(`DESAFIO CONCLUÍDO +${payload.reward} cr`, 2.4, 'gold');
         break;
@@ -413,6 +434,7 @@ class Game {
       if (this.drone.crash()) {
         this.camera.addShake(CONFIG.CAMERA.shakeCrash);
         this.post.flash(0.35, 0xff4d5e);
+        this.audio.play('crash');
 
         // O risco real: quebra peça, derruba a carga e gera conta de reparo.
         const broken = this.damage.applyCrash(hit.impact, hit.normal.y);
@@ -496,6 +518,7 @@ class Game {
     });
 
     this.map.draw(this.drone.position, this.drone.heading, this.home);
+    this._updateAudio(dt);
 
     this.post.render(this.scene, this.camera.camera, dt);
 
@@ -510,6 +533,56 @@ class Game {
 
   start() {
     this.engine.start();
+  }
+
+  /**
+   * Alimenta o áudio. Roda no render e não no passo fixo: os parâmetros são
+   * suavizados por `setTargetAtTime`, então amostrar mais vezes não melhora
+   * nada e só custa chamadas.
+   */
+  _updateAudio(dt) {
+    if (!this.audio.ready) return;
+
+    // "Parede perto muda o som": a proximidade sai da mesma consulta de altura
+    // que a colisão usa, sem raycast novo.
+    const ground = this.world.groundHeight(this.drone.position.x, this.drone.position.z);
+    const agl = this.drone.position.y - ground;
+    let proximity = clamp01(1 - agl / 12);
+    for (const chunk of this.world.terrain.chunksNear(this.drone.position.x, this.drone.position.z, 0)) {
+      for (const collider of chunk.colliders) {
+        const d = Math.hypot(this.drone.position.x - collider.x, this.drone.position.z - collider.z);
+        if (d < 14) proximity = Math.max(proximity, 1 - d / 14);
+      }
+    }
+
+    // Doppler: só a componente da velocidade que aponta pro "ouvinte" conta.
+    // Em primeira pessoa o ouvinte é o próprio drone, então o que sobra é o
+    // efeito de passar raspando por geometria — que é o que se quer ouvir.
+    const approach = this.drone.velocity.length() * (this.camera.thirdPerson ? 1 : 0.25);
+
+    this.audio.update(dt, {
+      rpm: this.drone.rpm,
+      airSpeed: this.drone.airSpeed ?? this.drone.speed,
+      approachSpeed: approach,
+      proximity,
+      silent: this.drone.crashed || this.map.open || this.board.open || this.hangar.open,
+      batteryWarning: this.battery.warning,
+      batteryCritical: this.battery.critical,
+    });
+
+    // Camada de música pelo contexto. A ordem é a prioridade: bateria crítica
+    // manda em tudo, porque é a informação mais urgente que existe.
+    const layer = this.battery.critical
+      ? 'critico'
+      : this.radio.degraded || this.damage.any
+        ? 'tensa'
+        : this.race.state === 'running' || this.missions.active
+          ? 'corrida'
+          : 'exploracao';
+    this.audio.setMusic(layer);
+
+    if (this.radio.critical && !this._signalWasLost) this.audio.play('signalLost');
+    this._signalWasLost = this.radio.critical;
   }
 
   /** Espelho de estado pra inspeção externa (testes e painel de debug). */
@@ -558,6 +631,11 @@ class Game {
         payloadKg: this.payloadKg,
         boardOpen: this.board.open,
         done: this.save.progress.missionsDone.length,
+      },
+      audio: {
+        ready: this.audio.ready,
+        state: this.audio.ctx?.state ?? 'ausente',
+        music: this.audio._musicLayer,
       },
       risk: {
         parts: { ...this.damage.parts },

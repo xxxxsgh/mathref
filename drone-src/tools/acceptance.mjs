@@ -725,6 +725,102 @@ check(
     .join('\n     '),
 );
 
+// ══════════════════════════════════════════════════════════════════════════
+// FASE 7 — áudio
+//
+// "De olhos fechados dá pra saber o que está acontecendo" não se automatiza. O
+// que dá pra verificar é que os parâmetros do som REALMENTE seguem o estado do
+// voo — se a frequência do motor não mudasse com o RPM, nenhum ouvido salvaria.
+// ══════════════════════════════════════════════════════════════════════════
+// O laço do jogo é parado durante a medição: senão ele reescreve os mesmos
+// parâmetros a 60 fps com o estado real do voo e briga com os valores injetados.
+const audioReady = await page.evaluate(async () => {
+  const g = globalThis.__DRONEFARER.game;
+  if (!g.audio.unlock()) return false;
+  await g.audio.ctx.resume();
+  g.engine.stop();
+  return g.audio.ctx.state === 'running';
+});
+
+/**
+ * `setTargetAtTime` é uma rampa exponencial, não uma atribuição: logo depois de
+ * agendar, `.value` ainda é o valor ANTIGO. Medir sem deixar o relógio de áudio
+ * andar compararia quatro vezes o mesmo número — foi exatamente o que aconteceu
+ * na primeira versão deste teste.
+ */
+const sampleAudio = async (rpm, airSpeed, proximity) => {
+  await page.evaluate(
+    ({ rpm, airSpeed, proximity }) => {
+      const g = globalThis.__DRONEFARER.game;
+      for (let i = 0; i < 4; i++) {
+        g.audio.update(0.05, {
+          rpm,
+          airSpeed,
+          approachSpeed: 0,
+          proximity,
+          silent: false,
+          batteryWarning: false,
+          batteryCritical: false,
+        });
+      }
+    },
+    { rpm, airSpeed, proximity },
+  );
+  await page.waitForTimeout(450); // ~10 constantes de tempo da suavização
+  return page.evaluate(() => {
+    const g = globalThis.__DRONEFARER.game;
+    return {
+      fundamental: +g.audio.engine.partials[0].osc.frequency.value.toFixed(1),
+      brightness: +g.audio.engine.filter.frequency.value.toFixed(0),
+      windGain: +g.audio.wind.gain.gain.value.toFixed(3),
+      wallEcho: +g.audio.proximity.wet.gain.value.toFixed(3),
+    };
+  });
+};
+
+const audio = audioReady
+  ? {
+      idle: await sampleAudio(0.05, 1, 0),
+      full: await sampleAudio(1, 1, 0),
+      fast: await sampleAudio(0.5, 30, 0),
+      nearWall: await sampleAudio(0.5, 1, 1),
+      music: await page.evaluate(() => {
+        const g = globalThis.__DRONEFARER.game;
+        g.audio.setMusic('critico');
+        return g.audio._musicLayer;
+      }),
+    }
+  : { unavailable: true };
+
+await page.evaluate(() => globalThis.__DRONEFARER.game.engine.start());
+
+if (audio.unavailable) {
+  check('Áudio disponível no ambiente de teste', false, 'Web Audio indisponível');
+} else {
+  check(
+    'O motor sobe de tom E de brilho com o RPM (não é volume, é esforço)',
+    audio.full.fundamental > audio.idle.fundamental * 2.5 &&
+      audio.full.brightness > audio.idle.brightness * 2,
+    `marcha lenta ${audio.idle.fundamental} Hz / corte ${audio.idle.brightness} Hz → ` +
+      `máximo ${audio.full.fundamental} Hz / corte ${audio.full.brightness} Hz`,
+  );
+  check(
+    'O vento acompanha a velocidade do AR, não o RPM',
+    audio.fast.windGain > audio.full.windGain * 3,
+    `parado ${audio.full.windGain} → a 30 m/s ${audio.fast.windGain}`,
+  );
+  check(
+    'Parede perto muda o som (eco curto aparece)',
+    audio.nearWall.wallEcho > 0.2 && audio.full.wallEcho < 0.05,
+    `longe ${audio.full.wallEcho} → colado ${audio.nearWall.wallEcho}`,
+  );
+  check(
+    'A música troca de camada por contexto',
+    audio.music === 'critico',
+    `camada ativa: ${audio.music}`,
+  );
+}
+
 await browser.close();
 server.close();
 
