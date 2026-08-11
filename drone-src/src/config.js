@@ -65,6 +65,11 @@ export const CONFIG = {
     expo: { pitch: 0.42, roll: 0.42, yaw: 0.35, throttle: 0.15 },
     deadzone: 0.06,
 
+    throttle: {
+      /** Quanto o acelerador de teclado sobe por segundo com a tecla presa. */
+      keyboardRate: 1.8,
+    },
+
     /** Massa base (kg). Carga e upgrades somam em cima disso (Fases 4 e 5). */
     massKg: 0.65,
 
@@ -110,7 +115,7 @@ export const CONFIG = {
     /** Pós-processamento do feed. Cada um é desligável por tier ou no menu. */
     barrel: 0.16, // distorção de barril da lente grande-angular
     chromatic: 0.0022, // aberração cromática nas bordas
-    vignette: 0.42,
+    vignette: 0.32,
     noise: 0.05, // ruído de sinal analógico
 
     /** Screen shake: amplitude inicial e meia-vida do decaimento. */
@@ -129,8 +134,12 @@ export const CONFIG = {
   WORLD: {
     seed: 20260811,
 
-    /** Lado do chunk em metros e número de vértices por lado. */
-    chunkSize: 96,
+    /**
+     * Lado do chunk em metros e quantidade de quads por lado.
+     * 128/32 dá 4 m por quad: relevo legível a 100 km/h sem virar 121 draw
+     * calls só de chão.
+     */
+    chunkSize: 128,
     chunkSegments: 32,
 
     /** Relevo base: fBm de ruído gradiente. */
@@ -146,6 +155,14 @@ export const CONFIG = {
 
     /** Altura máxima de voo antes do drone perder empuxo (ar rarefeito). */
     ceiling: 320,
+
+    /** Cores do chão, misturadas por altura e inclinação. */
+    palette: {
+      grass: 0x6d8862,
+      sand: 0xab9a77,
+      rock: 0x8d8b85,
+      water: 0x18323f,
+    },
 
     /** Densidade de props por chunk (multiplicada pelo tier de qualidade). */
     propDensity: 1.0,
@@ -234,8 +251,8 @@ export const CONFIG = {
         shadowMapSize: 2048,
         post: true,
         postEffects: { barrel: true, chromatic: true, vignette: true, noise: true },
-        viewChunks: 5,
-        drawDistance: 1400,
+        viewChunks: 4,
+        drawDistance: 1600,
         propDensity: 1.0,
         dustCount: 900,
         anisotropy: 4,
@@ -247,8 +264,8 @@ export const CONFIG = {
         shadowMapSize: 1024,
         post: true,
         postEffects: { barrel: true, chromatic: false, vignette: true, noise: true },
-        viewChunks: 4,
-        drawDistance: 1000,
+        viewChunks: 3,
+        drawDistance: 1200,
         propDensity: 0.75,
         dustCount: 600,
         anisotropy: 2,
@@ -261,7 +278,7 @@ export const CONFIG = {
         post: true,
         postEffects: { barrel: true, chromatic: false, vignette: true, noise: false },
         viewChunks: 3,
-        drawDistance: 720,
+        drawDistance: 900,
         propDensity: 0.5,
         dustCount: 320,
         anisotropy: 1,
@@ -274,7 +291,7 @@ export const CONFIG = {
         post: false,
         postEffects: { barrel: false, chromatic: false, vignette: false, noise: false },
         viewChunks: 2,
-        drawDistance: 480,
+        drawDistance: 620,
         propDensity: 0.28,
         dustCount: 140,
         anisotropy: 1,

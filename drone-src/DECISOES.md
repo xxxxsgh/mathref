@@ -37,3 +37,47 @@ em iPad e tem menos dependência**.
 - Loop de física fixo em 60 Hz com render desacoplado. ✅
 - 4 tiers detectados por GPU/resolução/núcleos, com override por `?q=`. ✅
 - Cena com grid + contador de FPS. ✅
+
+## Fase 1 — Voo FPV
+
+- **A mecânica central não é código, é consequência.** O empuxo aponta pro +Y
+  *local* do drone; inclinar pra frente já inclina o vetor junto, ganhando
+  componente horizontal e perdendo vertical. Não existe nenhuma regra escrita
+  dizendo "ao inclinar, acelere e afunde" — e é por isso que fica legível sem HUD.
+- **ANGLE por erro de quaternion, não por ângulos de Euler.** Sem gimbal lock, e
+  ao voltar de cabeça pra baixo o controlador acha o caminho curto em vez de
+  rodar o longo.
+- **Duas meia-vidas de rotação:** o drone *atinge* a taxa pedida em 0,045 s e só
+  *para* em 0,11 s. Essa assimetria é o que faz o ACRO ter peso em vez de parecer
+  preso num trilho.
+- **Acelerador: catraca no teclado, mola no analógico.** Stick centrado = pairar,
+  porque um controle que auto-centraliza faria o drone despencar toda vez que a
+  mão sai; teclado segura o valor, como um rádio de verdade.
+- **Poeira sem CPU:** as partículas ficam paradas e o shader repete a caixa em
+  volta do drone com um `mod`. Cauda deslocada pela velocidade → parado é ponto,
+  rápido é risco. Zero atualização por frame pra 900 partículas.
+- **Colisão distingue raspão de batida.** Encostar num poste devagar empurra pra
+  fora e tira velocidade; bater acima de 7,5 m/s quebra. Sem isso o jogo viraria
+  "evite o cenário" em vez de "rasgue por dentro dele".
+- **Sol atrás da proa inicial.** Contraluz transformava todos os props em
+  silhuetas pretas — e são justamente eles que dão a referência de velocidade.
+- **Distorção de barril renormalizada** pelo fator do canto: mantém as linhas
+  arqueadas da lente sem deixar moldura preta comendo o quadro.
+- **Props são prioridade, não enfeite.** Espalhados em grade com jitter em vez de
+  aleatório puro: aleatório puro amontoa e deixa vazios, e é o vazio que mata a
+  sensação de velocidade.
+
+### Aceite verificado (`npm run test:aceite`, 9/9)
+
+O aceite da fase é sobre sensação, que não se automatiza — mas as afirmações
+físicas por trás dela sim. O script pilota pelo teclado e mede:
+
+- Acelerador solto mantém a altura (0,02 m/s de deriva vertical). ✅
+- Inclinar pra frente: 8 → 44 km/h **e** afunda ~2 m/s. A troca existe. ✅
+- FOV acompanha a velocidade (101° → 106°). ✅
+- ANGLE nivela sozinho (0°); ACRO mantém 3,3 rad/s de giro residual e segue
+  inclinado 1,4 s depois. Os dois modos são claramente diferentes. ✅
+- Bater vira crash; respawn é automático, sem menu. ✅
+
+Falta um humano para os critérios 1, 3 e 4 (sentir velocidade sem HUD, mergulho
+difícil-mas-justo, 60 fps num iPad real) — aqui só há GPU por software.

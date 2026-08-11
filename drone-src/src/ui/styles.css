@@ -84,3 +84,227 @@ body {
   color: var(--fg);
   font-weight: 600;
 }
+
+/* ─── HUD ─────────────────────────────────────────────────────────────── */
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#hud-mode {
+  position: absolute;
+  top: calc(10px + var(--safe-t));
+  left: calc(14px + var(--safe-l));
+}
+
+.tag {
+  display: inline-block;
+  padding: 3px 9px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  background: #0a0d12aa;
+}
+
+/* ACRO muda de cor porque a diferença de pilotagem é grande demais pra ser
+   sinalizada só por texto — a cor é vista com o canto do olho. */
+.tag.acro {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+#hud-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+/* Retículo mínimo: marca o centro da lente sem virar mira de jogo de tiro. */
+.reticle {
+  width: 26px;
+  height: 26px;
+  border: 1px solid #ffffff2e;
+  border-radius: 50%;
+  position: relative;
+}
+
+.reticle::after {
+  content: '';
+  position: absolute;
+  inset: 11px;
+  background: #ffffff4d;
+  border-radius: 50%;
+}
+
+.banner {
+  margin-top: 18px;
+  font-size: clamp(20px, 4vw, 34px);
+  letter-spacing: 0.16em;
+  color: var(--accent);
+  text-shadow: 0 2px 14px #000c;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+}
+
+.banner.on {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.banner.danger {
+  color: var(--danger);
+}
+.banner.acro {
+  color: var(--warn);
+}
+.banner.gold {
+  color: var(--gold);
+}
+
+#hud-bottom {
+  position: absolute;
+  left: calc(14px + var(--safe-l));
+  right: calc(14px + var(--safe-r));
+  bottom: calc(14px + var(--safe-b));
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  text-shadow: 0 1px 4px #000b;
+}
+
+.gauge {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.gauge.center {
+  flex: 1;
+  justify-content: center;
+}
+
+.gauge.right {
+  justify-content: flex-end;
+}
+
+.gauge .label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+
+.gauge .value {
+  font-size: 14px;
+  color: var(--fg);
+}
+
+.gauge .value.big {
+  font-size: clamp(24px, 3.4vw, 34px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.bar {
+  width: 92px;
+  height: 7px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+  background: #0006;
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+
+.bar i.warn {
+  background: var(--warn);
+}
+
+/* Piscar é reservado pro crítico: se avisasse antes, o jogador aprenderia a
+   ignorar justamente o aviso que importa. */
+.bar i.critical {
+  background: var(--danger);
+  animation: pulse 0.7s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ─── Controles de toque ──────────────────────────────────────────────── */
+#touch {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+}
+
+.stick {
+  position: absolute;
+  width: 132px;
+  height: 132px;
+  margin: -66px 0 0 -66px;
+  border: 1px solid #ffffff26;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+
+.stick.on {
+  opacity: 1;
+}
+
+.stick i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 50%;
+  background: #35e0c833;
+  border: 1px solid var(--accent);
+}
+
+#touch-buttons {
+  position: absolute;
+  top: calc(10px + var(--safe-t));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+}
+
+#touch-buttons button {
+  pointer-events: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 7px 11px;
+}
+
+#touch-buttons button:active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
