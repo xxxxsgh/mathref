@@ -221,3 +221,41 @@ difícil-mas-justo, 60 fps num iPad real) — aqui só há GPU por software.
 - Leve × cargueiro: 90° de rolagem em 0,23 s contra 0,40 s — **1,72× mais
   lento**, medido rodando o modelo de voo de verdade, não uma fórmula paralela. ✅
 - Desinstalar devolve o arrasto ao normal e mantém o tier comprado. ✅
+
+## Fase 6 — Risco, dano e clima
+
+- **Dano por peça, não barra de integridade.** Cada avaria tem um sintoma
+  reconhecível sem ler HUD: hélice puxa pro lado, câmera suja a imagem, bateria
+  esvazia mais rápido. Uma barra genérica não ensinaria o piloto a decidir se
+  continua ou volta.
+- **O puxão da hélice é sempre pro mesmo lado.** Um desvio que muda de direção
+  seria impossível de compensar e viraria frustração, não dificuldade.
+- **A imagem avariada usa o MESMO caminho da perda de sinal.** Um só lugar no
+  shader degrada o feed, seja a causa distância ou lente quebrada.
+- **O risco é a carga e a conta, não a morte.** Crash forte destrói a carga da
+  missão e gera custo de reparo pago na base. Morrer não custa nada — perder a
+  entrega de 420 cr custa.
+- **Reparo só na base.** É o que dá peso a continuar voando avariado em vez de
+  voltar.
+- **Clima muda quatro coisas de uma vez** — visibilidade, vento, peso e luz — pra
+  que noite com chuva seja outra missão e não a mesma com filtro. Chuva: 92 m de
+  visibilidade, vento ×1,5, drone encharcado mais pesado. Névoa: 48 m com ar
+  parado (dá pra voar rápido, se souber o caminho). Vento forte: visibilidade
+  cheia e ×2,6 de rajada, todo o trabalho é correção. Noite: luz a 12%, o farol
+  do drone vira a única referência.
+- **Ciclo dia/noite por missão, nunca global.** Um relógio andando no mundo todo
+  faria o jogador esperar a hora certa pra jogar o que quer — o oposto de "mais
+  uma tentativa".
+- **Chuva cai inclinada pelo vento.** Chuva reta com vento forte denuncia na hora
+  que são dois sistemas que não se falam.
+- **Modo sem risco é o mesmo voo sem conta pra pagar** — não um modo mais fácil.
+
+### Aceite verificado (`npm run test:aceite`, 36/36)
+
+- Bater forte avaria peças e gera conta de reparo. ✅
+- Hélice quebrada gera giro parasita com o stick centrado (0 → 0,4 rad/s):
+  a avaria muda o voo, não só acende um aviso. ✅
+- Crash com carga perde a carga e cancela a entrega. ✅
+- Modo sem risco não avaria nem cobra. ✅
+- Os cinco climas diferem em visibilidade (48–252 m), vento (×0,35–×2,6) e luz
+  simultaneamente. ✅

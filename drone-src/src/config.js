@@ -319,6 +319,39 @@ export const CONFIG = {
   },
 
   // ══════════════════════════════════════════════════════════════════════
+  // DAMAGE — o custo do risco. Desligável no modo "sem risco".
+  // ══════════════════════════════════════════════════════════════════════
+  DAMAGE: {
+    /** Impacto (m/s) acima do crash que já causa dano total numa peça. */
+    severeSpeed: 16,
+    /** Fatia do dano que cada peça leva num impacto pleno. */
+    propellerShare: 0.7,
+    cameraShare: 0.45,
+    batteryShare: 0.3,
+
+    /** Puxão de hélice quebrada (rad/s), sempre pro mesmo lado. */
+    yawPull: 0.55,
+    rollPull: 0.42,
+
+    /** Consumo extra com a bateria avariada, em fração. */
+    batteryDrainPenalty: 0.85,
+
+    /** Custo de reparo com a peça 100% avariada. */
+    repairCostPerPart: 260,
+    /** Fração do pagamento perdida ao destruir a carga de uma missão. */
+    cargoLossPenalty: 1.0,
+  },
+
+  // ══════════════════════════════════════════════════════════════════════
+  // WEATHER — clima e hora. Por missão, nunca global.
+  // ══════════════════════════════════════════════════════════════════════
+  WEATHER: {
+    headlightIntensity: 46,
+    /** Meia-vida da transição entre presets. */
+    blendHalfLife: 0.45,
+  },
+
+  // ══════════════════════════════════════════════════════════════════════
   // AUDIO — o motor é metade da sensação de pilotar. Fase 7.
   // ══════════════════════════════════════════════════════════════════════
   AUDIO: {

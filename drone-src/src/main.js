@@ -23,6 +23,8 @@ import { Stage } from './missions/Stage.js';
 import { MissionBoard } from './ui/MissionBoard.js';
 import { Hangar } from './ui/Hangar.js';
 import { computeSpec, buyUpgrade, setEquipped } from './meta/Loadout.js';
+import { Damage } from './flight/Damage.js';
+import { Weather, WEATHER_PRESETS } from './world/Weather.js';
 import { HUD, toKmh } from './ui/HUD.js';
 
 /**
@@ -123,6 +125,8 @@ class Game {
     this.board = new MissionBoard(this.ui, this.missions, this.save, (id) =>
       this.missions.start(id),
     );
+    this.damage = new Damage(this.save);
+    this.weather = new Weather(this.scene, this.world, this.quality);
     this.hangar = new Hangar(this.ui, this.save, () => this.applyLoadout());
     this.applyLoadout();
 
@@ -244,7 +248,7 @@ class Game {
 
     // O vento é sentido conforme a estabilidade da build: hélices agressivas e
     // chassi leve são sacudidos muito mais que um cargueiro.
-    this._windAt.multiplyScalar(this.spec.windScale);
+    this._windAt.multiplyScalar(this.spec.windScale * this.weather.windScale);
 
     this._env.wind = this._windAt;
     this._env.rateScale = this.spec.rateScale;
@@ -252,12 +256,16 @@ class Game {
     this._env.thrustScale = this.battery.thrustScale * this.spec.thrustScale;
     // Carga entra como massa: mais inércia de rotação, menos empuxo por quilo e
     // menos autoridade pra corrigir — exatamente o que um drone carregado sente.
-    this._env.massScale = this.spec.massScale * (1 + this.payloadKg / CONFIG.DRONE.massKg / 4);
+    this._env.massScale =
+      this.spec.massScale * this.weather.massScale * (1 + this.payloadKg / CONFIG.DRONE.massKg / 4);
+    // Hélice quebrada puxa pro lado: entra como taxa parasita e o piloto passa
+    // a voar segurando o drone reto.
+    this._env.torqueBias = this.damage.torqueBias();
 
     this.drone.update(dt, axes, this._env);
     this.battery.update(
       dt,
-      this.drone.crashed ? 0 : this.drone.throttle * this.spec.drainScale,
+      this.drone.crashed ? 0 : this.drone.throttle * this.spec.drainScale * this.damage.drainMultiplier,
       this.payloadKg,
     );
 
@@ -273,10 +281,11 @@ class Game {
     if (this.drone.canRespawn) this._respawn();
 
     this.race.update(dt, this.drone, this._prevPosition, this.drone.position);
-    this.pois.update(dt, this.drone.position, this.scene.fog?.far ?? 900);
+    this.pois.update(dt, this.drone.position, this.weather.visibility());
     this.missions.update(dt);
     this.world.update(dt, this.drone.position, this.drone.velocity);
     this.world.updateZone(dt, this.drone.position, this.wind);
+    this.weather.update(dt, this.drone.position, this.drone.quaternion, this.wind);
     this._updateRecharge(dt);
   }
 
@@ -293,6 +302,23 @@ class Game {
     }
     if (this.input.took('missions')) this.board.toggle();
     if (this.input.took('hangar')) this.hangar.toggle();
+    if (this.input.took('weather')) this._cycleWeather();
+    if (this.input.took('noRisk')) {
+      this.save.progress.noRisk = !this.save.progress.noRisk;
+      if (this.save.progress.noRisk) this.damage.clear();
+      this.save.write();
+      this.hud.banner(this.save.progress.noRisk ? 'MODO SEM RISCO' : 'RISCO LIGADO', 1.8);
+    }
+    // Reparar só na base: é lá que a conta é paga, e é o que dá peso à decisão
+    // de continuar avariado em vez de voltar.
+    if (this.input.took('action') && this._repairable) {
+      const result = this.damage.repair();
+      this.hud.banner(
+        result.repaired ? `REPARADO −${result.cost} cr` : `SEM CRÉDITO (${result.cost} cr)`,
+        2.2,
+        result.repaired ? '' : 'danger',
+      );
+    }
     if (this.board.open) {
       for (let i = 1; i <= 5; i++) {
         if (this.input.took(`pick${i}`)) this.board.pickByIndex(i - 1);
@@ -322,7 +348,17 @@ class Game {
     if (onPad && !this.battery.empty) {
       this.battery.recharge(dt, CONFIG.RADIO.rechargePerSecond);
     }
+    this._repairable = onPad && this.damage.any;
     this._onPad = onPad;
+  }
+
+  /** Alterna o clima. Por missão/sessão, nunca um relógio global. */
+  _cycleWeather() {
+    const ids = Object.keys(WEATHER_PRESETS);
+    const index = ids.indexOf(this.weather.presetId ?? 'limpo');
+    const next = ids[(index + 1) % ids.length];
+    const preset = this.weather.set(next);
+    this.hud.banner(preset.name.toUpperCase(), 2.0);
   }
 
   _onMissionEvent(event, payload) {
@@ -377,7 +413,18 @@ class Game {
       if (this.drone.crash()) {
         this.camera.addShake(CONFIG.CAMERA.shakeCrash);
         this.post.flash(0.35, 0xff4d5e);
-        this.hud.banner('CRASH', 1.2, 'danger');
+
+        // O risco real: quebra peça, derruba a carga e gera conta de reparo.
+        const broken = this.damage.applyCrash(hit.impact, hit.normal.y);
+        if (this.payloadKg > 0 && !this.damage.noRisk) {
+          this.payloadKg = 0;
+          this.missions.abort();
+          this.hud.banner('CARGA PERDIDA NO IMPACTO', 2.6, 'danger');
+        } else if (broken) {
+          this.hud.banner(`AVARIA: ${this.damage.describe()}`, 2.4, 'danger');
+        } else {
+          this.hud.banner('CRASH', 1.2, 'danger');
+        }
       }
     } else {
       // Raspão: sacode proporcional ao impacto, sem interromper o voo.
@@ -429,6 +476,7 @@ class Game {
     // A perda de sinal é a MESMA degradação usada pela câmera avariada da
     // Fase 6 — um caminho só pro feed piorar, seja qual for a causa.
     this.post.setSignal(this.radio.signal);
+    this.post.setDamage(this.damage.cameraArtifacts);
     this.camera.setSignal(this.radio.signal);
 
     const poi = this.pois.hudState(this.drone.position);
@@ -510,6 +558,14 @@ class Game {
         payloadKg: this.payloadKg,
         boardOpen: this.board.open,
         done: this.save.progress.missionsDone.length,
+      },
+      risk: {
+        parts: { ...this.damage.parts },
+        repairCost: this.damage.repairCost(),
+        noRisk: this.damage.noRisk,
+        weather: this.weather.presetId ?? 'limpo',
+        windScale: +this.weather.windScale.toFixed(2),
+        visibility: Math.round(this.weather.visibility()),
       },
       loadout: {
         chassis: this.save.progress.chassis,

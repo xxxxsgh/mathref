@@ -615,6 +615,116 @@ check(
   `arrasto instalado ×${equipping.equipped} → desinstalado ×${equipping.removed}, tier comprado ainda ${equipping.owned}`,
 );
 
+// ══════════════════════════════════════════════════════════════════════════
+// FASE 6 — risco, dano e clima
+// ══════════════════════════════════════════════════════════════════════════
+const crashHard = async () =>
+  page.evaluate(() => {
+    const g = globalThis.__DRONEFARER.game;
+    // Impacto forte contra o chão, no mesmo caminho que uma batida de verdade.
+    g._onCollision({ hard: true, impact: 22, normal: { y: 0.9 }, kind: 'terrain' });
+  });
+
+await page.evaluate(() => {
+  const g = globalThis.__DRONEFARER.game;
+  g.save.progress.noRisk = false;
+  g.damage.clear();
+  g.drone.crashed = false;
+});
+await crashHard();
+await page.waitForTimeout(300);
+const damaged = await state();
+check(
+  'Bater forte avaria peças e gera conta de reparo',
+  damaged.risk.parts.helice > 0 && damaged.risk.repairCost > 0,
+  `${Object.entries(damaged.risk.parts).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(' · ')} → ${damaged.risk.repairCost} cr`,
+);
+
+// Hélice quebrada tem que MUDAR o voo, não só acender um aviso.
+const pull = await page.evaluate(() => {
+  const g = globalThis.__DRONEFARER.game;
+  const drone = g.drone;
+  const measure = (bias) => {
+    drone.quaternion.identity();
+    drone.angularVelocity.set(0, 0, 0);
+    drone.crashed = false;
+    drone.mode = 'ACRO';
+    const axes = { throttle: 0.33, pitch: 0, roll: 0, yaw: 0 };
+    for (let i = 0; i < 120; i++) drone.update(1 / 60, axes, { torqueBias: bias });
+    return +drone.angularVelocity.length().toFixed(3);
+  };
+  const healthy = measure(null);
+  const broken = measure(g.damage.torqueBias());
+  return { healthy, broken };
+});
+check(
+  'Hélice quebrada puxa o drone mesmo com o stick centrado',
+  pull.broken > 0.05 && pull.healthy < 0.01,
+  `giro parasita com stick solto: intacto ${pull.healthy} rad/s · avariado ${pull.broken} rad/s`,
+);
+
+// Carga cara + batida = prejuízo. É esse custo que faz pensar duas vezes.
+await page.evaluate(() => {
+  const g = globalThis.__DRONEFARER.game;
+  g.missions.start('entrega-vale');
+  g.payloadKg = 1.4;
+  g.drone.crashed = false;
+});
+await crashHard();
+await page.waitForTimeout(300);
+const lost = await state();
+check(
+  'Crash forte com carga perde a carga e cancela a entrega',
+  lost.mission.payloadKg === 0 && lost.mission.id === null,
+  `carga ${lost.mission.payloadKg} kg, missão ${lost.mission.id}`,
+);
+
+// Modo sem risco: mesmo voo, sem conta pra pagar.
+await page.keyboard.press('KeyN');
+await page.waitForTimeout(300);
+await page.evaluate(() => {
+  globalThis.__DRONEFARER.game.damage.clear();
+  globalThis.__DRONEFARER.game.drone.crashed = false;
+});
+await crashHard();
+await page.waitForTimeout(300);
+const safe = await state();
+check(
+  'Modo sem risco (N) treina sem custo: bater não avaria nem cobra',
+  safe.risk.noRisk && safe.risk.repairCost === 0 && safe.risk.parts.helice === 0,
+  `sem risco ${safe.risk.noRisk}, reparo ${safe.risk.repairCost} cr`,
+);
+await page.keyboard.press('KeyN');
+await page.waitForTimeout(200);
+
+// Clima: noite com chuva tem que ser outra missão, não a mesma com filtro.
+const weathers = await page.evaluate(async () => {
+  const g = globalThis.__DRONEFARER.game;
+  const out = {};
+  for (const id of ['limpo', 'chuva', 'nevoa', 'vento', 'noite']) {
+    g.weather.set(id, true);
+    g.weather.update(0.016, g.drone.position, g.drone.quaternion, g.wind);
+    out[id] = {
+      visibility: Math.round(g.weather.visibility()),
+      wind: +g.weather.windScale.toFixed(2),
+      light: +g.world.hemi.intensity.toFixed(2),
+      rain: g.weather.rain.visible,
+    };
+  }
+  g.weather.set('limpo', true);
+  return out;
+});
+check(
+  'Cada clima muda visibilidade, vento e luz ao mesmo tempo',
+  weathers.nevoa.visibility < weathers.limpo.visibility * 0.4 &&
+    weathers.vento.wind > weathers.limpo.wind * 2 &&
+    weathers.noite.light < weathers.limpo.light * 0.3 &&
+    weathers.chuva.rain,
+  Object.entries(weathers)
+    .map(([k, v]) => `${k}: ${v.visibility}m vis · vento ×${v.wind} · luz ${v.light}`)
+    .join('\n     '),
+);
+
 await browser.close();
 server.close();
 

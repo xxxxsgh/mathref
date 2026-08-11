@@ -28,6 +28,8 @@ const ACTION_KEYS = {
   action: ['KeyE', 'Space'], // pegar/soltar carga, fotografar, interagir
   debug: ['F3', 'Backquote'],
   tuner: ['KeyG'],
+  weather: ['KeyK'],
+  noRisk: ['KeyN'],
   nextCircuit: ['BracketRight'],
   prevCircuit: ['BracketLeft'],
   // Números aceitam a missão correspondente com o quadro aberto.
