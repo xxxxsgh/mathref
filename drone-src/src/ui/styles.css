@@ -1,0 +1,1081 @@
+/* ══════════════════════════════════════════════════════════════════════
+   DRONEFARER — UI. Tudo em DOM sobreposto ao canvas: texto nítido em
+   qualquer DPI e zero custo de draw call.
+   ══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --bg: #0a0d12;
+  --fg: #dfe8f2;
+  --dim: #7d8b9c;
+  --accent: #35e0c8;
+  --accent-soft: #35e0c855;
+  --warn: #ffb545;
+  --danger: #ff4d5e;
+  --gold: #ffcf49;
+  --silver: #cfd8e3;
+  --bronze: #d08a4a;
+  --panel: #0d1219e6;
+  --line: #ffffff1f;
+  --mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+  /* Sem realce azul de toque nem seleção acidental durante o voo. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+#view {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Camada de UI: não intercepta ponteiro por padrão. Cada controle que
+   precisa de toque religa `pointer-events` em si mesmo. */
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  padding: calc(12px + var(--safe-t)) calc(14px + var(--safe-r)) calc(12px + var(--safe-b))
+    calc(14px + var(--safe-l));
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ─── Contador de FPS / debug ─────────────────────────────────────────── */
+#fps {
+  position: absolute;
+  top: calc(10px + var(--safe-t));
+  right: calc(14px + var(--safe-r));
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dim);
+  text-align: right;
+  text-shadow: 0 1px 3px #000a;
+  white-space: pre;
+}
+
+#fps b {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* ─── HUD ─────────────────────────────────────────────────────────────── */
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#hud-mode {
+  position: absolute;
+  top: calc(10px + var(--safe-t));
+  left: calc(14px + var(--safe-l));
+}
+
+.tag {
+  display: inline-block;
+  padding: 3px 9px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  background: #0a0d12aa;
+}
+
+/* ACRO muda de cor porque a diferença de pilotagem é grande demais pra ser
+   sinalizada só por texto — a cor é vista com o canto do olho. */
+.tag.acro {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+#hud-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+/* Retículo mínimo: marca o centro da lente sem virar mira de jogo de tiro. */
+.reticle {
+  width: 26px;
+  height: 26px;
+  border: 1px solid #ffffff2e;
+  border-radius: 50%;
+  position: relative;
+}
+
+.reticle::after {
+  content: '';
+  position: absolute;
+  inset: 11px;
+  background: #ffffff4d;
+  border-radius: 50%;
+}
+
+.banner {
+  margin-top: 18px;
+  font-size: clamp(20px, 4vw, 34px);
+  letter-spacing: 0.16em;
+  color: var(--accent);
+  text-shadow: 0 2px 14px #000c;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+}
+
+.banner.on {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.banner.danger {
+  color: var(--danger);
+}
+.banner.acro {
+  color: var(--warn);
+}
+.banner.gold {
+  color: var(--gold);
+}
+
+#hud-bottom {
+  position: absolute;
+  left: calc(14px + var(--safe-l));
+  right: calc(14px + var(--safe-r));
+  bottom: calc(14px + var(--safe-b));
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  text-shadow: 0 1px 4px #000b;
+}
+
+.gauge {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.gauge.center {
+  flex: 1;
+  justify-content: center;
+}
+
+.gauge.right {
+  justify-content: flex-end;
+}
+
+.gauge .label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+
+.gauge .value {
+  font-size: 14px;
+  color: var(--fg);
+}
+
+.gauge .value.big {
+  font-size: clamp(24px, 3.4vw, 34px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.bar {
+  width: 92px;
+  height: 7px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+  background: #0006;
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+
+.bar i.warn {
+  background: var(--warn);
+}
+
+/* Piscar é reservado pro crítico: se avisasse antes, o jogador aprenderia a
+   ignorar justamente o aviso que importa. */
+.bar i.critical {
+  background: var(--danger);
+  animation: pulse 0.7s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ─── Zona, sinal e objetivo ──────────────────────────────────────────── */
+.zone {
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  text-shadow: 0 1px 4px #000b;
+}
+
+.signal {
+  margin-top: 6px;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--dim);
+  width: 84px;
+  transition: opacity 0.3s ease;
+}
+
+.signal span {
+  display: block;
+  height: 3px;
+  background: var(--accent);
+  margin-bottom: 3px;
+  transition: width 0.2s linear;
+}
+
+.signal.warn span {
+  background: var(--warn);
+}
+
+.signal.critical {
+  color: var(--danger);
+}
+
+.signal.critical span {
+  background: var(--danger);
+  animation: pulse 0.5s ease-in-out infinite;
+}
+
+/* Uma linha só, sempre. Objetivo que não cabe numa linha é objetivo mal
+   comunicado, não falta de espaço. */
+#objective {
+  position: absolute;
+  left: 50%;
+  bottom: calc(72px + var(--safe-b));
+  transform: translateX(-50%);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  border-radius: 3px;
+  padding: 6px 12px;
+  white-space: nowrap;
+  max-width: 92vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+#objective.on {
+  opacity: 1;
+}
+
+/* ─── Mapa ────────────────────────────────────────────────────────────── */
+#map {
+  position: absolute;
+  inset: 0;
+  background: #05070ae8;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(20px + var(--safe-t)) 20px calc(20px + var(--safe-b));
+}
+
+.map-frame {
+  position: relative;
+  width: min(92vw, 92vh, 900px);
+  aspect-ratio: 1;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #0a0d12;
+}
+
+.map-frame canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.map-head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 12px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  background: linear-gradient(#05070ac9, transparent);
+}
+
+.map-zone {
+  color: var(--accent);
+}
+
+.map-hint {
+  color: var(--dim);
+}
+
+.map-legend {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 9px 12px;
+  font-size: 11px;
+  color: var(--dim);
+  background: linear-gradient(transparent, #05070ac9);
+}
+
+/* ─── Quadro de missões ───────────────────────────────────────────────── */
+#board {
+  position: absolute;
+  inset: 0;
+  background: #05070ae8;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(20px + var(--safe-t)) 16px calc(20px + var(--safe-b));
+}
+
+#board .panel {
+  width: min(720px, 94vw);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+#board header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+#board h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+
+#board .credits {
+  font-size: 13px;
+  color: var(--gold);
+}
+
+#board ul {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#board li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+#board li:hover,
+#board li:active {
+  background: #ffffff0f;
+}
+
+#board li.done {
+  opacity: 0.55;
+}
+
+#board .key {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+#board .body {
+  flex: 1;
+  min-width: 0;
+}
+
+#board .body b {
+  display: block;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+#board .body i {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 2px;
+}
+
+#board .meta {
+  text-align: right;
+  flex: none;
+}
+
+#board .diff {
+  display: block;
+  font-size: 10px;
+  color: var(--warn);
+  letter-spacing: 0.1em;
+}
+
+#board .pay {
+  font-size: 12px;
+  color: var(--gold);
+}
+
+#board footer {
+  padding: 10px 18px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--dim);
+}
+
+/* ─── Hangar ──────────────────────────────────────────────────────────── */
+#hangar {
+  position: absolute;
+  inset: 0;
+  background: #05070aee;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(16px + var(--safe-t)) 14px calc(16px + var(--safe-b));
+}
+
+#hangar .panel {
+  width: min(820px, 96vw);
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+#hangar header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+#hangar h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+
+#hangar .credits {
+  font-size: 13px;
+  color: var(--gold);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  gap: 8px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.stats span {
+  display: block;
+}
+
+.stats i {
+  display: block;
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+
+.stats b {
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.chassis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chassis-card {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 10px;
+}
+
+.chassis-card.active {
+  border-color: var(--accent);
+}
+
+.chassis-card b {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chassis-card i {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--dim);
+  margin: 4px 0 8px;
+  line-height: 1.35;
+}
+
+#hangar ul {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+}
+
+#hangar li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+#hangar .body {
+  flex: 1;
+  min-width: 0;
+}
+
+#hangar .body b {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+#hangar .body em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--warn);
+  letter-spacing: 0.04em;
+}
+
+/* A frase em português é o que ensina a decidir. O número sozinho não. */
+#hangar .body i {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 3px;
+}
+
+.pips {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.pip {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.pip.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Comprado mas desinstalado: existe, está pago, e está fora do drone. */
+.pip.owned {
+  background: #35e0c840;
+  border-color: var(--accent);
+}
+
+.pip:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.builds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+}
+
+#hangar button,
+.builds button {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 7px 11px;
+  cursor: pointer;
+}
+
+#hangar button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#hangar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+#hangar footer {
+  padding: 10px 18px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--dim);
+}
+
+/* ─── Opções ──────────────────────────────────────────────────────────── */
+#options {
+  position: absolute;
+  inset: 0;
+  background: #05070aee;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(16px + var(--safe-t)) 14px calc(16px + var(--safe-b));
+}
+
+#options .panel {
+  width: min(520px, 96vw);
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+#options header,
+#options footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+#options footer {
+  border-bottom: none;
+  border-top: 1px solid var(--line);
+}
+
+#options h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+
+#options .hint {
+  font-size: 11px;
+  color: var(--dim);
+}
+
+#options .rows {
+  padding: 6px 18px 14px;
+}
+
+#options h3 {
+  margin: 16px 0 6px;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  color: var(--dim);
+}
+
+#options .row {
+  display: grid;
+  grid-template-columns: 1fr 150px 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 12px;
+}
+
+#options .row b {
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--accent);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#options input[type='range'] {
+  width: 100%;
+  accent-color: #35e0c8;
+}
+
+#options input[type='checkbox'] {
+  justify-self: start;
+  accent-color: #35e0c8;
+  width: 16px;
+  height: 16px;
+}
+
+#options button {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--danger);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 7px 11px;
+  cursor: pointer;
+}
+
+/* ─── Tutorial ────────────────────────────────────────────────────────── */
+#tutorial {
+  position: absolute;
+  left: 50%;
+  bottom: calc(112px + var(--safe-b));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--warn);
+  border-radius: 4px;
+  padding: 9px 12px;
+  max-width: 92vw;
+  pointer-events: auto;
+}
+
+.tut-step {
+  font-size: 10px;
+  color: var(--warn);
+  letter-spacing: 0.1em;
+}
+
+.tut-text {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#tutorial button {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 4px 8px;
+  cursor: pointer;
+  flex: none;
+}
+
+/* ─── Debug ───────────────────────────────────────────────────────────── */
+#debug {
+  position: absolute;
+  left: calc(14px + var(--safe-l));
+  bottom: calc(78px + var(--safe-b));
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--dim);
+  white-space: pre;
+  text-shadow: 0 1px 3px #000c;
+  pointer-events: none;
+}
+
+/* ─── Corrida ─────────────────────────────────────────────────────────── */
+#hud-race {
+  position: absolute;
+  top: calc(8px + var(--safe-t));
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  text-shadow: 0 1px 5px #000c;
+  min-width: 220px;
+}
+
+.race-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+}
+
+.race-line .circuit {
+  color: var(--accent);
+}
+
+.timer {
+  font-size: clamp(26px, 3.6vw, 38px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+}
+
+/* Antes de largar o cronômetro fica apagado: zerado e branco ele parece que
+   já está contando, e o jogador acha que perdeu tempo parado. */
+.timer.armed {
+  color: var(--dim);
+}
+
+.timer.finished {
+  color: var(--gold);
+}
+
+.delta.good {
+  color: var(--accent);
+}
+
+.delta.bad {
+  color: var(--danger);
+}
+
+.combo {
+  font-size: 15px;
+  color: var(--warn);
+  letter-spacing: 0.08em;
+  transition: opacity 0.18s ease;
+  height: 18px;
+}
+
+/* Seta-guia pro gate atual. */
+.gate-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gate-marker.on {
+  opacity: 0.9;
+}
+
+.gate-marker b {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--accent);
+  transform: translateY(30px);
+  text-shadow: 0 1px 4px #000d;
+  white-space: nowrap;
+}
+
+/* Fora da tela vira triângulo apontando pra onde virar. */
+.gate-marker.off-screen {
+  border-radius: 0;
+  border: none;
+  width: 0;
+  height: 0;
+  border-left: 13px solid transparent;
+  border-right: 13px solid transparent;
+  border-bottom: 22px solid var(--accent);
+}
+
+.gate-marker.off-screen b {
+  display: none;
+}
+
+#finish {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%) scale(0.96);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px 28px;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+#finish.on {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+#finish .medal {
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  color: var(--dim);
+}
+
+#finish .medal.ouro {
+  color: var(--gold);
+}
+#finish .medal.prata {
+  color: var(--silver);
+}
+#finish .medal.bronze {
+  color: var(--bronze);
+}
+
+#finish .finish-time {
+  font-size: 40px;
+  font-variant-numeric: tabular-nums;
+  margin: 4px 0 6px;
+}
+
+#finish .finish-detail {
+  font-size: 12px;
+  color: var(--fg);
+}
+
+#finish .finish-hint {
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 10px;
+}
+
+/* ─── Controles de toque ──────────────────────────────────────────────── */
+#touch {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+}
+
+.stick {
+  position: absolute;
+  width: 132px;
+  height: 132px;
+  margin: -66px 0 0 -66px;
+  border: 1px solid #ffffff26;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+
+.stick.on {
+  opacity: 1;
+}
+
+.stick i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 50%;
+  background: #35e0c833;
+  border: 1px solid var(--accent);
+}
+
+#touch-buttons {
+  position: absolute;
+  top: calc(10px + var(--safe-t));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+}
+
+#touch-buttons button {
+  pointer-events: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 7px 11px;
+}
+
+#touch-buttons button:active {
+  border-color: var(--accent);
+  color: var(--accent);
+}

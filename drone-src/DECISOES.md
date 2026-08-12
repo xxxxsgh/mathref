@@ -1,0 +1,341 @@
+# DRONEFARER — decisões
+
+Uma linha por decisão, na ordem em que foram tomadas. Quando o roadmap deixou a
+escolha em aberto, o critério de desempate foi o combinado: **o que roda melhor
+em iPad e tem menos dependência**.
+
+## Fase 0 — Fundação
+
+- **Física do drone: integração manual (semi-implícita), sem Rapier.** O pedido é
+  arcade com peso, não simulador; um solver de rigid body daria de graça
+  exatamente o realismo que teríamos de desfazer (capotar ao raspar num poste),
+  custando ~1,2 MB de WASM.
+- **Pós-processamento: shader próprio de passe único, sem a lib `postprocessing`.**
+  O feed FPV é barril + aberração cromática + vinheta + ruído — todos efeitos de
+  tela cheia que cabem num fragment shader só. Uma lib faria o mesmo passe com
+  ~45 KB gzip a mais e uma API a aprender.
+- **Terreno: chunks com streaming desde o início, não heightmap único.** A Fase 3
+  exige mundo aberto; começar com heightmap único significaria reescrever
+  terreno, colisão e props no meio do projeto. O custo de começar em chunks é
+  quase zero porque a função de altura é a mesma.
+- **Dependência de runtime única: `three`.** Ruído gradiente e PRNG são ~80 linhas
+  escritas à mão (`world/noise.js`), o que também deixa a função de altura
+  utilizável dentro de um Web Worker sem bundling extra.
+- **Deploy em `/mathref/drone/`,** fonte em `drone-src/` e build commitado em
+  `drone/` — mesmo arranjo já validado pelo Starfarer no mesmo repositório.
+- **Módulos em pastas (`core/`, `flight/`, `world/`, …) em vez de arquivos soltos
+  na raiz.** O roadmap pedia arquivos curtos, não raiz plana; as pastas mantêm os
+  arquivos curtos e ainda dão nomes previsíveis pra achar no iPad.
+- **Timestep fixo em 60 Hz com render desacoplado e interpolação.** Sem isso o
+  ghost gravado num aparelho não bate no outro.
+- **Qualidade adaptativa só desce, nunca sobe sozinha.** Subir de volta faz o jogo
+  oscilar entre dois tiers, e oscilar é pior de jogar que ficar no tier baixo.
+
+### Aceite verificado
+
+- `npm run build` gera `../drone/` com `base: '/mathref/drone/'`. ✅
+- Loop de física fixo em 60 Hz com render desacoplado. ✅
+- 4 tiers detectados por GPU/resolução/núcleos, com override por `?q=`. ✅
+- Cena com grid + contador de FPS. ✅
+
+## Fase 1 — Voo FPV
+
+- **A mecânica central não é código, é consequência.** O empuxo aponta pro +Y
+  *local* do drone; inclinar pra frente já inclina o vetor junto, ganhando
+  componente horizontal e perdendo vertical. Não existe nenhuma regra escrita
+  dizendo "ao inclinar, acelere e afunde" — e é por isso que fica legível sem HUD.
+- **ANGLE por erro de quaternion, não por ângulos de Euler.** Sem gimbal lock, e
+  ao voltar de cabeça pra baixo o controlador acha o caminho curto em vez de
+  rodar o longo.
+- **Duas meia-vidas de rotação:** o drone *atinge* a taxa pedida em 0,045 s e só
+  *para* em 0,11 s. Essa assimetria é o que faz o ACRO ter peso em vez de parecer
+  preso num trilho.
+- **Acelerador: catraca no teclado, mola no analógico.** Stick centrado = pairar,
+  porque um controle que auto-centraliza faria o drone despencar toda vez que a
+  mão sai; teclado segura o valor, como um rádio de verdade.
+- **Poeira sem CPU:** as partículas ficam paradas e o shader repete a caixa em
+  volta do drone com um `mod`. Cauda deslocada pela velocidade → parado é ponto,
+  rápido é risco. Zero atualização por frame pra 900 partículas.
+- **Colisão distingue raspão de batida.** Encostar num poste devagar empurra pra
+  fora e tira velocidade; bater acima de 7,5 m/s quebra. Sem isso o jogo viraria
+  "evite o cenário" em vez de "rasgue por dentro dele".
+- **Sol atrás da proa inicial.** Contraluz transformava todos os props em
+  silhuetas pretas — e são justamente eles que dão a referência de velocidade.
+- **Distorção de barril renormalizada** pelo fator do canto: mantém as linhas
+  arqueadas da lente sem deixar moldura preta comendo o quadro.
+- **Props são prioridade, não enfeite.** Espalhados em grade com jitter em vez de
+  aleatório puro: aleatório puro amontoa e deixa vazios, e é o vazio que mata a
+  sensação de velocidade.
+
+### Aceite verificado (`npm run test:aceite`, 9/9)
+
+O aceite da fase é sobre sensação, que não se automatiza — mas as afirmações
+físicas por trás dela sim. O script pilota pelo teclado e mede:
+
+- Acelerador solto mantém a altura (0,02 m/s de deriva vertical). ✅
+- Inclinar pra frente: 8 → 44 km/h **e** afunda ~2 m/s. A troca existe. ✅
+- FOV acompanha a velocidade (101° → 106°). ✅
+- ANGLE nivela sozinho (0°); ACRO mantém 3,3 rad/s de giro residual e segue
+  inclinado 1,4 s depois. Os dois modos são claramente diferentes. ✅
+- Bater vira crash; respawn é automático, sem menu. ✅
+
+Falta um humano para os critérios 1, 3 e 4 (sentir velocidade sem HUD, mergulho
+difícil-mas-justo, 60 fps num iPad real) — aqui só há GPU por software.
+
+## Fase 2 — Corrida e progressão
+
+- **Passagem por interseção de plano, não por proximidade.** A 130 km/h o drone
+  anda 60 cm por passo de física; um teste de "está perto do gate?" deixaria
+  passar batido em metade das tentativas. Guardamos a posição do passo anterior e
+  vemos se o segmento cruzou o plano — e no sentido certo.
+- **Só o gate ativo é testado.** A ordem é obrigatória, então testar todos seria
+  trabalho jogado fora e deixaria o jogador "passar" no gate 7 por acidente
+  enquanto procura o 3.
+- **Raspar não tira tempo, tira combo.** O roadmap pediu penalidade visual; somar
+  segundos ao cronômetro tornaria o recorde uma mentira. Perder o combo acumulado
+  é um custo real que mantém o relógio honesto.
+- **O cronômetro nunca é "ajudado".** Centro e ritmo pagam em créditos (a moeda
+  da Fase 5), não em desconto de tempo. Tempo é tempo.
+- **Só o fantasma da MELHOR volta é guardado.** Guardar a última faria o jogador
+  correr contra a própria volta ruim.
+- **Ghost em array plano de números arredondados**, não objetos: uma volta de 60 s
+  a 20 Hz cabe em ~35 KB no localStorage em vez de ~140 KB. Cursor que só anda
+  pra frente na reprodução.
+- **Bater NÃO reinicia a volta.** O respawn é automático e o cronômetro continua;
+  a decisão de recomeçar é sempre do jogador, apertando R.
+- **Gate orientado pela bissetriz** entre o traçado que chega e o que sai.
+  Apontá-lo só pro próximo deixaria gates atravessados na cara de quem chega nas
+  curvas, impossíveis de cruzar sem raspar.
+- **Save com migrações incrementais** (1→2→3) e quota tratada: se o localStorage
+  encher, os ghosts são descartados primeiro porque são o maior item e o mais
+  descartável. Falha de escrita nunca quebra o jogo.
+- **Os três circuitos cobram coisas diferentes:** Aberto premia velocidade de
+  ponta, Técnico troca de direção rasante, e Vertical exige ACRO — em ANGLE o
+  limite de 38° trava o mergulho antes de dar tempo de ouro.
+
+### Aceite verificado (`npm run test:aceite`, 17/17)
+
+- R rearma a volta na hora: cronômetro zerado, gate 1 ativo, sem menu. ✅
+- Cruzar o gate 1 larga o cronômetro; passar por todos termina a volta com um
+  split por gate. ✅
+- Recorde, ghost e créditos gravados no fim e **sobrevivem ao recarregar**. ✅
+- Cruzar um gate fora de ordem é ignorado. ✅
+- `]` troca de circuito e rearma. ✅
+
+## Fase 3 — Mundo aberto
+
+- **Zonas por peso, não por fronteira.** Cada zona tem centro e raio, e os
+  parâmetros de relevo/props/atmosfera são a média ponderada. Fronteira dura
+  desenharia uma linha reta no terreno e denunciaria o truque.
+- **As zonas mudam a PILOTAGEM, não a cor.** No vale o relevo é liso e a
+  dificuldade é a estrutura grande (vento canalizado, gaps). Na floresta a
+  densidade de tronco fecha a visibilidade e obriga voo lento e baixo. Na costa o
+  relevo é `ridged` (crista afiada em vez de duna) com térmicas subindo pelas
+  paredes e o dobro de vento — voo alto e longo, onde o adversário é o ar.
+- **Direção do vento interpolada em vetor, não em graus.** A média de 350° com
+  10° dá 180° — exatamente o contrário do certo.
+- **Água em disco, não em plano infinito.** O nível do mar da costa alagaria o
+  vale industrial, cujo relevo oscila em torno do zero. Um disco em volta do
+  centro da zona resolve sem máscara nem shader especial.
+- **Cinco desafios de POI, uma mecânica só:** tocar checkpoints em ordem dentro
+  de um tempo. É a geometria do marco que os diferencia — um checkpoint debaixo
+  do arco vira "passe por baixo da ponte", três descendo o poço viram "entre na
+  mina".
+- **Perda de sinal atenua o comando, não o randomiza.** Um link ruim de verdade
+  para de entregar; o drone segue obedecendo ao último comando que chegou. E o
+  acelerador cai pro ponto de pairar em vez de zerar, porque desligar os motores
+  mataria o drone toda vez — isso seria injusto, não tenso.
+- **A degradação é sempre reversível** e suavizada no tempo: voltar 50 m devolve
+  o sinal, e uma rajada que empurra o drone dois metros não faz a imagem piscar.
+- **O mapa PAUSA o jogo.** Sem pausa, consultar o mapa em voo é sinônimo de
+  bater, e o jogador aprende a nunca abrir o mapa. O relevo é rasterizado uma vez
+  e só a camada dinâmica é redesenhada.
+- **A antena é repetidor.** Descobri-la amplia a cobertura de rádio — explorar
+  compra alcance, o que dá motivo pra ir longe antes de conseguir ir longe.
+
+### Aceite verificado (`npm run test:aceite`, 23/23)
+
+- As três zonas diferem em relevo E em densidade de props (costa 35 m de
+  desnível contra 10 m do vale; floresta com 7,5× mais árvores). ✅
+- Sinal degrada a 1424 m (0.21) e **volta** ao chegar perto da base. ✅
+- Avistar um marco o registra no mapa; cada um oferece um desafio curto. ✅
+- TAB abre o mapa e o jogo pausa (altura idêntica antes e depois). ✅
+
+## Fase 4 — Missões
+
+- **Conteúdo, não sistema novo.** As cinco missões usam o voo, o mundo e a
+  câmera que já existiam. A corrida contratada simplesmente delega pro sistema
+  da Fase 2 e observa o resultado.
+- **A câmera vira mecânica na inspeção.** Não basta chegar perto: é preciso
+  estar na faixa de distância certa E com o ponto centralizado por 1,4 s. É o
+  trabalho real de um drone de inspeção, e a única missão que usa para onde a
+  lente aponta.
+- **O peso da entrega é sentido, não anunciado.** A carga entra como massa no
+  modelo de voo: mais inércia de rotação, menos empuxo por quilo, menos
+  autoridade pra corrigir, e bateria drenando mais rápido.
+- **Pousar exige chegar devagar.** Sem limite de velocidade de toque, "entregar"
+  seria despencar em cima do alvo.
+- **O alvo da busca NÃO é marcado.** A pista é térmica (barra que esquenta com a
+  proximidade) mais fumaça visível só de perto. Marcar no mapa mataria a missão
+  inteira — a busca é o conteúdo.
+- **Na filmagem, sair do enquadramento drena o contador em vez de zerar.** Perder
+  dois segundos numa curva não pode apagar meio minuto de trabalho.
+- **Objetivo é sempre UMA linha que muda de estado** ("aproxime", "centralize",
+  "segurando…") em vez de lista de tarefas. Se não couber numa linha, a missão
+  está mal comunicada — não falta espaço no HUD.
+- **Falhar não abre tela de derrota:** R recomeça a missão na hora. Dentro de uma
+  missão, R reinicia a missão; fora, reinicia a volta.
+
+### Aceite verificado (`npm run test:aceite`, 28/28)
+
+- Os cinco tipos existem e cada um resume o objetivo em menos de 90 caracteres,
+  numa linha só. ✅
+- Aceitar pelo número começa a missão na hora. ✅
+- Pegar a carga muda o peso do drone de verdade; abortar devolve ao normal. ✅
+
+## Fase 5 — Economia e upgrades
+
+- **Comprar ≠ instalar.** `upgrades` guarda o tier comprado (permanente) e
+  `equipped` o que está no drone agora. Essa separação é o que faz o trade-off
+  existir: dá pra tirar a antena tier 3 antes de uma corrida porque o arrasto
+  dela custa velocidade de ponta. Sem poder desinstalar, um upgrade com
+  desvantagem viraria arrependimento permanente — e ninguém compraria.
+- **Nenhuma linha é só vantagem.** Verificado em teste, não só no papel: motores
+  +empuxo/−autonomia, bateria +autonomia/−inércia, hélices +agilidade/−estabilidade
+  no vento, câmera +zoom/−peso na frente, antena +alcance/−arrasto.
+- **Tiers substituem, não empilham.** O tier 3 já é o valor final da linha; somar
+  os três faria a curva explodir.
+- **Multiplicativo, não aditivo.** Dois ganhos de 20% dão 44% e nenhuma
+  combinação zera um multiplicador por acidente.
+- **O modelo de voo não sabe o que é um upgrade.** Tudo vira escala (`rateScale`,
+  `dragScale`, `massScale`…) passada no `env` — a mesma porta por onde a carga da
+  Fase 4 já entrava.
+- **Cada linha mostra o número E uma frase em português.** "+18% de empuxo" não
+  ensina ninguém a decidir; "sai de qualquer buraco — se houver bateria" ensina.
+- **Zoom da câmera é FOV menor,** não escala de imagem: a lente longa enxerga mais
+  longe e enquadra menos, que é o custo real de uma teleobjetiva.
+
+### Aceite verificado (`npm run test:aceite`, 31/31)
+
+- As cinco linhas têm ganho E custo medidos nas escalas de voo. ✅
+- Leve × cargueiro: 90° de rolagem em 0,23 s contra 0,40 s — **1,72× mais
+  lento**, medido rodando o modelo de voo de verdade, não uma fórmula paralela. ✅
+- Desinstalar devolve o arrasto ao normal e mantém o tier comprado. ✅
+
+## Fase 6 — Risco, dano e clima
+
+- **Dano por peça, não barra de integridade.** Cada avaria tem um sintoma
+  reconhecível sem ler HUD: hélice puxa pro lado, câmera suja a imagem, bateria
+  esvazia mais rápido. Uma barra genérica não ensinaria o piloto a decidir se
+  continua ou volta.
+- **O puxão da hélice é sempre pro mesmo lado.** Um desvio que muda de direção
+  seria impossível de compensar e viraria frustração, não dificuldade.
+- **A imagem avariada usa o MESMO caminho da perda de sinal.** Um só lugar no
+  shader degrada o feed, seja a causa distância ou lente quebrada.
+- **O risco é a carga e a conta, não a morte.** Crash forte destrói a carga da
+  missão e gera custo de reparo pago na base. Morrer não custa nada — perder a
+  entrega de 420 cr custa.
+- **Reparo só na base.** É o que dá peso a continuar voando avariado em vez de
+  voltar.
+- **Clima muda quatro coisas de uma vez** — visibilidade, vento, peso e luz — pra
+  que noite com chuva seja outra missão e não a mesma com filtro. Chuva: 92 m de
+  visibilidade, vento ×1,5, drone encharcado mais pesado. Névoa: 48 m com ar
+  parado (dá pra voar rápido, se souber o caminho). Vento forte: visibilidade
+  cheia e ×2,6 de rajada, todo o trabalho é correção. Noite: luz a 12%, o farol
+  do drone vira a única referência.
+- **Ciclo dia/noite por missão, nunca global.** Um relógio andando no mundo todo
+  faria o jogador esperar a hora certa pra jogar o que quer — o oposto de "mais
+  uma tentativa".
+- **Chuva cai inclinada pelo vento.** Chuva reta com vento forte denuncia na hora
+  que são dois sistemas que não se falam.
+- **Modo sem risco é o mesmo voo sem conta pra pagar** — não um modo mais fácil.
+
+### Aceite verificado (`npm run test:aceite`, 36/36)
+
+- Bater forte avaria peças e gera conta de reparo. ✅
+- Hélice quebrada gera giro parasita com o stick centrado (0 → 0,4 rad/s):
+  a avaria muda o voo, não só acende um aviso. ✅
+- Crash com carga perde a carga e cancela a entrega. ✅
+- Modo sem risco não avaria nem cobra. ✅
+- Os cinco climas diferem em visibilidade (48–252 m), vento (×0,35–×2,6) e luz
+  simultaneamente. ✅
+
+## Fase 7 — Áudio
+
+- **Motor somado de harmônicas, não loop com pitch shift.** Quatro osciladores
+  (serra nas graves, quadrada nas agudas) mais ruído filtrado das hélices
+  cortando o ar. É por isso que acelerar soa como esforço e não como um botão de
+  volume: de 71 Hz/760 Hz de corte em marcha lenta para 240 Hz/5700 Hz no talo,
+  as harmônicas altas entrando antes.
+- **Um passa-baixa aberto pelo RPM.** Só o tom subindo soa a brinquedo; é o
+  brilho que dá o esforço.
+- **Vento pela velocidade DO AR, não do solo.** Parado com vento forte na cara
+  também assobia (0,011 → 0,333 de ganho a 30 m/s).
+- **"Parede perto muda o som" é um delay curto realimentado** que só aparece com
+  geometria próxima — reverb de fenda barato, e passar rente a um container é
+  imediatamente reconhecível (0 → 0,50 de eco).
+- **A proximidade sai da consulta de altura que a colisão já faz.** Nenhum
+  raycast novo por frame só pra decidir som.
+- **Música em camadas de ganho, não faixas trocadas.** A transição nunca corta.
+  A camada "tensa" desafina 3% de propósito: dissonância pequena é lida como
+  "algo está errado" sem nenhum aviso na tela. Bateria crítica tem prioridade
+  sobre tudo.
+- **O alerta de bateria carrega a informação no RITMO, não no timbre.** Bipe a
+  cada 1,25 s no aviso e a cada 0,42 s no crítico — vira urgência mesmo pra quem
+  não sabe o que o som significa, e é o que o roadmap pede: reconhecer sem olhar.
+- **Compressor no barramento final.** Motor + vento + música + alerta somados
+  estouram, e estourado soa sujo, não intenso.
+- **Áudio é alimentado no render, não no passo fixo.** Os parâmetros são
+  suavizados por `setTargetAtTime`; amostrar 60 vezes por segundo não melhora
+  nada e só custa chamadas.
+
+### Aceite verificado (`npm run test:aceite`, 40/40)
+
+- Motor sobe de tom E de brilho com o RPM. ✅
+- Vento segue a velocidade do ar. ✅
+- Eco de parede aparece com obstáculo próximo e some longe. ✅
+- Música troca de camada por contexto. ✅
+
+## Fase 8 — Performance, PWA e entrega
+
+- **Auditoria de bundle: o barrel do Three fica.** A regra era trocar por imports
+  específicos *se* o gzip passasse de ~250 KB. Total baixado: **183 KB**
+  (Three 135,1 + jogo 45,3 + CSS 2,9). O Rolldown já faz tree-shaking do barrel —
+  o Three inteiro seria ~170 KB gzip — então a troca custaria legibilidade em 23
+  arquivos sem ganho mensurável.
+- **`lil-gui` por import dinâmico.** São 8,1 KB gzip que viram um chunk separado
+  e nunca são baixados por quem não usa `?debug=1`.
+- **Terreno com orçamento por frame em vez de Web Worker.** A função de altura é
+  pura e barata (~2 ms por chunk), e o streaming já gera no máximo 2 chunks por
+  frame. Um worker acrescentaria serialização de malha e um segundo caminho de
+  código pra resolver um custo que não aparece no perfil. O `world/noise.js` foi
+  escrito sem imports justamente pra que essa porta continue aberta se um dia o
+  perfil mudar.
+- **Killcam mostra 3,5 s dos 8 s gravados, e qualquer comando pula.** 8 s a 0,6×
+  seriam 13 s parado depois de cada batida — isso destruiria o loop de "mais uma
+  tentativa" que a Fase 2 inteira existe pra proteger.
+- **Opções gravam com `flush`, não com o `write` agrupado.** São ações raras do
+  usuário, e recarregar a página logo depois de mexer num controle perdia a
+  escolha (pego pelo teste de aceite).
+- **O primeiro passo do tutorial exige subir a 25 m, não 8 m.** O drone já nasce
+  a ~14 m na largada, e um passo que se completa sozinho ensina que o tutorial
+  pode ser ignorado.
+- **Photo mode reaproveita os eixos do voo.** Quem acabou de pilotar não precisa
+  reaprender nada pra enquadrar; e o "DOF" é bruma atrás do foco, porque um
+  desfoque real custaria um passe com buffer de profundidade pra um efeito que
+  só precisa separar assunto do fundo numa imagem parada.
+- **`preserveDrawingBuffer` fica desligado.** Ligá-lo custa desempenho o tempo
+  todo; o PNG é lido logo depois de um render forçado.
+- **O painel de debug não existe sem `?debug=1`** — nem o DOM é criado.
+
+### Aceite verificado (`npm run test:aceite`, 46/46)
+
+- PWA instalável: manifest `standalone`, 3 ícones, service worker registrado e
+  15 recursos em pré-cache — abre offline. ✅
+- As opções persistem entre sessões. ✅
+- Crash forte dispara a killcam, que pausa a simulação e é pulável. ✅
+- `P` entra no photo mode, some com a HUD e pausa o jogo. ✅
+- Painel de debug só existe atrás do query param. ✅
+
+Os 60 fps num iPad real continuam dependendo de um iPad real: aqui só há GPU por
+software.
