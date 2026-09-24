@@ -1,12 +1,13 @@
 # mathref
 
-Repositório com três sites estáticos publicados pelo GitHub Pages.
+Repositório com quatro sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
 | [`/`](https://xxxxsgh.github.io/mathref/) | **MathRaf** — hub de matemática (`index.html` na raiz) |
 | [`/game/`](https://xxxxsgh.github.io/mathref/game/) | **Starfarer** — jogo 3D de nave espacial |
 | [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
+| [`/futebol/`](https://xxxxsgh.github.io/mathref/futebol/) | **Pixel Futebol 90** — futebol 2D top-down, 5x5, em um único HTML |
 
 ## Publicação
 
@@ -79,3 +80,16 @@ npm run dev          # desenvolvimento
 npm run build        # gera ../drone/
 npm run test:aceite  # 46 critérios de aceite executáveis
 ```
+
+## Pixel Futebol 90
+
+Futebol 2D visto de cima, estilo anos 90, em **um único arquivo**
+([`futebol/index.html`](./futebol/index.html)): HTML5 Canvas + JavaScript puro,
+sem bibliotecas, sem imagens e sem build. Sprites, estádio e sons são gerados
+em código. Publicado como está (a pasta entra no site pela cópia por exclusão).
+
+- 5x5 (goleiro + 4), azul (jogador) x vermelho (IA), 3 níveis de dificuldade
+- Passe, chute com força carregável, carrinho, bola com altura e sombra
+- Laterais, escanteios, tiros de meta, 2 tempos de 3 minutos
+- Teclado: setas + A (passe) S (chute) D (carrinho) Q (troca) — ou WASD + J K L U
+- Celular: joystick virtual + botões
