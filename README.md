@@ -7,6 +7,7 @@ Repositório com três sites estáticos publicados pelo GitHub Pages.
 | [`/`](https://xxxxsgh.github.io/mathref/) | **MathRaf** — hub de matemática (`index.html` na raiz) |
 | [`/game/`](https://xxxxsgh.github.io/mathref/game/) | **Starfarer** — jogo 3D de nave espacial |
 | [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
+| [`/carball/`](https://xxxxsgh.github.io/mathref/carball/) | **Turbo Bola** — futebol de carros 3D (arquivo único) |
 
 ## Publicação
 
@@ -79,3 +80,14 @@ npm run dev          # desenvolvimento
 npm run build        # gera ../drone/
 npm run test:aceite  # 46 critérios de aceite executáveis
 ```
+
+## Turbo Bola
+
+Futebol de carros 3D num único arquivo, [`carball/index.html`](./carball/index.html):
+Three.js para gráficos e cannon-es para física, os dois via CDN, sem build.
+Você (azul) contra a CPU (laranja) numa arena fechada, em partida de 3 minutos
+com gol de ouro em caso de empate. Tem turbo com itens no chão, pulo duplo,
+mortal e rotação no ar, câmera na bola e controles de toque no celular.
+
+Para rodar local basta servir a pasta (`python3 -m http.server`) e abrir
+`/carball/`. Com `#debug` na URL, o estado do jogo fica exposto em `window.__game`.
