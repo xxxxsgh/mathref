@@ -38,6 +38,11 @@ export class UI {
     $('pHelp').onclick = () => { this.click(); $('help').classList.remove('hidden'); };
     $('helpOk').onclick = () => { this.click(); $('help').classList.add('hidden'); };
     $('resNext').onclick = () => { this.click(); $('result').classList.add('hidden'); this.onResultNext && this.onResultNext(); };
+    $('bFull').onclick = () => {
+      this.click();
+      const d = document;
+      try { if (!d.fullscreenElement) d.documentElement.requestFullscreen({ navigationUI: 'hide' }); else d.exitFullscreen(); } catch {}
+    };
     $('resAgain').onclick = () => { this.click(); $('result').classList.add('hidden'); this.onResultAgain && this.onResultAgain(); };
   }
 
@@ -180,6 +185,7 @@ export class UI {
       ${mini('quality', 'Qualidade', [['baixa', 'Baixa'], ['media', 'Média'], ['alta', 'Alta']], 'Recarrega sombras e brilho')}
       ${tog('trail', 'Rastro da bola')}
       ${tog('shake', 'Tremor de câmera')}
+      ${tog('vibrate', 'Vibração', 'No celular, a cada batida')}
       <div class="sgroup">Seu jogador</div>
       <div class="sr"><span>Nome</span><input type="text" maxlength="14" value="${(d.name || 'Você').replace(/"/g, '')}" id="nameIn"></div>
       <div class="sr"><span>Camisa</span>${colors('shirt', [0xf97316, 0xdc2626, 0x2563eb, 0x16a34a, 0x9333ea, 0x0f172a, 0xf5f5f5, 0xec4899])}</div>

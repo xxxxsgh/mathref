@@ -160,12 +160,12 @@ export class Audio {
   }
 
   // ─── locutor ───
-  say(text) {
+  say(text, { pitch = 1, rate = 1.05, queue = false } = {}) {
     if (!this.st.voice || !this.st.sound || !('speechSynthesis' in window)) return;
     try {
-      speechSynthesis.cancel();
+      if (!queue) speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'pt-BR'; u.rate = 1.05; u.volume = Math.min(1, this.st.volume * 1.2);
+      u.lang = 'pt-BR'; u.rate = rate; u.pitch = pitch; u.volume = Math.min(1, this.st.volume * 1.2);
       const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('pt'));
       if (v) u.voice = v;
       speechSynthesis.speak(u);

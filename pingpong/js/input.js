@@ -53,6 +53,12 @@ export class Input {
 
   /** velocidade média nos últimos `win` ms (unidades normalizadas/s, y ajustado pelo aspecto) */
   velocity(win = 90) {
+    // atalhos de teclado para golpes (Z topspin, X corte, C smash)
+    const k = this.keys;
+    const kx = ((k.has('ArrowRight') || k.has('KeyD')) ? 2.2 : 0) - ((k.has('ArrowLeft') || k.has('KeyA')) ? 2.2 : 0);
+    if (k.has('KeyC') || k.has('KeyL')) return { x: kx, y: 4.8 };
+    if (k.has('KeyZ') || k.has('KeyJ')) return { x: kx, y: 3.2 };
+    if (k.has('KeyX') || k.has('KeyK')) return { x: kx, y: -2.2 };
     const now = performance.now();
     const h = this.hist;
     let i = h.length - 1;

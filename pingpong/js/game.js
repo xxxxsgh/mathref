@@ -17,7 +17,7 @@ import { Replay } from './replay.js';
 const COACH = {
   id: 'coach', name: 'Treinador Beto', flag: '🧢', style: 'Treino',
   look: { shirt: 0x334155, accent: 0x22d3ee, shorts: 0x0f172a, skin: 0xe0ac69, hair: 0x3f2a14, hairStyle: 'short', beard: true, number: 0, scale: 1.02 },
-  ai: { move: 6, react: 0.05, readErr: 0, reach: 1.1, consistency: 0.22, power: [4.5, 6], top: [40, 100], back: 0.05, aggression: 0.3, placement: 0.3, smash: 0, depth: 0.4, spinRead: 1 },
+  ai: { errBase: 0.004, move: 6, react: 0.05, readErr: 0, reach: 1.1, consistency: 0.22, power: [4.5, 6], top: [40, 100], back: 0.05, aggression: 0.3, placement: 0.3, smash: 0, depth: 0.4, spinRead: 1 },
 };
 
 export function playerLook(save) {
@@ -242,6 +242,7 @@ export class Game {
     const s = this.session;
     if (side === 0) {
       s.kmhMax = Math.max(s.kmhMax || 0, info.kmh);
+      if (this.settings.vibrate !== false && navigator.vibrate) { try { navigator.vibrate(info.kind === 'smash' ? 35 : info.perfect ? 20 : 10); } catch {} }
       if (this.mode === 'targets') { if (info.perfect) { s.perfects++; this.save.d.stats.perfects++; this.audio.perfect(); } }
       else if (info.perfect) { s.combo++; s.perfects++; this.save.d.stats.perfects++; this.audio.perfect(); }
       else s.combo = 0;
@@ -251,7 +252,14 @@ export class Game {
       this.ui.shotLabel(info.label, `${Math.round(info.kmh)} km/h`, info.color, this.ball, extra);
       this.ui.combo(s.combo);
       if (info.kind === 'smash') { this.cam.shake(0.08); }
-      if (this.mode === 'rally') { s.hits++; }
+      if (this.mode === 'rally') {
+        s.hits++;
+        // o treinador acelera a cada batida
+        const k = Math.min(1, s.hits / 60), ai = this.cpu.ai;
+        ai.power = [4.5 + k * 4.5, 6 + k * 6];
+        ai.aggression = 0.3 + k * 0.5; ai.placement = 0.3 + k * 0.6; ai.smash = k * 0.5;
+        if (s.hits % 10 === 0) { this.ui.flash(`${s.hits} BATIDAS!`, 'O treinador acelerou', '#fbbf24', 1); this.audio.cheer(0.6); this.arena.cheer(0.8); }
+      }
       if (this.mode === 'tutorial') this.tutOnHit(info);
     } else {
       if (info.kind === 'smash') this.cam.shake(0.04);
@@ -325,11 +333,14 @@ export class Game {
     // placar
     this.updateBoard();
     const [a, b] = ref.score;
+    // grito do adversário em pontos bonitos
+    const shout = !me && this.opp.shouts && (big || Math.random() < 0.2);
+    if (shout) this.audio.say(pick(this.opp.shouts), { ...this.opp.voice });
     setTimeout(() => {
-      if (info.gameOver) this.audio.say(`Game. ${info.gameScore[0]} a ${info.gameScore[1]}`);
+      if (info.gameOver) this.audio.say(`Game. ${info.gameScore[0]} a ${info.gameScore[1]}`, { queue: shout });
       else {
         const srv = ref.computeServer();
-        this.audio.say(`${ref.score[srv]} a ${ref.score[1 - srv]}`);
+        this.audio.say(`${ref.score[srv]} a ${ref.score[1 - srv]}`, { queue: shout });
       }
     }, 650);
     if (info.gameOver) {

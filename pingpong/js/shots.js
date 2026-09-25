@@ -46,7 +46,7 @@ export function makeShot(p) {
   const depth = p.depth ?? lerp(K.depth[0], K.depth[1], 0.35 + power * 0.65);
 
   let tx = clamp(p.aimX, -1.3, 1.3) * (W - 0.07);
-  let tz = sign * (0.28 + clamp(depth, 0, 1.08) * (L - 0.33));
+  let tz = sign * (0.3 + clamp(depth, 0, 1.05) * (L - 0.49));
 
   // erro: contato ruim + risco do golpe + dificuldade da bola recebida
   const difficulty = clamp((incomingSpeed - 6) / 10, 0, 1) * 0.5 + clamp(Math.abs(incomingTop) / 300, 0, 1) * 0.35;

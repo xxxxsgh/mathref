@@ -146,12 +146,26 @@ export class CpuController extends Striker {
     const K = KINDS[kind];
     const want = rnd(ai.power[0], ai.power[1]);
     const power = kind === 'smash' ? clamp(0.4 + ai.aggression * 0.6, 0, 1) : clamp((want - K.speed[0]) / (K.speed[1] - K.speed[0]), 0, 1);
+    // pressão: bola rápida, efeito forte e ter que correr aumentam o erro
+    const inSpd = Math.hypot(b.vx, b.vy, b.vz);
+    const inTop = Math.abs(topspinOf(b));
+    const run = clamp(Math.abs(this.bodyVel.x) / ai.move, 0, 1);
+    const pressure = clamp((inSpd - 6) / 7, 0, 1) * 0.5 + run * 0.3 + clamp(inTop / 250, 0, 1) * 0.35 * (1 - ai.spinRead) + clamp(off, 0, 1) * 0.2;
     const info = makeShot({
       ball: b, side: 1, kind, power, aimX, depth,
-      quality: clamp(1 - off * 0.7, 0, 1),
+      quality: clamp((1 - off * 0.7) * (1 - pressure * 0.35), 0, 1),
       spinRead: ai.spinRead, consistency: ai.consistency,
       sidespin: rnd(-20, 20),
     });
+    // erro não forçado
+    const errChance = (ai.errBase ?? 0.05) + pressure * 0.2 * ai.consistency;
+    if (Math.random() < errChance) {
+      const r = Math.random();
+      if (r < 0.45) { b.vy -= rnd(0.9, 1.6); }                          // rede
+      else if (r < 0.8) { b.vy += rnd(0.5, 1.0); b.vz *= 1.12; }         // longa
+      else { b.vx += (Math.random() < 0.5 ? -1 : 1) * rnd(0.9, 1.5); }   // para fora pelo lado
+      info.error = true;
+    }
     this.startFollow(info.kind);
     this.plan = null;
     g.onStrike(1, info);

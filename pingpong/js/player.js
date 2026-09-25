@@ -50,10 +50,23 @@ export class PlayerController extends Striker {
       this.targetY = TY + 0.22;
     }
     if (serving) this.targetY = TY + 0.15;
+    // Compromisso: perto do contato a raquete trava na posição e o gesto
+    // passa a valer só como swing (mira/efeito/força), sem tirar a raquete
+    // do caminho da bola.
+    const lockT = 0.17 + assist * 0.02;
+    if (incoming && this.ttc != null && this.ttc < lockT && this.ttc > -0.12) {
+      if (!this.lock) this.lock = { x: this.pad.x, z: this.pad.z };
+      tx = this.lock.x; tz = this.lock.z;
+    } else if (this.lock) {
+      this.lock = null;
+      this.release = 0.2;
+    }
+    const follow = this.release > 0 ? 9 : 26;
+    this.release = Math.max(0, (this.release || 0) - dt);
     // velocidade da "mão"
     this.padPrev.copy(this.pad);
-    this.pad.x = damp(this.pad.x, tx, 26, dt);
-    this.pad.z = damp(this.pad.z, tz, 22, dt);
+    this.pad.x = damp(this.pad.x, tx, follow, dt);
+    this.pad.z = damp(this.pad.z, tz, follow * 0.85, dt);
     this.pad.y = damp(this.pad.y, this.targetY, 14, dt);
     this.padVel.subVectors(this.pad, this.padPrev).divideScalar(Math.max(dt, 1e-4));
 
@@ -109,6 +122,7 @@ export class PlayerController extends Striker {
     });
     info.perfect = perfect; info.quality = quality;
     this.startFollow(info.kind);
+    this.lock = null; this.release = 0.25;
     g.onStrike(0, info);
     return info;
   }
