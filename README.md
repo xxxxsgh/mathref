@@ -7,6 +7,7 @@ Repositório com três sites estáticos publicados pelo GitHub Pages.
 | [`/`](https://xxxxsgh.github.io/mathref/) | **MathRaf** — hub de matemática (`index.html` na raiz) |
 | [`/game/`](https://xxxxsgh.github.io/mathref/game/) | **Starfarer** — jogo 3D de nave espacial |
 | [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
+| [`/pingpong/`](https://xxxxsgh.github.io/mathref/pingpong/) | **Viciante 3D** — tênis de mesa 3D |
 
 ## Publicação
 
@@ -79,3 +80,18 @@ npm run dev          # desenvolvimento
 npm run build        # gera ../drone/
 npm run test:aceite  # 46 critérios de aceite executáveis
 ```
+
+## Viciante 3D
+
+Tênis de mesa 3D em Three.js, num único `pingpong/index.html` sem build (o
+Three.js vai junto em `pingpong/three.module.min.js`, então não depende de CDN).
+
+- **Partida** contra a CPU em três níveis (Robô Bolinha, Capitão Spin, Mestre
+  Wang), games até 11 com vantagem de 2, 1/3/5 games, saque alternando a cada
+  2 pontos e regras de saque/quique arbitradas.
+- **Rally infinito**: o treinador sempre devolve, cada vez mais rápido; alvos
+  na mesa dão bônus. Recorde salvo.
+- **Progressão**: combos por batidas PERFEITAS (bola no centro da raquete), XP,
+  níveis e 7 raquetes desbloqueáveis. Tudo salvo em `localStorage`.
+- Controle: mouse ou dedo move a raquete; arrastar para cima na batida dá força,
+  para os lados mira. Clique/toque/espaço saca. `Esc`/`P` pausa.
