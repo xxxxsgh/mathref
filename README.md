@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com quatro sites estáticos publicados pelo GitHub Pages.
+Repositório com cinco sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -8,6 +8,7 @@ Repositório com quatro sites estáticos publicados pelo GitHub Pages.
 | [`/game/`](https://xxxxsgh.github.io/mathref/game/) | **Starfarer** — jogo 3D de nave espacial |
 | [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
 | [`/cidades/`](https://xxxxsgh.github.io/mathref/cidades/) | **Gulabpur e Suryaghat** — duas cidades indianas em 3D estilo anime para explorar a pé (um único `index.html`, Three.js via CDN) |
+| [`/planetas/`](https://xxxxsgh.github.io/mathref/planetas/) | **Planetas de Bolso** — Kolkata e Kochi como planetinhas para contornar a pé, com bonde e balsa no equador (um único `index.html`, Three.js via CDN) |
 
 ## Publicação
 
