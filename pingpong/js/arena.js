@@ -106,8 +106,8 @@ export class Arena {
         g.fillStyle = gr; g.fillRect(0, 0, w, h);
       }
     });
-    const court = new THREE.Mesh(new THREE.PlaneGeometry(8, 14), new THREE.MeshStandardMaterial({ map: courtTex, roughness: 0.62, metalness: 0.0, envMapIntensity: 0.6 }));
-    court.rotation.x = -Math.PI / 2; court.position.y = 0.003; court.receiveShadow = true;
+    const court = new THREE.Mesh(new THREE.PlaneGeometry(8, 14), new THREE.MeshStandardMaterial({ map: courtTex, roughness: 0.62, metalness: 0.0, envMapIntensity: 0.6, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }));
+    court.rotation.x = -Math.PI / 2; court.position.y = 0.012; court.receiveShadow = true;
     this.group.add(court);
   }
 
@@ -118,10 +118,10 @@ export class Arena {
     const top = new THREE.Mesh(new RoundedBoxGeometry(2 * W, 0.025, 2 * L, 3, 0.006), this.topMat);
     top.position.y = TY - 0.0125; top.castShadow = top.receiveShadow = true;
     g.add(top);
-    const lineMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.5 });
+    const lineMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 });
     const line = (w, d, x, z) => {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), lineMat);
-      m.rotation.x = -Math.PI / 2; m.position.set(x, TY + 0.0006, z); m.receiveShadow = true; g.add(m);
+      m.rotation.x = -Math.PI / 2; m.position.set(x, TY + 0.0012, z); m.receiveShadow = true; g.add(m);
     };
     line(0.02, 2 * L, -W + 0.01, 0); line(0.02, 2 * L, W - 0.01, 0);
     line(2 * W, 0.02, 0, -L + 0.01); line(2 * W, 0.02, 0, L - 0.01);

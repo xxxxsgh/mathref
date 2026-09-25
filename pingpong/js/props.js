@@ -90,7 +90,7 @@ export class BallView {
     const sh = document.createElement('canvas'); sh.width = sh.height = 64;
     const g = sh.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
     gr.addColorStop(0, 'rgba(0,0,0,.7)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
-    this.blob = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.09), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sh), transparent: true, depthWrite: false }));
+    this.blob = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.09), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sh), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -16 }));
     this.blob.rotation.x = -Math.PI / 2;
     scene.add(this.blob);
     // rastro (fita de triângulos)
@@ -125,7 +125,7 @@ export class BallView {
       this.mesh.quaternion.premultiply(_qq);
     }
     const over = Math.abs(b.x) <= W && Math.abs(b.z) <= L && b.y > TY - 0.01;
-    const gy = over ? TY + 0.0015 : 0.006;
+    const gy = over ? TY + 0.002 : 0.016;
     const h = Math.max(0, b.y - gy);
     this.blob.position.set(b.x, gy, b.z);
     this.blob.scale.setScalar(0.6 + h * 1.4);
@@ -176,7 +176,7 @@ export class FX {
     this.rings = [];
     const rg = new THREE.RingGeometry(0.7, 1, 32);
     for (let i = 0; i < 10; i++) {
-      const m = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+      const m = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -16 }));
       m.rotation.x = -Math.PI / 2; m.visible = false; scene.add(m);
       this.rings.push({ m, life: 0, max: 1, size: 0.1 });
     }

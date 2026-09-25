@@ -31,7 +31,7 @@ async function boot() {
   renderer.shadowMap.enabled = S.quality !== 'baixa';
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(48, 1, 0.05, 80);
+  const camera = new THREE.PerspectiveCamera(48, 1, 0.08, 60);
 
   step(30, 'Montando a mesa…');
   await nextFrame();
@@ -138,6 +138,10 @@ async function boot() {
   }
   requestAnimationFrame(loop);
   window.__vt = { game, save, ui };
+}
+
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 
 boot().catch(e => {

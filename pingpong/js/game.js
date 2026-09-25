@@ -62,6 +62,7 @@ export class Game {
     this.timer = 0;
     this.timeScale = 1;
     this.slow = 0;
+    this.hitstop = 0;
     this.t = 0;
     this.applySkins();
     this.resetPositions();
@@ -235,6 +236,7 @@ export class Game {
     this.audio.paddle(p, side === 0 ? 0.1 : -0.1, Math.abs(info.top) > 150);
     this.audio.whoosh(p);
     this.fx.hitFlash(this.ball.x, this.ball.y, this.ball.z, p);
+    if (info.kind === 'smash') this.hitstop = 0.09; else if (info.perfect) this.hitstop = 0.05;
     this.fx.burst(this.ball.x, this.ball.y, this.ball.z, info.perfect ? 0xfbbf24 : 0xffe2b0, 6 + Math.round(p * 16), 1 + p * 2, 0.35);
     this.replay.event('hit', p);
     const s = this.session;
@@ -462,9 +464,9 @@ export class Game {
   }
   addTarget(d, fixed) {
     const g = new THREE.Group();
-    const ring = new THREE.Mesh(new THREE.RingGeometry(d.r * 0.78, d.r, 40), new THREE.MeshBasicMaterial({ color: d.c, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }));
-    const fill = new THREE.Mesh(new THREE.CircleGeometry(d.r * 0.78, 40), new THREE.MeshBasicMaterial({ color: d.c, transparent: true, opacity: 0.22, depthWrite: false }));
-    const dot = new THREE.Mesh(new THREE.CircleGeometry(d.r * 0.2, 24), new THREE.MeshBasicMaterial({ color: d.c, transparent: true, opacity: 0.8, depthWrite: false }));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(d.r * 0.78, d.r, 40), new THREE.MeshBasicMaterial({ color: d.c, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false , polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -12 }));
+    const fill = new THREE.Mesh(new THREE.CircleGeometry(d.r * 0.78, 40), new THREE.MeshBasicMaterial({ color: d.c, transparent: true, opacity: 0.22, depthWrite: false , polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -12 }));
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(d.r * 0.2, 24), new THREE.MeshBasicMaterial({ color: d.c, transparent: true, opacity: 0.8, depthWrite: false , polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -12 }));
     for (const m of [ring, fill, dot]) { m.rotation.x = -Math.PI / 2; g.add(m); }
     ring.position.y = fill.position.y = dot.position.y = TY + 0.002;
     const t = { ...d, g, x: 0, z: 0 };
@@ -624,7 +626,9 @@ export class Game {
     }
 
     // física
-    if (this.phase !== 'intro') this.physics(dt * this.settings.speed * this.timeScale);
+    let hs = 1;
+    if (this.hitstop > 0) { this.hitstop -= dt; hs = 0.12; }
+    if (this.phase !== 'intro') this.physics(dt * this.settings.speed * this.timeScale * hs);
 
     // temporizadores de fase
     if (this.phase === 'intro') { this.timer -= dt; if (this.timer <= 0) { this.ui.vsCard(null); this.prepareServe(this.ref.server); } }

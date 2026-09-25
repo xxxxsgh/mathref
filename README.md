@@ -83,15 +83,38 @@ npm run test:aceite  # 46 critérios de aceite executáveis
 
 ## Viciante 3D
 
-Tênis de mesa 3D em Three.js, num único `pingpong/index.html` sem build (o
-Three.js vai junto em `pingpong/three.module.min.js`, então não depende de CDN).
+Tênis de mesa 3D em Three.js, em `pingpong/`, **sem build**: módulos ES
+servidos direto (Three.js e addons empacotados em `pingpong/vendor/`, sem
+depender de CDN). Instalável como PWA e jogável offline.
 
-- **Partida** contra a CPU em três níveis (Robô Bolinha, Capitão Spin, Mestre
-  Wang), games até 11 com vantagem de 2, 1/3/5 games, saque alternando a cada
-  2 pontos e regras de saque/quique arbitradas.
-- **Rally infinito**: o treinador sempre devolve, cada vez mais rápido; alvos
-  na mesa dão bônus. Recorde salvo.
-- **Progressão**: combos por batidas PERFEITAS (bola no centro da raquete), XP,
-  níveis e 7 raquetes desbloqueáveis. Tudo salvo em `localStorage`.
-- Controle: mouse ou dedo move a raquete; arrastar para cima na batida dá força,
-  para os lados mira. Clique/toque/espaço saca. `Esc`/`P` pausa.
+**Jogabilidade**
+- Física real da bola: gravidade, arrasto, efeito Magnus e quique com atrito
+  que troca velocidade e rotação — topspin "pula", corte "morre", efeito
+  lateral curva. Rede e bola na fita.
+- Controle por gesto: a raquete segue o mouse/dedo e o **movimento na hora da
+  batida** define o golpe — ↑ topspin, ↑↑ em bola alta smash, parado
+  bloqueio, ↓ push/corte, ↔ mira. Contato no centro da raquete = PERFEITO.
+- O efeito recebido importa: bloquear topspin sem compensar manda a bola
+  longe; bater reto em bola cortada joga na rede. Indicador de efeito no HUD.
+- Saque com lançamento e gesto (cortado, lateral, longo), regras oficiais:
+  let, ace, deuce, rodízio de saque, game/match point.
+
+**Modos**: Carreira com 6 adversários de estilos diferentes (iniciante,
+bloqueadora, topspin, defensora com corte, atacante e o chefão), Partida
+rápida, Rally infinito, Desafio dos alvos (60 s) e Treino guiado.
+
+**Apresentação**: personagens humanoides procedurais com IK de braços e
+pernas e passos com pés plantados; ginásio com torcida animada, placar 3D,
+bloom; replays em câmera lenta; locutor do placar, torcida e música
+sintetizados; loja de raquetes, bolas e mesas; conquistas; recompensa diária;
+personalização do jogador; 3 câmeras e ajustes completos.
+
+| Arquivo | Papel |
+|---|---|
+| `js/physics.js` | integração, Magnus, quique com atrito, solvers de golpe e saque |
+| `js/shots.js` | tipos de golpe, erro, leitura de efeito |
+| `js/player.js` / `js/ai.js` | controle do jogador e IA por estilo |
+| `js/rules.js` | árbitro e pontuação |
+| `js/character.js` | humanoide procedural com IK |
+| `js/game.js` | modos, fases, replay, recompensas |
+| `js/ui.js`, `css/style.css` | menus e HUD |
