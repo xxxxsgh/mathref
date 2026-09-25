@@ -1,0 +1,14 @@
+{
+  "name": "Viciante 3D — Tênis de Mesa",
+  "short_name": "Viciante 3D",
+  "description": "Tênis de mesa 3D com física de efeito real, carreira, desafios e replays.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#05070f",
+  "theme_color": "#05070f",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Viciante 3D — Tênis de Mesa</title>
+<meta name="description" content="Tênis de mesa 3D com física de efeito real, carreira contra 7 adversários, desafios, replays e loja.">
+<meta name="theme-color" content="#05070f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="boot"><div class="boot-in"><div class="boot-logo">🏓</div><div class="boot-t">VICIANTE 3D</div><div class="boot-bar"><i id="bootBar"></i></div><div class="boot-s" id="bootMsg">Montando o ginásio…</div></div></div>
+
+<!-- ═════════ HUD ═════════ -->
+<div id="hud" class="hidden">
+  <div id="board">
+    <div class="bp" id="bp0"><span class="flag" id="bf0">🙂</span><span class="bn" id="bn0">Você</span><span class="srv" id="bs0"></span><span class="bg" id="bg0"></span><b class="bsc" id="bsc0">0</b></div>
+    <div class="bp" id="bp1"><span class="flag" id="bf1">🇧🇷</span><span class="bn" id="bn1">CPU</span><span class="srv" id="bs1"></span><span class="bg" id="bg1"></span><b class="bsc" id="bsc1">0</b></div>
+  </div>
+  <div id="chal" class="hidden"><div class="ch-l" id="chL">Pontos</div><div class="ch-v" id="chV">0</div><div class="ch-s" id="chS"></div></div>
+  <div id="banner" class="hidden"></div>
+  <div id="flash"><div class="ft" id="flashT"></div><div class="fs" id="flashS"></div></div>
+  <div id="labels"></div>
+  <div id="comboBox" class="hidden"><div class="cb-x" id="comboX">x2</div><div class="cb-l">combo perfeito</div></div>
+  <div id="spinBox" class="hidden"><div class="sp-ic" id="spIc"></div><div><div class="sp-t" id="spT">Topspin</div><div class="sp-bar"><i id="spBar"></i></div></div></div>
+  <div id="hint" class="hidden"></div>
+  <div id="tut" class="hidden"><div class="tut-h"><span id="tutStep">1/7</span><span id="tutProg"></span></div><div class="tut-t" id="tutText"></div></div>
+  <div id="replayTag" class="hidden"><span class="rec"></span>REPLAY <small>toque para pular</small></div>
+  <button id="bPause" class="icon-btn" aria-label="Pausar">⏸</button>
+</div>
+
+<!-- VS -->
+<div id="vs" class="hidden">
+  <div class="vs-side vs-l"><div class="vs-av" id="vsAv0">🙂</div><div class="vs-n" id="vsN0">Você</div></div>
+  <div class="vs-mid"><div class="vs-x">VS</div><div class="vs-info" id="vsInfo"></div></div>
+  <div class="vs-side vs-r"><div class="vs-av" id="vsAv1">🇧🇷</div><div class="vs-n" id="vsN1">CPU</div><div class="vs-st" id="vsSt"></div></div>
+</div>
+
+<!-- ═════════ MENUS ═════════ -->
+<div id="ui" class="hidden">
+  <header id="top">
+    <div class="lvl"><div class="lvl-n" id="lvN">1</div><div class="lvl-b"><div class="lvl-t">Nível <span id="lvX">0/80</span></div><div class="bar"><i id="lvBar"></i></div></div></div>
+    <div class="coins" id="coinBox"><span>🪙</span><b id="coinN">0</b></div>
+    <button class="fs-btn" id="bFull" aria-label="Tela cheia">⛶</button>
+  </header>
+
+  <section class="scr" id="s-home">
+    <div class="logo"><div class="logo-t">VICIANTE<span>3D</span></div><div class="logo-s">TÊNIS DE MESA</div></div>
+    <button class="hero" id="goCareer">
+      <div class="hero-l"><div class="hero-k">CARREIRA</div><div class="hero-n" id="heroOpp">Próximo: Tio Juca</div><div class="hero-d" id="heroDesc"></div></div>
+      <div class="hero-r"><div class="hero-av" id="heroAv">🇧🇷</div><div class="hero-go">JOGAR ▶</div></div>
+    </button>
+    <div class="grid">
+      <button class="tile" data-go="quick"><i>⚡</i><b>Partida rápida</b><small>Escolha o rival</small></button>
+      <button class="tile" data-go="chal"><i>🎯</i><b>Desafios</b><small>Recordes</small></button>
+      <button class="tile" data-go="shop"><i>🛍️</i><b>Loja</b><small>Raquetes e mais</small></button>
+      <button class="tile" data-go="ach"><i>🏆</i><b>Conquistas</b><small id="achCount">0/14</small></button>
+      <button class="tile" data-go="tut"><i>🎓</i><b>Treino guiado</b><small>Aprenda os golpes</small></button>
+      <button class="tile" data-go="set"><i>⚙️</i><b>Ajustes</b><small>Som, câmera…</small></button>
+    </div>
+    <div class="stats-row" id="homeStats"></div>
+  </section>
+
+  <section class="scr hidden" id="s-career">
+    <div class="scr-h"><button class="back" data-back>←</button><h2>Carreira</h2><span class="muted" id="careerProg">0/7</span></div>
+    <div class="ladder" id="ladder"></div>
+  </section>
+
+  <section class="scr hidden" id="s-quick">
+    <div class="scr-h"><button class="back" data-back>←</button><h2>Partida rápida</h2></div>
+    <div class="lab">Adversário</div>
+    <div class="opp-pick" id="oppPick"></div>
+    <div class="lab">Duração</div>
+    <div class="seg" id="lenPick"><button data-v="1">1 game</button><button data-v="2" class="on">Melhor de 3</button><button data-v="3">Melhor de 5</button></div>
+    <button class="cta" id="quickGo">JOGAR</button>
+  </section>
+
+  <section class="scr hidden" id="s-chal">
+    <div class="scr-h"><button class="back" data-back>←</button><h2>Desafios</h2></div>
+    <button class="chal-card" id="goRally"><i>♾️</i><div><b>Rally infinito</b><small>O treinador devolve tudo, cada vez mais rápido. 3 vidas.</small></div><span class="best" id="bestRally">0</span></button>
+    <button class="chal-card" id="goTargets"><i>🎯</i><div><b>Alvos</b><small>60 s de máquina de bolas. Acerte os alvos; menores valem mais.</small></div><span class="best" id="bestTargets">0</span></button>
+    <button class="chal-card" id="goTut2"><i>🎓</i><div><b>Treino guiado</b><small>Topspin, corte, mira, smash e saque passo a passo.</small></div><span class="best" id="tutDone"></span></button>
+  </section>
+
+  <section class="scr hidden" id="s-shop">
+    <div class="scr-h"><button class="back" data-back>←</button><h2>Loja</h2></div>
+    <div class="seg" id="shopTabs"><button data-v="paddle" class="on">Raquetes</button><button data-v="ball">Bolas</button><button data-v="table">Mesas</button></div>
+    <div class="shop" id="shopGrid"></div>
+  </section>
+
+  <section class="scr hidden" id="s-ach">
+    <div class="scr-h"><button class="back" data-back>←</button><h2>Conquistas</h2></div>
+    <div class="ach" id="achList"></div>
+  </section>
+
+  <section class="scr hidden" id="s-set">
+    <div class="scr-h"><button class="back" data-back>←</button><h2>Ajustes</h2></div>
+    <div class="set" id="setList"></div>
+  </section>
+</div>
+
+<div id="pause" class="ov hidden"><div class="panel">
+  <h2 class="ov-t">Pausado</h2>
+  <button class="cta" id="pResume">CONTINUAR</button>
+  <button class="sec" id="pRestart">Reiniciar</button>
+  <button class="sec" id="pHelp">Como jogar</button>
+  <button class="sec" id="pQuit">Sair para o menu</button>
+</div></div>
+
+<div id="help" class="ov hidden"><div class="panel help">
+  <h2 class="ov-t">Como jogar</h2>
+  <div class="hl"><b>Mover</b><span>Mouse ou dedo move a raquete. Para cima = mais perto da mesa.</span></div>
+  <div class="hl"><b>Bater</b><span>A batida é automática quando a bola chega na raquete. O <em>gesto</em> na hora decide o golpe:</span></div>
+  <div class="moves">
+    <div><i>⬆️</i><b>Topspin</b><small>deslize para cima</small></div>
+    <div><i>⏫</i><b>Smash</b><small>rápido p/ cima em bola alta</small></div>
+    <div><i>⏺️</i><b>Bloqueio</b><small>parado</small></div>
+    <div><i>⬇️</i><b>Corte / Push</b><small>deslize para baixo</small></div>
+    <div><i>↔️</i><b>Mira</b><small>deslize para o lado</small></div>
+  </div>
+  <div class="hl"><b>Efeito</b><span>Topspin chegando faz bloqueios subirem; corte (backspin) chegando derruba drives na rede. Responda corte com push ou topspin. O indicador no canto mostra o efeito da bola.</span></div>
+  <div class="hl"><b>Perfeito</b><span>Acertar a bola no centro da raquete dá <em>PERFEITO</em> — mais precisão e combo.</span></div>
+  <div class="hl"><b>Saque</b><span>Toque/espaço lança a bola; ao descer, deslize: ↓ cortado, ↔ lateral, ↑ longo.</span></div>
+  <div class="hl"><b>Teclado</b><span>Setas/WASD movem · segure <em>Z</em> topspin, <em>X</em> corte, <em>C</em> smash · Espaço saca · P/Esc pausa</span></div>
+  <button class="cta" id="helpOk">ENTENDI</button>
+</div></div>
+
+<div id="result" class="ov hidden"><div class="panel">
+  <div class="res-badge" id="resBadge">🏆</div>
+  <h2 class="res-t" id="resT">VITÓRIA!</h2>
+  <div class="res-s" id="resS"></div>
+  <div class="res-rows" id="resRows"></div>
+  <div class="res-gain"><div><span>XP</span><b id="resXp">+0</b></div><div><span>Moedas</span><b id="resCoins">+0</b></div></div>
+  <div id="resExtra"></div>
+  <button class="cta" id="resNext">CONTINUAR</button>
+  <button class="sec" id="resAgain">Jogar de novo</button>
+</div></div>
+
+<div id="daily" class="ov hidden"><div class="panel center">
+  <div class="res-badge">🎁</div>
+  <h2 class="ov-t">Recompensa diária</h2>
+  <div class="daily-days" id="dailyDays"></div>
+  <div class="res-s" id="dailyTxt"></div>
+  <button class="cta" id="dailyOk">PEGAR</button>
+</div></div>
+
+<div id="toasts"></div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }
+</script>
+<script type="module" src="js/main.js"></script>
+<noscript>Este jogo precisa de JavaScript.</noscript>
+</body>
+</html>
