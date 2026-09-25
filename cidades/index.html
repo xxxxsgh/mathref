@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Duas Cidades</title>
+  <meta name="description" content="Jaipur e Kolkata como dois planetinhas que dá para dar a volta a pé, cada um com seu trem no equador. Uma cidade cel-shaded no navegador." />
+  <meta name="theme-color" content="#efe6d6" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='22' fill='%23e2957f' stroke='%23231a26' stroke-width='4'/%3E%3Cellipse cx='32' cy='36' rx='30' ry='7' fill='none' stroke='%23231a26' stroke-width='3'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;700&family=Rozha+One&family=Tiro+Devanagari+Hindi&family=Noto+Serif+Bengali:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="main.js"></script>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <section id="home" hidden>
+    <header class="masthead">
+      <h1>Duas Cidades</h1>
+      <p class="intro">Duas cidades indianas, cada uma um planeta pequeno o bastante para dar a volta a pé, cada uma com um trem que nunca para de circular. Escolha uma.</p>
+    </header>
+    <div class="cities"></div>
+    <footer class="foot">
+      <p class="keys">Ande com <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> e o mouse. <kbd>E</kbd> para conversar e embarcar, <kbd>P</kbd> para ver o planeta inteiro. Com som.</p>
+      <p class="touchnote">Ande com o polegar esquerdo, olhe com o direito. Melhor com fones.</p>
+    </footer>
+  </section>
+
+  <div id="card" class="gone">
+    <div class="card-inner">
+      <div class="card-script"></div>
+      <div class="card-latin"></div>
+      <button id="go" disabled>Construindo…</button>
+      <a class="card-back" href="./">Escolher a outra cidade</a>
+    </div>
+  </div>
+
+  <div id="hud" hidden>
+    <div id="toast"><div class="t-native"></div><div class="t-latin"></div><div class="t-desc"></div></div>
+    <div id="mode"></div>
+    <div id="prompt"></div>
+    <div id="talk"><div class="k-who"></div><div class="k-native"></div><div class="k-translit"></div><div class="k-pt"></div></div>
+    <div id="hint">WASD andar · Shift correr · E interagir · V auto · T hora · K chuva · P planeta · M som · H esconder</div>
+    <div id="coords"></div>
+    <div id="touch">
+      <div id="joy"><div id="knob"></div></div>
+      <div id="tbtns">
+        <button data-k="KeyE">E</button><button data-k="KeyP">P</button><button data-k="KeyT">T</button><button data-k="KeyK">K</button><button data-k="KeyM">M</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,12 +1,13 @@
 # mathref
 
-Repositório com três sites estáticos publicados pelo GitHub Pages.
+Repositório com quatro sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
 | [`/`](https://xxxxsgh.github.io/mathref/) | **MathRaf** — hub de matemática (`index.html` na raiz) |
 | [`/game/`](https://xxxxsgh.github.io/mathref/game/) | **Starfarer** — jogo 3D de nave espacial |
 | [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
+| [`/cidades/`](https://xxxxsgh.github.io/mathref/cidades/) | **Duas Cidades** — Jaipur e Kolkata como planetinhas 3D cel-shaded para explorar a pé |
 
 ## Publicação
 
