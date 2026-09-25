@@ -135,6 +135,17 @@ export class Character {
     this.handTargetR = new THREE.Vector3();
     this.handTargetL = new THREE.Vector3();
     this.freeHand = null; // alvo explícito para a mão livre (saque)
+    // sombra de contato (suave, ajuda muito sem shadow map)
+    if (!Character.blobTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const g = c.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(0.6, 'rgba(0,0,0,.25)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+      Character.blobTex = new THREE.CanvasTexture(c);
+    }
+    this.blob = new THREE.Mesh(new THREE.PlaneGeometry(0.9 * s, 0.9 * s), new THREE.MeshBasicMaterial({ map: Character.blobTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -12 }));
+    this.blob.rotation.x = -Math.PI / 2;
+    this.limbs.add(this.blob);
     this.placed = false;
   }
 
@@ -317,6 +328,7 @@ export class Character {
     this.stepFoot(this.footR, this.footL, -stance, dt, f);
     this.stepFoot(this.footL, this.footR, stance, dt, f);
     this.placed = true;
+    this.blob.position.set(this.pos.x, 0.014, this.pos.z);
     this.solveLeg(this.legR, this.footR, -this.hipW);
     this.solveLeg(this.legL, this.footL, this.hipW);
   }

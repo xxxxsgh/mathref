@@ -85,9 +85,21 @@ export class UI {
     const d = this.save.d;
     const next = OPPONENTS[Math.min(d.career, OPPONENTS.length - 1)];
     const done = d.career >= OPPONENTS.length;
-    $('heroOpp').textContent = done ? 'Campeão! Revanche?' : `Próximo: ${next.name}`;
-    $('heroDesc').textContent = done ? 'Você venceu todos. Jogue de novo contra qualquer um.' : `${next.style} · recompensa ${next.reward} 🪙`;
-    $('heroAv').textContent = done ? '👑' : next.flag;
+    if (!d.tutorial && d.stats.played === 0) {
+      $('heroOpp').textContent = 'Comece aqui: Treino guiado';
+      $('heroDesc').textContent = 'Aprenda topspin, corte, mira, smash e saque · +300 🪙';
+      $('heroAv').textContent = '🎓';
+      document.querySelector('.hero-k').textContent = 'PRIMEIRA VEZ';
+      $('goCareer').onclick = () => { this.click(); this.startGame(() => this.game.startTutorial()); };
+    } else {
+      document.querySelector('.hero-k').textContent = 'CARREIRA';
+      $('goCareer').onclick = () => { this.click(); this.go('career'); };
+    }
+    if (d.tutorial || d.stats.played > 0) {
+      $('heroOpp').textContent = done ? 'Campeão! Revanche?' : `Próximo: ${next.name}`;
+      $('heroDesc').textContent = done ? 'Você venceu todos. Jogue de novo contra qualquer um.' : `${next.style} · recompensa ${next.reward} 🪙`;
+      $('heroAv').textContent = done ? '👑' : next.flag;
+    }
     $('achCount').textContent = `${Object.keys(d.ach).length}/${ACHIEVEMENTS.length}`;
     const st = d.stats;
     $('homeStats').innerHTML = [['Vitórias', st.wins], ['Carreira', `${d.career}/6`], ['Rally', st.rallyBest], ['Alvos', st.targetsBest]]
