@@ -5,7 +5,8 @@ import { Sound } from './audio.js';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
-const cfg = CITIES[params.get('city')];
+// ?city=jaipur ou #jaipur (o hash funciona também onde a query string não chega)
+const cfg = CITIES[params.get('city') || location.hash.slice(1)];
 const sound = new Sound();
 
 if (cfg) enterCity(cfg); else showHome();
@@ -50,7 +51,7 @@ function showHome() {
       </div>
       <ol class="route">${c.stations.map((s) => `<li><span class="n" lang="${c.lang}">${s.deva}</span><span class="l">${s.latin}</span></li>`).join('')}</ol>
       <span class="step">Caminhar por ${c.latin} →</span>`;
-    btn.onclick = () => { location.search = '?city=' + c.id; };
+    btn.onclick = () => { home.hidden = true; try { history.replaceState(null, '', '#' + c.id); } catch {} enterCity(c); };
     box.appendChild(btn);
   }
 }
@@ -63,6 +64,7 @@ async function enterCity(cfg) {
   const sc = card.querySelector('.card-script'); sc.textContent = cfg.script; sc.lang = cfg.lang;
   card.querySelector('.card-latin').textContent = `${cfg.latin} — ${cfg.nick}`;
   const go = $('#go');
+  card.querySelector('.card-back').onclick = (e) => { e.preventDefault(); try { history.replaceState(null, '', location.pathname); } catch {} location.reload(); };
 
   const fam = cfg.lang === 'bn' ? '"Noto Serif Bengali"' : '"Tiro Devanagari Hindi"';
   await Promise.race([Promise.all([document.fonts.load(`700 40px ${fam}`, cfg.script), document.fonts.load('700 20px Mukta')]), new Promise((r) => setTimeout(r, 2500))]);
