@@ -34,6 +34,12 @@ export const OPPONENTS = [
     reward: 450, xp: 220, games: 2, voice: { pitch: 1.0, rate: 1.2 }, shouts: ['Vamos!', 'Toma!', 'É smash!', 'Uhul!'],
   },
   {
+    id: 'igawa', name: 'Mario Igawa', flag: '🇯🇵', style: 'Contra-ataque', desc: 'Colado na mesa, reflexo de samurai. Devolve seu ataque ainda mais rápido e grita "Sā!" a cada ponto.',
+    look: { shirt: 0xffffff, accent: 0xdc2626, shorts: 0x0f172a, skin: 0xf1c27d, hair: 0x0a0a0a, hairStyle: 'short', band: 0xdc2626, scale: 0.99, number: 11 },
+    ai: { errBase: 0.036, move: 3.1, react: 0.09, readErr: 0.024, reach: 0.49, consistency: 0.47, power: [7, 11.5], top: [100, 220], back: 0.15, aggression: 0.65, placement: 0.86, smash: 0.8, depth: 0.3, spinRead: 0.88 },
+    reward: 600, xp: 300, games: 2, voice: { pitch: 1.05, rate: 1.15 }, shouts: ['Sā!', 'Yosh!', 'Ikuzo!', 'Chōre!'],
+  },
+  {
     id: 'wang', name: 'Mestre Wang', flag: '🇨🇳', style: 'Lenda', desc: 'Campeão mundial aposentado. Lê cada efeito e coloca a bola onde quer.',
     look: { shirt: 0xdc2626, accent: 0xfbbf24, shorts: 0x7f1d1d, skin: 0xf1c27d, hair: 0x111111, hairStyle: 'short', scale: 1, number: 1 },
     ai: { errBase: 0.03, move: 3.2, react: 0.08, readErr: 0.018, reach: 0.5, consistency: 0.42, power: [7, 12.5], top: [120, 260], back: 0.3, aggression: 0.7, placement: 0.92, smash: 0.95, depth: 0.7, spinRead: 0.95 },

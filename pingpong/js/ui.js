@@ -102,7 +102,7 @@ export class UI {
     }
     $('achCount').textContent = `${Object.keys(d.ach).length}/${ACHIEVEMENTS.length}`;
     const st = d.stats;
-    $('homeStats').innerHTML = [['Vitórias', st.wins], ['Carreira', `${d.career}/6`], ['Rally', st.rallyBest], ['Alvos', st.targetsBest]]
+    $('homeStats').innerHTML = [['Vitórias', st.wins], ['Carreira', `${d.career}/${OPPONENTS.length}`], ['Rally', st.rallyBest], ['Alvos', st.targetsBest]]
       .map(([a, b]) => `<div class="stat"><b>${b}</b><span>${a}</span></div>`).join('');
   }
 
@@ -110,7 +110,7 @@ export class UI {
 
   renderCareer() {
     const d = this.save.d;
-    $('careerProg').textContent = `${Math.min(d.career, 6)}/6`;
+    $('careerProg').textContent = `${Math.min(d.career, OPPONENTS.length)}/${OPPONENTS.length}`;
     $('ladder').innerHTML = OPPONENTS.map((o, i) => {
       const st = i < d.career ? 'done' : i === d.career ? 'cur' : 'lock';
       const btn = st === 'done' ? '✓ Revanche' : st === 'cur' ? 'JOGAR' : '🔒';
