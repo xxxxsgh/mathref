@@ -7,7 +7,7 @@ Repositório com três sites estáticos publicados pelo GitHub Pages.
 | [`/`](https://xxxxsgh.github.io/mathref/) | **MathRaf** — hub de matemática (`index.html` na raiz) |
 | [`/game/`](https://xxxxsgh.github.io/mathref/game/) | **Starfarer** — jogo 3D de nave espacial |
 | [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
-| [`/principe/`](https://xxxxsgh.github.io/mathref/principe/) | **Estrelas que Riem** — a história de *O Pequeno Príncipe* em 3D |
+| [`/ilo/`](https://xxxxsgh.github.io/mathref/ilo/) | **Ilo e o Céu Apagado** — aventura 3D original em mundos pequeninos |
 
 ## Publicação
 
@@ -81,36 +81,40 @@ npm run build        # gera ../drone/
 npm run test:aceite  # 46 critérios de aceite executáveis
 ```
 
-## Estrelas que Riem
+## Ilo e o Céu Apagado
 
-Jogo 3D que conta a história de *O Pequeno Príncipe* (Antoine de
-Saint-Exupéry, 1943), feito do zero em Three.js com estilo próprio: "tinta e
-aquarela" — materiais toon em quatro tons, contorno de tinta, céu de manchas
-de aquarela e textura de papel por cima de tudo. Modelos, música (sintetizada
-em tempo real) e textos são originais.
+Jogo 3D com história, personagens e mundos **originais**, feito do zero em
+Three.js com estilo próprio "tinta e aquarela": materiais toon em quatro tons,
+contorno de tinta, céu de manchas de aquarela e textura de papel por cima de
+tudo. Modelos, música (sintetizada em tempo real) e textos foram criados para
+o jogo.
 
-Cada capítulo é um pequeno planeta esférico com gravidade radial — dá para
-dar a volta no B-612 em poucos passos:
+**A história.** Em Cisco, uma lua do tamanho de um quintal, Ilo mora com a Vó
+Brasa, que mantém o céu aceso com seu braseiro. Uma noite as estrelas começam
+a apagar: cada mundinho vizinho perdeu alguma coisa de que gostava. Ilo monta
+uma pipa, voa de mundo em mundo ajudando os moradores e junta sete faíscas
+para reacender o céu.
+
+Cada capítulo é um pequeno mundo esférico com gravidade própria:
 
 | Capítulo | O que se faz |
 |---|---|
-| Prólogo | O aviador conserta o motor no Saara; o príncipe pede um carneiro (caderno de desenhos) |
-| I · B-612 | Arrancar baobás, limpar vulcões, regar a rosa, levar o biombo, ver o pôr do sol |
-| II · O Rei | Obedecer a ordens razoáveis e julgar o velho rato |
-| III · O Vaidoso | Aplaudir para ele erguer o chapéu |
-| IV · O Bêbado | A conversa em círculo; recolher garrafas |
-| V · O Homem de Negócios | Achar cinco estrelas caídas — e decidir de quem elas são |
-| VI · O Acendedor | Acender e apagar o lampião num planeta que gira a cada 12 s |
-| VII · O Geógrafo | Explorar os lugares marcados e descobrir que as flores são efêmeras |
-| VIII · A Terra | Serpente, flor de três pétalas, o eco da montanha, o jardim de rosas e cativar a raposa |
-| IX · O Poço | Caminhar à noite pelo deserto até o poço |
-| Final | As estrelas que riem |
+| Prólogo · Cisco | Arrancar ervas-de-sombra, varrer chaminés, alimentar o braseiro, desenhar a pipa |
+| I · Relógio | Alcançar o Tique, a engrenagem que fugiu de tanto trabalhar |
+| II · Sinos | Tocar os cinco sinos para o maestro que esqueceu sua música |
+| III · Nevoeiro | Achar os quatro nuvenzinhos da baleia-nuvem Cúmulo |
+| IV · Pinhas | Achar cinco estrelas caídas — e decidir se ficam guardadas ou voltam ao céu |
+| V · Farol | Acender e apagar o farol num mundo onde o dia dura 12 s |
+| VI · Mapas | Descrever o mundo para a cartógrafa toupeira que nunca o viu |
+| VII · Grande Duna | Lagarta de vidro, o cacto, o eco da montanha, o Campo das Lanternas e ganhar a confiança do cervinho Musgo |
+| VIII · A Fonte | Caminhar à noite com Musgo até a Fonte das Estrelas |
+| Final | Soltar as sete faíscas e dar nome à estrela nova |
 
-Entre os asteroides, o príncipe viaja agarrado a um bando de pássaros e colhe
-poeira de estrela — ela vira as estrelas douradas que riem no final.
+Entre os mundos, Ilo voa pendurado na pipa colhendo faíscas soltas — elas
+viram as estrelas douradas que acendem no final.
 
-- Fonte: [`principe/`](./principe) — HTML + módulos ES, **sem build**. O
-  Three.js (r170) está copiado em `principe/vendor/`, então funciona offline.
+- Fonte: [`ilo/`](./ilo) — HTML + módulos ES, **sem build**. O Three.js (r170)
+  está copiado em `ilo/vendor/`, então funciona offline.
 - Controles: WASD/setas, Shift (devagar), Espaço (pular), E (interagir),
   arrastar ou Z/C (câmera). No celular: joystick virtual e botões na tela.
 - O progresso fica salvo no `localStorage`; o menu permite voltar a qualquer
@@ -118,5 +122,5 @@ poeira de estrela — ela vira as estrelas douradas que riem no final.
 
 ```bash
 python3 -m http.server 8080   # na raiz do repositório
-# abrir http://localhost:8080/principe/
+# abrir http://localhost:8080/ilo/
 ```

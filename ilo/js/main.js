@@ -7,7 +7,7 @@ import { World, tangentTo } from './world.js';
 import { CHAPTERS, SPEAKERS } from './chapters.js';
 
 const $ = (s) => document.querySelector(s);
-const SAVE_KEY = 'principe-save-v1';
+const SAVE_KEY = 'ilo-save-v1';
 
 function loadSave() {
   try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || null; } catch { return null; }
@@ -32,7 +32,7 @@ function boot() {
   const saved = loadSave();
   const g = {
     world, ui, sound, input,
-    state: { chapter: 0, max: 0, dust: 0, sunsets: 0, freed: false, ...(saved || {}) },
+    state: { chapter: 0, max: 0, dust: 0, sunsets: 0, sparks: 0, kite: 0, freed: false, ...(saved || {}) },
     timers: [], waiters: [], paused: false, running: false,
 
     save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(g.state)); } catch { /* sem storage */ } },
@@ -125,7 +125,7 @@ function boot() {
   $('#bResume').addEventListener('click', () => setPause(false));
   $('#bToMenu').addEventListener('click', () => { location.reload(); });
   $('#bRestartCh').addEventListener('click', () => {
-    try { sessionStorage.setItem('principe-autostart', String(g.state.chapter)); } catch { /* ok */ }
+    try { sessionStorage.setItem('ilo-autostart', String(g.state.chapter)); } catch { /* ok */ }
     location.reload();
   });
 
@@ -165,7 +165,7 @@ function boot() {
     bc.textContent = `Continuar · ${CHAPTERS[saved.chapter]?.short || ''}`;
     bc.addEventListener('click', () => runFrom(saved.chapter));
   }
-  $('#bNew').addEventListener('click', () => { g.state.dust = 0; g.state.sunsets = 0; g.state.freed = false; runFrom(0); });
+  $('#bNew').addEventListener('click', () => { Object.assign(g.state, { dust: 0, sunsets: 0, sparks: 0, kite: 0, freed: false }); runFrom(0); });
 
   // cena de fundo do menu: um pequeno planeta girando
   CHAPTERS.menuScene(g);
@@ -178,7 +178,7 @@ function boot() {
   addEventListener('keydown', unlockAudio);
 
   let auto = null;
-  try { auto = sessionStorage.getItem('principe-autostart'); sessionStorage.removeItem('principe-autostart'); } catch { /* ok */ }
+  try { auto = sessionStorage.getItem('ilo-autostart'); sessionStorage.removeItem('ilo-autostart'); } catch { /* ok */ }
   const q = new URLSearchParams(location.search).get('cap');
   if (q !== null) auto = q;
   if (auto !== null && CHAPTERS[+auto]) runFrom(+auto);

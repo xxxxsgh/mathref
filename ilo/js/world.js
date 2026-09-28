@@ -1,7 +1,7 @@
 // Motor do jogo: renderizador, céu de tinta, planetas esféricos com gravidade
 // radial, controle do personagem, câmera e interações.
 import * as THREE from 'three';
-import { Prince } from './prince.js';
+import { Hero } from './hero.js';
 import { toon, mesh, flat, PAL, starGeom, glow } from './style.js';
 
 export const DEG = Math.PI / 180;
@@ -80,7 +80,7 @@ void main() {
 
 export const SKIES = {
   space:  { top: '#1a1540', horizon: '#3d2f70', bottom: '#120f2a', nebula: 1.0, stars: 1.0, sun: 0, light: '#fff3dc', lightI: 2.1, hemiSky: '#c9c2ff', hemiGround: '#4a3a66', hemiI: 1.1, amb: 0.35 },
-  b612:   { top: '#1d1a4c', horizon: '#6e5aa6', bottom: '#171335', nebula: 0.9, stars: 1.0, sun: 0, light: '#fff0d8', lightI: 2.2, hemiSky: '#d6c9ff', hemiGround: '#5a4468', hemiI: 1.1, amb: 0.35 },
+  cisco:   { top: '#1d1a4c', horizon: '#6e5aa6', bottom: '#171335', nebula: 0.9, stars: 1.0, sun: 0, light: '#fff0d8', lightI: 2.2, hemiSky: '#d6c9ff', hemiGround: '#5a4468', hemiI: 1.1, amb: 0.35 },
   sunset: { top: '#3a2a6e', horizon: '#ff9f6e', bottom: '#4a2a5c', nebula: 0.35, stars: 0.35, sun: 0, light: '#ffb07a', lightI: 2.3, hemiSky: '#ffc3a0', hemiGround: '#6a3a5a', hemiI: 1.0, amb: 0.3 },
   day:    { top: '#6fa3d8', horizon: '#f6dcb0', bottom: '#e0c08a', nebula: 0.0, stars: 0.0, sun: 1, light: '#fff6e4', lightI: 2.5, hemiSky: '#cfe4ff', hemiGround: '#b89a6a', hemiI: 1.2, amb: 0.4 },
   dusk:   { top: '#2e2d6a', horizon: '#f59a74', bottom: '#5a3a5a', nebula: 0.15, stars: 0.3, sun: 1, light: '#ffb58a', lightI: 2.0, hemiSky: '#ffc8a8', hemiGround: '#6a4a5a', hemiI: 1.0, amb: 0.32 },
@@ -143,9 +143,9 @@ export class World {
     this.stage = new THREE.Group();
     this.scene.add(this.stage);
 
-    this.prince = new Prince();
-    this.prince.addTo(this.scene);
-    this.avatar = this.prince;
+    this.hero = new Hero();
+    this.hero.addTo(this.scene);
+    this.avatar = this.hero;
 
     // brilho-guia
     this.guideObj = new THREE.Group();
@@ -214,21 +214,21 @@ export class World {
     this.stage.clear();
     dispose.forEach((g) => g.dispose());
     this.resetStageState();
-    this.setAvatar(this.prince);
-    this.prince.visible = true;
-    this.prince.pose = 'walk';
-    this.prince.fall = 0;
-    this.prince.wind.set(0, 0, 0);
-    this.prince.resetScarf();
+    this.setAvatar(this.hero);
+    this.hero.visible = true;
+    this.hero.pose = 'walk';
+    this.hero.fall = 0;
+    this.hero.wind.set(0, 0, 0);
+    this.hero.resetScarf();
     this.starU.uBoost.value = 0;
     this.ui.prompt(null);
     this.ui.meter(null);
   }
 
   setAvatar(b) {
-    if (this.avatar && this.avatar !== b && this.avatar !== this.prince) this.avatar.root.visible = true;
+    if (this.avatar && this.avatar !== b && this.avatar !== this.hero) this.avatar.root.visible = true;
     this.avatar = b;
-    if (b !== this.prince && !b.root.parent) this.stage.add(b.root);
+    if (b !== this.hero && !b.root.parent) this.stage.add(b.root);
   }
 
   // ─── céu ───
@@ -336,7 +336,7 @@ export class World {
 
   hook(fn) { this.hooks.push(fn); return fn; }
   unhook(fn) { this.hooks = this.hooks.filter((h) => h !== fn); }
-  addActor(b) { if (!this.actors.includes(b)) this.actors.push(b); if (b !== this.prince && !b.root.parent) this.stage.add(b.root); return b; }
+  addActor(b) { if (!this.actors.includes(b)) this.actors.push(b); if (b !== this.hero && !b.root.parent) this.stage.add(b.root); return b; }
 
   // ─── jogador ───
   spawn(n, towards = null) {
@@ -349,7 +349,7 @@ export class World {
     c.camUp.copy(c.n);
     this.placeAvatar();
     this.snapCamera();
-    this.prince.resetScarf();
+    this.hero.resetScarf();
   }
   get playerPos() { return this.avatar.root.position; }
 
@@ -546,9 +546,9 @@ export class World {
     this.updateSun(dt);
     this.updateGuide(dt);
     this.updateInteract(dt);
-    if (this.prince.visible) {
-      const up = this.planet ? _d.copy(this.prince.root.position).normalize() : Y;
-      this.prince.updateScarf(dt, up);
+    if (this.hero.visible) {
+      const up = this.planet ? _d.copy(this.hero.root.position).normalize() : Y;
+      this.hero.updateScarf(dt, up);
     }
     this.sky.position.copy(this.camera.position);
     this.stars.position.copy(this.camera.position);

@@ -1,5 +1,5 @@
-// Personagens bípedes montados com primitivas: o pequeno príncipe (com o
-// cachecol dourado simulado) e os adultos dos asteroides.
+// Personagens bípedes montados com primitivas: Ilo (com a fita de pipa
+// simulada no pescoço) e os moradores dos mundinhos.
 import * as THREE from 'three';
 import { mesh, flat, toon, PAL, starGeom, blob } from './style.js';
 
@@ -153,47 +153,45 @@ export class Biped {
   }
 }
 
-// ─── o pequeno príncipe ───
+// ─── Ilo ───
 const SCARF_N = 11, SCARF_SEG = 0.09;
 
-export class Prince extends Biped {
+export class Hero extends Biped {
   constructor() {
     super({
       coat: PAL.coat, legs: PAL.coatDark, headR: 0.3, bodyTop: 0.16, bodyBot: 0.29, bodyH: 0.52, legLen: 0.44,
+      boots: 0x3a6a8a,
       decorate: (b) => {
         const r = b.spec.headR;
-        // cabelo em mechas pontudas, cor de trigo
-        const hairMat = { outline: 0.018 };
-        const cap = mesh(new THREE.SphereGeometry(r * 1.04, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.42), PAL.hair, hairMat);
-        cap.position.y = r * 0.06;
-        cap.rotation.x = -0.25;
-        b.head.add(cap);
-        const tuft = new THREE.ConeGeometry(0.075, 0.26, 6);
-        const up = new THREE.Vector3(0, 1, 0);
-        for (let i = 0; i < 13; i++) {
-          const a = (i / 13) * Math.PI * 2;
-          const lat = 0.55 + (i % 3) * 0.22;
-          const dir = new THREE.Vector3(Math.cos(a) * Math.cos(lat), Math.sin(lat), Math.sin(a) * Math.cos(lat) - 0.35).normalize();
-          if (dir.z > 0.55 && dir.y < 0.75) continue; // deixa a franja livre para o rosto
-          const c = mesh(tuft, PAL.hair, hairMat);
-          c.position.copy(dir).multiplyScalar(r * 0.98);
-          c.quaternion.setFromUnitVectors(up, dir);
-          c.rotateX(0.35);
-          b.head.add(c);
+        // cabelo curto escuro, com uma franja arredondada
+        const hair = mesh(new THREE.SphereGeometry(r * 1.04, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), PAL.hair, { outline: 0.018 });
+        hair.rotation.x = -0.35;
+        b.head.add(hair);
+        for (const sd of [-1, 0, 1]) {
+          const lock = mesh(new THREE.SphereGeometry(r * 0.22, 8, 6), PAL.hair, { outline: 0.01 });
+          lock.position.set(sd * r * 0.35, r * 0.55, r * 0.72);
+          b.head.add(lock);
         }
-        // cinto dourado e dragonas em forma de estrela
-        const belt = mesh(new THREE.CylinderGeometry(0.235, 0.245, 0.05, 16), PAL.gold, { outline: 0.012 });
-        belt.position.y = b.hipY + 0.1;
-        b.body.add(belt);
-        const sg = starGeom(0.07, 0.032, 0.03);
-        for (const sd of [-1, 1]) {
-          const st = mesh(sg, PAL.gold, { outline: 0.01 });
-          st.position.set(sd * 0.17, b.shoulderY + 0.07, 0);
-          st.rotation.x = -Math.PI / 2;
-          b.body.add(st);
+        // gorro de tricô laranja com pompom
+        const cap = mesh(new THREE.SphereGeometry(r * 1.1, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.42), PAL.cap, { outline: 0.018 });
+        cap.position.y = r * 0.12;
+        cap.rotation.x = -0.2;
+        const brim = mesh(new THREE.TorusGeometry(r * 0.98, r * 0.12, 8, 24), 0xf4ead5, { outline: 0.012 });
+        brim.rotation.x = Math.PI / 2 - 0.2;
+        brim.position.set(0, r * 0.5, -r * 0.1);
+        const pom = mesh(new THREE.SphereGeometry(r * 0.28, 10, 8), 0xf4ead5, { outline: 0.012 });
+        pom.position.set(0, r * 1.25, -r * 0.25);
+        b.head.add(cap, brim, pom);
+        // botões e bolsa de faíscas
+        for (let i = 0; i < 3; i++) {
+          const bt = flat(new THREE.SphereGeometry(0.025, 6, 4), PAL.gold);
+          bt.position.set(0, b.hipY + 0.12 + i * 0.13, 0.22 - i * 0.025);
+          b.body.add(bt);
         }
-        // gola do cachecol
-        const ring = mesh(new THREE.TorusGeometry(0.13, 0.055, 8, 16), PAL.gold, { outline: 0.015 });
+        const bag = mesh(new THREE.BoxGeometry(0.16, 0.14, 0.08), 0xb07a45, { outline: 0.01 });
+        bag.position.set(0.24, b.hipY + 0.05, 0.05);
+        b.body.add(bag);
+        const ring = mesh(new THREE.TorusGeometry(0.12, 0.045, 8, 16), PAL.ribbon, { outline: 0.015 });
         ring.rotation.x = Math.PI / 2;
         ring.position.y = b.neckY + 0.02;
         b.body.add(ring);
@@ -207,7 +205,7 @@ export class Prince extends Biped {
     const idx = [];
     for (let i = 0; i < SCARF_N - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
     g.setIndex(idx);
-    this.ribbon = new THREE.Mesh(g, toon(PAL.gold, { side: THREE.DoubleSide }));
+    this.ribbon = new THREE.Mesh(g, toon(PAL.ribbon, { side: THREE.DoubleSide }));
     this.ribbon.frustumCulled = false;
     const eg = new THREE.BufferGeometry();
     eg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SCARF_N * 2 * 3), 3));

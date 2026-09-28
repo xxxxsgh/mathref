@@ -5,10 +5,10 @@ const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
 export const THEMES = {
   menu: { root: 62, tempo: 66, prog: [0, 5, 3, 4], pad: 0.05, density: 0.7 },
   desert: { root: 57, tempo: 60, prog: [0, 3, 5, 4], pad: 0.06, density: 0.55 },
-  b612: { root: 64, tempo: 76, prog: [0, 5, 3, 4], pad: 0.05, density: 0.8 },
+  cisco: { root: 64, tempo: 76, prog: [0, 5, 3, 4], pad: 0.05, density: 0.8 },
   flight: { root: 67, tempo: 92, prog: [0, 4, 5, 3], pad: 0.05, density: 0.95 },
-  king: { root: 60, tempo: 70, prog: [0, 4, 0, 5], pad: 0.06, density: 0.6 },
-  vain: { root: 65, tempo: 84, prog: [0, 3, 4, 0], pad: 0.04, density: 0.8 },
+  clock: { root: 60, tempo: 70, prog: [0, 4, 0, 5], pad: 0.06, density: 0.6 },
+  bells: { root: 65, tempo: 84, prog: [0, 3, 4, 0], pad: 0.04, density: 0.8 },
   sad: { root: 55, tempo: 54, prog: [5, 3, 0, 4], pad: 0.07, density: 0.4 },
   business: { root: 62, tempo: 100, prog: [0, 0, 4, 4], pad: 0.04, density: 0.9 },
   lamp: { root: 66, tempo: 110, prog: [0, 3, 4, 5], pad: 0.04, density: 0.85 },
@@ -23,7 +23,7 @@ export class Sound {
   constructor() {
     this.ctx = null;
     this.muted = false;
-    try { this.muted = localStorage.getItem('principe-mute') === '1'; } catch { /* sem storage */ }
+    try { this.muted = localStorage.getItem('ilo-mute') === '1'; } catch { /* sem storage */ }
     this.theme = null;
     this.step = 0;
     this.nextT = 0;
@@ -67,7 +67,7 @@ export class Sound {
 
   toggleMute() {
     this.muted = !this.muted;
-    try { localStorage.setItem('principe-mute', this.muted ? '1' : '0'); } catch { /* ok */ }
+    try { localStorage.setItem('ilo-mute', this.muted ? '1' : '0'); } catch { /* ok */ }
     if (this.master) this.master.gain.setTargetAtTime(this.muted ? 0 : 0.8, this.ctx.currentTime, 0.05);
     return this.muted;
   }

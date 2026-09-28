@@ -1,29 +1,28 @@
 // Utilidades compartilhadas pelos capítulos.
 import * as THREE from 'three';
 import { fbm3, rng, col } from './style.js';
-import { bird, tuft, rock } from './props.js';
+import { kite, tuft, rock } from './props.js';
 import { dirLL, angleBetween, tangentTo } from './world.js';
 import { flight } from './flight.js';
 
 export { dirLL, angleBetween, tangentTo };
 
 export const SPEAKERS = {
-  'Pequeno Príncipe': '#f3c653',
-  'Aviador': '#9ad0ff',
-  'Rosa': '#ff8a9a',
-  'Rei': '#d0a8ff',
-  'Vaidoso': '#ff9ad0',
-  'Bêbado': '#a8d0b0',
-  'Homem de negócios': '#f0e4a0',
-  'Acendedor': '#ffd08a',
-  'Geógrafo': '#d8b890',
-  'Serpente': '#e9cf4a',
-  'Flor': '#f2e6f5',
+  'Ilo': '#4fc3b0',
+  'Vó Brasa': '#ff9a60',
+  'Dona Hora': '#f0d890',
+  'Maestro Badalo': '#f3c653',
+  'Cúmulo': '#c8d8ff',
+  'Seu Pinhão': '#d8a070',
+  'Faroleira Tuca': '#ff8a80',
+  'Tatá': '#d0b0e0',
+  'Vidrilho': '#9fe3e0',
+  'Dona Espinha': '#9ad08a',
   'Eco': '#c8c0e0',
-  'Rosas': '#ff9aaa',
-  'Raposa': '#f5a060',
+  'Lanternas': '#ffc870',
+  'Musgo': '#b8d890',
 };
-export const P = 'Pequeno Príncipe';
+export const I = 'Ilo';
 
 const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 export { ss as smoothstep };
@@ -60,49 +59,34 @@ export function decorate(W, seed, { tufts = 20, rocks = 8, avoid = [], tuftColor
   scatter(W, rocks, seed + 1, (r) => rock(0.6 + r() * 0.9, rockColor), avoid, minAng);
 }
 
-/** Bando de pássaros pousado: ao interagir, parte para o próximo asteroide. */
-export async function departure(g, n, flightArgs, { label = 'Partir com os pássaros', objective = 'Partir com os pássaros selvagens' } = {}) {
+/** A pipa espera no chão: ao interagir, Ilo parte para o próximo mundinho. */
+export async function departure(g, n, flightArgs, { label = 'Subir na pipa', objective = 'Voltar para a pipa' } = {}) {
   const W = g.world;
-  const flock = new THREE.Group();
-  const birds = [];
-  for (let i = 0; i < 6; i++) {
-    const b = bird();
-    b.position.set((i % 3 - 1) * 0.45, 0.15 + (i % 2) * 0.1, Math.floor(i / 3) * 0.45 - 0.2);
-    b.rotation.y = Math.random() * Math.PI;
-    flock.add(b);
-    birds.push(b);
-  }
-  W.place(flock, n);
-  const h = W.hook((dt) => {
-    for (const b of birds) {
-      b.userData.t += dt * 3;
-      const f = Math.max(0, Math.sin(b.userData.t)) * 0.4;
-      b.userData.wings[0].rotation.z = f; b.userData.wings[1].rotation.z = -f;
-    }
-  });
+  const k = kite(g.state.kite || 0);
+  const holder = new THREE.Group();
+  k.position.y = 0.9;
+  k.rotation.x = -1.1;
+  holder.add(k);
+  W.place(holder, n);
+  const h = W.hook((dt, t) => { k.userData.update(t); k.rotation.z = Math.sin(t * 1.5) * 0.1; });
   g.ui.addObjective({ id: 'leave', text: objective });
   W.guide = n;
   let go = false;
-  W.interact({ at: flock, r: 2, label, act: () => { go = true; } });
+  W.interact({ at: holder, r: 2, label, act: () => { go = true; } });
   await g.until(() => go);
   W.unhook(h);
   g.ui.check('leave');
   g.sound.sfx('whoosh');
-  W.prince.pose = 'raise';
+  W.hero.pose = 'raise';
   g.lock();
-  // os pássaros levantam voo
   let t = 0;
   const up = n.clone().normalize();
   const lift = W.hook((dt) => {
     t += dt;
-    for (const b of birds) {
-      b.userData.t += dt * 12;
-      const f = Math.sin(b.userData.t) * 0.8;
-      b.userData.wings[0].rotation.z = f; b.userData.wings[1].rotation.z = -f;
-    }
-    flock.position.addScaledVector(up, dt * 2.5);
+    holder.position.addScaledVector(up, dt * (1 + t * 3));
+    k.userData.update(t * 3);
   });
-  await g.wait(1.4);
+  await g.wait(1.3);
   W.unhook(lift);
   g.unlock();
   await flight(g, flightArgs);
