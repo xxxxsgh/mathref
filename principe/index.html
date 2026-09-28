@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Estrelas que Riem — O Pequeno Príncipe em 3D</title>
+<meta name="description" content="Um jogo 3D feito do zero que conta a história de O Pequeno Príncipe, de Antoine de Saint-Exupéry, planeta por planeta.">
+<meta name="theme-color" content="#1b1640">
+<link rel="icon" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="paper" aria-hidden="true"></div>
+
+<div id="hud" class="hidden">
+  <div id="chapter"></div>
+  <ul id="objectives"></ul>
+</div>
+<div id="stardust" class="hidden" title="Poeira de estrela">✦ <span>0</span></div>
+
+<div id="prompt"></div>
+<div id="meter"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" class="bg"/><circle cx="22" cy="22" r="18" class="fg"/></svg></div>
+<div id="toast"></div>
+
+<div id="dialog" role="dialog" aria-live="polite">
+  <div class="name"></div>
+  <div class="text"></div>
+  <div class="next">▾</div>
+</div>
+<div id="choices"></div>
+
+<div id="sketch">
+  <div class="sheet">
+    <h3>Caderno de desenhos</h3>
+    <p class="hint">Escolha um desenho para mostrar</p>
+    <div class="grid"></div>
+  </div>
+</div>
+
+<div id="card"><div class="kicker"></div><h2></h2><p></p></div>
+<div id="fade"></div>
+
+<div id="touch">
+  <div id="stick"><div id="knob"></div></div>
+  <button id="bJump" aria-label="Pular">⤒</button>
+  <button id="bAct" aria-label="Ação">✦</button>
+</div>
+
+<div id="topbtns" class="hidden">
+  <button id="bMute" aria-label="Som">♪</button>
+  <button id="bPause" aria-label="Pausa">❚❚</button>
+</div>
+
+<div id="menu">
+  <div class="menu-inner">
+    <div class="kicker">uma história em planetas pequenos</div>
+    <h1>Estrelas que Riem</h1>
+    <div class="sub">O Pequeno Príncipe · em 3D</div>
+    <div class="buttons">
+      <button id="bContinue" class="big hidden">Continuar</button>
+      <button id="bNew" class="big">Começar a história</button>
+      <button id="bChapters">Capítulos</button>
+    </div>
+    <div id="chapterList" class="hidden"></div>
+    <div class="help">
+      <span><b>WASD</b>/setas andar</span>
+      <span><b>Shift</b> devagar</span>
+      <span><b>Espaço</b> pular</span>
+      <span><b>E</b> interagir</span>
+      <span><b>arrastar</b> / <b>Z C</b> câmera</span>
+    </div>
+    <div class="credit">Baseado em <i>Le Petit Prince</i> (1943), de Antoine de Saint-Exupéry.<br>Jogo, modelos, música e textos feitos do zero.</div>
+  </div>
+</div>
+
+<div id="pause" class="hidden">
+  <div class="menu-inner small">
+    <h2>Pausa</h2>
+    <div class="buttons">
+      <button id="bResume" class="big">Voltar ao jogo</button>
+      <button id="bRestartCh">Recomeçar capítulo</button>
+      <button id="bToMenu">Menu inicial</button>
+    </div>
+  </div>
+</div>
+
+<div id="boot">carregando estrelas…</div>
+<noscript><p style="color:#fff;padding:2em">Este jogo precisa de JavaScript e WebGL.</p></noscript>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
