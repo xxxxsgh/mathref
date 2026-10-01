@@ -1,12 +1,13 @@
 # mathref
 
-Repositório com três sites estáticos publicados pelo GitHub Pages.
+Repositório com quatro sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
 | [`/`](https://xxxxsgh.github.io/mathref/) | **MathRaf** — hub de matemática (`index.html` na raiz) |
 | [`/game/`](https://xxxxsgh.github.io/mathref/game/) | **Starfarer** — jogo 3D de nave espacial |
 | [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
+| [`/ventania/`](https://xxxxsgh.github.io/mathref/ventania/) | **Ventania** — aventura 3D em mundo aberto (sem build) |
 
 ## Publicação
 
@@ -79,3 +80,20 @@ npm run dev          # desenvolvimento
 npm run build        # gera ../drone/
 npm run test:aceite  # 46 critérios de aceite executáveis
 ```
+
+## Ventania
+
+Aventura 3D em mundo aberto numa ilha ventosa, em Three.js puro com ES modules
+e importmap — **sem etapa de build**: a pasta `ventania/` vai para o ar como
+está. Tudo (modelos, texturas, sons) é gerado por código.
+
+- **Visão, bíblia de arte, regras técnicas e decisões:** [`CLAUDE.md`](./CLAUDE.md)
+
+```bash
+npm install              # na raiz: playwright + three (só ferramentas de dev)
+npm run serve            # http://localhost:8080/ventania/
+npm run shots -- rotulo  # screenshots de 6 ângulos fixos em shots/rotulo/
+npm run feel             # medições do controle (aceleração, pulo, planador…)
+```
+
+`CLAUDE.md`, `package.json`, `tools/` e `shots/` não são publicados.

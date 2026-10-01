@@ -1,0 +1,15 @@
+{
+  "name": "mathref-tools",
+  "private": true,
+  "type": "module",
+  "description": "Ferramentas de desenvolvimento (screenshots com Playwright). Nada aqui é publicado.",
+  "scripts": {
+    "serve": "node tools/serve.mjs",
+    "shots": "node tools/shots.mjs",
+    "feel": "node tools/feel.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1",
+    "three": "0.185.1"
+  }
+}

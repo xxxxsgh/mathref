@@ -5,3 +5,5 @@ node_modules/
 dist/
 # Pasta temporária montada pelo workflow do Pages.
 _site/
+# Screenshots gerados por tools/shots.mjs (Ventania).
+shots/

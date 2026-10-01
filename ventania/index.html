@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ventania</title>
+  <meta name="description" content="Ventania — aventura em mundo aberto numa ilha ventosa. Three.js, sem build." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23ffcf8a'/%3E%3Cpath d='M12 36c10-10 30-10 40 0M18 44c8-6 20-6 28 0' stroke='%23d9581f' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;700&family=Nunito:wght@400;700&display=swap" rel="stylesheet" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --ink: #fff7ea;
+      --ink-dim: rgba(255, 247, 234, 0.72);
+      --glass: rgba(42, 34, 70, 0.38);
+      --glass-strong: rgba(36, 28, 62, 0.72);
+      --accent: #ffcf8a;
+      --accent-2: #d9581f;
+      --shadow: 0 2px 10px rgba(40, 20, 60, 0.35);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #2c2f66; }
+    body { font-family: 'Nunito', system-ui, sans-serif; color: var(--ink); user-select: none; }
+    canvas#game { display: block; width: 100vw; height: 100vh; }
+
+    #hud { position: fixed; inset: 0; pointer-events: none; }
+    #hud.off { display: none; }
+
+    /* Bússola */
+    #compass {
+      position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+      width: min(520px, 70vw); height: 34px; overflow: hidden;
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+              mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+    }
+    #compass::after {
+      content: ''; position: absolute; left: 50%; top: 0; width: 2px; height: 9px;
+      background: var(--accent); transform: translateX(-1px); border-radius: 2px;
+    }
+    #compass-strip { position: absolute; left: 0; top: 0; height: 100%; will-change: transform; }
+    .tick { position: absolute; top: 14px; width: 1px; height: 6px; background: var(--ink-dim); transform: translateX(-0.5px); }
+    .tick.card { height: auto; background: none; top: 9px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; transform: translateX(-50%); color: var(--ink-dim); text-shadow: var(--shadow); }
+    .tick.card.main { font-family: 'Cormorant Garamond', serif; font-size: 19px; top: 5px; color: var(--ink); }
+    .marker { position: absolute; left: 0; top: 22px; font-size: 10px; color: var(--accent); transform: translateX(-50%); text-shadow: var(--shadow); transition: opacity .3s; }
+    #compass-line { position: absolute; top: 52px; left: 50%; transform: translateX(-50%); width: min(520px, 70vw); height: 1px; background: linear-gradient(90deg, transparent, rgba(255,247,234,.35), transparent); }
+
+    #clock { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--ink-dim); opacity: 0; transition: opacity .4s; text-shadow: var(--shadow); }
+    #clock.show { opacity: 1; }
+
+    /* Legenda de controles */
+    #controls {
+      position: absolute; left: 20px; bottom: 20px; padding: 12px 14px; border-radius: 12px;
+      background: var(--glass); backdrop-filter: blur(6px); font-size: 13px; line-height: 1.7;
+      transition: opacity .3s, transform .3s; box-shadow: var(--shadow);
+    }
+    #controls.hide { opacity: 0; transform: translateY(8px); }
+    #controls b { color: var(--accent); font-weight: 700; }
+    #controls > div > b:first-child { display: inline-block; min-width: 54px; }
+    #controls .hint { color: var(--ink-dim); font-size: 11px; margin-top: 4px; }
+
+    #fps { position: absolute; right: 14px; top: 14px; padding: 6px 10px; border-radius: 8px; background: var(--glass-strong); font: 12px/1.45 ui-monospace, monospace; white-space: pre; display: none; }
+    #fps.show { display: block; }
+
+    #toast { position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%); padding: 8px 16px; border-radius: 20px; background: var(--glass-strong); font-size: 14px; opacity: 0; transition: opacity .3s; }
+    #toast.show { opacity: 1; }
+
+    /* Menu */
+    #menu {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column;
+      background: radial-gradient(ellipse at 50% 40%, rgba(60, 40, 90, 0.15), rgba(30, 22, 60, 0.6));
+      transition: opacity .4s; z-index: 5;
+    }
+    #menu.hide { opacity: 0; pointer-events: none; }
+    #menu-title { font-family: 'Cormorant Garamond', serif; font-weight: 700; font-size: clamp(54px, 9vw, 112px); letter-spacing: 0.08em; margin: 0; text-shadow: 0 4px 30px rgba(217, 88, 31, 0.45), var(--shadow); }
+    #menu .sub { margin: 0 0 28px; color: var(--ink-dim); font-size: 16px; letter-spacing: 0.04em; }
+    #menu.paused #menu-title { font-size: clamp(40px, 6vw, 64px); }
+    .panel { background: var(--glass-strong); backdrop-filter: blur(8px); padding: 18px 22px; border-radius: 16px; box-shadow: var(--shadow); min-width: 300px; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 8px 0; font-size: 14px; }
+    #quality { display: flex; gap: 6px; }
+    button { font: inherit; color: var(--ink); background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); padding: 6px 12px; border-radius: 10px; cursor: pointer; }
+    button:hover { background: rgba(255,255,255,0.16); }
+    button.active { background: var(--accent); color: #3a2410; border-color: var(--accent); font-weight: 700; }
+    #play { display: block; width: 100%; margin-top: 14px; padding: 12px; font-size: 18px; font-weight: 700; background: linear-gradient(180deg, #ff9a52, var(--accent-2)); border: none; color: #fff7ea; }
+    input[type=range] { accent-color: var(--accent); width: 140px; }
+    #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #2c2f66; z-index: 10; font-family: 'Cormorant Garamond', serif; font-size: 28px; letter-spacing: .1em; transition: opacity .6s; }
+    #loading.done { opacity: 0; pointer-events: none; }
+    #error { position: fixed; left: 12px; right: 12px; bottom: 12px; padding: 10px; background: #5a2a4a; border-radius: 8px; font: 12px ui-monospace, monospace; display: none; z-index: 20; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div id="compass"><div id="compass-strip"></div></div>
+    <div id="compass-line"></div>
+    <div id="clock"></div>
+    <div id="controls">
+      <div><b>WASD</b> mover</div>
+      <div><b>Shift</b> correr</div>
+      <div><b>Espaço</b> pular · no ar: planador</div>
+      <div><b>Mouse</b> câmera · roda: zoom</div>
+      <div><b>T</b> acelerar o tempo · <b>M</b> som</div>
+      <div class="hint">H esconde · F3 desempenho · Esc menu</div>
+    </div>
+    <div id="fps"></div>
+    <div id="toast"></div>
+  </div>
+
+  <div id="menu" class="hide">
+    <h1 id="menu-title">Ventania</h1>
+    <p class="sub">uma ilha, o vento e o horizonte</p>
+    <div class="panel">
+      <div class="row"><span>Qualidade</span><div id="quality"></div></div>
+      <div class="row"><span>Volume</span><input id="volume" type="range" min="0" max="1" step="0.05" /></div>
+      <div class="row"><span>Sensibilidade</span><input id="sensitivity" type="range" min="0.3" max="2.5" step="0.05" /></div>
+      <div class="row"><span>Inverter Y</span><input id="invert" type="checkbox" /></div>
+      <button id="play">Começar</button>
+    </div>
+  </div>
+
+  <div id="loading">gerando a ilha…</div>
+  <div id="error"></div>
+
+  <script>
+    // Erros visíveis na tela (ajuda a depurar no GitHub Pages).
+    addEventListener('error', (e) => {
+      const el = document.getElementById('error');
+      el.style.display = 'block';
+      el.textContent += (e.message || e) + '\n';
+    });
+    addEventListener('unhandledrejection', (e) => {
+      const el = document.getElementById('error');
+      el.style.display = 'block';
+      el.textContent += 'Promise: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason) + '\n';
+    });
+  </script>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

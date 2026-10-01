@@ -5,6 +5,7 @@
 #   /               → MathRaf    (index.html na raiz, self-contained)
 #   /mathref/game/  → Starfarer  (compilado a partir de game-src/)
 #   /mathref/drone/ → Dronefarer (compilado a partir de drone-src/)
+#   /mathref/ventania/ → Ventania (ES modules puros, publicado como está)
 #
 # ═══ POR QUE COMPILAR AQUI E NÃO SÓ PUBLICAR A PASTA game/ ═══
 #
@@ -125,6 +126,11 @@ jobs:
             --exclude='./docs' \
             --exclude='./README.md' \
             --exclude='./.gitignore' \
+            --exclude='./CLAUDE.md' \
+            --exclude='./package.json' \
+            --exclude='./package-lock.json' \
+            --exclude='./tools' \
+            --exclude='./shots' \
             --exclude='./_site' \
             . | tar -xf - -C _site
           # Sem isto o Pages roda o Jekyll, que ignora arquivos e pastas
