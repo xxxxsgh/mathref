@@ -54,7 +54,8 @@ export class WeaponController {
     this.onShotResult = null;
     /** @type {((r: any) => void)|null} */
     this.onMelee = null;
-    this.pendingHeavy = false;
+    /** primeiro saque da faca desde o spawn usa a animação de "equipar" */
+    this.knifeFresh = true;
     this.spreadNow = 0;
     this.tmpO = new THREE.Vector3();
     this.tmpD = new THREE.Vector3();
@@ -104,6 +105,10 @@ export class WeaponController {
     this.vm.setWeapon(ws.def.type, this.modelFor(ws));
     this.state = 'drawing';
     this.zoomed = false;
+    if (ws.def.type === 'knife' && this.knifeFresh) {
+      flourish = true;
+      this.knifeFresh = false;
+    }
     this.timer = ws.def.type === 'knife' && flourish ? KNIFE_EQUIP.duration : ws.def.drawTime;
     const clip = ws.def.type === 'knife' ? (flourish ? KNIFE_EQUIP : KNIFE_DRAW) : gunDraw(ws.def.drawTime);
     this.vm.animator.play(clip, { blend: 0 });
@@ -306,9 +311,6 @@ export class WeaponController {
     this.audio.shot(def.sound, null);
     this.onShotResult?.(res);
     if (ws.ammo === 0 && ws.reserve > 0) setTimeout(() => this.state === 'ready' && this.startReload(), 180);
-    if (def.type === 'dmr' && this.zoomed) {
-      // DMR: sai da luneta brevemente entre tiros (como ferrolho)
-    }
   }
 
   /** Inclinação extra de câmera a aplicar (recuo). */

@@ -38,11 +38,11 @@ export function formatFloat(f) {
  */
 export const WEAR_ZONES = {
   bladeEdge: 1.0,
-  grip: 0.8,
-  trigger: 0.85,
-  magazine: 0.7,
-  slide: 0.7, // partes móveis
-  bolt: 0.75,
+  grip: 0.55,
+  trigger: 0.75,
+  magazine: 0.5,
+  slide: 0.4, // partes móveis
+  bolt: 0.62,
   muzzle: 0.6,
   guard: 0.6,
   stock: 0.45,

@@ -88,8 +88,11 @@ export class HUD {
    * @param {number} spreadPx
    */
   applyCrosshair(s, spreadPx) {
+    const gap = Math.round((s.crosshairGap + (s.crosshairDynamic ? spreadPx : 0)) * 2) / 2;
+    const key = `${s.crosshairColor}|${gap}|${s.crosshairSize}|${s.crosshairThickness}|${s.crosshairDot}`;
+    if (key === this.xKey) return;
+    this.xKey = key;
     this.el.style.setProperty('--xc', s.crosshairColor);
-    const gap = s.crosshairGap + (s.crosshairDynamic ? spreadPx : 0);
     const len = s.crosshairSize;
     const th = s.crosshairThickness;
     const [up, down, left, right, dot] = this.xparts;

@@ -1,8 +1,5 @@
 [
   {"name":"rifle","slot":"primary"},
-  {"name":"pistol","slot":"secondary"},
-  {"name":"knifeA","slot":"melee","inspect":"A","t":2.2},
-  {"name":"knifeC","slot":"melee","inspect":"C","t":1.8},
-  {"name":"knifeE3","slot":"melee","inspect":"E","t":3.4},
-  {"name":"knifeE4","slot":"melee","inspect":"E","t":4.5}
+  {"name":"knifeIdle","slot":"melee"},
+  {"name":"knifeD","slot":"melee","inspect":"D","t":0.9}
 ]

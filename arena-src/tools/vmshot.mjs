@@ -8,7 +8,12 @@ import { spawn } from 'node:child_process';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { chromium } = require('/opt/node-tools/node_modules/playwright');
+let chromium;
+try {
+  ({ chromium } = require('playwright'));
+} catch {
+  ({ chromium } = require('/opt/node-tools/node_modules/playwright'));
+}
 const poses = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const PORT = 4790;
 mkdirSync(new URL('./shots/', import.meta.url), { recursive: true });

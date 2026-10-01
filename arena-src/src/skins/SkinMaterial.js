@@ -184,9 +184,9 @@ vec4 skinPattern(vec2 uv, vec3 wp){
 
 float scratchLayer(vec2 uv, float ang, float density, float seed){
   vec2 r = rot2(ang) * uv;
-  float n = vn2(vec2(r.x * 4.0, r.y * 160.0) + seed);
-  float line = 1.0 - smoothstep(0.0, 0.035, abs(n - 0.5));
-  float seg = smoothstep(1.0 - density, 1.0 - density + 0.12, vn2(r * vec2(9.0, 30.0) + seed * 1.7));
+  float n = vn2(vec2(r.x * 2.5, r.y * 55.0) + seed);
+  float line = 1.0 - smoothstep(0.0, 0.04, abs(n - 0.5));
+  float seg = smoothstep(1.0 - density, 1.0 - density + 0.15, vn2(r * vec2(5.0, 14.0) + seed * 1.7));
   return line * seg;
 }
 `;
@@ -291,14 +291,14 @@ float surfaceWearMask = max(uZone, edgeF * 1.25) + gradM * 0.55;
 float nW = fbm3(vWPos * 34.0 + uSeedOff);
 float nBig = fbm3(vWPos * 9.0 + uSeedOff * 1.3);
 float baseWear = pow(uFloat, 0.8);
-float wearIntensity = baseWear * (0.25 + 0.95 * surfaceWearMask) + (nW * 0.6 + nBig * 0.4 - 0.5) * (0.36 + 0.8 * uFloat);
+float wearIntensity = baseWear * (0.2 + 0.85 * surfaceWearMask) + (nW * 0.55 + nBig * 0.45 - 0.5) * (0.35 + 0.9 * uFloat);
 wearIntensity *= uWearOn;
 
 float loss = smoothstep(0.55, 0.62, wearIntensity);
 float primer = smoothstep(0.44, 0.55, wearIntensity) * (1.0 - loss);
 
 // arranhões: densidade e alcance crescem com o float; mais nas áreas de contato
-float sDen = clamp(uFloat * 1.1 + surfaceWearMask * uFloat * 0.5, 0.0, 0.75);
+float sDen = clamp(uFloat * 0.9 + surfaceWearMask * uFloat * 0.4, 0.0, 0.6);
 float sc = max(scratchLayer(suv * 9.0, uScratchAng, sDen, uSeedOff.x),
                scratchLayer(suv * 9.0, uScratchAng + 1.1, sDen * 0.7, uSeedOff.y));
 sc *= smoothstep(0.035, 0.2, uFloat) * uWearOn;

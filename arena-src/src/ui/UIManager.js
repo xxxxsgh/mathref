@@ -22,6 +22,8 @@ export class UIManager {
     this.overlayLayer = h('div', { style: { position: 'absolute', inset: '0', pointerEvents: 'none' } });
     this.root.append(this.layer, this.overlayLayer);
     this.hud = new HUD(this.root, game.settings);
+    // HUD por baixo de telas e menus da partida
+    this.root.prepend(this.hud.el);
     this.current = '';
     /** @type {HTMLElement|null} */
     this.overlay = null;
@@ -179,6 +181,7 @@ export class UIManager {
   /** @param {any} m */
   showMatchEnd(m) {
     this.game.input.unlock();
+    this.hud.show(false);
     this.hideScoreboard();
     setTimeout(() => this.setOverlay(MatchEnd(this), 'end'), 50);
   }

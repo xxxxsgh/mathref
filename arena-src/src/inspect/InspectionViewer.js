@@ -28,14 +28,14 @@ export class InspectionViewer {
     // pedestal com anel luminoso
     const ped = new THREE.Mesh(
       new THREE.CylinderGeometry(0.75, 0.82, 0.06, 64),
-      new THREE.MeshStandardMaterial({ color: 0x15181c, roughness: 0.35, metalness: 0.6 }),
+      new THREE.MeshStandardMaterial({ color: 0x0f1114, roughness: 0.7, metalness: 0.2, envMapIntensity: 0.25 }),
     );
     ped.position.y = -0.36;
     this.ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.006, 8, 96), this.ringMat);
     ring.rotation.x = Math.PI / 2;
     ring.position.y = -0.328;
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(6, 48), new THREE.MeshStandardMaterial({ color: 0x0e1013, roughness: 0.9 }));
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(6, 48), new THREE.MeshStandardMaterial({ color: 0x0b0c0f, roughness: 0.95, envMapIntensity: 0.1 }));
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -0.39;
     this.scene.add(ped, ring, floor);
@@ -61,6 +61,7 @@ export class InspectionViewer {
     this.lastX = 0;
     this.lastY = 0;
     this.idleTime = 0;
+    this.panelShift = 0;
   }
 
   /**
@@ -94,17 +95,18 @@ export class InspectionViewer {
     });
     this.ringMat.color.set(rarityColor);
     // distância inicial que enquadra o item
-    const fit = Math.max(0.6, (maxLen * 0.5) / Math.tan(THREE.MathUtils.degToRad(16)) * 0.75);
+    const fit = Math.max(0.6, ((maxLen * 0.5) / Math.tan(THREE.MathUtils.degToRad(16))) * 0.95);
     this.tDist = Math.min(this.maxDist, fit + (stacked ? 0.35 : 0));
     this.maxDist = Math.max(2.2, this.tDist * 1.8);
     this.minDist = Math.max(0.18, this.tDist * 0.22);
     this.dist = this.tDist * 2.4;
     this.tYaw = 0.35;
-    this.tPitch = 0.12;
+    this.tPitch = 0.18;
     this.yaw = -0.8;
     this.pitch = 0.4;
     this.intro = 0;
     this.setWear(this.wearOn);
+    this.applyShift();
   }
 
   clear() {
@@ -189,6 +191,14 @@ export class InspectionViewer {
   /** @param {number} aspect */
   resize(aspect) {
     this.camera.aspect = aspect;
+    // telas largas: desloca a imagem para a esquerda (painel de info à direita)
+    this.panelShift = aspect > 1.3 ? 1 : 0;
+    this.applyShift();
+  }
+
+  applyShift() {
+    const comparing = this.models.length > 1;
+    this.camera.filmOffset = this.panelShift && !comparing ? 3.2 : 0;
     this.camera.updateProjectionMatrix();
   }
 

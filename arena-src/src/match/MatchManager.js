@@ -185,6 +185,7 @@ export class MatchManager {
     if (a === this.player) {
       this.wc.clearModels();
       this.wc.recoil.reset();
+      this.wc.knifeFresh = true;
       this.wc.equip(a.slot, false);
       this.respawnTimer = 0;
       this.deathInfo = '';

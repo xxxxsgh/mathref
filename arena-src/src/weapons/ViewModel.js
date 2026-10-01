@@ -22,9 +22,9 @@ import { flashStarTexture, glowTexture } from '../world/Textures.js';
 
 /** Pose de descanso por tipo de arma (espaço da câmera da viewmodel). */
 export const VM_BASE = {
-  rifle: { pos: [0.16, -0.16, -0.42], rot: [0.02, 0.09, -0.03], item: [0, 0, 0] },
-  smg: { pos: [0.15, -0.15, -0.4], rot: [0.02, 0.1, -0.03], item: [0, 0, 0] },
-  dmr: { pos: [0.16, -0.165, -0.42], rot: [0.02, 0.08, -0.03], item: [0, 0, 0] },
+  rifle: { pos: [0.17, -0.17, -0.47], rot: [0.02, 0.09, -0.03], item: [0, 0, 0] },
+  smg: { pos: [0.16, -0.16, -0.44], rot: [0.02, 0.1, -0.03], item: [0, 0, 0] },
+  dmr: { pos: [0.17, -0.175, -0.47], rot: [0.02, 0.08, -0.03], item: [0, 0, 0] },
   pistol: { pos: [0.12, -0.13, -0.38], rot: [0.03, 0.12, 0.0], item: [0, 0, 0] },
   heavy: { pos: [0.12, -0.135, -0.38], rot: [0.03, 0.12, 0.0], item: [0, 0, 0] },
   knife: { pos: [0.15, -0.14, -0.34], rot: [0.06, 0.22, -0.1], item: [0.42, 0.06, -0.35] },

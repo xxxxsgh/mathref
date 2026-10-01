@@ -14,6 +14,7 @@ export function PauseMenu(ui) {
     h('div', { class: 'pause-list' }, [
       h('button', { class: 'btn primary', onclick: () => ui.resumeMatch() }, 'Continuar'),
       h('button', { class: 'btn', onclick: () => ui.showMatchSettings() }, 'Configurações'),
+      h('button', { class: 'btn', onclick: () => g.startMatch(g.match.opts) }, 'Reiniciar partida'),
       h('button', { class: 'btn danger', onclick: () => g.endMatch() }, 'Sair da partida'),
     ]),
     h('p', { style: { color: 'var(--muted)', fontSize: '12px', marginBottom: 0 } }, 'O jogo continua rodando — os bots não esperam.'),
@@ -84,6 +85,11 @@ export function BuyMenu(ui) {
   return el;
 }
 
+function fmtTime(t) {
+  const s = Math.floor(t);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 /** @param {import('./UIManager.js').UIManager} ui */
 export function Scoreboard(ui) {
   const m = ui.game.match;
@@ -104,7 +110,8 @@ export function Scoreboard(ui) {
     }
   }
   return h('div', { class: 'overlay', style: { background: 'rgba(5,7,9,.35)', pointerEvents: 'none' } }, h('div', { class: 'modal', style: { minWidth: 'min(640px, 94vw)' } }, [
-    h('h2', {}, m.mode === 'competitive' ? `Placar — Round ${m.round.round}` : 'Placar — Treino'),
+    h('h2', {}, m.mode === 'competitive' ? `Placar — Round ${m.round.round} de até 13` : 'Placar — Treino'),
+    h('div', { style: { color: 'var(--muted)', fontSize: '12px', marginTop: '-8px', marginBottom: '10px' } }, `Tempo de partida ${fmtTime(m.time)} • ${m.opts.teamSize}v${m.opts.teamSize} • bots ${m.opts.difficulty}`),
     h('table', { class: 'sb' }, [h('tr', {}, ['Jogador', 'K', 'D', 'A', 'HS', 'Dano', '$'].map((t) => h('th', {}, t))), ...rows]),
   ]));
 }
@@ -124,6 +131,7 @@ export function MatchEnd(ui) {
       h('dt', {}, 'Abates / Mortes'), h('dd', {}, `${p.stats.kills} / ${p.stats.deaths}`),
       h('dt', {}, 'Headshots'), h('dd', {}, String(p.stats.headshots)),
       h('dt', {}, 'Dano causado'), h('dd', {}, String(Math.round(p.stats.damage))),
+      h('dt', {}, 'Duração'), h('dd', {}, fmtTime(m.time)),
       h('dt', {}, 'Fragmentos'), h('dd', { style: { color: '#b8f3ff' } }, `+${r.shards}`),
       h('dt', {}, 'Experiência'), h('dd', {}, `+${r.xp} XP`),
     ]),

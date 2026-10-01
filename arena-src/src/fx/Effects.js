@@ -48,9 +48,9 @@ export class Effects {
       return { s, vel: new THREE.Vector3(), life: 0, max: 0, active: false };
     }, Math.round(24 * lim));
 
-    const tracerGeo = new THREE.CylinderGeometry(0.008, 0.008, 1, 4, 1, true);
+    const tracerGeo = new THREE.CylinderGeometry(0.005, 0.005, 1, 4, 1, true);
     tracerGeo.rotateX(Math.PI / 2);
-    const tracerMat = new THREE.MeshBasicMaterial({ color: 0xffe2a8, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+    const tracerMat = new THREE.MeshBasicMaterial({ color: 0xffc77a, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
     this.tracers = new Pool(() => {
       const m = new THREE.Mesh(tracerGeo, tracerMat);
       m.visible = false;
@@ -200,7 +200,7 @@ export class Effects {
       t.t += dt;
       const speed = 320;
       const head = Math.min(t.dist, t.t * speed);
-      const len = Math.min(4, head);
+      const len = Math.min(2.5, head);
       const tail = head - len;
       if (tail >= t.dist - 0.05) {
         t.active = false;
