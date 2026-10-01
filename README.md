@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com quatro sites estáticos publicados pelo GitHub Pages.
+Repositório com cinco sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -8,6 +8,7 @@ Repositório com quatro sites estáticos publicados pelo GitHub Pages.
 | [`/game/`](https://xxxxsgh.github.io/mathref/game/) | **Starfarer** — jogo 3D de nave espacial |
 | [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
 | [`/arena/`](https://xxxxsgh.github.io/mathref/arena/) | **NULLPOINT** — FPS tático de arena com skins e inspeção de faca |
+| [`/cod/`](https://xxxxsgh.github.io/mathref/cod/) | **Claude of Duty** — FPS de guerra por ondas numa cidade em ruínas |
 
 ## Publicação
 
@@ -104,3 +105,21 @@ npm run build      # gera ../arena/
 npm test           # testes unitários
 npm run test:e2e   # ponta a ponta no Chromium (Playwright)
 ```
+
+## Claude of Duty
+
+FPS de guerra inspirado em Call of Duty e Battlefield, num único arquivo
+([`cod/index.html`](./cod/index.html)) sem build: Three.js r147 via CDN e todo
+o resto procedural — texturas, modelos, mapa e áudio sintetizado.
+
+- Cidade em ruínas ao entardecer: céu físico, IBL, sombras suaves, neblina,
+  bloom, gradação de cor e FXAA.
+- Três armas (carabina com red dot, pistola, fuzil com luneta e respiração),
+  recuo, dispersão, mira, recarga animada e granadas.
+- Destruição: granadas derrubam paredes de ruínas e caixas; barris vermelhos
+  explodem em cadeia.
+- Inimigos com A* em grade, linha de visada, rajadas, tempo de reação e
+  precisão que crescem a cada onda; minimapa marca quem atira.
+
+Por ser um arquivo estático na raiz, o workflow do Pages publica em `/cod/`
+sem nenhuma alteração.
