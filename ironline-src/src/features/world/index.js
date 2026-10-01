@@ -67,7 +67,7 @@ export default {
       bullets: decalMat(DT.bulletHolesTexture()),
       posters: decalMat(DT.postersTexture(), { roughness: 0.8 }),
       graffiti: decalMat(DT.graffitiTexture(), { roughness: 0.75 }),
-      paint: decalMat(DT.roadPaintTexture(), { roughness: 0.7 }),
+      paint: decalMat(DT.roadPaintTexture(), { roughness: 0.9 }),
       stains: decalMat(DT.stainsTexture(), { roughness: 0.6 }),
       trash: decalMat(DT.trashTexture(), { alphaTest: 0.35, transparent: false, depthWrite: true, roughness: 0.85 }),
       signs: new THREE.MeshStandardMaterial({ map: DT.signsTexture(), roughness: 0.55, metalness: 0.1, vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }),
@@ -125,17 +125,14 @@ export default {
     const inst = W.I.build(root, mats);
 
     // ── IBL ──
+    // O ambiente vai em scene.environment (todos os PBR recebem IBL difuso e
+    // especular). A feature rendering troca pelo céu físico dela quando presente.
     let environment = null;
     try {
       environment = createEnvironment(renderer, sky);
-      // Só superfícies brilhantes recebem o envmap: amostrar PMREM em TODO pixel
-      // custa caro (≈30% do frame no SwiftShader) e quase não muda reboco/concreto.
-      for (const k of ['glass', 'carpaint', 'chrome']) {
-        mats[k].envMap = environment;
-        mats[k].needsUpdate = true;
-      }
+      if (!ctx.scene.environment) ctx.scene.environment = environment;
       mats.glass.envMapIntensity = 1.2;
-      mats.carpaint.envMapIntensity = 0.6;
+      mats.carpaint.envMapIntensity = 0.8;
     } catch (err) {
       console.warn('[world] envmap falhou', err);
     }

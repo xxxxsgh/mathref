@@ -276,15 +276,33 @@ export function graffitiTexture(seed = 17) {
 export function roadPaintTexture(seed = 19) {
   const r = mulberry(seed);
   const [c, g] = canvas(128, 512);
-  g.fillStyle = 'rgba(235,232,220,0.92)';
+  // tinta branca-creme suja (albedo ~0.6, não "brilha"), gasta pelos pneus
+  g.fillStyle = 'rgba(196,190,172,0.9)';
   g.fillRect(0, 0, 128, 512);
-  g.globalCompositeOperation = 'destination-out';
-  for (let i = 0; i < 900; i++) {
-    const x = r() * 128, y = r() * 512, rr = 1 + r() * (r() < 0.1 ? 22 : 6);
-    g.fillStyle = `rgba(0,0,0,${0.3 + r() * 0.7})`;
+  for (let i = 0; i < 400; i++) {
+    const x = r() * 128, y = r() * 512, rr = 2 + r() * 10;
+    g.fillStyle = `rgba(${90 + r() * 40},${85 + r() * 35},${75 + r() * 30},${0.08 + r() * 0.18})`;
     g.beginPath();
     g.arc(x, y, rr, 0, Math.PI * 2);
     g.fill();
+  }
+  g.globalCompositeOperation = 'destination-out';
+  // lascas: muitas pequenas, algumas placas grandes, bordas roídas
+  for (let i = 0; i < 1600; i++) {
+    const x = r() * 128, y = r() * 512, rr = 0.8 + r() * (r() < 0.06 ? 26 : 5);
+    g.fillStyle = `rgba(0,0,0,${0.35 + r() * 0.65})`;
+    g.beginPath();
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * Math.PI * 2;
+      const q = rr * (0.5 + r() * 0.8);
+      g.lineTo(x + Math.cos(a) * q, y + Math.sin(a) * q);
+    }
+    g.fill();
+  }
+  for (let y = 0; y < 512; y += 2) {
+    g.fillStyle = 'rgba(0,0,0,0.9)';
+    g.fillRect(0, y, 3 + r() * 9, 2);
+    g.fillRect(128 - 3 - r() * 9, y, 12, 2);
   }
   const t = tex(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
