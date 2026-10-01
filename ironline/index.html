@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0c0e" />
+    <meta name="description" content="IRONLINE — FPS militar original em Three.js." />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <title>IRONLINE</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: #e8e8e8;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+      #app, #app canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+      #ui { position: fixed; inset: 0; pointer-events: none; user-select: none; }
+      #ui .interactive { pointer-events: auto; }
+      /* tela de carga (a feature hud a remove ao iniciar) */
+      #boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+        background: radial-gradient(ellipse at center, #14181b 0%, #07090a 70%); color: #f2f4ef; z-index: 10; transition: opacity .5s; }
+      #boot b { font: 600 34px/1 'Bahnschrift', 'DIN Alternate', 'Roboto Condensed', 'Arial Narrow', sans-serif; letter-spacing: .32em; padding-left: .32em; }
+      #boot i { display: block; width: 220px; height: 2px; background: rgba(242,244,239,.12); overflow: hidden; position: relative; }
+      #boot i::after { content: ''; position: absolute; inset: 0; width: 40%; background: #ffb22e; animation: bootbar 1.1s ease-in-out infinite; }
+      @keyframes bootbar { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+    </style>
+    <script type="module" crossorigin src="/mathref/ironline/assets/index-BI370NQ3.js"></script>
+    <link rel="modulepreload" crossorigin href="/mathref/ironline/assets/three-B6FLhzCG.js">
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="ui"></div>
+    <div id="boot"><b>IRONLINE</b><i></i></div>
+    <script>
+      // capturas (?shot=) nunca mostram a tela de carga; e ela some sozinha
+      // mesmo que a feature hud não carregue (?only=/?skip=)
+      (function () {
+        var b = document.getElementById('boot');
+        if (/[?&]shot=/.test(location.search)) b.remove();
+        else setTimeout(function () { if (b.isConnected) { b.style.opacity = 0; setTimeout(function () { b.remove(); }, 600); } }, 15000);
+      })();
+    </script>
+  </body>
+</html>
