@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VECTRA ARENA</title>
+  <meta name="description" content="VECTRA ARENA — original competitive arena FPS prototype running in the browser (Three.js).">
+  <meta name="theme-color" content="#05070c">
+  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 3D world -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- screen-space effects: vignette + scanlines + damage flash -->
+  <div id="fx-vignette"></div>
+  <div id="fx-scanlines"></div>
+  <div id="fx-damage"></div>
+
+  <!-- ===================== LOADING ===================== -->
+  <section id="screen-loading" class="screen active">
+    <div class="loading-inner">
+      <div class="logo">
+        <span class="logo-top">VECTRA</span>
+        <span class="logo-bottom">ARENA</span>
+      </div>
+      <div class="loading-label">LOADING...</div>
+      <div class="loading-map" id="load-map">OUTPOST</div>
+      <div class="progress"><div class="progress-bar" id="load-bar"></div></div>
+      <div class="loading-step" id="load-step">INITIALIZING</div>
+      <div class="loading-tip" id="load-tip"></div>
+    </div>
+  </section>
+
+  <!-- ===================== MAIN MENU ===================== -->
+  <section id="screen-menu" class="screen">
+    <div class="menu-left">
+      <div class="logo big">
+        <span class="logo-top">VECTRA</span>
+        <span class="logo-bottom">ARENA</span>
+      </div>
+      <nav class="menu-nav">
+        <button class="menu-btn primary" data-action="play"><span>PLAY</span><small>Competitive · Outpost</small></button>
+        <button class="menu-btn" data-action="inventory"><span>INVENTORY</span><small>Skins · Wear · Patterns</small></button>
+        <button class="menu-btn" data-action="loadout"><span>LOADOUT</span><small>Equipped weapons</small></button>
+        <button class="menu-btn" data-action="inspection"><span>INSPECTION</span><small>3D viewer</small></button>
+        <button class="menu-btn" data-action="settings"><span>SETTINGS</span><small>Controls · Video · Audio</small></button>
+      </nav>
+    </div>
+    <aside class="menu-right panel">
+      <div class="panel-title">OPERATOR PROFILE</div>
+      <div class="profile-level"><span>LEVEL</span><b id="prof-level">1</b></div>
+      <div class="xp-bar"><div id="prof-xp"></div></div>
+      <div class="xp-text" id="prof-xp-text">0 / 600 XP</div>
+      <div class="profile-grid">
+        <div><span>MATCHES</span><b id="prof-matches">0</b></div>
+        <div><span>WINS</span><b id="prof-wins">0</b></div>
+        <div><span>KILLS</span><b id="prof-kills">0</b></div>
+        <div><span>K/D</span><b id="prof-kd">0.00</b></div>
+        <div><span>HEADSHOTS</span><b id="prof-hs">0</b></div>
+        <div><span>CREDITS</span><b id="prof-credits">0</b></div>
+      </div>
+      <div class="panel-title small">EQUIPPED KNIFE</div>
+      <div class="equipped-knife" id="prof-knife">—</div>
+    </aside>
+    <div class="menu-footer">
+      <span>CLICK PLAY · WASD MOVE · MOUSE AIM · F INSPECT</span>
+      <span>PROTOTYPE BUILD 0.9 · ALL ASSETS PROCEDURAL</span>
+    </div>
+  </section>
+
+  <!-- ===================== PLAY SETUP ===================== -->
+  <section id="screen-play" class="screen panel-screen">
+    <header class="screen-header">
+      <h2>DEPLOY</h2>
+      <button class="btn ghost" data-back>BACK</button>
+    </header>
+    <div class="play-layout">
+      <div class="map-card">
+        <div class="map-art"><div class="map-art-grid"></div><span>OUTPOST</span></div>
+        <div class="map-info">
+          <b>OUTPOST</b>
+          <span>Industrial combat facility · Sector 7</span>
+          <span>COMPETITIVE · BEST OF 13 · 4 vs 4</span>
+        </div>
+      </div>
+      <div class="play-options panel">
+        <div class="opt-group">
+          <label>BOT DIFFICULTY</label>
+          <div class="seg" id="seg-difficulty">
+            <button data-v="easy">EASY</button>
+            <button data-v="normal">NORMAL</button>
+            <button data-v="hard">HARD</button>
+          </div>
+        </div>
+        <div class="opt-group">
+          <label>PRIMARY WEAPON</label>
+          <div class="seg" id="seg-primary">
+            <button data-v="rifle">ASSAULT RIFLE</button>
+            <button data-v="sniper">PRECISION RIFLE</button>
+          </div>
+        </div>
+        <ul class="controls-list">
+          <li><kbd>WASD</kbd> Move</li><li><kbd>SHIFT</kbd> Sprint</li>
+          <li><kbd>CTRL</kbd>/<kbd>C</kbd> Crouch</li><li><kbd>SPACE</kbd> Jump</li>
+          <li><kbd>LMB</kbd> Fire</li><li><kbd>RMB</kbd> Aim / Scope / Heavy</li>
+          <li><kbd>R</kbd> Reload</li><li><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> Weapons</li>
+          <li><kbd>F</kbd> Inspect</li><li><kbd>TAB</kbd> Scoreboard</li>
+          <li><kbd>ESC</kbd> Pause</li><li><kbd>Q</kbd> Last weapon</li>
+        </ul>
+        <button class="btn big primary" id="btn-deploy">DEPLOY</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== INVENTORY ===================== -->
+  <section id="screen-inventory" class="screen panel-screen">
+    <header class="screen-header">
+      <h2>INVENTORY</h2>
+      <div class="filters" id="inv-filters">
+        <button data-f="all" class="active">ALL</button>
+        <button data-f="knives">KNIVES</button>
+        <button data-f="rifles">RIFLES</button>
+        <button data-f="pistols">PISTOLS</button>
+      </div>
+      <div class="credits">CREDITS <b id="inv-credits">0</b><small>fictional</small></div>
+      <button class="btn ghost" data-back>BACK</button>
+    </header>
+    <div class="compare-hint hidden" id="compare-hint">SELECT A SECOND ITEM TO COMPARE <button class="btn small ghost" id="compare-cancel">CANCEL</button></div>
+    <div class="inv-grid" id="inv-grid"></div>
+    <div class="item-menu hidden" id="item-menu">
+      <div class="item-menu-title" id="item-menu-title"></div>
+      <button data-act="equip">EQUIP</button>
+      <button data-act="inspect">INSPECT</button>
+      <button data-act="compare">COMPARE</button>
+      <button data-act="sell">SELL</button>
+    </div>
+  </section>
+
+  <!-- ===================== LOADOUT ===================== -->
+  <section id="screen-loadout" class="screen panel-screen">
+    <header class="screen-header">
+      <h2>LOADOUT</h2>
+      <button class="btn ghost" data-back>BACK</button>
+    </header>
+    <div class="loadout-grid" id="loadout-grid"></div>
+    <div class="loadout-note">Skins and wear are purely cosmetic: every copy of a weapon has identical damage, accuracy, recoil and fire rate.</div>
+  </section>
+
+  <!-- ===================== INSPECTION ===================== -->
+  <section id="screen-inspect" class="screen">
+    <div class="inspect-bg"></div>
+    <div class="inspect-view" id="inspect-view"></div>
+    <div class="inspect-info panel">
+      <div class="inspect-weapon" id="ins-weapon">KNIFE</div>
+      <div class="inspect-name" id="ins-name">CYBERSTORM</div>
+      <div class="inspect-rarity" id="ins-rarity">EPIC</div>
+      <div class="inspect-stats">
+        <div><span>Float</span><b id="ins-float">0.287</b></div>
+        <div><span>Pattern</span><b id="ins-pattern">734</b></div>
+        <div><span>Condition</span><b id="ins-cond">Field-Tested</b></div>
+      </div>
+      <div class="wear-scale">
+        <div class="wear-bar"><i style="left:0;width:7%"></i><i style="left:7%;width:8%"></i><i style="left:15%;width:23%"></i><i style="left:38%;width:7%"></i><i style="left:45%;width:55%"></i></div>
+        <div class="wear-marker" id="ins-marker"></div>
+        <div class="wear-labels"><span>FN</span><span>MW</span><span>FT</span><span>WW</span><span>BS</span></div>
+      </div>
+      <div class="inspect-nav">
+        <button class="btn small ghost" id="ins-prev">◀ PREV</button>
+        <span id="ins-index">1 / 1</span>
+        <button class="btn small ghost" id="ins-next">NEXT ▶</button>
+      </div>
+    </div>
+    <div class="inspect-buttons">
+      <button class="btn" id="ins-rotate">ROTATE</button>
+      <button class="btn" id="ins-zoom">ZOOM</button>
+      <button class="btn active" id="ins-auto">AUTO ROTATE</button>
+      <button class="btn" id="ins-light">LIGHTING: STUDIO</button>
+      <button class="btn" id="ins-equip">EQUIP</button>
+      <button class="btn primary" id="ins-close">CLOSE</button>
+    </div>
+    <div class="inspect-hint">DRAG TO ROTATE · WHEEL TO ZOOM</div>
+  </section>
+
+  <!-- ===================== SETTINGS ===================== -->
+  <section id="screen-settings" class="screen panel-screen">
+    <header class="screen-header">
+      <h2>SETTINGS</h2>
+      <button class="btn ghost" data-back>BACK</button>
+    </header>
+    <div class="settings-layout">
+      <div class="panel settings-col">
+        <div class="panel-title">CONTROLS</div>
+        <div class="setting"><label>Mouse Sensitivity</label><input type="range" id="set-sens" min="0.1" max="3" step="0.05"><output></output></div>
+        <div class="setting"><label>Field of View</label><input type="range" id="set-fov" min="70" max="110" step="1"><output></output></div>
+        <div class="panel-title">CROSSHAIR</div>
+        <div class="setting"><label>Crosshair Size</label><input type="range" id="set-chsize" min="2" max="24" step="1"><output></output></div>
+        <div class="setting"><label>Crosshair Gap</label><input type="range" id="set-chgap" min="0" max="20" step="1"><output></output></div>
+        <div class="setting"><label>Crosshair Color</label><input type="color" id="set-chcolor"></div>
+        <div class="crosshair-preview"><div class="crosshair" id="ch-preview"><i></i><i></i><i></i><i></i><b></b></div></div>
+      </div>
+      <div class="panel settings-col">
+        <div class="panel-title">VIDEO</div>
+        <div class="setting"><label>Graphics Quality</label>
+          <div class="seg" id="set-quality"><button data-v="low">LOW</button><button data-v="medium">MEDIUM</button><button data-v="high">HIGH</button></div>
+        </div>
+        <div class="setting"><label>Rotating Mini-map</label><input type="checkbox" id="set-minimap"></div>
+        <div class="setting"><label>Fullscreen</label><button class="btn small" id="set-fullscreen">TOGGLE</button></div>
+        <div class="panel-title">AUDIO</div>
+        <div class="setting"><label>Master Volume</label><input type="range" id="set-master" min="0" max="1" step="0.01"><output></output></div>
+        <div class="setting"><label>Music Volume</label><input type="range" id="set-music" min="0" max="1" step="0.01"><output></output></div>
+        <div class="setting"><label>SFX Volume</label><input type="range" id="set-sfx" min="0" max="1" step="0.01"><output></output></div>
+        <div class="panel-title">DATA</div>
+        <div class="setting"><label>Reset save (inventory, progress, settings)</label><button class="btn small danger" id="set-reset">RESET</button></div>
+        <div class="quality-note" id="quality-note"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== HUD ===================== -->
+  <div id="hud" class="hidden">
+    <canvas id="minimap" width="200" height="200"></canvas>
+
+    <div class="hud-top">
+      <div class="score-box">
+        <span class="team blue">BLUE <b id="score-blue">0</b></span>
+        <span class="timer" id="round-timer">01:45</span>
+        <span class="team red"><b id="score-red">0</b> RED</span>
+      </div>
+      <div class="round-label" id="round-label">ROUND 1 / 13</div>
+      <div class="alive-row"><span id="alive-blue"></span><span id="alive-red"></span></div>
+    </div>
+
+    <div class="killfeed" id="killfeed"></div>
+
+    <div class="crosshair" id="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
+    <div class="hitmarker" id="hitmarker"><i></i><i></i><i></i><i></i></div>
+    <div id="damage-indicators"></div>
+
+    <div class="hud-bottom-left">
+      <div class="vital">
+        <div class="vital-icon">✚</div>
+        <div class="vital-num" id="hp-num">100</div><div class="vital-lbl">HP</div>
+        <div class="vital-bar"><div id="hp-bar"></div></div>
+      </div>
+      <div class="vital armor">
+        <div class="vital-icon">⬢</div>
+        <div class="vital-num" id="armor-num">50</div><div class="vital-lbl">ARMOR</div>
+        <div class="vital-bar"><div id="armor-bar"></div></div>
+      </div>
+    </div>
+
+    <div class="hud-bottom-right">
+      <div class="ammo"><b id="ammo-mag">30</b><span>/</span><em id="ammo-res">90</em></div>
+      <div class="weapon-name" id="weapon-name">ASSAULT RIFLE</div>
+      <div class="weapon-skin" id="weapon-skin"></div>
+      <div class="weapon-slots" id="weapon-slots">
+        <span data-slot="1">1</span><span data-slot="2">2</span><span data-slot="3">3</span>
+      </div>
+    </div>
+
+    <div class="skin-tag hidden" id="skin-tag"></div>
+    <div class="toasts" id="toasts"></div>
+    <div class="round-banner hidden" id="round-banner"><b></b><span></span></div>
+    <div class="buy-panel hidden" id="buy-panel">
+      <div class="buy-title">EQUIPMENT PHASE <b id="buy-timer">5</b></div>
+      <div class="buy-row"><kbd>Z</kbd> ASSAULT RIFLE <kbd>X</kbd> PRECISION RIFLE</div>
+      <div class="buy-row dim">Armor 50 and full ammo issued automatically</div>
+    </div>
+    <div class="scope-overlay hidden" id="scope"><div class="scope-ring"></div></div>
+    <div class="spectate-label hidden" id="spectate-label"></div>
+    <div class="click-resume hidden" id="click-resume">CLICK TO CAPTURE MOUSE</div>
+  </div>
+
+  <!-- scoreboard (TAB) -->
+  <div id="scoreboard" class="overlay hidden">
+    <div class="sb-panel panel">
+      <div class="sb-header"><span id="sb-title">OUTPOST · ROUND 1/13</span><span id="sb-score">BLUE 0 — 0 RED</span></div>
+      <table><thead><tr><th>OPERATOR</th><th>K</th><th>D</th><th>STATUS</th></tr></thead><tbody id="sb-body"></tbody></table>
+    </div>
+  </div>
+
+  <!-- pause -->
+  <div id="pause-menu" class="overlay hidden">
+    <div class="pause-panel panel">
+      <div class="logo small"><span class="logo-top">VECTRA</span><span class="logo-bottom">ARENA</span></div>
+      <div class="panel-title">PAUSED</div>
+      <button class="btn big primary" id="btn-resume">RESUME</button>
+      <button class="btn big" id="btn-pause-settings">SETTINGS</button>
+      <button class="btn big danger" id="btn-quit">QUIT TO MENU</button>
+    </div>
+  </div>
+
+  <!-- death screen -->
+  <div id="death-screen" class="overlay hidden">
+    <div class="death-panel">
+      <div class="death-title">ELIMINATED</div>
+      <div class="death-row"><span>Killed by:</span><b id="death-killer">RAVEN</b></div>
+      <div class="death-row"><span>Damage received:</span><b id="death-damage">87</b></div>
+      <div class="death-row"><span>Weapon:</span><b id="death-weapon">ASSAULT RIFLE</b></div>
+      <div class="death-respawn" id="death-respawn">RESPAWNING...</div>
+    </div>
+  </div>
+
+  <!-- match end -->
+  <div id="match-end" class="overlay hidden">
+    <div class="match-panel panel">
+      <div class="match-result" id="match-result">VICTORY</div>
+      <div class="match-score" id="match-score">BLUE 7 — 4 RED</div>
+      <div class="match-stats" id="match-stats"></div>
+      <div class="match-rewards" id="match-rewards"></div>
+      <button class="btn big primary" id="btn-match-menu">CONTINUE</button>
+    </div>
+  </div>
+
+  <!-- generic modal (confirm / compare) -->
+  <div id="modal" class="overlay hidden">
+    <div class="modal-panel panel">
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-actions" id="modal-actions"></div>
+    </div>
+  </div>
+
+  <!-- mobile notice -->
+  <div id="mobile-warning" class="overlay hidden">
+    <div class="mobile-panel">
+      <div class="logo small"><span class="logo-top">VECTRA</span><span class="logo-bottom">ARENA</span></div>
+      <p>Desktop controls recommended.</p>
+      <p class="dim">This prototype is designed for mouse + keyboard. Menus, inventory and the inspection viewer work on tablets.</p>
+      <button class="btn" id="mobile-continue">CONTINUE ANYWAY</button>
+    </div>
+  </div>
+
+  <!-- fatal error (e.g. Three.js CDN unreachable) -->
+  <div id="fatal" class="overlay hidden"><div class="panel"><b>VECTRA ARENA could not start</b><p id="fatal-msg"></p></div></div>
+
+  <!--
+    EXTERNAL DEPENDENCY: Three.js r149 (MIT) loaded from a CDN.
+    Fallback chain: jsDelivr -> unpkg -> local copy in assets/vendor (works offline).
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+  <script>window.THREE || document.write('<script src="https://unpkg.com/three@0.149.0/build/three.min.js"><\/script>');</script>
+  <script>window.THREE || document.write('<script src="assets/vendor/three.min.js"><\/script>');</script>
+
+  <!-- game code (plain scripts: works when opening index.html directly) -->
+  <script src="save.js"></script>
+  <script src="audio.js"></script>
+  <script src="skins.js"></script>
+  <script src="weapons.js"></script>
+  <script src="arena.js"></script>
+  <script src="player.js"></script>
+  <script src="bots.js"></script>
+  <script src="inventory.js"></script>
+  <script src="ui.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
