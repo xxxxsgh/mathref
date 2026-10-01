@@ -110,6 +110,12 @@ class Player {
       if (input.left) fx -= 1;
       if (input.right) fx += 1;
     }
+    // touch joystick: analog direction and magnitude
+    let analog = 1;
+    if (!this.frozen && input.touchMove) {
+      fx = input.touchMove.x; fz = input.touchMove.y;
+      analog = Math.min(1, Math.hypot(fx, fz));
+    }
     const len = Math.hypot(fx, fz);
     if (len > 0) { fx /= len; fz /= len; }
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
@@ -118,7 +124,7 @@ class Player {
 
     this.sprinting = input.sprint && input.forward && !this.crouching && !arsenal.ads && len > 0 && !this.frozen;
     this.sprintingHard = this.sprinting && this.horizontalSpeed > 6.5;
-    let speed = 5.4 * (def ? def.moveMult : 1);
+    let speed = 5.4 * (def ? def.moveMult : 1) * Math.max(0.35, analog);
     if (this.sprinting) speed *= 1.42;
     if (this.crouching) speed *= 0.48;
     if (arsenal.ads) speed *= arsenal.scoped ? 0.45 : 0.62;

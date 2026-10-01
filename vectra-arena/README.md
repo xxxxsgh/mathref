@@ -45,6 +45,19 @@ A cópia local garante que o jogo abra mesmo offline.
 | Esc | pausa |
 | Z / X | na fase de equipamento: Assault Rifle / Precision Rifle |
 
+### Celular e tablet
+
+Em telas de toque os controles aparecem sozinhos (ou force com `index.html?touch`):
+analógico à esquerda (empurre todo para frente para correr), arraste o lado
+direito para mirar (arrastar em FIRE/AIM também mira), botões FIRE, AIM, JUMP,
+CROUCH, R, F, 1/2/3, TAB e pausa. Ao clicar em DEPLOY o jogo tenta entrar em
+tela cheia na horizontal; a qualidade gráfica começa em LOW no primeiro acesso.
+
+## Versão em arquivo único
+
+`vectra-arena-standalone.html` tem o CSS e todo o JS embutidos (só o Three.js
+vem do CDN, então precisa de internet). Gere de novo com `python3 build-standalone.py`.
+
 ## Estrutura
 
 | Arquivo | Conteúdo |
@@ -59,6 +72,7 @@ A cópia local garante que o jogo abra mesmo offline.
 | `player.js` | `Player` — movimento, colisão, agachar, pulo, recuo |
 | `bots.js` | `Bot` / `BotManager` — patrulha por waypoints, visão + linha de visada, reação, strafe, rajadas |
 | `inventory.js` | `Inventory` (equipar, vender, recompensas) e `PreviewRenderer` (miniaturas + visualizador 3D) |
+| `touch.js` | `TouchControls` — analógico virtual, mira por arraste e botões na tela |
 | `ui.js` | `UIManager` — menus, HUD, mini-mapa, kill feed, placar, morte, fim de partida |
 | `game.js` | `Game`, `RoundManager` (melhor de 13), partículas, tracers, decals, loop principal |
 

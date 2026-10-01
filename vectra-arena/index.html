@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <title>VECTRA ARENA</title>
   <meta name="description" content="VECTRA ARENA — original competitive arena FPS prototype running in the browser (Three.js).">
   <meta name="theme-color" content="#05070c">
@@ -266,12 +268,28 @@
     <div class="round-banner hidden" id="round-banner"><b></b><span></span></div>
     <div class="buy-panel hidden" id="buy-panel">
       <div class="buy-title">EQUIPMENT PHASE <b id="buy-timer">5</b></div>
-      <div class="buy-row"><kbd>Z</kbd> ASSAULT RIFLE <kbd>X</kbd> PRECISION RIFLE</div>
+      <div class="buy-row buy-buttons"><button id="buy-rifle"><kbd>Z</kbd> ASSAULT RIFLE</button><button id="buy-sniper"><kbd>X</kbd> PRECISION RIFLE</button></div>
       <div class="buy-row dim">Armor 50 and full ammo issued automatically</div>
     </div>
     <div class="scope-overlay hidden" id="scope"><div class="scope-ring"></div></div>
     <div class="spectate-label hidden" id="spectate-label"></div>
     <div class="click-resume hidden" id="click-resume">CLICK TO CAPTURE MOUSE</div>
+  </div>
+
+  <!-- touch controls (phones / tablets only) -->
+  <div id="touch-controls" class="hidden">
+    <div id="t-move-zone"></div>
+    <div id="t-look-zone"></div>
+    <div id="t-stick"><div id="t-knob"></div></div>
+    <button class="t-btn t-big" id="t-fire">FIRE</button>
+    <button class="t-btn" id="t-ads">AIM</button>
+    <button class="t-btn" id="t-jump">JUMP</button>
+    <button class="t-btn" id="t-crouch">CROUCH</button>
+    <button class="t-btn t-small" id="t-reload">R</button>
+    <button class="t-btn t-small" id="t-inspect">F</button>
+    <div class="t-slots"><button class="t-btn t-small" id="t-slot1">1</button><button class="t-btn t-small" id="t-slot2">2</button><button class="t-btn t-small" id="t-slot3">3</button></div>
+    <button class="t-btn t-top" id="t-score">TAB</button>
+    <button class="t-btn t-top" id="t-pause">II</button>
   </div>
 
   <!-- scoreboard (TAB) -->
@@ -327,9 +345,9 @@
   <div id="mobile-warning" class="overlay hidden">
     <div class="mobile-panel">
       <div class="logo small"><span class="logo-top">VECTRA</span><span class="logo-bottom">ARENA</span></div>
-      <p>Desktop controls recommended.</p>
-      <p class="dim">This prototype is designed for mouse + keyboard. Menus, inventory and the inspection viewer work on tablets.</p>
-      <button class="btn" id="mobile-continue">CONTINUE ANYWAY</button>
+      <p>Touch controls enabled.</p>
+      <p class="dim">Left thumb: move (push fully forward to sprint). Right thumb: drag to aim. Play in landscape — fullscreen starts automatically on DEPLOY. Mouse + keyboard is still the best way to play.</p>
+      <button class="btn primary" id="mobile-continue">TAP TO PLAY</button>
     </div>
   </div>
 
@@ -354,6 +372,7 @@
   <script src="bots.js"></script>
   <script src="inventory.js"></script>
   <script src="ui.js"></script>
+  <script src="touch.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

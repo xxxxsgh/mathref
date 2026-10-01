@@ -492,6 +492,7 @@ class UIManager {
 
   showHUD(v) {
     this.hudVisible = v;
+    if (this.game.touch) this.game.touch.show(v && this.game.touchMode);
     $('#hud').classList.toggle('hidden', !v);
     document.body.classList.toggle('playing', v);
   }

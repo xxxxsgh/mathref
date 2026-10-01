@@ -269,6 +269,11 @@ class Game {
     this.mode = 'loading';        // loading | menu | playing | matchEnd
     this.locked = false;
     this.noLock = /[?&]nolock/.test(location.search); // testing aid: play without pointer lock
+    this.touchMode = TouchControls.isTouchDevice() || /[?&]touch/.test(location.search);
+    if (this.touchMode) {
+      this.noLock = true; // touch devices have no pointer lock
+      if (!this.save.data.touchInit) { this.save.data.touchInit = true; this.save.settings.quality = 'low'; this.save.save(); }
+    }
     this.combatants = [];
     this.difficulty = 'normal';
     this.trauma = 0;
@@ -372,6 +377,8 @@ class Game {
     this.ui.setLoading(1, 'READY');
     await this.nextFrame();
     this.bindInput();
+    this.touch = new TouchControls(this);
+    if (this.touchMode) document.body.classList.add('touch');
     window.addEventListener('resize', () => this.onResize());
 
     this.mode = 'menu';
@@ -384,7 +391,7 @@ class Game {
   checkMobile() {
     const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
     const fine = window.matchMedia && window.matchMedia('(any-pointer: fine)').matches;
-    if (coarse && !fine) document.getElementById('mobile-warning').classList.remove('hidden');
+    if ((coarse && !fine) || this.touchMode) document.getElementById('mobile-warning').classList.remove('hidden');
   }
 
   /* --------------------------- settings ---------------------------- */
@@ -526,7 +533,10 @@ class Game {
 
   pause() {
     if (this.mode !== 'playing') return;
+    if (this.touch) this.touch.reset();
     for (const k in this.input) this.input[k] = false;
+    this.input.touchMove = null;
+    if (this.touchMode) this.locked = false; // freezes the simulation until RESUME
     this.ui.showScoreboard(false);
     if (this.ui.screen !== 'settings') document.getElementById('pause-menu').classList.remove('hidden');
   }
@@ -541,6 +551,13 @@ class Game {
   /* ------------------------- match flow ---------------------------- */
   async startMatch() {
     this.audio.init();
+    if (this.touchMode) {
+      // phones: go fullscreen + landscape when possible
+      const de = document.documentElement;
+      if (!document.fullscreenElement && de.requestFullscreen) {
+        de.requestFullscreen().then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {})).catch(() => {});
+      }
+    }
     this.audio.startMusic();
     this.ui.hideAllScreens();
     const ls = document.getElementById('screen-loading');
@@ -622,6 +639,7 @@ class Game {
 
   quitToMenu() {
     if (document.pointerLockElement) document.exitPointerLock();
+    if (this.touch) this.touch.reset();
     this.mode = 'menu';
     this.save.save();
     for (const b of this.bots.bots) b.group.visible = false;
@@ -827,7 +845,8 @@ class Game {
     if (this.mode === 'menu' || this.mode === 'loading') {
       this.updateMenu(dt);
     } else if (this.mode === 'playing') {
-      if (this.locked || this.noLock) this.updatePlaying(dt);
+      // touch: `locked` doubles as "not paused"; desktop testing (?nolock) always runs
+      if (this.touchMode ? this.locked : (this.locked || this.noLock)) this.updatePlaying(dt);
       this.render(true);
     } else if (this.mode === 'matchEnd') {
       this.arena.update(dt);
