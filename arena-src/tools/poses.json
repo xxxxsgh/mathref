@@ -1,0 +1,5 @@
+[
+  {"name":"rifle","slot":"primary"},
+  {"name":"knifeIdle","slot":"melee"},
+  {"name":"knifeD","slot":"melee","inspect":"D","t":0.9}
+]
