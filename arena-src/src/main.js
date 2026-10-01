@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import './ui/styles.css';
 import { Save } from './core/Save.js';
-import { Settings } from './core/Settings.js';
+import { Settings, isTouchDevice } from './core/Settings.js';
 import { Input } from './core/Input.js';
 import { Arena } from './world/Arena.js';
 import { Effects } from './fx/Effects.js';
@@ -71,6 +71,7 @@ class Game {
     this.arena = new Arena(this.scene, { shadows: q !== 'low' });
     this.fx = new Effects(this.scene, q);
     this.input = new Input(this.renderer.domElement);
+    this.applyTouchMode();
     this.vm = new ViewModel(this.envMap, this.settings.data.viewmodelFov);
     this.viewer = new InspectionViewer(this.envMap);
     this.thumbs = new Thumbnails();
@@ -166,8 +167,28 @@ class Game {
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr) * d.renderScale);
   }
 
+  /** Liga/desliga o modo toque conforme a configuração (auto = detecta). */
+  applyTouchMode() {
+    const mode = this.settings.data.touchControls;
+    const on = mode === 'on' || (mode === 'auto' && isTouchDevice());
+    if (on !== this.input.touchMode && this.input.locked) this.input.unlock();
+    this.input.touchMode = on;
+    document.body.classList.toggle('touch', on);
+  }
+
+  /** Tela cheia + paisagem no celular (só funciona dentro de um toque). */
+  enterFullscreen() {
+    const el = document.documentElement;
+    if (document.fullscreenElement || !el.requestFullscreen) return;
+    el.requestFullscreen({ navigationUI: 'hide' })
+      .then(() => /** @type {any} */ (screen.orientation)?.lock?.('landscape'))
+      .catch(() => {});
+  }
+
   onSettings(d, key) {
     this.audio.setVolumes(d);
+    if (!key || key === 'touchControls') this.applyTouchMode();
+    if (!key || key === 'touchButtonScale') this.ui?.touch.applyScale(d.touchButtonScale);
     if (!key || key === 'quality' || key === 'renderScale') {
       this.applyQuality();
       this.resize();
@@ -198,7 +219,10 @@ class Game {
     const dt = Math.min(0.05, Math.max(0.0005, (now - this.last) / 1000));
     this.last = now;
     this.fps += (1 / dt - this.fps) * 0.05;
-    if (this.state === 'match' && this.match) this.updateMatch(dt);
+    const inMatch = this.state === 'match' && !!this.match;
+    this.ui.touch.show(inMatch && this.input.touchMode && this.input.locked && !this.ui.menuOpen);
+    this.ui.touch.updateOrientationHint(inMatch);
+    if (inMatch) this.updateMatch(dt);
     else if (this.state === 'viewer') {
       this.viewer.update(dt);
       this.viewer.render(this.renderer);
@@ -232,6 +256,7 @@ class Game {
 
   updateMatch(dt, render = true) {
     const m = /** @type {MatchManager} */ (this.match);
+    this.ui.touch.update();
     m.update(dt, { menuOpen: this.ui.menuOpen });
     const p = m.player;
 

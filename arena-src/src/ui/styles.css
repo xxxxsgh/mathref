@@ -253,3 +253,78 @@ input[type=color] { width: 44px; height: 28px; border: none; background: none; }
   .setting { grid-template-columns: 1fr 1fr 50px; }
   .profile { position: static; margin-bottom: 20px; }
 }
+
+/* ───────── toque (celular/tablet) ───────── */
+body.touch, body.touch #app canvas { touch-action: none; -webkit-touch-callout: none; overscroll-behavior: none; }
+.touch-layer { position: absolute; inset: 0; touch-action: none; --ts: 1; -webkit-tap-highlight-color: transparent; }
+.joy-base { display: none; position: absolute; width: calc(112px * var(--ts)); height: calc(112px * var(--ts)); transform: translate(-50%, -50%); border-radius: 50%; border: 2px solid rgba(255,255,255,.28); background: rgba(10,12,15,.25); pointer-events: none; }
+.joy-knob { position: absolute; left: 50%; top: 50%; width: calc(48px * var(--ts)); height: calc(48px * var(--ts)); border-radius: 50%; background: rgba(232,237,242,.55); transform: translate(-50%, -50%); }
+.tbtn { position: absolute; display: flex; align-items: center; justify-content: center; border-radius: 50%; touch-action: none; user-select: none; -webkit-user-select: none;
+  width: calc(var(--s) * var(--ts)); height: calc(var(--s) * var(--ts)); --s: 58px; font: 800 18px var(--font); color: rgba(255,255,255,.9);
+  background: rgba(10,12,15,.42); border: 2px solid rgba(255,255,255,.26); backdrop-filter: blur(2px); transition: transform .06s, background .06s; }
+.tbtn.down { transform: scale(.92); background: rgba(93,255,176,.3); border-color: var(--accent); }
+.tbtn.on { background: rgba(93,255,176,.35); border-color: var(--accent); }
+.t-fire { --s: 92px; right: calc(118px * var(--ts) + env(safe-area-inset-right)); bottom: calc(92px * var(--ts)); background: rgba(255,77,94,.38); border-color: rgba(255,77,94,.8); }
+.t-fire::after, .t-fire-l::after { content: ''; width: 34%; height: 34%; border-radius: 50%; border: 3px solid rgba(255,255,255,.85); box-shadow: 0 0 0 4px rgba(255,255,255,.15); }
+.t-fire.down, .t-fire-l.down { background: rgba(255,77,94,.65); border-color: #ff4d5e; }
+.t-fire-l { --s: 60px; left: calc(22px + env(safe-area-inset-left)); bottom: calc(170px * var(--ts)); background: rgba(255,77,94,.3); border-color: rgba(255,77,94,.65); }
+.t-jump { --s: 66px; right: calc(28px + env(safe-area-inset-right)); bottom: calc(40px * var(--ts)); }
+.t-crouch { --s: 58px; right: calc(32px + env(safe-area-inset-right)); bottom: calc(126px * var(--ts)); }
+.t-reload { right: calc(222px * var(--ts) + env(safe-area-inset-right)); bottom: calc(26px * var(--ts)); }
+.t-alt { right: calc(232px * var(--ts) + env(safe-area-inset-right)); bottom: calc(118px * var(--ts)); }
+.t-util { --s: 42px; font-size: 15px; right: calc(14px + env(safe-area-inset-right)); border-radius: 10px; }
+.t-swap { --s: 50px; right: calc(32px + env(safe-area-inset-right)); bottom: calc(200px * var(--ts)); }
+.t-inspect { right: calc(160px * var(--ts) + env(safe-area-inset-right)); bottom: calc(20px * var(--ts)); }
+.t-buy { right: auto; top: calc(12px + env(safe-area-inset-top)); left: calc(50% - 56px); transform: translateX(-50%); }
+.t-score { right: auto; top: calc(12px + env(safe-area-inset-top)); left: calc(50% + 56px); transform: translateX(-50%); }
+.t-buy.down, .t-score.down { transform: translateX(-50%) scale(.92); }
+.t-pause { top: 12px; right: auto; left: 50%; transform: translateX(-50%); top: calc(12px + env(safe-area-inset-top)); }
+.t-pause.down { transform: translateX(-50%) scale(.92); }
+.rotate-hint { position: absolute; inset: 0; z-index: 50; display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; background: rgba(8,10,13,.94); font-size: 46px; color: var(--accent); text-align: center; padding: 24px; }
+.rotate-hint span { font-size: 15px; color: var(--text); letter-spacing: .05em; }
+
+/* HUD reorganizado para deixar os cantos de baixo livres para os polegares */
+body.touch .hud .bl { left: auto; right: auto; bottom: auto; top: calc(10px + env(safe-area-inset-top)); left: calc(64px + env(safe-area-inset-left)); gap: 14px; }
+body.touch .hud .stat .big { font-size: 24px; }
+body.touch .hud .hpbar { width: 100px; }
+body.touch .hud .money { bottom: auto; top: calc(48px + env(safe-area-inset-top)); left: calc(64px + env(safe-area-inset-left)); font-size: 15px; }
+body.touch .hud .br { right: auto; left: 50%; transform: translateX(-50%); bottom: 8px; text-align: center; }
+body.touch .hud .ammo .big { font-size: 28px; }
+body.touch .hud .ammo .res { font-size: 15px; }
+body.touch .hud .slots { justify-content: center; margin-bottom: 2px; }
+body.touch .hud .top { top: calc(58px + env(safe-area-inset-top)); transform: translateX(-50%) scale(.8); transform-origin: top center; }
+body.touch .hud .alive { top: calc(104px + env(safe-area-inset-top)); }
+body.touch .hud .objective { top: calc(122px + env(safe-area-inset-top)); width: 200px; }
+body.touch .hud .practice { top: calc(60px + env(safe-area-inset-top)); font-size: 11px; }
+body.touch .hud .feed { transform: scale(.82); transform-origin: top right; }
+body.touch .hud .inspect-tag { bottom: auto; top: 38%; }
+body.touch .hud .center-msg { bottom: 34%; }
+body.touch .hud .banner { top: 30%; }
+body.touch .hud .banner .b1 { font-size: 24px; }
+
+/* telas baixas (celular deitado): menus mais compactos e roláveis */
+@media (max-height: 560px) {
+  .main-menu { justify-content: flex-start; padding-top: 18px; overflow-y: auto; }
+  .logo { font-size: 38px; }
+  .tagline { margin: 6px 0 12px; }
+  .menu-item { font-size: 16px; padding: 7px 12px; }
+  .profile { position: absolute; top: 12px; right: 12px; min-width: 0; padding: 8px 12px; }
+  .profile .stats { display: none; }
+  .equipped-strip { display: none; }
+  .topbar { padding: 10px 16px; }
+  .content { padding: 14px 16px; }
+  .modal { padding: 14px 16px; max-height: 94vh; }
+  .vpanel { top: 64px; width: 280px; max-height: calc(100vh - 140px); overflow: auto; padding: 12px; }
+  .vpanel h3 { font-size: 18px; }
+  .vbar .btn { padding: 6px 10px; font-size: 12px; }
+  .vhint { display: none; }
+}
+@media (max-width: 700px) {
+  .vpanel, .vpanel.left { width: auto; left: 10px; right: 10px; top: auto; bottom: 74px; max-height: 40vh; overflow: auto; }
+  .vpanel.left { bottom: auto; top: 64px; }
+  .vbar { flex-wrap: wrap; justify-content: center; width: calc(100% - 20px); border-radius: 14px; }
+  .controls-ref { columns: 1; }
+  .setting { grid-template-columns: 1fr 1fr 44px; }
+  .main-menu { padding: 0 20px; }
+  .profile { position: static; margin: 16px 0; }
+}

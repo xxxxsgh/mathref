@@ -45,6 +45,16 @@ export class Input {
     this.enabled = true;
     /** @type {((locked: boolean) => void)[]} */
     this.lockListeners = [];
+    /**
+     * Modo toque: não existe pointer lock no celular. "Travar" vira só um
+     * estado lógico (partida ativa) e os controles virtuais escrevem direto
+     * neste objeto: teclas, botões, delta de mira e o eixo analógico.
+     */
+    this.touchMode = false;
+    /** eixo analógico do joystick (-1..1; y negativo = frente) */
+    this.axisX = 0;
+    this.axisY = 0;
+    this.axisActive = false;
 
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Tab' && this.locked) e.preventDefault();
@@ -81,6 +91,7 @@ export class Input {
       if (this.locked) e.preventDefault();
     });
     document.addEventListener('pointerlockchange', () => {
+      if (this.touchMode) return;
       this.locked = document.pointerLockElement === this.target;
       if (!this.locked) {
         this.buttons.fill(false);
@@ -92,13 +103,33 @@ export class Input {
 
   lock() {
     if (this.locked) return;
+    if (this.touchMode) {
+      this.setLocked(true);
+      return;
+    }
     const p = this.target.requestPointerLock?.({ unadjustedMovement: true });
     // `unadjustedMovement` não existe em todo navegador; tenta sem ele.
     if (p && typeof p.catch === 'function') p.catch(() => this.target.requestPointerLock?.());
   }
 
   unlock() {
+    if (this.touchMode) {
+      if (this.locked) this.setLocked(false);
+      return;
+    }
     if (document.pointerLockElement) document.exitPointerLock();
+  }
+
+  /** @param {boolean} v */
+  setLocked(v) {
+    this.locked = v;
+    if (!v) {
+      this.buttons.fill(false);
+      this.keys.clear();
+      this.axisX = this.axisY = 0;
+      this.axisActive = false;
+    }
+    for (const fn of this.lockListeners) fn(v);
   }
 
   /** @param {keyof typeof BINDINGS} action */
