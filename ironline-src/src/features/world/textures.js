@@ -63,7 +63,7 @@ export function genPlaster(N, seed = 11) {
     c[0] = r * k; c[1] = g * k; c[2] = b * k;
     m[0] = cav[i]; m[1] = lerp(0.84, 0.95, p) + grain[i] * 0.04; m[2] = 0;
   });
-  return { albedo, normal, orm, world: 2.4 };
+  return { albedo, normal, orm, world: 4.0 };
 }
 
 /** Máscara simples de tijolos (1 = tijolo, 0 = argamassa) para reuso. */
@@ -112,24 +112,38 @@ export function genConcrete(N, seed = 21) {
 }
 
 // ─── tijolo aparente ───────────────────────────────────────────────────
+// Repetição de 3.84 m (16 × 48 tijolos de 0.24 × 0.08 m com junta de 1 cm):
+// tons de olaria por tijolo (terracota, queimado, amarelado, reaproveitado),
+// arestas boleadas e lascadas, argamassa recuada com areia, eflorescência
+// salina e fuligem que SEGUEM os tijolos (não manchas soltas).
 export function genBrick(N, seed = 31) {
-  const cols = 8, rows = 24; // 1.92 m → tijolo 0.24 × 0.08
+  const cols = 16, rows = 48, TW = 3.84;
   const r = mulberry(seed);
-  const tint = new Float32Array(cols * 2 * rows * 3);
-  for (let i = 0; i < tint.length / 3; i++) {
-    const t = r();
-    const dark = r() < 0.12 ? 0.7 : 1;
-    tint[i * 3] = lerp(0.52, 0.68, t) * dark;
-    tint[i * 3 + 1] = lerp(0.26, 0.4, t * t) * dark;
-    tint[i * 3 + 2] = lerp(0.18, 0.28, t) * dark;
+  const nB = cols * rows;
+  const tone = new Float32Array(nB * 6);
+  for (let i = 0; i < nB; i++) {
+    const t = r(), k = r();
+    let c;
+    if (k < 0.58) c = [lerp(0.44, 0.55, t), lerp(0.25, 0.31, t), lerp(0.19, 0.23, t)];
+    else if (k < 0.8) c = [lerp(0.33, 0.41, t), lerp(0.2, 0.25, t), lerp(0.16, 0.19, t)];
+    else if (k < 0.92) c = [lerp(0.55, 0.62, t), lerp(0.37, 0.43, t), lerp(0.27, 0.32, t)];
+    else c = [lerp(0.4, 0.48, t), lerp(0.35, 0.41, t), lerp(0.31, 0.36, t)];
+    tone[i * 6] = c[0]; tone[i * 6 + 1] = c[1]; tone[i * 6 + 2] = c[2];
+    tone[i * 6 + 3] = r(); // fuligem / sujeira do tijolo
+    tone[i * 6 + 4] = (r() - 0.5) * 2; // inclinação x
+    tone[i * 6 + 5] = (r() - 0.5) * 2; // inclinação y
   }
-  const n1 = fbm(N, seed + 1, { period: 48, octaves: 3 });
-  const n2 = fbm(N, seed + 2, { period: 4, octaves: 5 });
-  const chip = fbm(N, seed + 3, { period: 32, octaves: 3 });
-  const soot = fbm(N, seed + 4, { period: 3, octaves: 5 });
+  const n1 = fbm(N, seed + 1, { period: 64, octaves: 3 });
+  const n2 = fbm(N, seed + 2, { period: 8, octaves: 5 });
+  const chip = fbm(N, seed + 3, { period: 48, octaves: 3 });
+  const eff = fbm(N, seed + 4, { period: 4, octaves: 5 });
+  const pit = white(N, seed + 5);
+  const sand = blur(white(N, seed + 6), N, 1);
   const h = new Float32Array(N * N);
   const isB = new Float32Array(N * N);
   const bid = new Int32Array(N * N);
+  const edge = new Float32Array(N * N);
+  const bw = TW / cols, bh = TW / rows;
   for (let y = 0; y < N; y++) {
     const fy = (y / N) * rows;
     const row = Math.floor(fy);
@@ -138,74 +152,104 @@ export function genBrick(N, seed = 31) {
       const fx = (x / N) * cols + off;
       const col = Math.floor(fx);
       const lx = fx - col, ly = fy - row;
-      const ex = Math.min(lx, 1 - lx) * (0.24 / 1), ey = Math.min(ly, 1 - ly) * 0.08;
-      const e = Math.min(ex, ey); // metros até a junta
+      const ex = Math.min(lx, 1 - lx) * bw, ey = Math.min(ly, 1 - ly) * bh;
       const i = y * N + x;
-      const mortar = 0.006 + (chip[i] - 0.5) * 0.006;
-      const b = smooth(mortar, mortar + 0.004, e);
+      const id = (row * cols + (((col % cols) + cols) % cols)) % nB;
+      bid[i] = id;
+      // lascas: a aresta "come" o tijolo onde o ruído é alto
+      const ch = smooth(0.55, 0.85, chip[i]) * 0.012;
+      const e = Math.min(ex, ey) - ch;
+      edge[i] = e;
+      const mortar = 0.005;
+      const b = smooth(mortar, mortar + 0.0035, e);
       isB[i] = b;
-      bid[i] = (row * cols * 2 + (col % (cols * 2))) % (cols * 2 * rows);
-      h[i] = b * (0.7 + n1[i] * 0.25) + (1 - b) * n1[i] * 0.2;
+      const bevel = smooth(mortar, mortar + 0.012, e);
+      const tilt = tone[id * 6 + 4] * (lx - 0.5) * 0.05 + tone[id * 6 + 5] * (ly - 0.5) * 0.05;
+      h[i] = b * (0.55 + bevel * 0.25 + tilt + n1[i] * 0.1 - (pit[i] > 0.985 ? 0.12 : 0)) + (1 - b) * (0.1 + sand[i] * 0.12);
     }
   }
   const hb = blur(h, N, 1);
-  const normal = heightToNormal(hb, N, 3);
-  const cav = cavity(hb, N, 3, 2);
+  const normal = heightToNormal(hb, N, 4);
+  const cav = cavity(hb, N, 2, 1.6);
   const { albedo, orm } = pack(N, (i, c, m) => {
     const b = isB[i];
-    const t = bid[i] * 3;
-    const v = 0.85 + n1[i] * 0.3;
-    const sd = 1 - smooth(0.55, 0.9, soot[i]) * 0.35;
-    const br = tint[t] * v, bg = tint[t + 1] * v, bb = tint[t + 2] * v;
-    const mo = 0.55 + n2[i] * 0.12;
-    c[0] = lerp(mo, br, b) * cav[i] * sd;
-    c[1] = lerp(mo * 0.96, bg, b) * cav[i] * sd;
-    c[2] = lerp(mo * 0.9, bb, b) * cav[i] * sd;
-    m[0] = cav[i]; m[1] = lerp(0.95, 0.82, b); m[2] = 0;
+    const t = bid[i] * 6;
+    const v = 0.88 + n1[i] * 0.2 + (n2[i] - 0.5) * 0.12;
+    const soot = tone[t + 3] > 0.86 ? 0.62 : tone[t + 3] > 0.7 ? 0.86 : 1;
+    let br = tone[t] * v * soot, bg = tone[t + 1] * v * soot, bb = tone[t + 2] * v * soot;
+    // lasca recente: miolo do tijolo mais claro/alaranjado
+    const fresh = smooth(0.7, 0.9, chip[i]) * (1 - smooth(0.004, 0.02, edge[i])) * b;
+    br = lerp(br, 0.6, fresh * 0.5); bg = lerp(bg, 0.38, fresh * 0.5); bb = lerp(bb, 0.28, fresh * 0.5);
+    const mo = 0.5 + n2[i] * 0.1 + (sand[i] - 0.5) * 0.12;
+    let cr = lerp(mo, br, b), cg = lerp(mo * 0.97, bg, b), cb = lerp(mo * 0.92, bb, b);
+    // eflorescência salina (velatura esbranquiçada, mais na argamassa)
+    const ef = smooth(0.66, 0.9, eff[i]) * (0.35 + 0.4 * (1 - b));
+    cr = lerp(cr, 0.72, ef * 0.45); cg = lerp(cg, 0.7, ef * 0.45); cb = lerp(cb, 0.66, ef * 0.45);
+    const k = 0.55 + cav[i] * 0.45;
+    c[0] = cr * k; c[1] = cg * k; c[2] = cb * k;
+    m[0] = cav[i]; m[1] = lerp(0.96, 0.8 + n1[i] * 0.1, b) + ef * 0.04; m[2] = 0;
   });
-  return { albedo, normal, orm, world: 1.92 };
+  return { albedo, normal, orm, world: TW };
 }
 
-// ─── asfalto com agregado, remendos e rachaduras ───────────────────────
+// ─── asfalto: agregado fino + ligante gasto ────────────────────────────
+// Só a camada de "material". Remendos, rachaduras seladas, couro de
+// jacaré, trilhas de pneu, sarjeta, buracos e poças vêm do shader de
+// estrada (materials.js → W_ROAD) em coordenadas de mundo, sem repetição.
 export function genAsphalt(N, seed = 41) {
   const big = fbm(N, seed, { period: 2, octaves: 6, gain: 0.55 });
-  const mid = fbm(N, seed + 1, { period: 8, octaves: 4 });
-  const wn = white(N, seed + 2);
-  const wn2 = white(N, seed + 3);
-  const cr = cracks(N, seed + 4, { cells: 3, width: 0.012, coverage: 0.4, warp: 0.1 });
+  const mid = fbm(N, seed + 1, { period: 10, octaves: 4 });
+  const w = worley(N, 150, seed + 2, { jitter: 0.9 });
+  const wn = white(N, seed + 3);
   const sand = fbm(N, seed + 7, { period: 3, octaves: 5 });
-  const patchN = fbm(N, seed + 5, { period: 2, octaves: 2 });
-  const oil = fbm(N, seed + 6, { period: 5, octaves: 4 });
-  const agg = blur(wn, N, 1);
+  const ravel = fbm(N, seed + 8, { period: 6, octaves: 5 });
   const h = new Float32Array(N * N);
-  const patch = new Float32Array(N * N);
-  for (let y = 0; y < N; y++) {
-    for (let x = 0; x < N; x++) {
-      const i = y * N + x;
-      // remendo retangular: quadrado de borda reta (asfalto mais novo/escuro)
-      const px = x / N, py = y / N;
-      const inP = px > 0.12 && px < 0.42 && py > 0.55 && py < 0.8 ? 1 : 0;
-      const inP2 = px > 0.62 && px < 0.9 && py > 0.1 && py < 0.28 ? 1 : 0;
-      patch[i] = Math.max(inP * (patchN[i] > 0.3 ? 1 : 0), inP2);
-      h[i] = (agg[i] - 0.5) * 1.2 + (wn2[i] > 0.93 ? 0.4 : 0) + mid[i] * 0.2 + cr[i] * (1 - patch[i]) * 0.5 + patch[i] * 0.1;
-    }
+  const stoneM = new Float32Array(N * N);
+  for (let i = 0; i < N * N; i++) {
+    // pedras do agregado: células de Worley expostas onde o ligante gastou
+    const expo = 0.25 + smooth(0.45, 0.8, ravel[i]) * 0.5;
+    const st = (1 - smooth(0.18, 0.36, w.f1[i])) * (w.id[i] < expo ? 1 : 0);
+    stoneM[i] = st;
+    h[i] = st * (0.5 + w.id[i] * 0.3) + (wn[i] - 0.5) * 0.12 + mid[i] * 0.15 - (w.f1[i] > 0.42 && ravel[i] > 0.7 ? 0.25 : 0);
   }
-  const normal = heightToNormal(h, N, 1.6);
-  const cav = cavity(h, N, 2, 2);
+  const hb = blur(h, N, 1);
+  const normal = heightToNormal(hb, N, 2.4);
+  const cav = cavity(hb, N, 2, 1.8);
   const { albedo, orm } = pack(N, (i, c, m) => {
-    const p = patch[i];
-    const stone = wn2[i] > 0.93 ? 0.12 * (wn2[i] - 0.93) * 14 : 0;
-    let v = 0.3 + (big[i] - 0.5) * 0.12 + (mid[i] - 0.5) * 0.06 + stone * 0.5;
-    v = lerp(v, 0.19 + mid[i] * 0.04, p);
-    const o = smooth(0.74, 0.88, oil[i]) * 0.35 * (1 - p);
-    v *= 1 - o;
-    v *= 1 - cr[i] * 0.45;
-    // areia/poeira assentada (tom quente)
-    const sd = smooth(0.55, 0.85, sand[i]) * 0.5;
-    c[0] = lerp(v, 0.5, sd * 0.5) * cav[i]; c[1] = lerp(v * 0.985, 0.45, sd * 0.5) * cav[i]; c[2] = lerp(v * 0.955, 0.38, sd * 0.5) * cav[i];
-    m[0] = cav[i]; m[1] = lerp(0.88, 0.62, Math.max(o, cr[i] * 0.6)) - stone * 0.25; m[2] = 0;
+    const st = stoneM[i];
+    const sid = w.id[i];
+    // ligante: preto-acinzentado oxidado pelo sol
+    let v = 0.2 + (big[i] - 0.5) * 0.06 + (mid[i] - 0.5) * 0.04;
+    // pedra: cinza/bege variados
+    const sv = 0.3 + sid * 0.22;
+    let r = lerp(v, sv * 1.02, st), g = lerp(v * 0.99, sv, st), b = lerp(v * 0.97, sv * 0.94, st);
+    const sd = smooth(0.6, 0.88, sand[i]) * 0.35;
+    r = lerp(r, 0.46, sd); g = lerp(g, 0.42, sd); b = lerp(b, 0.36, sd);
+    const k = 0.7 + cav[i] * 0.3;
+    c[0] = r * k; c[1] = g * k; c[2] = b * k;
+    m[0] = cav[i]; m[1] = lerp(0.86, 0.72, st) + sd * 0.1; m[2] = 0;
   });
-  return { albedo, normal, orm, world: 7 };
+  return { albedo, normal, orm, world: 4 };
+}
+
+/**
+ * Detalhe de estrada (linear, 12 m por repetição), amostrado pelo shader
+ * W_ROAD: R = rachaduras abertas, G = selante de piche ("cobrinhas"),
+ * B = rede fina de couro de jacaré, A = máscara de zonas de jacaré.
+ */
+export function genRoadDetail(N, seed = 141) {
+  const open = cracks(N, seed, { cells: 3, width: 0.012, coverage: 0.5, warp: 0.08 });
+  const seal = cracks(N, seed + 50, { cells: 2, width: 0.03, coverage: 0.45, warp: 0.1 });
+  const gator = cracks(N, seed + 90, { cells: 16, width: 0.05, coverage: 0.95, warp: 0.05 });
+  const zone = fbm(N, seed + 120, { period: 3, octaves: 4 });
+  const d = new Uint8Array(N * N * 4);
+  for (let i = 0; i < N * N; i++) {
+    d[i * 4] = S(open[i]);
+    d[i * 4 + 1] = S(smooth(0.2, 0.6, seal[i]));
+    d[i * 4 + 2] = S(gator[i]);
+    d[i * 4 + 3] = S(zone[i]);
+  }
+  return d;
 }
 
 // ─── calçada de placas de concreto ─────────────────────────────────────
@@ -347,14 +391,18 @@ export function genWood(N, seed = 81) {
   return { albedo, normal, orm, world: 1.2 };
 }
 
-// ─── piso cerâmico (interior) ──────────────────────────────────────────
+// ─── piso de ladrilho hidráulico (interior) ────────────────────────────
+// 0.25 m, 8 × 8 por repetição de 2 m. Quatro desenhos clássicos (rosácea,
+// quadrifólio, losango, liso) em tons terrosos desbotados; o shader W_FLOOR
+// varia tom/peça por ladrilho no mundo, tira ladrilhos, junta poeira nos
+// rodapés e gasta o caminho de passagem.
 export function genTiles(N, seed = 91) {
-  const tiles = 8; // 0.3 m em 2.4 m
+  const tiles = 8;
   const r = mulberry(seed);
-  const tv = Array.from({ length: tiles * tiles * 2 }, () => r());
-  const dust = fbm(N, seed + 1, { period: 3, octaves: 6 });
+  const tv = Array.from({ length: tiles * tiles * 3 }, () => r());
   const fine = fbm(N, seed + 2, { period: 128, octaves: 2 });
-  const cr = cracks(N, seed + 3, { cells: 7, width: 0.015, coverage: 0.4 });
+  const mott = fbm(N, seed + 1, { period: 16, octaves: 4 });
+  const cr = cracks(N, seed + 3, { cells: 9, width: 0.012, coverage: 0.35 });
   const h = new Float32Array(N * N);
   const gap = new Float32Array(N * N);
   const pat = new Float32Array(N * N);
@@ -366,61 +414,76 @@ export function genTiles(N, seed = 91) {
       const cx = Math.floor(fx), cy = Math.floor(fy);
       const lx = fx - cx, ly = fy - cy;
       const e = Math.min(lx, 1 - lx, ly, 1 - ly);
-      const g = 1 - smooth(0.012, 0.025, e);
+      const g = 1 - smooth(0.012, 0.026, e);
       gap[i] = g;
-      tid[i] = cy * tiles + cx;
-      // padrão geométrico (losango em cada ladrilho, alternando)
-      const d = Math.abs(lx - 0.5) + Math.abs(ly - 0.5);
-      pat[i] = ((cx + cy) % 2 ? 1 : 0) * 0.5 + (d < 0.32 ? 0.5 : 0);
-      const broken = tv[tid[i] * 2 + 1] > 0.8 ? cr[i] : 0;
-      h[i] = (1 - g) * 0.6 - broken * 0.6;
+      const t = cy * tiles + cx;
+      tid[i] = t;
+      // desenho em coordenadas do "módulo" de 2×2 ladrilhos (simetria de quadrante)
+      const qx = (cx % 2 ? 1 - lx : lx), qy = (cy % 2 ? 1 - ly : ly); // 0 = centro do módulo
+      const dc = Math.hypot(qx, qy);
+      const dd = Math.abs(lx - 0.5) + Math.abs(ly - 0.5);
+      const kind = Math.floor(tv[Math.floor(cy / 2) * tiles + Math.floor(cx / 2)] * 3); // módulos de 2×2
+      let p = 0;
+      if (kind === 0) p = dc < 0.42 ? (dc < 0.3 ? 2 : 1) : (dd > 0.82 ? 3 : 0); // rosácea
+      else if (kind === 1) p = Math.abs(dc - 0.55) < 0.08 ? 1 : dd < 0.22 ? 2 : 0; // quadrifólio (arcos)
+      else p = dd < 0.36 ? (dd < 0.18 ? 3 : 2) : e < 0.07 ? 1 : 0; // losango com filete
+      pat[i] = p;
+      const broken = tv[t * 3 + 1] > 0.86 ? cr[i] : 0;
+      h[i] = (1 - g) * (0.6 + (tv[t * 3 + 2] - 0.5) * 0.04) - broken * 0.5 + fine[i] * 0.03;
     }
   }
-  const normal = heightToNormal(blur(h, N, 1), N, 2);
+  const normal = heightToNormal(blur(h, N, 1), N, 2.4);
+  const cols = [
+    [0.66, 0.62, 0.54], // creme
+    [0.52, 0.3, 0.22], // terracota
+    [0.3, 0.34, 0.36], // grafite
+    [0.46, 0.42, 0.3], // ocre
+  ];
   const { albedo, orm } = pack(N, (i, c, m) => {
-    const p = pat[i];
-    const t = tv[tid[i] * 2];
-    let rr = 0.66, gg = 0.62, bb = 0.55;
-    if (p >= 0.5 && p < 1) { rr = 0.5; gg = 0.45; bb = 0.38; }
-    if (p >= 1) { rr = 0.42; gg = 0.44; bb = 0.42; }
-    if (p === 0.5) { rr = 0.56; gg = 0.4; bb = 0.33; }
-    const v = 0.9 + t * 0.15 + (fine[i] - 0.5) * 0.05;
-    const dd = smooth(0.2, 0.75, dust[i]);
-    const dc = [0.55, 0.5, 0.44];
+    const col = cols[pat[i]];
+    const t = tv[tid[i] * 3];
+    const v = 0.9 + t * 0.12 + (fine[i] - 0.5) * 0.06 + (mott[i] - 0.5) * 0.1;
     const gp = gap[i];
-    c[0] = lerp(lerp(rr * v, dc[0], dd * 0.6), 0.32, gp);
-    c[1] = lerp(lerp(gg * v, dc[1], dd * 0.6), 0.3, gp);
-    c[2] = lerp(lerp(bb * v, dc[2], dd * 0.6), 0.27, gp);
-    m[0] = 1 - gp * 0.4; m[1] = lerp(0.25, 0.85, Math.max(dd, gp)); m[2] = 0;
+    c[0] = lerp(col[0] * v, 0.3, gp);
+    c[1] = lerp(col[1] * v, 0.28, gp);
+    c[2] = lerp(col[2] * v, 0.25, gp);
+    m[0] = 1 - gp * 0.45; m[1] = lerp(0.42 + mott[i] * 0.2, 0.92, gp); m[2] = 0;
   });
-  return { albedo, normal, orm, world: 2.4 };
+  return { albedo, normal, orm, world: 2 };
 }
 
-// ─── terra/entulho miúdo ───────────────────────────────────────────────
+// ─── terra / pó de entulho ─────────────────────────────────────────────
+// Grãos finos e pó de reboco/cimento — sem "bolinhas" grandes repetidas.
 export function genDirt(N, seed = 101) {
   const big = fbm(N, seed, { period: 3, octaves: 6, gain: 0.55 });
-  const w = worley(N, 22, seed + 1);
-  const w2 = worley(N, 60, seed + 2);
+  const w = worley(N, 70, seed + 1, { jitter: 0.95 });
+  const w2 = worley(N, 180, seed + 2, { jitter: 0.95 });
   const fine = fbm(N, seed + 3, { period: 128, octaves: 2 });
+  const wn = white(N, seed + 4);
   const h = new Float32Array(N * N);
   for (let i = 0; i < N * N; i++) {
-    const peb = Math.max(0, 0.34 - w.f1[i]) * 2 * (w.id[i] > 0.4 ? 1 : 0);
-    const peb2 = Math.max(0, 0.4 - w2.f1[i]) * (w2.id[i] > 0.5 ? 1 : 0);
-    h[i] = big[i] * 0.3 + peb + peb2 * 0.6 + fine[i] * 0.2;
+    const g1 = (1 - smooth(0.15, 0.45, w.f1[i])) * (w.id[i] > 0.55 ? 1 : 0) * (0.5 + w.id[i] * 0.5);
+    const g2 = (1 - smooth(0.2, 0.5, w2.f1[i])) * (w2.id[i] > 0.4 ? 0.6 : 0);
+    h[i] = big[i] * 0.4 + g1 * 0.5 + g2 * 0.35 + fine[i] * 0.15 + wn[i] * 0.06;
   }
-  const normal = heightToNormal(h, N, 2.5);
-  const cav = cavity(h, N, 2, 2.5);
+  const hb = blur(h, N, 1);
+  const normal = heightToNormal(hb, N, 2.2);
+  const cav = cavity(hb, N, 2, 2);
   const { albedo, orm } = pack(N, (i, c, m) => {
-    const t = w.id[i];
-    let r = 0.5 + (big[i] - 0.5) * 0.2, g = 0.44 + (big[i] - 0.5) * 0.18, b = 0.36 + (big[i] - 0.5) * 0.12;
-    // pedrinhas: só um pouco mais claras/cinzentas que a terra, borda suave
-    const pk = (1 - smooth(0.22, 0.34, w.f1[i])) * (t > 0.4 ? 1 : 0) * 0.6;
-    const v = 0.42 + t * 0.18;
-    r = lerp(r, v, pk); g = lerp(g, v * 0.97, pk); b = lerp(b, v * 0.92, pk);
-    c[0] = r * cav[i]; c[1] = g * cav[i]; c[2] = b * cav[i];
-    m[0] = cav[i]; m[1] = 0.95; m[2] = 0;
+    const t = w.id[i], t2 = w2.id[i];
+    const b = big[i] - 0.5;
+    let r = 0.5 + b * 0.16, g = 0.45 + b * 0.14, bl = 0.38 + b * 0.1;
+    // grãos: cinza de concreto, bege de reboco, alguns avermelhados (tijolo moído)
+    const g1 = (1 - smooth(0.15, 0.4, w.f1[i])) * (t > 0.55 ? 1 : 0);
+    const gc = t > 0.9 ? [0.5, 0.33, 0.26] : t > 0.75 ? [0.62, 0.6, 0.55] : [0.56, 0.52, 0.45];
+    r = lerp(r, gc[0], g1 * 0.7); g = lerp(g, gc[1], g1 * 0.7); bl = lerp(bl, gc[2], g1 * 0.7);
+    const g2 = (1 - smooth(0.2, 0.45, w2.f1[i])) * (t2 > 0.4 ? 1 : 0) * 0.3;
+    r += g2 * (t2 - 0.6) * 0.3; g += g2 * (t2 - 0.6) * 0.3; bl += g2 * (t2 - 0.6) * 0.28;
+    const k = 0.65 + cav[i] * 0.35;
+    c[0] = r * k; c[1] = g * k; c[2] = bl * k;
+    m[0] = cav[i]; m[1] = 0.96; m[2] = 0;
   });
-  return { albedo, normal, orm, world: 2.5 };
+  return { albedo, normal, orm, world: 2.2 };
 }
 
 // ─── tecido de saco de areia (juta/polipropileno) ──────────────────────
