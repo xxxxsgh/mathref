@@ -441,7 +441,7 @@ const rendering = {
     if (sun && !this.sun) this.sun = sun;
     if (sun) {
       this.shadowFit.readDirection(sun, this.sunDir);
-      this.shadowFit.update(sun, camera, this.sunDir);
+      if (this.shadowFit.update(sun, camera, this.sunDir)) this.shadowDirty = true;
     }
     const intensity = sun?.intensity ?? 3;
     this.atmo.setSun(this.sunDir, intensity);
@@ -579,6 +579,14 @@ const rendering = {
       vm.camera.projectionMatrix.elements[9] += jy;
     }
 
+    // Shadow map do sol sob demanda: re-renderiza quando o frustum muda
+    // (câmera andou/sol girou) e, para objetos móveis (inimigos, portas), a
+    // cada 2 quadros (3 no modo shot). O mapa de 4096² é o passe mais caro.
+    renderer.shadowMap.autoUpdate = false;
+    const every = ctx.shot ? 3 : 2;
+    renderer.shadowMap.needsUpdate = !!this.shadowDirty || this.frameIndex % every === 0 || !sun?.shadow?.map;
+    this.shadowDirty = false;
+
     // 1) cena do mundo
     renderer.setClearColor(0x000000, 1);
     renderer.setRenderTarget(rt.scene);
@@ -589,6 +597,8 @@ const rendering = {
     // 2) viewmodel em alvo próprio (α pré-multiplicado)
     const vmOn = vm.visible;
     if (vmOn) {
+      // a viewmodel tem a própria luz com sombra (mapa pequeno): sempre atualiza
+      renderer.shadowMap.needsUpdate = true;
       renderer.setClearColor(0x000000, 0);
       renderer.setRenderTarget(rt.vm);
       renderer.clear();
@@ -899,6 +909,7 @@ const rendering = {
 
   dispose(ctx) {
     this.offs?.forEach((off) => off());
+    ctx.renderer.shadowMap.autoUpdate = true;
     ctx.setRenderPipeline(null);
     this.disposeTargets();
     Object.values(this.mats || {}).forEach((m) => m.dispose());

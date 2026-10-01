@@ -49,8 +49,9 @@ export class ShadowFitter {
     return out.normalize();
   }
 
+  /** Reposiciona a sombra; retorna true se o frustum do sol mudou (precisa re-renderizar). */
   update(sun, camera, dirToSun) {
-    if (!sun.castShadow) return;
+    if (!sun.castShadow) return false;
     const shadow = sun.shadow;
     if (shadow.mapSize.x !== this.mapSize) {
       shadow.mapSize.setScalar(this.mapSize);
@@ -94,9 +95,15 @@ export class ShadowFitter {
       cam.far = this.distance + 120;
       cam.updateProjectionMatrix();
     }
+    const changed = !this.lastCenter || this.lastCenter.distanceToSquared(_center) > 1e-8 || this.lastDirKey.angleTo(dirToSun) > 1e-5;
+    if (changed) {
+      (this.lastCenter ||= new THREE.Vector3()).copy(_center);
+      (this.lastDirKey ||= new THREE.Vector3()).copy(dirToSun);
+    }
     shadow.radius = this.softness;
     shadow.bias = -0.00015;
     shadow.normalBias = texel * 1.4;
     shadow.blurSamples = 8;
+    return changed;
   }
 }
