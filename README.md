@@ -121,5 +121,11 @@ o resto procedural — texturas, modelos, mapa e áudio sintetizado.
 - Inimigos com A* em grade, linha de visada, rajadas, tempo de reação e
   precisão que crescem a cada onda; minimapa marca quem atira.
 
+- Celular e tablet (na horizontal): joystick flutuante à esquerda (empurrar
+  até a borda corre), arrastar à direita para mirar, botão de fogo que também
+  mira enquanto arrasta, e botões de mira, pulo, agachar, recarga, granada,
+  troca de arma e pausa. Em toque, a resolução e o mapa de sombras caem para
+  manter o desempenho.
+
 Por ser um arquivo estático na raiz, o workflow do Pages publica em `/cod/`
 sem nenhuma alteração.

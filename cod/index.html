@@ -94,11 +94,11 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--ink);color:var(-
 #scope:after{top:0;bottom:0;left:50%;width:1px}
 
 /* menu */
-#menu,#over{position:fixed;inset:0;display:flex;align-items:center;
+#menu,#over{position:fixed;inset:0;display:flex;align-items:flex-start;z-index:10;
   background:linear-gradient(90deg,rgba(8,9,7,.94) 0%,rgba(8,9,7,.82) 38%,rgba(8,9,7,.15) 75%,transparent);
   padding-inline:max(16px,6vw);overflow-y:auto}
 #over{background:rgba(8,9,7,.82);justify-content:center}
-.dossier{max-width:520px;display:grid;gap:18px;padding-block:24px}
+.dossier{max-width:520px;display:grid;gap:18px;padding-block:24px;margin-block:auto}
 .kicker{font-size:13px;letter-spacing:.32em;color:var(--amber);font-weight:600}
 h1{margin:0;font-family:var(--f-display);font-weight:400;font-size:clamp(46px,8.5vw,96px);line-height:.88;color:#f4efe2;letter-spacing:.01em;text-wrap:balance}
 h1 small{display:block;font-size:.34em;letter-spacing:.5em;color:var(--dim);margin:.25em 0 .2em .1em}
@@ -113,8 +113,48 @@ h1 small{display:block;font-size:.34em;letter-spacing:.5em;color:var(--dim);marg
 .keys div{display:flex;gap:10px;align-items:baseline}
 kbd{font-family:var(--f-hud);font-weight:800;color:var(--khaki);border:1px solid rgba(212,201,166,.4);border-bottom-width:2px;padding:0 6px;min-width:14px;text-align:center;font-size:13px}
 #loading{font-size:14px;letter-spacing:.2em;color:var(--amber)}
-#touchNote{display:none;font-size:14px;color:var(--red);letter-spacing:.06em}
-@media (pointer:coarse){#touchNote{display:block}}
+.tkeys{display:none;gap:6px;font-size:14px;color:var(--dim);letter-spacing:.03em;max-width:460px}
+.tkeys b{color:var(--khaki);font-weight:800;letter-spacing:.08em;margin-right:6px}
+
+/* controles de toque */
+#touch{position:fixed;inset:0;z-index:5;touch-action:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.tbtn{position:absolute;width:56px;height:56px;border-radius:50%;background:rgba(14,15,11,.42);border:1.5px solid rgba(212,201,166,.45);
+  color:var(--khaki);font:800 11px/1 var(--f-hud);letter-spacing:.08em;display:grid;place-items:center;text-align:center;-webkit-user-select:none;user-select:none}
+.tbtn.on{background:rgba(242,163,58,.38);border-color:var(--amber);color:#fff}
+.tbtn.big{width:88px;height:88px;font-size:14px;border-width:2px;border-color:rgba(217,57,44,.7);background:rgba(90,20,14,.35)}
+.tbtn.big.on{background:rgba(217,57,44,.55)}
+.tbtn.sm{width:42px;height:42px;font-size:13px}
+#tFire{right:calc(26px + env(safe-area-inset-right,0px));bottom:calc(34px + env(safe-area-inset-bottom,0px))}
+#tAds{right:calc(126px + env(safe-area-inset-right,0px));bottom:calc(26px + env(safe-area-inset-bottom,0px))}
+#tReload{right:calc(118px + env(safe-area-inset-right,0px));bottom:calc(98px + env(safe-area-inset-bottom,0px))}
+#tJump{right:calc(42px + env(safe-area-inset-right,0px));bottom:calc(136px + env(safe-area-inset-bottom,0px))}
+#tCrouch{right:calc(192px + env(safe-area-inset-right,0px));bottom:calc(22px + env(safe-area-inset-bottom,0px))}
+#tGren{right:calc(186px + env(safe-area-inset-right,0px));bottom:calc(94px + env(safe-area-inset-bottom,0px))}
+#tSwap{right:calc(112px + env(safe-area-inset-right,0px));bottom:calc(168px + env(safe-area-inset-bottom,0px))}
+#tPause{right:calc(14px + env(safe-area-inset-right,0px));top:calc(10px + env(safe-area-inset-top,0px))}
+#stick{position:absolute;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:1.5px solid rgba(212,201,166,.4);background:rgba(14,15,11,.25);pointer-events:none}
+#knob{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:rgba(212,201,166,.45);border:1.5px solid rgba(244,239,226,.7)}
+#stick.run{border-color:var(--amber)}
+#stickHint{position:absolute;left:calc(40px + env(safe-area-inset-left,0px));bottom:calc(30px + env(safe-area-inset-bottom,0px));width:110px;height:110px;border-radius:50%;border:1.5px dashed rgba(212,201,166,.25);pointer-events:none;display:grid;place-items:center;font:600 11px var(--f-hud);letter-spacing:.14em;color:rgba(212,201,166,.45)}
+#rotate{position:fixed;inset:0;z-index:20;display:none;place-items:center;text-align:center;background:var(--ink);padding-inline:24px;font-size:18px;letter-spacing:.12em;color:var(--khaki)}
+#rotate b{display:block;font-family:var(--f-display);font-weight:400;font-size:40px;color:#fff;letter-spacing:.02em;margin-bottom:8px}
+@media (orientation:portrait){body.touch.playing #rotate{display:grid}}
+body.touch .keys{display:none}
+body.touch .tkeys{display:grid}
+body.touch #status{left:calc(12px + env(safe-area-inset-left,0px));top:8px;gap:0}
+body.touch #status .row{font-size:11px}
+body.touch #status b{font-size:16px}
+body.touch #bl{top:86px;bottom:auto;left:calc(12px + env(safe-area-inset-left,0px))}
+body.touch #minimap{width:100px;height:100px}
+body.touch #hp{width:100px}
+body.touch #br{top:8px;bottom:auto;right:calc(66px + env(safe-area-inset-right,0px));gap:0}
+body.touch #mag{font-size:32px}
+body.touch #reserve{font-size:15px}
+body.touch #wname,body.touch #gren,body.touch #hint{font-size:11px}
+body.touch #killfeed{top:96px;right:calc(12px + env(safe-area-inset-right,0px))}
+body.touch #killfeed div{font-size:12px}
+body.touch #compass{width:min(240px,36vw);top:8px}
+@media (max-height:500px){h1{font-size:44px}.brief{font-size:14px}.dossier{gap:12px}.btn{font-size:20px}}
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .stats div{border-top:1px solid rgba(212,201,166,.3);padding-top:6px;font-size:12px;letter-spacing:.2em;color:var(--dim)}
 .stats b{display:block;font-size:30px;color:#fff;letter-spacing:.02em;font-variant-numeric:tabular-nums}
@@ -151,6 +191,20 @@ kbd{font-family:var(--f-hud);font-weight:800;color:var(--khaki);border:1px solid
   </div>
 </div>
 
+<div id="touch" hidden>
+  <div id="stickHint">MOVER</div>
+  <div id="stick" hidden><i id="knob"></i></div>
+  <div class="tbtn big" id="tFire" data-act="fire">FOGO</div>
+  <div class="tbtn" id="tAds" data-act="ads">MIRA</div>
+  <div class="tbtn" id="tReload" data-act="reload">RECAR.</div>
+  <div class="tbtn" id="tJump" data-act="jump">PULO</div>
+  <div class="tbtn" id="tCrouch" data-act="crouch">AGACH.</div>
+  <div class="tbtn" id="tGren" data-act="gren">GRAN.</div>
+  <div class="tbtn" id="tSwap" data-act="swap">ARMA</div>
+  <div class="tbtn sm" id="tPause" data-act="pause">II</div>
+</div>
+<div id="rotate"><div><b>GIRE O APARELHO</b>Claude of Duty joga na horizontal</div></div>
+
 <div id="menu">
   <div class="dossier">
     <div class="kicker">OPERAÇÃO CREPÚSCULO · SETOR 7 · 18:42</div>
@@ -158,7 +212,12 @@ kbd{font-family:var(--f-hud);font-weight:800;color:var(--khaki);border:1px solid
     <p class="brief">A cidade de <b>Vel Darin</b> caiu ao entardecer. Segure o cruzamento central enquanto ondas de infantaria avançam pelas ruínas. Paredes cedem a granadas, barris vermelhos explodem, e cada onda chega mais precisa que a anterior.</p>
     <div class="btns"><button class="btn" id="play" disabled>MOBILIZAR</button><button class="btn ghost" id="restart" hidden>REINICIAR MISSÃO</button></div>
     <div id="loading">GERANDO TERRENO…</div>
-    <div id="touchNote">Este jogo precisa de teclado e mouse.</div>
+    <div class="tkeys">
+      <div><b>POLEGAR ESQUERDO</b>mover · empurre até a borda para correr</div>
+      <div><b>POLEGAR DIREITO</b>arraste em qualquer lugar para mirar</div>
+      <div><b>FOGO</b>segure e arraste para atirar enquanto mira</div>
+      <div><b>BOTÕES</b>mira · pulo · agachar · recarga · granada · trocar arma</div>
+    </div>
     <div class="keys">
       <div><kbd>W A S D</kbd>mover</div>
       <div><kbd>Mouse</kbd>mirar · atirar</div>
@@ -222,7 +281,8 @@ const tmpV = new V3(), tmpV2 = new V3(), tmpV3 = new V3(), UP = new V3(0, 1, 0);
 /* ─────────────────────────── RENDERER ─────────────────────────── */
 const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-const PR = Math.min(window.devicePixelRatio || 1, 1.5);
+const IS_TOUCH = (window.matchMedia && matchMedia('(pointer:coarse)').matches) || (navigator.maxTouchPoints > 0 && !(window.matchMedia && matchMedia('(any-pointer:fine)').matches));
+const PR = Math.min(window.devicePixelRatio || 1, IS_TOUCH ? 1 : 1.5);
 renderer.setPixelRatio(PR);
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
@@ -264,7 +324,7 @@ const hemi = new THREE.HemisphereLight(0xb9c4d4, 0x4d3f2c, 0.32);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffc78e, 2.4);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.setScalar(IS_TOUCH ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -52, right: 52, top: 52, bottom: -52, near: 1, far: 320 });
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.035;
 scene.add(sun, sun.target);
@@ -1347,6 +1407,7 @@ const P = {
   grenades: 3, shake: 0, bloom: 0, boltT: 0, breath: 0, beatT: 0, stepSign: 0
 };
 const keys = {};
+const TOUCH = { on: false, mv: { x: 0, y: 0 }, sprint: false, stickId: null, lookId: null, sx: 0, sy: 0, lx: 0, ly: 0, btns: new Map() };
 const enemies = [], pickups = [], grenades = [], pending = [];
 let hitList = [], hitDirty = true;
 
@@ -1748,8 +1809,9 @@ function updatePlayer(dt) {
   const f = new V3(-Math.sin(P.yaw), 0, -Math.cos(P.yaw)), r = new V3(Math.cos(P.yaw), 0, -Math.sin(P.yaw));
   const wish = new V3();
   if (keys.KeyW) wish.add(f); if (keys.KeyS) wish.sub(f); if (keys.KeyD) wish.add(r); if (keys.KeyA) wish.sub(r);
-  if (wish.lengthSq() > 0) wish.normalize();
-  const wantSprint = (keys.ShiftLeft || keys.ShiftRight) && keys.KeyW && !P.ads && P.onGround && !P.trigger;
+  if (TOUCH.on) wish.addScaledVector(f, -TOUCH.mv.y).addScaledVector(r, TOUCH.mv.x);
+  if (wish.lengthSq() > 1) wish.normalize();
+  const wantSprint = ((keys.ShiftLeft || keys.ShiftRight) && keys.KeyW || TOUCH.sprint) && !P.ads && P.onGround && !P.trigger;
   if (wantSprint && P.crouch) P.crouch = false;
   const sprint = wantSprint && !P.crouch;
   P.sprintT = lerp(P.sprintT, sprint ? 1 : 0, Math.min(1, dt * 8));
@@ -1893,7 +1955,7 @@ let lastHud = '';
 function updateHud() {
   const w = W(), ammo = P.ammo[P.weapon], res = P.reserve[P.weapon];
   const alive = enemies.filter(e => e.alive).length + G.toSpawn;
-  const sig = [G.wave, G.score, alive, P.weapon, ammo, res, P.grenades, P.reloading, Math.round(P.health)].join('|');
+  const sig = [G.wave, G.score, alive, P.weapon, ammo, res, P.grenades, P.reloading, Math.round(P.health), P.ads, P.crouch].join('|');
   if (sig !== lastHud) {
     lastHud = sig;
     $('wave').textContent = G.wave; $('score').textContent = G.score.toLocaleString('pt-BR'); $('left').textContent = alive;
@@ -1902,6 +1964,7 @@ function updateHud() {
     $('grenN').textContent = P.grenades;
     $('hint').textContent = P.reloading ? 'RECARREGANDO…' : ammo === 0 && res === 0 ? 'SEM MUNIÇÃO · TROQUE DE ARMA' : ammo <= Math.ceil(w.mag * .25) ? '[R] RECARREGAR' : '';
     $('hpFill').style.width = P.health + '%'; $('hpFill').classList.toggle('low', P.health < 35);
+    if (TOUCH.on) { $('tAds').classList.toggle('on', P.ads); $('tCrouch').classList.toggle('on', P.crouch); }
   }
   const head = ((-P.yaw * 180 / Math.PI) % 360 + 360) % 360;
   const cw = $('compass').clientWidth;
@@ -1971,6 +2034,7 @@ function showGameOver() {
   $('sWave').textContent = G.wave; $('sScore').textContent = G.score.toLocaleString('pt-BR'); $('sKills').textContent = G.kills;
   $('sHeads').textContent = G.heads; $('sAcc').textContent = (G.shots ? Math.round(G.hits / G.shots * 100) : 0) + '%'; $('sBest').textContent = best.toLocaleString('pt-BR');
   $('over').hidden = false; $('hud').hidden = true; $('vignette').style.opacity = 0; $('scope').hidden = true;
+  touchLayer(false);
   if (document.pointerLockElement) document.exitPointerLock();
 }
 function updateGame(dt) {
@@ -2038,13 +2102,106 @@ function pause() {
   G.state = 'pause'; P.trigger = false; P.ads = false; for (const k in keys) keys[k] = false;
   $('menu').hidden = false; $('hud').hidden = true; $('scope').hidden = true;
   $('play').textContent = 'CONTINUAR'; $('restart').hidden = false;
+  touchLayer(false);
 }
 function begin(fresh) {
   initAudio();
   if (fresh) { resetGame(); G.time = 0; G.state = 'play'; startWave(); }
   else G.state = 'play';
   $('menu').hidden = true; $('over').hidden = true; $('hud').hidden = false;
-  lock();
+  if (IS_TOUCH) {
+    touchLayer(true);
+    const el = document.documentElement;
+    try {
+      if (el.requestFullscreen && !document.fullscreenElement)
+        el.requestFullscreen({ navigationUI: 'hide' }).then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {})).catch(() => {});
+    } catch (e) { /* tela cheia é opcional */ }
+  } else lock();
+}
+
+/* ─────────────────────────── CONTROLES DE TOQUE ─────────────────────────── */
+function touchLayer(on) {
+  TOUCH.on = on;
+  $('touch').hidden = !on;
+  document.body.classList.toggle('playing', on);
+  TOUCH.mv.x = TOUCH.mv.y = 0; TOUCH.sprint = false; TOUCH.stickId = TOUCH.lookId = null; TOUCH.btns.clear();
+  $('stick').hidden = true; $('stickHint').hidden = false;
+  P.trigger = false; keys.Space = false;
+  document.querySelectorAll('.tbtn').forEach(b => b.classList.remove('on'));
+}
+function touchLook(dx, dy) {
+  const sens = .0048 * (camera.fov / 75) * (W().scope && P.adsT > .9 ? .5 : 1);
+  P.yaw -= dx * sens; P.pitch -= dy * sens;
+  mdx += dx * .6; mdy += dy * .6;
+}
+function touchBtn(btn, down) {
+  const act = btn.dataset.act;
+  if (act !== 'ads' && act !== 'crouch') btn.classList.toggle('on', down);
+  if (G.state !== 'play') return;
+  switch (act) {
+    case 'fire': P.trigger = down; if (down) fire(); break;
+    case 'jump': keys.Space = down; break;
+    case 'ads': if (down) P.ads = !P.ads; break;
+    case 'crouch': if (down) P.crouch = !P.crouch; break;
+    case 'reload': if (down) startReload(); break;
+    case 'gren': if (down) throwGrenade(); break;
+    case 'swap': if (down) switchWeapon((P.weapon + 1) % WEAPONS.length); break;
+    case 'pause': if (down) pause(); break;
+  }
+}
+function setupTouch() {
+  if (!IS_TOUCH) return;
+  document.body.classList.add('touch');
+  const layer = $('touch'), stick = $('stick'), knob = $('knob'), R = 56;
+  layer.addEventListener('touchstart', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      const btn = t.target.closest ? t.target.closest('.tbtn') : null;
+      if (btn) {
+        TOUCH.btns.set(t.identifier, btn); touchBtn(btn, true);
+        if (btn.dataset.act === 'fire' && TOUCH.lookId === null) { TOUCH.lookId = t.identifier; TOUCH.lx = t.clientX; TOUCH.ly = t.clientY; }
+        continue;
+      }
+      if (t.clientX < innerWidth * .42 && TOUCH.stickId === null) {
+        TOUCH.stickId = t.identifier; TOUCH.sx = t.clientX; TOUCH.sy = t.clientY;
+        stick.style.left = t.clientX + 'px'; stick.style.top = t.clientY + 'px';
+        knob.style.transform = ''; stick.hidden = false; $('stickHint').hidden = true;
+      } else if (TOUCH.lookId === null) { TOUCH.lookId = t.identifier; TOUCH.lx = t.clientX; TOUCH.ly = t.clientY; }
+    }
+  }, { passive: false });
+  layer.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier === TOUCH.stickId) {
+        let dx = t.clientX - TOUCH.sx, dy = t.clientY - TOUCH.sy;
+        const d = Math.hypot(dx, dy);
+        if (d > R) { dx *= R / d; dy *= R / d; }
+        const k = d < 8 ? 0 : 1;
+        TOUCH.mv.x = dx / R * k; TOUCH.mv.y = dy / R * k;
+        TOUCH.sprint = d > R * 1.05 && dy < -R * .7;
+        stick.classList.toggle('run', TOUCH.sprint);
+        knob.style.transform = `translate(${dx}px,${dy}px)`;
+      }
+      if (t.identifier === TOUCH.lookId && G.state === 'play') {
+        touchLook(t.clientX - TOUCH.lx, t.clientY - TOUCH.ly);
+        TOUCH.lx = t.clientX; TOUCH.ly = t.clientY;
+      }
+    }
+  }, { passive: false });
+  const end = e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier === TOUCH.stickId) {
+        TOUCH.stickId = null; TOUCH.mv.x = TOUCH.mv.y = 0; TOUCH.sprint = false;
+        stick.hidden = true; stick.classList.remove('run'); $('stickHint').hidden = false;
+      }
+      if (t.identifier === TOUCH.lookId) TOUCH.lookId = null;
+      const btn = TOUCH.btns.get(t.identifier);
+      if (btn) { TOUCH.btns.delete(t.identifier); touchBtn(btn, false); }
+    }
+  };
+  layer.addEventListener('touchend', end, { passive: false });
+  layer.addEventListener('touchcancel', end, { passive: false });
 }
 $('play').addEventListener('click', () => begin(G.state === 'menu'));
 $('restart').addEventListener('click', () => begin(true));
@@ -2095,7 +2252,7 @@ function frame(now) {
   // sombra acompanha a câmera
   const fwd = camFwd().setY(0).normalize();
   const c = tmpV.copy(camera.position).addScaledVector(fwd, 22).setY(0);
-  const tx = 104 / 2048;
+  const tx = 104 / sun.shadow.mapSize.x;
   c.x = Math.round(c.x / tx) * tx; c.z = Math.round(c.z / tx) * tx;
   sun.target.position.copy(c); sun.position.copy(c).addScaledVector(sunDir, 150);
   grade.uniforms.time.value = now / 1000;
@@ -2108,7 +2265,7 @@ function boot() {
   pkind('smoke', T.smoke, false); pkind('dust', T.smoke, false); pkind('blood', T.smoke, false);
   pkind('fire', T.flash, true, false); pkind('flash', T.flash, true, false); pkind('spark', T.glow, true, false); pkind('chip', T.glow, false);
   pickupGlow = makeGlow();
-  enemyAssets(); buildViewmodels(); buildCompass();
+  enemyAssets(); buildViewmodels(); buildCompass(); setupTouch();
   resetGame();
   G.state = 'menu';
   $('loading').hidden = true; $('play').disabled = false; $('play').focus();
