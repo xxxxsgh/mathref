@@ -76,8 +76,12 @@ export function BuyMenu(ui) {
   window.addEventListener('keydown', keys);
   render();
   const el = h('div', { class: 'overlay' }, h('div', { class: 'modal', style: { minWidth: 'min(720px, 94vw)' } }, [
-    h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [h('h2', { style: { margin: 0 } }, 'Loja'), money]),
-    h('p', { style: { color: 'var(--muted)', fontSize: '12px' } }, 'Número compra • B ou Esc fecha. Skins equipadas no inventário aparecem automaticamente.'),
+    h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' } }, [
+      h('h2', { style: { margin: 0 } }, 'Loja'),
+      money,
+      h('button', { class: 'btn', onclick: () => ui.closeBuyMenu() }, 'Fechar'),
+    ]),
+    h('p', { style: { color: 'var(--muted)', fontSize: '12px' } }, ui.game.input.touchMode ? 'Toque para comprar. Skins equipadas no inventário aparecem automaticamente.' : 'Número compra • B ou Esc fecha. Skins equipadas no inventário aparecem automaticamente.'),
     body,
   ]));
   /** @type {any} */ (el).cleanup = () => window.removeEventListener('keydown', keys);
