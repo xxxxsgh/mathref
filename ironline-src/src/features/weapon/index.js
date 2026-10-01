@@ -26,11 +26,11 @@ import { Spring, Track, ease, clamp, lerp, smoothstep, wobble } from './anim.js'
 
 // ─── poses-base (posição do PIVÔ da arma no espaço da câmera, rot em rad) ──
 const PIVOT = new THREE.Vector3(0, -0.035, -0.14); // perto do poço do carregador
-const HIP = { pos: new THREE.Vector3(0.088, -0.128, -0.36), rot: new THREE.Euler(0.03, 0.06, -0.04) };
-const EYE_RELIEF = 0.185; // distância olho → ponto de visada no ADS
+const HIP = { pos: new THREE.Vector3(0.084, -0.112, -0.27), rot: new THREE.Euler(0.06, 0.045, -0.08) };
+const EYE_RELIEF = 0.2; // distância olho → ponto de visada no ADS
 const ADS = { pos: new THREE.Vector3(), rot: new THREE.Euler(0, 0, 0) };
 const SPRINT = { pos: new THREE.Vector3(-0.03, -0.045, 0.03), rot: new THREE.Euler(-0.32, 0.62, 0.42) };
-const VM_FOV = { hip: 52, ads: 42 };
+const VM_FOV = { hip: 58, ads: 19 };
 const ADS_FOV = 0.8; // fator do FOV do mundo no ADS (1x holográfica)
 
 // ─── mãos: transformações-base no espaço da arma ─────────────────────────
@@ -53,7 +53,11 @@ function basisFD(F, D, pos) {
 }
 const HAND_R = basis([0.06, -1, -0.18], [1, 0.05, 0.12], [0.034, -0.088, 0.052]);
 const HAND_L = {
-  guard: basisFD([0.7, 0.45, -0.4], [-0.6, -0.8, 0.05], [-0.05, -0.075, -0.33]),
+  // mão esquerda na empunhadura vertical: palma no lado esquerdo dela,
+  // médio/anelar/mínimo fechados pela frente, indicador estendido ao longo
+  // do guarda-mão (pega de "apontar") e polegar por trás. Pose resolvida por otimização contra a
+  // geometria real (sem interpenetração, dedos encostando).
+  guard: basisFD([0.128, -0.11, -0.986], [-0.992, -0.009, -0.127], [-0.039, -0.059, -0.323]),
 };
 
 const _v = new THREE.Vector3();
@@ -164,7 +168,7 @@ export default {
     // lente holográfica no meio do capô
     const ow = R.opticWindow;
     const lens = makeLens({ w: ow.w, h: ow.h });
-    lens.position.set(0, ow.y, (ow.z0 + ow.z1) / 2 + 0.02);
+    lens.position.set(0, ow.y, (ow.z0 + ow.z1) / 2 + 0.006);
     R.root.add(lens);
     this.lens = lens;
     // posição de ADS: o ponto de visada vai para (0, 0, −alívio)
@@ -188,7 +192,7 @@ export default {
     rig.add(this.sleeveR, this.sleeveL);
     // "ombros" (âncoras dos antebraços) no espaço do rig
     this.anchorR = new THREE.Vector3(0.24, -0.46, -0.06);
-    this.anchorL = new THREE.Vector3(-0.07, -0.5, -0.32);
+    this.anchorL = new THREE.Vector3(-0.16, -0.6, -0.06);
 
     // ─── luzes da viewmodel ──────────────────────────────────────────────
     const vs = vm.scene;
@@ -293,6 +297,10 @@ export default {
       get recoil() { return self.spr.recX.x; },
       get fireRate() { return st.rpm; },
       name: 'KR-9',
+      // a ejeção de cápsulas (arco visível + quique no chão) fica com a vfx,
+      // que já tem latão com física; a arma só informa a janela de ejeção
+      ejectPort: R.ejectPort,
+      brassByVfx: true,
       fire: () => self.fire(ctx),
       reload: () => self.tryReload(ctx),
       inspect: () => self.startAction('inspect'),
@@ -355,7 +363,7 @@ export default {
     S.kickP.impulse(0.09 * lerp(1, 0.7, a));
     S.kickY.impulse((rng.next() - 0.5) * 0.05);
     S.kickR.impulse((rng.next() - 0.5) * 0.16);
-    st.flashT = 0.05;
+    st.flashT = 0.055;
     // ─ bala: do olho, na direção da câmera (com chute), com dispersão ─
     camera.updateMatrixWorld();
     camera.getWorldPosition(_org);
@@ -375,7 +383,7 @@ export default {
       if (!ctx.shot?.preset?.combat) hit.collider.data?.damage?.(dmg, info);
       bus.emit('weapon:hit', info);
     }
-    this.eject(ctx);
+    if (!ctx.service('vfx')) this.eject(ctx); // sem vfx: cápsula própria
   },
 
   eject(ctx) {
@@ -637,7 +645,7 @@ export default {
       aL = this.anchorL.clone().applyMatrix4(_m2);
     }
     this.placeSleeve(this.sleeveR, this.handR.root, aR, 0.3);
-    this.placeSleeve(this.sleeveL, this.handL.root, aL, 0.35);
+    this.placeSleeve(this.sleeveL, this.handL.root, aL, 0.05);
 
     // ─ chute de câmera (canal aditivo, sem sobrescrever outros donos) ─
     const kp = this.climb.p + S.kickP.x * 0.02;
@@ -712,10 +720,10 @@ export default {
     _m.lookAt(elbow, _v, up);
     sleeve.quaternion.setFromRotationMatrix(_m);
     // a manga começa no fim do punho da luva (no eixo da mão) e segue p/ o cotovelo
-    sleeve.position.copy(_v).addScaledVector(_v2.set(0, 0, 1).applyQuaternion(_q), 0.02).addScaledVector(dir, 0.008);
+    sleeve.position.copy(_v).addScaledVector(_v2.set(0, 0, 1).applyQuaternion(_q), 0.02 * Math.min(1, follow / 0.3)).addScaledVector(dir, 0.006);
     sleeve.userData.sleeve.scale.z = L;
     const w = sleeve.userData.watch;
-    if (w) w.position.set(0.0, 0.035, 0.055);
+    if (w) w.position.set(0.0, 0.03, 0.06);
   },
 
   writeKick(player, p, y, r) {
@@ -812,11 +820,12 @@ export default {
     this.rim.intensity = lerp(0.3 + 0.45 * shade, 0.22, st.indoor);
     // clarão de boca
     st.flashT = Math.max(0, st.flashT - dt);
-    const f = st.flashT > 0 ? st.flashT / 0.05 : 0;
-    this.flash.intensity = f * f * 1.6;
-    this.flash.color.setRGB(1, 0.62 + 0.2 * f, 0.32);
+    const f = st.flashT > 0 ? st.flashT / 0.055 : 0;
+    // clarão curto e quente que ilumina luvas e receptor (pico forte, cauda curta)
+    this.flash.intensity = f > 0 ? (0.35 + 0.65 * f) * 3.6 : 0;
+    this.flash.color.setRGB(1, 0.55 + 0.25 * f, 0.26 + 0.1 * f);
     // retículo: um pouco mais brilhante de dia
-    this.lens.material.uniforms.uIntensity.value = lerp(7, 11, st.sunVis * (1 - st.indoor));
+    this.lens.material.uniforms.uIntensity.value = lerp(2.4, 4.0, st.sunVis * (1 - st.indoor));
   },
 
   dispose(ctx) {

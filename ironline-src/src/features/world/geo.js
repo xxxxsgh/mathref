@@ -36,20 +36,47 @@ export class Builder {
     this.tris = 0;
     /** Peças adicionadas com cast=false não projetam sombra (o proxy cobre). */
     this.cast = true;
+    /** realShadows: fachadas projetam a própria geometria (recuos de janela,
+     * sacadas, cornijas com sombra nítida) em vez do volume simplificado. */
+    this.realShadows = false;
     this.proxies = [];
   }
 
-  /** Caixa só de sombra (volume simplificado de um prédio). */
-  proxy(min, max) {
-    this.proxies.push([min, max]);
+  /** Caixa só de sombra (volume simplificado de um prédio). force: mesmo com realShadows. */
+  proxy(min, max, force = false) {
+    if (force || !this.realShadows) this.proxies.push([min, max]);
+  }
+
+  /**
+   * Painel subdividido (para AO/luz assados por vértice): origem, eixos u e
+   * v (vetores com o comprimento do lado), nu × nv quadriláteros. A normal é
+   * u × v. opts.color pode ser função (p) → [r,g,b].
+   */
+  panel(o, u, v, nu, nv, mat, opts = {}) {
+    const g = new THREE.BufferGeometry();
+    const pos = [], nor = [];
+    const n = new THREE.Vector3(...u).cross(new THREE.Vector3(...v)).normalize();
+    const P = (i, j) => [o[0] + u[0] * (i / nu) + v[0] * (j / nv), o[1] + u[1] * (i / nu) + v[1] * (j / nv), o[2] + u[2] * (i / nu) + v[2] * (j / nv)];
+    for (let j = 0; j < nv; j++) {
+      for (let i = 0; i < nu; i++) {
+        const a = P(i, j), b = P(i + 1, j), c = P(i + 1, j + 1), d = P(i, j + 1);
+        pos.push(...a, ...b, ...c, ...a, ...c, ...d);
+        for (let k = 0; k < 6; k++) nor.push(n.x, n.y, n.z);
+      }
+    }
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    this.add(g, mat, null, opts);
+    return this;
   }
 
   _bucket(mat, x, z) {
     const cx = Math.floor(x / this.chunk), cz = Math.floor(z / this.chunk);
-    const key = `${mat}|${cx}|${cz}|${this.cast ? 1 : 0}`;
+    const cast = this.cast || (this.realShadows && !this.noCastZone);
+    const key = `${mat}|${cx}|${cz}|${cast ? 1 : 0}`;
     let b = this.buckets.get(key);
     if (!b) {
-      b = { mat, cast: this.cast, pos: [], nor: [], uv: [], col: [] };
+      b = { mat, cast, pos: [], nor: [], uv: [], col: [] };
       this.buckets.set(key, b);
     }
     return b;
@@ -62,20 +89,27 @@ export class Builder {
    */
   add(geo, mat, matrix = null, opts = {}) {
     const g = geo.index ? geo.toNonIndexed() : geo;
-    const P = g.attributes.position, Nn = g.attributes.normal, U = g.attributes.uv;
+    const P = g.attributes.position, Nn = g.attributes.normal, U = g.attributes.uv, VC = g.attributes.color;
     const col = opts.color || [1, 1, 1];
     const ao = opts.ao;
     const worldUV = opts.worldUV !== false;
     const us = opts.uvScale || 1;
-    const uo = opts.uvOffset || [0, 0];
     if (matrix) _n.getNormalMatrix(matrix);
     // centro para escolher o chunk
     let cx = opts.at?.[0], cz = opts.at?.[1];
-    if (cx === undefined) {
+    if (cx === undefined || opts.uvRand) {
       _box.setFromBufferAttribute(P);
       if (matrix) _box.applyMatrix4(matrix);
-      cx = (_box.min.x + _box.max.x) / 2;
-      cz = (_box.min.z + _box.max.z) / 2;
+      cx ??= (_box.min.x + _box.max.x) / 2;
+      cz ??= (_box.min.z + _box.max.z) / 2;
+    }
+    // uvRand: deslocamento de UV por peça (portas de enrolar, placas,
+    // props) — a mesma mancha de ferrugem não se repete em fila
+    let uo = opts.uvOffset || [0, 0];
+    if (opts.uvRand && !opts.uvOffset) {
+      const hx = Math.sin(_box.min.x * 12.9898 + _box.min.y * 4.1414 + _box.min.z * 78.233) * 43758.5453;
+      const hy = Math.sin(_box.min.x * 39.3468 + _box.min.y * 11.135 + _box.min.z * 7.817) * 24634.6345;
+      uo = [(hx - Math.floor(hx)) * 13.7, (hy - Math.floor(hy)) * 9.3];
     }
     const tri = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     const nrm = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
@@ -115,7 +149,10 @@ export class Builder {
         let kf = 1;
         if (ao) kf = ao[2] + (1 - ao[2]) * Math.min(1, Math.max(0, (p.y - ao[0]) / (ao[1] - ao[0])));
         const c = typeof col === 'function' ? col(p) : col;
-        b.col.push(c[0] * kf, c[1] * kf, c[2] * kf);
+        // vcolor: multiplica pela cor de vértice da própria geometria (AO de copa…)
+        const vc = opts.vcolor && VC ? [VC.getX(i + k), VC.getY(i + k), VC.getZ(i + k)] : null;
+        if (vc) b.col.push(c[0] * kf * vc[0], c[1] * kf * vc[1], c[2] * kf * vc[2]);
+        else b.col.push(c[0] * kf, c[1] * kf, c[2] * kf);
       }
       this.tris++;
     }

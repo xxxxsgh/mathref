@@ -148,7 +148,7 @@ const ROAD_FRAG = /* glsl */ `
   float lane = abs(al - 3.0);
   float trk = exp(-pow((lane - 0.78) / 0.34, 2.0)) * (0.55 + 0.45 * nB.r) * (1.0 - smoothstep(4.8, 5.4, al));
   diffuseColor.rgb *= 1.0 - 0.2 * trk;
-  wRough -= 0.14 * trk;
+  wRough -= 0.07 * trk;
   // eixo central mais claro (pó) entre as trilhas
   float mid = exp(-pow(lane / 0.45, 2.0)) * 0.6 + exp(-pow(al / 0.9, 2.0)) * 0.5;
   diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.18, 1.14, 1.08), mid * nA.b);
@@ -185,8 +185,8 @@ const ROAD_FRAG = /* glsl */ `
   float gtr = texture2D(uRoad, p / 2.6).b * zone;
   float opn = max(rd.r, rd2.r * 0.8) * (1.0 - gut * 0.6);
   float seal = rd2.g * (1.0 - gut);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.035, 0.033, 0.03), seal * 0.85);
-  wRough -= 0.4 * seal;
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.03, 0.028, 0.026), seal * 0.85);
+  wRough -= 0.12 * seal;
   diffuseColor.rgb *= 1.0 - 0.7 * max(opn, gtr * 0.85);
   H -= 0.006 * max(opn, gtr) - 0.0015 * seal;
   // buracos (com água no fundo)
@@ -206,8 +206,8 @@ const ROAD_FRAG = /* glsl */ `
     wWet = max(wWet, smoothstep(0.35, 0.05, dist) * 0.95);
   }
   // manchas úmidas / poças rasas em depressões
-  float damp = smoothstep(0.66, 0.74, nA.r) * smoothstep(0.4, 0.7, nB.g);
-  wWet = max(wWet, max(damp * 0.85, gwet * 0.7));
+  float damp = smoothstep(0.74, 0.8, nA.r) * smoothstep(0.55, 0.75, nB.g);
+  wWet = max(wWet, max(damp * 0.8, gwet * 0.6));
   wBump += vec3(H);
 }
 `;
@@ -224,14 +224,22 @@ const FLOOR_FRAG = /* glsl */ `
   // tom por ladrilho
   diffuseColor.rgb *= 0.88 + 0.22 * wHash(cell + 7.0);
   float e = min(min(lc.x, 1.0 - lc.x), min(lc.y, 1.0 - lc.y)) * 0.25;
-  // ladrilhos faltando (agrupados por ruído): contrapiso de cimento
-  float miss = step(0.86 - 0.5 * smoothstep(0.6, 0.85, nA.r), h);
+  // ladrilhos faltando (agrupados por ruído): contrapiso de cimento com borda
+  float zoneM = smoothstep(0.62, 0.85, nA.r);
+  float miss = step(0.965 - 0.4 * zoneM, h);
+  // ladrilho solto/levantado: mais escuro numa aresta
+  float loose = step(0.9, wHash(cell + 3.7)) * (1.0 - miss);
   if (miss > 0.5) {
-    float lip = 1.0 - smoothstep(0.0, 0.03, e);
-    diffuseColor.rgb = vec3(0.4, 0.38, 0.34) * (0.75 + 0.4 * nB.r) * (1.0 - 0.45 * lip);
+    float lip = 1.0 - smoothstep(0.0, 0.035, e);
+    diffuseColor.rgb = vec3(0.33, 0.3, 0.26) * (0.7 + 0.5 * nB.r) * (1.0 - 0.6 * lip);
     wRoughSet = 0.97;
     wBump -= vec3(0.012 * (1.0 - lip));
   }
+  diffuseColor.rgb *= 1.0 - loose * 0.35 * smoothstep(0.4, 1.0, lc.x);
+  // trinca diagonal em alguns ladrilhos
+  float crk = step(0.82, wHash(cell + 9.1)) * (1.0 - miss);
+  float dl = abs(lc.x - lc.y - (wHash(cell + 1.7) - 0.5) * 0.6);
+  diffuseColor.rgb *= 1.0 - crk * 0.6 * (1.0 - smoothstep(0.0, 0.02, dl));
   // poeira acumulada nos rodapés + véu geral + caminho gasto (porta → sala)
   float dw = min(min(p.x - uRoom.x, uRoom.z - p.x), min(p.y - uRoom.y, uRoom.w - p.y));
   float wallDust = 1.0 - smoothstep(0.05, 0.75 + 0.5 * nA.b, dw);
@@ -239,8 +247,8 @@ const FLOOR_FRAG = /* glsl */ `
   vec2 pa = p - a, ba = b - a;
   float t = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
   float path = 1.0 - smoothstep(0.5, 1.6, length(pa - ba * t) + (nA.a - 0.5) * 0.8);
-  float dust = clamp(wallDust * 0.9 + smoothstep(0.45, 0.85, nA.g * 0.6 + nB.b * 0.6) * 0.55 - path * 0.6, 0.0, 1.0);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.47, 0.42) * (0.85 + 0.3 * nB.r), dust * 0.85);
+  float dust = clamp(wallDust * 0.95 + 0.25 + smoothstep(0.4, 0.8, nA.g * 0.6 + nB.b * 0.6) * 0.5 - path * 0.7, 0.0, 1.0);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.52, 0.47, 0.4) * (0.85 + 0.3 * nB.r), dust * 0.8);
   wRough += dust * 0.5 - path * 0.15;
 }
 `;
@@ -250,7 +258,7 @@ const FLOOR_FRAG = /* glsl */ `
  * baseY, protectRust, tb (quebra de repetição), road, floor } — 0..1.
  */
 export function weather(mat, opts = {}) {
-  const o = { macro: 0.6, ground: 0.7, streaks: 0.6, dust: 0.3, baseY: 0, protectRust: 0, tb: false, road: false, floor: false, ...opts };
+  const o = { macro: 0.6, ground: 0.7, streaks: 0.6, dust: 0.3, baseY: 0, protectRust: 0, tb: false, road: false, floor: false, tri: 0, ...opts };
   const uniforms = {
     uWeather: { value: W.tex },
     uWParams: { value: new THREE.Vector4(o.macro, o.ground, o.streaks, o.dust) },
@@ -259,9 +267,11 @@ export function weather(mat, opts = {}) {
   };
   if (o.road) Object.assign(uniforms, { uRoad: { value: W.road }, uCross: LAYOUT.uCross });
   if (o.floor) Object.assign(uniforms, { uRoom: LAYOUT.uRoom });
+  if (o.tri) uniforms.uTriScale = { value: o.tri };
   mat.userData.weather = uniforms;
   const tb = !!o.tb && !!mat.map;
-  const defs = (tb ? '#define W_TB\n' : '') + (o.road ? '#define W_ROAD\n' : '') + (o.floor ? '#define W_FLOOR\n' : '');
+  const tri = !!o.tri && !!mat.map;
+  const defs = (tb && !tri ? '#define W_TB\n' : '') + (o.road ? '#define W_ROAD\n' : '') + (o.floor ? '#define W_FLOOR\n' : '') + (tri ? '#define W_TRI\n' : '');
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms);
     sh.vertexShader = sh.vertexShader
@@ -282,7 +292,7 @@ export function weather(mat, opts = {}) {
         }`
       );
     let fs = sh.fragmentShader
-      .replace('#include <common>', `${defs}#include <common>\n${PARS}${o.road ? ROAD_PARS : ''}${o.floor ? FLOOR_PARS : ''}`)
+      .replace('#include <common>', `${defs}#include <common>\n${PARS}${o.road ? ROAD_PARS : ''}${o.floor ? FLOOR_PARS : ''}${tri ? 'uniform float uTriScale;' : ''}`)
       .replace(
         '#include <map_fragment>',
         `#ifdef W_TB
@@ -293,7 +303,15 @@ export function weather(mat, opts = {}) {
         }
         #endif
         #ifdef USE_MAP
-          #ifdef W_TB
+          #if defined( W_TRI )
+            // triplanar em espaço de mundo: sem UV esticada em qualquer orientação
+            vec3 tw = pow(abs(normalize(vWN)), vec3(4.0));
+            tw /= (tw.x + tw.y + tw.z);
+            vec4 sampledDiffuseColor = texture2D(map, vWW.zy * uTriScale) * tw.x
+              + texture2D(map, vWW.xz * uTriScale + 0.37) * tw.y
+              + texture2D(map, vWW.xy * uTriScale + 0.71) * tw.z;
+            wBump += vec3(dot(sampledDiffuseColor.rgb, vec3(0.333)) * 0.01);
+          #elif defined( W_TB )
             vec4 sampledDiffuseColor = tbTex(map, vMapUv);
           #else
             vec4 sampledDiffuseColor = texture2D(map, vMapUv);
@@ -381,7 +399,7 @@ export function weather(mat, opts = {}) {
           mapN.xy *= normalScale * (1.0 - 0.85 * wWet);
           normal = normalize(tbn * mapN);
         #endif
-        #if defined( W_ROAD ) || defined( W_FLOOR )
+        #if defined( W_ROAD ) || defined( W_FLOOR ) || defined( W_TRI )
         {
           vec3 wn0 = normalize(vWN);
           vec3 bn = wBumpN(wn0, wBump.x);
@@ -402,6 +420,11 @@ export function weather(mat, opts = {}) {
             float dotNV = saturate(dot(geometryNormal, geometryViewDir));
             reflectedLight.indirectSpecular *= computeSpecularOcclusion(dotNV, ambientOcclusion, material.roughness);
           #endif
+        #endif
+        #ifdef W_ROAD
+          // asfalto empoeirado: brilho rasante contra o sol bem mais contido (fora das poças)
+          reflectedLight.directSpecular *= mix(0.45, 1.0, wWet);
+          reflectedLight.indirectSpecular *= mix(0.6, 1.0, wWet);
         #endif`
       )
       .replace(
@@ -446,13 +469,15 @@ export function createMaterials(q, renderer) {
     brick: T.makeSet(T.genBrick, N, an),
     asphalt: T.makeSet(T.genAsphalt, N, anG),
     pavers: T.makeSet(T.genPavers, N, anG),
-    metal: T.makeSet(T.genPaintedMetal, Ns, an),
+    metal: T.makeSet((n) => T.genPaintedMetal(n, 61, 0.8), Ns, an),
     car: T.makeSet((n) => T.genPaintedMetal(n, 64, 0.9), Ns, an),
     corrugated: T.makeSet(T.genCorrugated, Ns, an),
     wood: T.makeSet(T.genWood, Ns, an),
     tiles: T.makeSet(T.genTiles, Ns, anG),
     dirt: T.makeSet(T.genDirt, Ns, anG),
     fabric: T.makeSet(T.genFabric, Ns, an),
+    bark: T.makeSet(T.genBark, Ns, an),
+    burnt: T.makeSet(T.genBurnt, Ns, an),
     grime: T.makeSet(T.genGrime, 256, an),
     far: T.makeSet(T.genFarFacade, Ns, an),
   };
@@ -498,7 +523,7 @@ export function createMaterials(q, renderer) {
     concrete: std(sets.concrete, {}, { ground: 0.7, streaks: 0.7, dust: 0.45, tb: true }, true),
     brick: std(sets.brick, {}, { ground: 0.6, streaks: 0.5, dust: 0.2 }, true),
     asphalt: std(sets.asphalt, {}, { ground: 0, streaks: 0, dust: 0.1, macro: 0.7, tb: true, road: true }, true),
-    pavers: std(sets.pavers, {}, { ground: 0, streaks: 0, dust: 0.25, macro: 0.8 }, true),
+    pavers: std(sets.pavers, {}, { ground: 0, streaks: 0, dust: 0.25, macro: 0.8, tb: true }, true),
     metal: std(sets.metal, {}, { ground: 0.5, streaks: 0.4, dust: 0.3, protectRust: 1 }),
     carpaint: std(sets.car, { roughness: 0.55 }, { ground: 0.7, streaks: 0.2, dust: 0.6, protectRust: 1 }),
     corrugated: std(sets.corrugated, {}, { ground: 0.5, streaks: 0.3, dust: 0.2, protectRust: 1 }),
@@ -507,6 +532,14 @@ export function createMaterials(q, renderer) {
     dirt: std(sets.dirt, {}, { ground: 0, streaks: 0, dust: 0, macro: 0.7, tb: true }, true),
     fabric: std(sets.fabric, {}, { ground: 0.6, streaks: 0, dust: 0.35 }, true),
     far: std(sets.far, {}, { ground: 0.3, streaks: 0.5, dust: 0, macro: 0.5 }, true),
+    bark: std(sets.bark, { normalMap: null, roughnessMap: null, metalnessMap: null, aoMap: null, roughness: 0.92, metalness: 0 }, { tri: 1 / 1.2, ground: 0.4, streaks: 0, dust: 0.3, macro: 0.3 }, true),
+    burnt: std(sets.burnt, {}, { ground: 0.3, streaks: 0.2, dust: 0.5, macro: 0.4 }),
+    bag: std(null, { color: 0xffffff, roughness: 0.5, envMapIntensity: 0.6 }, { ground: 0.2, streaks: 0, dust: 0.6, macro: 0.2 }),
+    // caixas de munição (textura de face com estêncil, montada no index)
+    crate: std(null, { roughness: 0.85 }, { ground: 0.3, streaks: 0, dust: 0.45, macro: 0.3 }, true),
+    // entulho: triplanar (sem UV), relevo por bump do próprio albedo
+    rubbleC: std(sets.concrete, { normalMap: null, roughnessMap: null, metalnessMap: null, aoMap: null, roughness: 0.9, metalness: 0 }, { tri: 1 / 1.4, ground: 0.25, streaks: 0, dust: 0.55, macro: 0.3 }, true),
+    rubbleD: std(sets.dirt, { normalMap: null, roughnessMap: null, metalnessMap: null, aoMap: null, roughness: 0.97, metalness: 0 }, { tri: 1 / 2.2, ground: 0, streaks: 0, dust: 0.2, macro: 0.6 }, true),
     // vidro: escuro e liso, reflexo do ambiente; sujeira por rugosidade
     glass: std(sets.grime, { metalness: 0, roughness: 1, envMapIntensity: 1.4, aoMap: null }, false),
     // fundo das janelas falsas: escuro, sem intemperismo
@@ -528,5 +561,5 @@ export const SURFACE = {
   pavers: 'concrete', metal: 'metal', carpaint: 'metal', corrugated: 'metal', wood: 'wood', tiles: 'concrete',
   dirt: 'dirt', fabric: 'dirt', far: 'concrete', glass: 'glass', room: 'concrete', rubber: 'rubber',
   plastic: 'plastic', black: 'metal', cable: 'metal', chrome: 'metal', light: 'glass',
-  window: 'glass', rubble: 'concrete', mesh: 'metal', manhole: 'metal', ceiling: 'concrete',
+  window: 'glass', bag: 'plastic', burnt: 'metal', iron: 'metal', crate: 'wood', bark: 'wood', leaves: 'wood', palm: 'wood', grass: 'dirt', ivy: 'wood', rubble: 'concrete', rubbleC: 'concrete', rubbleD: 'dirt', mesh: 'metal', manhole: 'metal', ceiling: 'concrete',
 };

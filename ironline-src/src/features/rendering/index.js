@@ -5,15 +5,21 @@
  *  - Atmosfera física (Atmosphere.js): céu por espalhamento Rayleigh/Mie/ozônio
  *    via sky-view LUT, nuvens fbm iluminadas, disco solar; o mesmo céu vira
  *    ambiente PMREM (IBL) em scene.environment e na viewmodel.
- *  - Sombra do sol ajustada à câmera com snap de texel (Shadows.js) e PCF
- *    suave; luz de rebatimento (GI falso) do chão iluminado.
+ *  - Sombra do sol: cascata curta e densa ajustada à câmera (Shadows.js,
+ *    4096² em high, re-renderizada sob demanda) + cascata larga própria
+ *    (SunView.js) aplicada em pós + sombras de contato em espaço de tela.
+ *  - GI de um rebatimento do sol via RSM (SunView.js + GI_FRAG): o chão
+ *    ensolarado aquece teto e paredes; luz fake de rebatimento só sem GI.
+ *  - Sonda de reflexo local da viewmodel (LocalProbe.js).
  *  - Poeira em suspensão iluminada só dentro dos feixes de sol (Dust.js).
  *  - Pipeline HDR próprio (ctx.setRenderPipeline):
- *      cena (MSAA, HalfFloat, depth) ─┬─ AO ½ res + blur bilateral
- *                                     ├─ volumétrico ½ res (shadow map) + blur
- *      viewmodel (alvo próprio, α) ───┴─ combine: motion blur, AO, névoa de
- *                                        altura/perspectiva aérea, god rays,
- *                                        viewmodel com DOF de ADS
+ *      cena (HDR, depth, jitter TAA) ─┬─ AO ½ res 2 escalas + blur bilateral
+ *                                     ├─ GI ¼ res (RSM) + blur
+ *                                     ├─ volumétrico ½ res (shadow map + RSM) + blur
+ *      viewmodel (alvo próprio, α) ───┴─ combine: albedo estimado → AO no
+ *                                        ambiente, GI, sombra larga/contato,
+ *                                        interior, névoa/Mie, god rays, vm+DOF
+ *      → TAA (reprojeção, Catmull-Rom, recorte YCoCg)
  *      → cadeia de bloom (13-tap/tenda) → exposição automática
  *      → tonemap: ACES + gradação + aberração + sujeira de lente + vinheta
  *      → final: FXAA ou nitidez CAS, grão de filme, dithering → tela
@@ -26,10 +32,12 @@
  * uma textura, ela é respeitada. `scene.fog` do world é substituída pela
  * névoa de altura do compositor (os parâmetros dela viram dica de densidade).
  *
- * ORÇAMENTO (GPU intermediária, 1080p, preset high — alvo ≤ 3,5 ms de pós):
- *   AO ½ res 12 amostras + 2 blurs ≈ 0,6 ms · volumétrico ½ res 20 passos ≈ 0,7 ms
- *   combine ≈ 0,4 ms · bloom 6 níveis ≈ 0,5 ms · tonemap+final ≈ 0,5 ms
- *   céu: LUT 192×108 e PMREM só quando o sol muda.
+ * ORÇAMENTO (GPU intermediária, 1080p, preset high — alvo ≤ 4,5 ms de pós):
+ *   AO ½ res 14 amostras + 2 blurs ≈ 0,6 ms · GI ¼ res 16 VPLs ≈ 0,4 ms
+ *   volumétrico ½ res 20 passos ≈ 0,7 ms · combine ≈ 0,8 ms · TAA ≈ 0,4 ms
+ *   bloom 6 níveis ≈ 0,5 ms · tonemap+final ≈ 0,5 ms
+ *   sob demanda: RSM 256² (6 quadros/1,4 m), cascata larga (15 m), sonda
+ *   local 6×128² (1,5 m/3 s), LUT do céu e PMREM (quando o sol muda).
  */
 import * as THREE from 'three';
 import { Atmosphere } from './Atmosphere.js';

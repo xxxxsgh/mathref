@@ -124,10 +124,11 @@ export function genBrick(N, seed = 31) {
   for (let i = 0; i < nB; i++) {
     const t = r(), k = r();
     let c;
-    if (k < 0.58) c = [lerp(0.44, 0.55, t), lerp(0.25, 0.31, t), lerp(0.19, 0.23, t)];
-    else if (k < 0.8) c = [lerp(0.33, 0.41, t), lerp(0.2, 0.25, t), lerp(0.16, 0.19, t)];
-    else if (k < 0.92) c = [lerp(0.55, 0.62, t), lerp(0.37, 0.43, t), lerp(0.27, 0.32, t)];
-    else c = [lerp(0.4, 0.48, t), lerp(0.35, 0.41, t), lerp(0.31, 0.36, t)];
+    // tons de olaria dessaturados (tijolo velho, curtido de sol e poeira)
+    if (k < 0.5) c = [lerp(0.5, 0.6, t), lerp(0.34, 0.4, t), lerp(0.27, 0.31, t)];
+    else if (k < 0.72) c = [lerp(0.42, 0.5, t), lerp(0.29, 0.34, t), lerp(0.24, 0.27, t)];
+    else if (k < 0.88) c = [lerp(0.6, 0.68, t), lerp(0.46, 0.52, t), lerp(0.36, 0.41, t)];
+    else c = [lerp(0.5, 0.58, t), lerp(0.46, 0.52, t), lerp(0.42, 0.47, t)];
     tone[i * 6] = c[0]; tone[i * 6 + 1] = c[1]; tone[i * 6 + 2] = c[2];
     tone[i * 6 + 3] = r(); // fuligem / sujeira do tijolo
     tone[i * 6 + 4] = (r() - 0.5) * 2; // inclinação x
@@ -175,12 +176,12 @@ export function genBrick(N, seed = 31) {
     const b = isB[i];
     const t = bid[i] * 6;
     const v = 0.88 + n1[i] * 0.2 + (n2[i] - 0.5) * 0.12;
-    const soot = tone[t + 3] > 0.86 ? 0.62 : tone[t + 3] > 0.7 ? 0.86 : 1;
+    const soot = tone[t + 3] > 0.9 ? 0.7 : tone[t + 3] > 0.75 ? 0.9 : 1;
     let br = tone[t] * v * soot, bg = tone[t + 1] * v * soot, bb = tone[t + 2] * v * soot;
     // lasca recente: miolo do tijolo mais claro/alaranjado
     const fresh = smooth(0.7, 0.9, chip[i]) * (1 - smooth(0.004, 0.02, edge[i])) * b;
     br = lerp(br, 0.6, fresh * 0.5); bg = lerp(bg, 0.38, fresh * 0.5); bb = lerp(bb, 0.28, fresh * 0.5);
-    const mo = 0.5 + n2[i] * 0.1 + (sand[i] - 0.5) * 0.12;
+    const mo = 0.62 + n2[i] * 0.1 + (sand[i] - 0.5) * 0.12;
     let cr = lerp(mo, br, b), cg = lerp(mo * 0.97, bg, b), cb = lerp(mo * 0.92, bb, b);
     // eflorescência salina (velatura esbranquiçada, mais na argamassa)
     const ef = smooth(0.66, 0.9, eff[i]) * (0.35 + 0.4 * (1 - b));
@@ -199,35 +200,38 @@ export function genBrick(N, seed = 31) {
 export function genAsphalt(N, seed = 41) {
   const big = fbm(N, seed, { period: 2, octaves: 6, gain: 0.55 });
   const mid = fbm(N, seed + 1, { period: 10, octaves: 4 });
-  const w = worley(N, 150, seed + 2, { jitter: 0.9 });
+  // agregado angular e miúdo: bordas de Worley (f2-f1) em duas escalas
+  const w = worley(N, 220, seed + 2, { jitter: 1 });
+  const w2 = worley(N, 90, seed + 5, { jitter: 1 });
   const wn = white(N, seed + 3);
   const sand = fbm(N, seed + 7, { period: 3, octaves: 5 });
   const ravel = fbm(N, seed + 8, { period: 6, octaves: 5 });
   const h = new Float32Array(N * N);
   const stoneM = new Float32Array(N * N);
+  const sid = new Float32Array(N * N);
   for (let i = 0; i < N * N; i++) {
-    // pedras do agregado: células de Worley expostas onde o ligante gastou
-    const expo = 0.25 + smooth(0.45, 0.8, ravel[i]) * 0.5;
-    const st = (1 - smooth(0.18, 0.36, w.f1[i])) * (w.id[i] < expo ? 1 : 0);
+    const expo = 0.3 + smooth(0.45, 0.8, ravel[i]) * 0.45;
+    const e1 = w.f2[i] - w.f1[i], e2 = w2.f2[i] - w2.f1[i];
+    const s1 = smooth(0.06, 0.2, e1) * (w.id[i] < expo ? 1 : 0);
+    const s2 = smooth(0.05, 0.16, e2) * (w2.id[i] < expo * 0.5 ? 1 : 0);
+    const st = Math.max(s1 * 0.8, s2);
     stoneM[i] = st;
-    h[i] = st * (0.5 + w.id[i] * 0.3) + (wn[i] - 0.5) * 0.12 + mid[i] * 0.15 - (w.f1[i] > 0.42 && ravel[i] > 0.7 ? 0.25 : 0);
+    sid[i] = s2 > s1 * 0.8 ? w2.id[i] : w.id[i];
+    h[i] = st * (0.35 + sid[i] * 0.2) + (wn[i] - 0.5) * 0.08 + mid[i] * 0.15;
   }
   const hb = blur(h, N, 1);
-  const normal = heightToNormal(hb, N, 2.4);
-  const cav = cavity(hb, N, 2, 1.8);
+  const normal = heightToNormal(hb, N, 1.3);
+  const cav = cavity(hb, N, 2, 1.4);
   const { albedo, orm } = pack(N, (i, c, m) => {
     const st = stoneM[i];
-    const sid = w.id[i];
-    // ligante: preto-acinzentado oxidado pelo sol
-    let v = 0.2 + (big[i] - 0.5) * 0.06 + (mid[i] - 0.5) * 0.04;
-    // pedra: cinza/bege variados
-    const sv = 0.3 + sid * 0.22;
-    let r = lerp(v, sv * 1.02, st), g = lerp(v * 0.99, sv, st), b = lerp(v * 0.97, sv * 0.94, st);
+    let v = 0.19 + (big[i] - 0.5) * 0.05 + (mid[i] - 0.5) * 0.04 + (wn[i] - 0.5) * 0.03;
+    const sv = 0.25 + sid[i] * 0.16;
+    let r = lerp(v, sv * 1.03, st * 0.85), g = lerp(v * 0.99, sv, st * 0.85), b = lerp(v * 0.97, sv * 0.95, st * 0.85);
     const sd = smooth(0.6, 0.88, sand[i]) * 0.35;
-    r = lerp(r, 0.46, sd); g = lerp(g, 0.42, sd); b = lerp(b, 0.36, sd);
-    const k = 0.7 + cav[i] * 0.3;
+    r = lerp(r, 0.44, sd); g = lerp(g, 0.4, sd); b = lerp(b, 0.35, sd);
+    const k = 0.8 + cav[i] * 0.2;
     c[0] = r * k; c[1] = g * k; c[2] = b * k;
-    m[0] = cav[i]; m[1] = lerp(0.86, 0.72, st) + sd * 0.1; m[2] = 0;
+    m[0] = cav[i]; m[1] = lerp(0.93, 0.86, st) + sd * 0.05; m[2] = 0;
   });
   return { albedo, normal, orm, world: 4 };
 }
@@ -447,7 +451,7 @@ export function genTiles(N, seed = 91) {
     c[0] = lerp(col[0] * v, 0.3, gp);
     c[1] = lerp(col[1] * v, 0.28, gp);
     c[2] = lerp(col[2] * v, 0.25, gp);
-    m[0] = 1 - gp * 0.45; m[1] = lerp(0.42 + mott[i] * 0.2, 0.92, gp); m[2] = 0;
+    m[0] = 1 - gp * 0.45; m[1] = lerp(0.62 + mott[i] * 0.2, 0.95, gp); m[2] = 0;
   });
   return { albedo, normal, orm, world: 2 };
 }
@@ -556,6 +560,50 @@ export function genFarFacade(N, seed = 131) {
     m[0] = 1 - w * 0.5; m[1] = lerp(0.9, 0.3, w); m[2] = 0;
   });
   return { albedo, normal, orm, world: 19.2 };
+}
+
+// ─── chapa queimada (carcaças): carvão, cinza branca, ferrugem florescendo ─
+export function genBurnt(N, seed = 161) {
+  const a = fbm(N, seed, { period: 4, octaves: 6, gain: 0.6 });
+  const b = fbm(N, seed + 1, { period: 12, octaves: 4 });
+  const st = fbm(N, seed + 2, { period: 16, octaves: 3, stretchY: 0.12 });
+  const wn = white(N, seed + 3);
+  const h = new Float32Array(N * N);
+  for (let i = 0; i < N * N; i++) h[i] = a[i] * 0.4 + b[i] * 0.3 + (wn[i] - 0.5) * 0.1 - smooth(0.6, 0.8, a[i]) * 0.2;
+  const normal = heightToNormal(blur(h, N, 1), N, 2.2);
+  const { albedo, orm } = pack(N, (i, c, m) => {
+    const rust = clamp01(smooth(0.66, 0.82, a[i]) * 0.9 + smooth(0.7, 0.9, st[i]) * 0.4);
+    const ash = smooth(0.62, 0.8, b[i]) * (1 - rust) * 0.7;
+    const char = 0.05 + b[i] * 0.05;
+    let r = lerp(char, 0.32 + wn[i] * 0.08, rust), g = lerp(char * 0.95, 0.15 + wn[i] * 0.04, rust), bb = lerp(char * 0.9, 0.07, rust);
+    r = lerp(r, 0.36, ash); g = lerp(g, 0.35, ash); bb = lerp(bb, 0.33, ash);
+    c[0] = r; c[1] = g; c[2] = bb;
+    m[0] = 1; m[1] = lerp(0.82, 0.96, Math.max(rust, ash)); m[2] = lerp(0.15, 0.0, Math.max(rust, ash));
+  });
+  return { albedo, normal, orm, world: 1.8 };
+}
+
+// ─── casca de árvore (sulcos verticais + líquen) ────────────────────────
+export function genBark(N, seed = 151) {
+  const a = fbm(N, seed, { period: 12, octaves: 5, stretchY: 0.15 });
+  const b = fbm(N, seed + 1, { period: 32, octaves: 3, stretchY: 0.3 });
+  const lich = fbm(N, seed + 2, { period: 6, octaves: 5 });
+  const h = new Float32Array(N * N);
+  for (let i = 0; i < N * N; i++) {
+    const ridge = 1 - Math.abs(a[i] * 2 - 1);
+    h[i] = Math.pow(ridge, 1.6) * 0.8 + b[i] * 0.25;
+  }
+  const normal = heightToNormal(blur(h, N, 1), N, 4);
+  const cav = cavity(h, N, 3, 2);
+  const { albedo, orm } = pack(N, (i, c, m) => {
+    const v = 0.3 + h[i] * 0.22;
+    const l = smooth(0.68, 0.8, lich[i]) * 0.6;
+    c[0] = lerp(v * 1.0, 0.5, l * 0.6) * cav[i];
+    c[1] = lerp(v * 0.9, 0.55, l * 0.6) * cav[i];
+    c[2] = lerp(v * 0.78, 0.38, l * 0.6) * cav[i];
+    m[0] = cav[i]; m[1] = 0.92; m[2] = 0;
+  });
+  return { albedo, normal, orm, world: 1.2 };
 }
 
 // ─── DataTextures ──────────────────────────────────────────────────────

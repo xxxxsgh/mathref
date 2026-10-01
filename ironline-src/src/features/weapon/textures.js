@@ -96,9 +96,11 @@ function scratches(N, seed, count) {
   for (let s = 0; s < count; s++) {
     let x = r() * N, y = r() * N;
     // famílias de direção: a maioria dos arranhões de manuseio é paralela
+    // direções espalhadas (famílias muito alinhadas aos eixos viravam uma
+    // "grade" visível na amostragem triplanar)
     const fam = r();
-    let ang = fam < 0.45 ? 0.1 + r() * 0.3 : fam < 0.8 ? 1.4 + r() * 0.35 : r() * Math.PI;
-    const len = 6 + Math.pow(r(), 2.2) * N * 0.35;
+    let ang = fam < 0.4 ? 0.35 + r() * 0.5 : fam < 0.7 ? 2.0 + r() * 0.6 : r() * Math.PI * 2;
+    const len = 4 + Math.pow(r(), 2.5) * N * 0.09;
     const strength = 0.35 + r() * 0.65;
     const bend = (r() - 0.5) * 0.004;
     for (let i = 0; i < len; i++) {
@@ -120,7 +122,7 @@ export function grimeTexture() {
   if (_grime) return _grime;
   const N = 512;
   const fine = fbm(N, 101, 32, 4, 0.55);
-  const sc = scratches(N, 202, 340);
+  const sc = scratches(N, 202, 520);
   const blot = fbm(N, 303, 3, 6, 0.55);
   const speck = fbm(N, 404, 128, 2, 0.5);
   const d = new Uint8Array(N * N * 4);

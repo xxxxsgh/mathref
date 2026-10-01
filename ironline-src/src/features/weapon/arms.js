@@ -121,7 +121,7 @@ export class Hand {
         j.add(seg);
         // reforço no dorso do segmento proximal
         if (s === 0) {
-          const pad = rbox(r0 * 1.5, 0.004, f.L[0] * 0.55, 0.0018, 0, r0 * 0.78, -f.L[0] * 0.5, 2);
+          const pad = rbox(r0 * 1.3, 0.0032, f.L[0] * 0.5, 0.0015, 0, r0 * 0.8, -f.L[0] * 0.5, 2);
           j.add(mesh(pad, 'knuckle'));
         }
         joints.push(j);
@@ -185,11 +185,11 @@ export const POSES = {
     spread: [0.0, 0.0, -0.04, -0.1],
     t: [1.05, 0.62, 0.9, 0.35, 0.3],
   },
-  // mão esquerda envolvendo o guarda-mão (C-clamp com o polegar à frente)
+  // mão esquerda na empunhadura vertical (dedos pela frente, polegar ao lado)
   guard: {
-    f: [[0.75, 1.0, 0.6], [0.8, 1.05, 0.6], [0.85, 1.1, 0.6], [0.9, 1.1, 0.55]],
-    spread: [0.08, 0.02, -0.04, -0.1],
-    t: [-0.15, -0.35, 0.3, 0.1, 0.05],
+    f: [[0.11, 0.56, 0.42], [1.7, 1.04, 0.78], [1.56, 1.11, 0.83], [1.13, 1.03, 0.77]],
+    spread: [0.05, 0.03, -0.04, -0.12],
+    t: [0.1, -0.35, 0.0, 0.12, 0.1],
   },
   // segurando o carregador (dedos fechados em volta do corpo)
   mag: {
@@ -241,27 +241,31 @@ export function buildSleeve(M, { left = false, watch = false } = {}) {
   const grp = new THREE.Group();
   grp.name = left ? 'sleeveL' : 'sleeveR';
   const R = mulberry(left ? 77 : 33);
-  const seg = 28, rings = 40;
+  const seg = 36, rings = 64;
   const g = new THREE.CylinderGeometry(1, 1, 1, seg, rings, true);
   g.rotateX(Math.PI / 2); // eixo Y → Z (y=+0.5 → z=−0.5)
   g.translate(0, 0, 0.5); // z ∈ [0, 1]
   const p = g.attributes.position;
-  const folds = Array.from({ length: 7 }, () => ({ z: 0.1 + R() * 0.8, a: R() * Math.PI * 2, w: 0.04 + R() * 0.05, k: 0.05 + R() * 0.07, tw: (R() - 0.5) * 2 }));
+  const folds = Array.from({ length: 10 }, () => ({ z: 0.1 + R() * 0.8, a: R() * Math.PI * 2, w: 0.04 + R() * 0.05, k: 0.05 + R() * 0.07, tw: (R() - 0.5) * 2 }));
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
     const th = Math.atan2(y, x);
-    // raio: punho (bainha dobrada) → antebraço → cotovelo
-    let r = 0.0335 + 0.011 * Math.pow(z, 0.8);
-    // bainha enrolada perto do punho
-    r += 0.004 * Math.exp(-(((z - 0.035) / 0.03) ** 2));
+    // raio: punho → antebraço → cotovelo
+    let r = 0.0285 + 0.0135 * Math.pow(z, 0.8);
+    // punho franzido: o tecido sobra e embola sobre a luva (anéis apertados)
+    const near = Math.exp(-z / 0.12);
+    r += 0.0055 * Math.exp(-(((z - 0.028) / 0.022) ** 2));
+    r += 0.0028 * near * Math.sin(z * 95 + Math.sin(th * 2 + z * 30) * 1.4) * (0.6 + 0.4 * Math.cos(th - 0.8));
     // dobras: anéis enviesados que circulam parcialmente
     let fold = 0;
     for (const f of folds) {
       const zz = z - f.z - Math.sin(th + f.a) * 0.04 * f.tw;
       fold += f.k * Math.exp(-((zz / f.w) ** 2)) * (0.5 + 0.5 * Math.cos(th - f.a));
     }
-    fold += 0.02 * Math.sin(th * 3 + z * 9) * Math.sin(z * 14);
-    r *= 1 + fold * 0.35;
+    fold += 0.025 * Math.sin(th * 3 + z * 9) * Math.sin(z * 14);
+    // vincos longos do tecido puxado (ao longo do antebraço)
+    fold += 0.018 * Math.sin(th * 5 + Math.sin(z * 6) * 1.5) * (1 - near);
+    r *= 1 + fold * 0.42;
     // seção elíptica (antebraço é mais largo que alto)
     p.setXYZ(i, Math.cos(th) * r * 1.1, Math.sin(th) * r * 0.86, z);
   }
@@ -271,7 +275,7 @@ export function buildSleeve(M, { left = false, watch = false } = {}) {
   sl.frustumCulled = false;
   grp.add(sl);
   // borda interna escura (abertura da manga) — esconde o vazio no punho
-  const cap = new THREE.Mesh(new THREE.CircleGeometry(0.034, 20), M.cavity);
+  const cap = new THREE.Mesh(new THREE.CircleGeometry(0.031, 20), M.cavity);
   cap.scale.set(1.1, 0.86, 1);
   cap.position.z = 0.002;
   cap.rotation.y = Math.PI; // virada para o punho (−Z)
@@ -294,13 +298,13 @@ export function buildSleeve(M, { left = false, watch = false } = {}) {
     const wg = w.build(M, 'watch');
     const glass = new THREE.Mesh(
       new THREE.CircleGeometry(0.0145, 32),
-      new THREE.MeshPhysicalMaterial({ color: 0x0b0e10, roughness: 0.04, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.02, emissive: new THREE.Color(0.02, 0.09, 0.06), emissiveIntensity: 1 }),
+      new THREE.MeshPhysicalMaterial({ color: 0x0b0e10, roughness: 0.04, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.02, emissive: new THREE.Color(0.004, 0.012, 0.009), emissiveIntensity: 1 }),
     );
     glass.rotation.x = -Math.PI / 2;
     glass.position.y = 0.0095;
     wg.add(glass);
     // ponteiros luminosos
-    const hm = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 1.6, 0.9) });
+    const hm = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 0.6, 0.35) });
     const h1 = new THREE.Mesh(new THREE.BoxGeometry(0.0012, 0.0004, 0.009), hm);
     h1.position.set(0.002, 0.0098, -0.004);
     h1.rotation.y = 0.5;
@@ -308,6 +312,7 @@ export function buildSleeve(M, { left = false, watch = false } = {}) {
     h2.position.set(-0.003, 0.0098, -0.002);
     h2.rotation.y = -1.1;
     wg.add(h1, h2);
+    wg.scale.setScalar(0.82);
     grp.userData.watch = wg;
     grp.add(wg);
   }

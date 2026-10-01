@@ -45,12 +45,13 @@ export function withDetail(mat, opts = {}) {
     uWear: { value: opts.wear ?? 0.8 },
     uWearColor: { value: new THREE.Color(opts.wearColor ?? 0x8a8780) },
     uWearMetal: { value: opts.wearMetal ?? 0.9 },
-    uEdge: { value: new THREE.Vector2(...(opts.edge ?? [220, 700])) },
+    uEdge: { value: new THREE.Vector2(...(opts.edge ?? [90, 340])) },
     uScratch: { value: opts.scratch ?? 0.6 },
     uGrime: { value: opts.grime ?? 0.35 },
     uRoughVar: { value: opts.roughVar ?? 0.18 },
     uBump: { value: opts.bump ?? (kind === 'hard' ? 0.3 : 0.6) },
     uDust: { value: opts.dust ?? 0.12 },
+    uSmudge: { value: opts.smudge ?? 0.0 },
     uDustColor: { value: new THREE.Color(opts.dustColor ?? 0x6e665a) },
   };
   mat.userData.detail = u;
@@ -64,7 +65,7 @@ varying vec3 vWObj;
 varying vec3 vWObjN;
 uniform sampler2D tDetail;
 uniform sampler2D tCamo;
-uniform float uScale, uCamoScale, uWear, uWearMetal, uScratch, uGrime, uRoughVar, uBump, uDust;
+uniform float uScale, uCamoScale, uWear, uWearMetal, uScratch, uGrime, uRoughVar, uBump, uDust, uSmudge;
 uniform vec3 uWearColor, uDustColor;
 uniform vec2 uEdge;
 float wMask = 0.0;
@@ -112,6 +113,16 @@ ${PERTURB}`;
         '#include <metalnessmap_fragment>',
         `#include <metalnessmap_fragment>
   roughnessFactor = clamp(roughnessFactor + (wD.r - 0.5) * uRoughVar + wD.b * uGrime * 0.12 - wMask * ${kind === 'hard' ? '0.3' : '-0.1'}, 0.05, 1.0);
+  // digitais/óleo: manchas grandes mais lisas (brilho irregular no anodizado)
+  roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.55, uSmudge * smoothstep(0.55, 0.8, wD.b) * (1.0 - wMask));
+  // AA especular geométrico (Kaplanyan/Tokuyoshi): variância da normal na
+  // tela alarga o lóbulo — quinas finas e dentes de trilho não cintilam
+  {
+    vec3 gN = normalize(vNormal);
+    vec3 dnx = dFdx(gN), dny = dFdy(gN);
+    float kv = min(0.18, 0.25 * (dot(dnx, dnx) + dot(dny, dny)));
+    roughnessFactor = sqrt(clamp(roughnessFactor * roughnessFactor + kv, 0.0, 1.0));
+  }
   ${kind === 'hard' ? 'metalnessFactor = mix(metalnessFactor, uWearMetal, wMask);' : ''}`,
       )
       .replace(
@@ -129,13 +140,16 @@ export function makeMaterials() {
   const std = (p, d) => withDetail(new THREE.MeshStandardMaterial(p), d);
   const M = {
     // receptor de alumínio anodizado tipo III, preto acinzentado
-    receiver: std({ color: 0x3b3c3f, roughness: 0.42, metalness: 0.5 }, { wear: 0.9, wearColor: 0x9a978f, scratch: 0.55, grime: 0.3 }),
+    // (anodizado = camada de óxido tingida: responde como dielétrico escuro,
+    // quase neutro; só a quina gasta mostra o alumínio claro por baixo)
+    receiver: std({ color: 0x2c2c2b, roughness: 0.46, metalness: 0.2 }, { wear: 1.0, wearColor: 0xa8a6a0, wearMetal: 0.95, scratch: 0.45, grime: 0.3, smudge: 0.5 }),
     // guarda-mão / coronha em cerakote "coyote" (cerâmica fosca)
-    tan: std({ color: 0x7c6a52, roughness: 0.58, metalness: 0.08 }, { wear: 0.7, wearColor: 0x8d877c, wearMetal: 0.75, scratch: 0.45, grime: 0.4, dust: 0.3 }),
+    // guarda-mão / coronha: cerakote grafite (cerâmica fosca, micro-poros)
+    tan: std({ color: 0x2c2b29, roughness: 0.66, metalness: 0.05 }, { wear: 0.85, wearColor: 0x8f8c86, wearMetal: 0.85, scratch: 0.4, grime: 0.35, dust: 0.22, roughVar: 0.22, bump: 0.45, smudge: 0.35 }),
     // polímero (punho, carregador, coronha)
-    polymer: std({ color: 0x302f2d, roughness: 0.62, metalness: 0.0 }, { wear: 0.35, wearColor: 0x3a3936, wearMetal: 0.0, scratch: 0.3, grime: 0.3, roughVar: 0.22, bump: 0.8 }),
+    polymer: std({ color: 0x1e1e1d, roughness: 0.6, metalness: 0.0 }, { wear: 0.4, wearColor: 0x3c3b39, wearMetal: 0.0, scratch: 0.3, grime: 0.3, roughVar: 0.25, bump: 0.8, smudge: 0.6 }),
     // aço fosfatizado (cano, ferrolho, pinos)
-    steel: std({ color: 0x4a4a4c, roughness: 0.36, metalness: 0.9 }, { wear: 1.0, wearColor: 0xb4b2ac, wearMetal: 1.0, scratch: 0.7, grime: 0.35 }),
+    steel: std({ color: 0x3a3a3a, roughness: 0.4, metalness: 0.85 }, { wear: 1.0, wearColor: 0xb4b2ac, wearMetal: 1.0, scratch: 0.7, grime: 0.35 }),
     // aço escurecido em brasa (freio de boca)
     burnt: std({ color: 0x252220, roughness: 0.5, metalness: 0.85 }, { wear: 0.7, wearColor: 0x9a8f80, scratch: 0.3, grime: 0.6 }),
     // alumínio vivo / cromado (interior do ferrolho, parafusos)
@@ -151,20 +165,20 @@ export function makeMaterials() {
   };
   // luva: tecido sintético escuro + palma de couro
   M.glove = withDetail(
-    new THREE.MeshPhysicalMaterial({ color: 0x48463f, roughness: 0.82, metalness: 0, sheen: 0.35, sheenRoughness: 0.8, sheenColor: new THREE.Color(0x3a3a34) }),
-    { kind: 'fabric', scale: 70, wear: 0.4, wearColor: 0x6c6a62, grime: 0.5, bump: 1.4 },
+    new THREE.MeshPhysicalMaterial({ color: 0x7a6650, roughness: 0.84, metalness: 0, sheen: 0.45, sheenRoughness: 0.7, sheenColor: new THREE.Color(0x6a5a46) }),
+    { kind: 'fabric', scale: 80, wear: 0.45, wearColor: 0x9c8c74, grime: 0.55, bump: 1.5 },
   );
   M.gloveLeather = withDetail(
     new THREE.MeshPhysicalMaterial({ color: 0x4e4134, roughness: 0.6, metalness: 0, sheen: 0.2, sheenRoughness: 0.6, sheenColor: new THREE.Color(0x3a3028) }),
     { kind: 'fabric', scale: 18, wear: 0.5, wearColor: 0x5e5244, grime: 0.6, bump: 0.5 },
   );
-  M.knuckle = std({ color: 0x32332f, roughness: 0.5, metalness: 0.0 }, { wear: 0.5, wearColor: 0x4a4a46, wearMetal: 0.0, scratch: 0.4, grime: 0.3, bump: 0.7 });
+  M.knuckle = std({ color: 0x4a4034, roughness: 0.5, metalness: 0.0 }, { wear: 0.5, wearColor: 0x4a4a46, wearMetal: 0.0, scratch: 0.4, grime: 0.3, bump: 0.7 });
   M.sleeve = withDetail(
     new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, sheen: 0.3, sheenRoughness: 0.8, sheenColor: new THREE.Color(0x4a4638) }),
-    { kind: 'camo', scale: 45, camoScale: 2.4, wear: 0.25, wearColor: 0x9a927c, grime: 0.55, bump: 1.6 },
+    { kind: 'camo', scale: 60, camoScale: 7.5, wear: 0.25, wearColor: 0x9a927c, grime: 0.55, bump: 1.6 },
   );
   M.strap = withDetail(
-    new THREE.MeshPhysicalMaterial({ color: 0x3b3a30, roughness: 0.8, metalness: 0, sheen: 0.6, sheenColor: new THREE.Color(0x605e50) }),
+    new THREE.MeshPhysicalMaterial({ color: 0x4f4334, roughness: 0.8, metalness: 0, sheen: 0.6, sheenColor: new THREE.Color(0x6a5c48) }),
     { kind: 'fabric', scale: 90, wear: 0.3, grime: 0.4, bump: 1.2 },
   );
   return M;

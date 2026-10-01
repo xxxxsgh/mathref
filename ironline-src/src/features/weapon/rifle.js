@@ -13,17 +13,17 @@
  * (boca, janela de ejeção, linha de visada, pegas das mãos).
  */
 import * as THREE from 'three';
-import { Kit, side, section, top, rbox, cylZ, cylX, cylY, torus, roundRect } from './geo.js';
+import { Kit, side, section, top, rbox, cylZ, cylX, cylY, torus, roundRect, crease } from './geo.js';
 import { engravingTexture } from './textures.js';
 
 // ─── dimensões principais ────────────────────────────────────────────────
 export const DIM = {
   upperTop: 0.0165, // topo do receptor superior
   railTop: 0.0245, // topo dos dentes do trilho
-  hgFront: 0.545, // frente do guarda-mão (u)
-  muzzle: 0.64, // ponta do freio de boca (u)
+  hgFront: 0.585, // frente do guarda-mão (u)
+  muzzle: 0.68, // ponta do freio de boca (u)
   sightY: 0.0545, // linha de visada da holográfica (centro da janela)
-  optic: [0.035, 0.118], // u da holográfica (trás, frente)
+  optic: [0.07, 0.15], // u da holográfica (trás, frente)
 };
 
 /** Dentes de trilho Picatinny ao longo de u ∈ [u0,u1] em y = yBase. */
@@ -241,6 +241,29 @@ export function buildRifle(M, opts = {}) {
       K.add('cavity', cylX(0.0013, 0.0014, sx * 0.0226, 0.002, -u, 6));
     }
   }
+  // empunhadura vertical (polímero) num trilho M-LOK curto sob o guarda-mão:
+  // seção elíptica, leve inclinação para a frente, anéis de pegada e base alargada
+  {
+    const zc = -0.37, y0 = -0.03, y1 = -0.115, rake = 0.012;
+    const g = new THREE.CylinderGeometry(1, 1, 1, 28, 24, false);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const t = 0.5 - y; // 0 topo → 1 base
+      // anéis de pegada (sulcos rasos) e alargamento na base
+      const groove = 1 - 0.06 * Math.max(0, Math.sin(t * Math.PI * 9)) * (t > 0.12 && t < 0.86 ? 1 : 0);
+      const flare = 1 + 0.18 * Math.max(0, (t - 0.88) / 0.12) ** 2;
+      const k = groove * flare * (y > 0.499 || y < -0.499 ? 0.94 : 1);
+      p.setXYZ(i, x * 0.0135 * k, y0 + (y1 - y0) * t, zc - t * rake + z * 0.0145 * k);
+    }
+    g.computeVertexNormals();
+    K.add('polymer', crease(g, 0.9));
+    // base (tampa) arredondada
+    K.add('polymer', rbox(0.031, 0.006, 0.034, 0.0028, 0, y1 - 0.001, zc - rake));
+    // garra no trilho inferior
+    K.add('receiver', rbox(0.02, 0.006, 0.036, 0.0018, 0, y0 - 0.0005, zc + 0.001));
+    for (const sx of [-1, 1]) K.add('steel', cylX(0.0019, 0.0012, sx * 0.0103, y0 - 0.0005, zc + 0.008, 10));
+  }
   // QD de bandoleira no guarda-mão (esquerda) com olhal
   K.add('steel', cylX(0.0058, 0.005, -0.0235, -0.017, -(hg0 + 0.02), 16));
   K.add('steel', torus(0.008, 0.0014, -0.027, -0.025, -(hg0 + 0.02), 0, Math.PI / 2, 0.3));
@@ -263,11 +286,13 @@ export function buildRifle(M, opts = {}) {
   // coroa da boca (escura por dentro)
   K.add('cavity', cylZ(0.0042, -(b1 - 0.001), -(b1 + 0.0004), { seg: 16 }));
 
-  // ─── massa de mira dobrável (frente) e alça dobrável (trás) ────────────
-  K.add('receiver', rbox(0.02, 0.006, 0.024, 0.002, 0, D.railTop + 0.003, -(hg1 - 0.02)));
-  K.add('receiver', rbox(0.012, 0.003, 0.022, 0.0012, 0, D.railTop + 0.0068, -(hg1 - 0.022)));
-  K.add('receiver', rbox(0.02, 0.006, 0.02, 0.002, 0, D.railTop + 0.003, -0.016));
-  K.add('receiver', rbox(0.014, 0.003, 0.018, 0.0012, 0, D.railTop + 0.0068, -0.015));
+  // ─── massa de mira e alça DOBRADAS (rebatidas sobre o trilho: a ótica
+  // é a mira primária, então não roubam o quadro no ADS) ─────────────────
+  for (const [u, L] of [[hg1 - 0.022, 0.03], [0.02, 0.026]]) {
+    K.add('receiver', rbox(0.019, 0.0045, L, 0.0016, 0, D.railTop + 0.0022, -u)); // base
+    K.add('receiver', rbox(0.013, 0.0025, L * 0.8, 0.001, 0, D.railTop + 0.0055, -u - 0.002)); // folha rebatida
+    K.add('steel', cylX(0.0018, 0.021, 0, D.railTop + 0.0035, -u + L / 2 - 0.004, 12)); // eixo
+  }
 
   // ─── lanterna compacta (lado esquerdo, frente) ─────────────────────────
   {
@@ -299,35 +324,56 @@ export function buildRifle(M, opts = {}) {
   // alavanca QD (esquerda)
   K.add('steel', rbox(0.004, 0.006, 0.03, 0.0018, -0.022, oy + 0.002, -(o0 + 0.04)));
   K.add('steel', cylX(0.004, 0.006, -0.0215, oy + 0.002, -(o0 + 0.022), 14));
-  // capô: seção em arco com a janela vazada (janela mais larga que alta)
-  const HT = oy + 0.0465, WB = oy + 0.0138, WT = oy + 0.0388, WX = 0.0162;
-  const hoodOut = roundRect(-0.0215, oy + 0.006, 0.0215, HT, 0.0095, 6);
-  const win = roundRect(-WX, WB, WX, WT, 0.0042, 6);
-  const hoodLen = 0.072;
-  K.add('receiver', section(hoodOut, -(o0 + 0.008), hoodLen, { b: 0.002, seg: 3, holes: [win] }));
-  // molduras traseira e frontal (mais grossas, chanfradas)
-  const rim = () => roundRect(-0.0224, oy + 0.006, 0.0224, HT + 0.0009, 0.0102, 6);
-  const rimHole = () => roundRect(-WX + 0.0008, WB + 0.0008, WX - 0.0008, WT - 0.0008, 0.0036, 6);
-  K.add('receiver', section(rim(), -(o0 + 0.006), 0.006, { b: 0.0015, holes: [rimHole()] }));
-  K.add('receiver', section(rim(), -(o0 + 0.074), 0.006, { b: 0.0015, holes: [rimHole()] }));
-  // nervura superior do capô (reforço) e vidro escuro do emissor (base)
-  K.add('receiver', rbox(0.012, 0.003, hoodLen - 0.01, 0.0012, 0, HT + 0.001, -(o0 + 0.044)));
+  // capô: seção em arco com a janela vazada — paredes finas (3 mm) e janela
+  // grande, como numa holográfica real; capô curto (pouco "túnel" no ADS)
+  const HT = oy + 0.0455, WB = oy + 0.0125, WT = oy + 0.0405, WX = 0.0178;
+  const HX = 0.0208;
+  const hoodOut = roundRect(-HX, oy + 0.006, HX, HT, 0.0075, 6);
+  const win = roundRect(-WX, WB, WX, WT, 0.0048, 6);
+  const hoodLen = 0.038;
+  const hz0 = o0 + 0.024; // traseira do capô (capô curto, na frente da base)
+  K.add('receiver', section(hoodOut, -hz0, hoodLen, { b: 0.0012, seg: 3, holes: [win] }));
+  // lábio traseiro e frontal: chanfro largo voltado para fora (moldura fina)
+  const rim = () => roundRect(-HX - 0.0006, oy + 0.006, HX + 0.0006, HT + 0.0006, 0.008, 6);
+  const rimHole = () => roundRect(-WX + 0.0004, WB + 0.0004, WX - 0.0004, WT - 0.0004, 0.0044, 6);
+  K.add('receiver', section(rim(), -(hz0 - 0.001), 0.003, { b: 0.0006, holes: [rimHole()] }));
+  K.add('receiver', section(rim(), -(hz0 + hoodLen - 0.0022), 0.003, { b: 0.0006, holes: [rimHole()] }));
+  // nervura superior do capô + parafusos de fixação no topo
+  K.add('receiver', rbox(0.009, 0.0022, hoodLen - 0.016, 0.0009, 0, HT + 0.0006, -(hz0 + hoodLen / 2)));
+  for (const u of [hz0 + 0.009, hz0 + hoodLen - 0.009]) {
+    K.add('steel', cylY(0.0016, 0.0012, 0, HT + 0.0018, -u, 10));
+    K.add('cavity', rbox(0.0022, 0.0004, 0.0005, 0.0001, 0, HT + 0.0024, -u, 1));
+  }
   // forro interno do capô (fosco escuro): sem ele as paredes da janela
   // refletem o céu e o "túnel" fica claro demais no ADS
   {
-    const zc = -(o0 + 0.008 + hoodLen / 2), L = hoodLen - 0.002, e = 0.0004;
+    const zc = -(hz0 + hoodLen / 2), L = hoodLen - 0.004, e = 0.0004;
     K.add('cavity', rbox(WX * 2, 0.0006, L, 0.0002, 0, WB + e, zc, 1));
     K.add('cavity', rbox(WX * 2, 0.0006, L, 0.0002, 0, WT - e, zc, 1));
     K.add('cavity', rbox(0.0006, WT - WB, L, 0.0002, -WX + e, (WB + WT) / 2, zc, 1));
     K.add('cavity', rbox(0.0006, WT - WB, L, 0.0002, WX - e, (WB + WT) / 2, zc, 1));
   }
-  // botões de brilho (traseira, lado esquerdo) e tampa de bateria (frente)
-  for (const [x, w] of [[-0.009, 0.008], [0.001, 0.008], [0.011, 0.008]]) K.add('rubber', rbox(w, 0.005, 0.003, 0.0015, x, oy + 0.009, -(o0 + 0.002)));
-  K.add('receiver', cylX(0.0058, 0.006, -0.02, oy + 0.007, -(o1 - 0.008), 20));
-  K.add('steel', rbox(0.0012, 0.0012, 0.008, 0.0004, -0.0232, oy + 0.007, -(o1 - 0.008)));
-  // parafusos do capô
-  for (const u of [o0 + 0.02, o1 - 0.02]) {
-    for (const sx of [-1, 1]) K.add('steel', cylX(0.0018, 0.0012, sx * 0.0222, oy + 0.026, -u, 10));
+  // corpo inferior (bateria/eletrônica) atrás do capô: rampa com painel de botões
+  K.add('receiver', side([[o0 - 0.004, oy + 0.006], [hz0 + 0.004, oy + 0.006], [hz0 + 0.004, WB - 0.0005], [o0 + 0.002, WB - 0.0045], [o0 - 0.004, oy + 0.0105]], 0.04, { b: 0.0016, seg: 3 }));
+  // botões de brilho (− / NV / +) na rampa traseira, borracha com relevo
+  for (const x of [-0.011, 0, 0.011]) {
+    const m = new THREE.Matrix4().makeRotationX(-0.75).setPosition(x, oy + 0.0118, -(o0 + 0.0035));
+    K.add('rubber', rbox(0.0085, 0.0028, 0.0075, 0.0012), m);
+  }
+  // emissor do laser (janelinha escura na base, frente da janela)
+  K.add('cavity', rbox(0.01, 0.0015, 0.008, 0.0006, 0, WB + 0.0006, -(hz0 + hoodLen - 0.009)));
+  // tampa de bateria (lado direito, serrilhada) e alavanca QD
+  K.add('receiver', cylX(0.0062, 0.005, 0.022, oy + 0.0095, -(o1 - 0.012), 24));
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    K.add('receiver', rbox(0.0045, 0.0012, 0.0012, 0.0004, 0.022, oy + 0.0095 + Math.sin(a) * 0.0062, -(o1 - 0.012) + Math.cos(a) * 0.0062));
+  }
+  // parafusos laterais do capô
+  for (const u of [hz0 + 0.01, hz0 + hoodLen - 0.01]) {
+    for (const sx of [-1, 1]) {
+      K.add('steel', cylX(0.0017, 0.0012, sx * (HX + 0.0003), oy + 0.022, -u, 12));
+      K.add('cavity', cylX(0.0007, 0.0013, sx * (HX + 0.0005), oy + 0.022, -u, 6));
+    }
   }
 
   const rifle = K.build(M, 'rifle');
@@ -390,8 +436,8 @@ export function buildRifle(M, opts = {}) {
 
   return {
     root, rifle, mag: magPivot, magBody, chargingHandle: ch, boltCatch, trigger: trig, selector: sel, muzzle, ejectPort,
-    sight: new THREE.Vector3(0, (WB + WT) / 2, -(o0 + 0.04)),
-    opticWindow: { y: (WB + WT) / 2, z0: -(o0 + 0.008), z1: -(o0 + 0.08), w: WX * 2, h: WT - WB },
+    sight: new THREE.Vector3(0, (WB + WT) / 2, -(hz0 + hoodLen / 2)),
+    opticWindow: { y: (WB + WT) / 2, z0: -hz0, z1: -(hz0 + hoodLen), w: WX * 2, h: WT - WB },
   };
 }
 

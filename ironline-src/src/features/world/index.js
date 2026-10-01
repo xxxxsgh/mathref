@@ -26,6 +26,11 @@ import { createMaterials, SURFACE, weather, setOcclusionVolumes } from './materi
 import * as DT from './decals.js';
 import { Builder } from './geo.js';
 import { Instancer } from './props.js';
+import { WindowBatch } from './windows.js';
+import { meshTexture } from './barriers.js';
+import { ironTextures } from './road.js';
+import { createSmoke } from './smoke.js';
+import { vegetationMaterials, FOLIAGE_U } from './vegetation.js';
 import { makeRng } from './noise.js';
 import { buildLayout } from './layout.js';
 import { ROOM } from './interior.js';
@@ -46,7 +51,9 @@ export default {
     this.root = root;
 
     // ── materiais ──
-    const { mats, genMs } = createMaterials(quality, renderer);
+    const { mats, genMs, sets } = createMaterials(quality, renderer);
+    this.sets = sets;
+    const nrm = (t) => ({ map: t.map, normalMap: t.normalMap, normalScale: new THREE.Vector2(1.4, 1.4) });
     const decalMat = (map, extra = {}) =>
       new THREE.MeshStandardMaterial({
         map,
@@ -63,20 +70,37 @@ export default {
     Object.assign(mats, {
       streaks: decalMat(DT.streakTexture()),
       soot: decalMat(DT.sootTexture()),
-      cracks: decalMat(DT.crackTexture()),
-      bullets: decalMat(DT.bulletHolesTexture()),
+      cracks: decalMat(null, { ...nrm(DT.crackTexture()) }),
+      bullets: decalMat(null, { ...nrm(DT.bulletHolesTexture()) }),
+      chips: decalMat(null, { ...nrm(DT.chipsTexture()), roughness: 0.95 }),
+      scorch: decalMat(DT.scorchTexture(), { roughness: 0.98 }),
+      shards: decalMat(DT.shardsTexture(), { roughness: 0.12, metalness: 0.0 }),
       posters: decalMat(DT.postersTexture(), { roughness: 0.8 }),
       graffiti: decalMat(DT.graffitiTexture(), { roughness: 0.75 }),
       paint: decalMat(DT.roadPaintTexture(), { roughness: 0.9 }),
       stains: decalMat(DT.stainsTexture(), { roughness: 0.6 }),
       trash: decalMat(DT.trashTexture(), { alphaTest: 0.35, transparent: false, depthWrite: true, roughness: 0.85 }),
       signs: new THREE.MeshStandardMaterial({ map: DT.signsTexture(), roughness: 0.55, metalness: 0.1, vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }),
-      leaves: new THREE.MeshStandardMaterial({ map: DT.leavesTexture(), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.75, vertexColors: true }),
-      palm: new THREE.MeshStandardMaterial({ map: DT.leavesTexture(31, true), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.7, vertexColors: true }),
-      grass: new THREE.MeshStandardMaterial({ map: DT.grassTexture(), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.9, vertexColors: true }),
+      ...vegetationMaterials(),
     });
+    mats.mesh = new THREE.MeshStandardMaterial({ map: meshTexture(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.45, metalness: 0.8, vertexColors: true });
+    mats.fabricDS = mats.fabric.clone();
+    mats.fabricDS.side = THREE.DoubleSide;
+    {
+      const it = ironTextures();
+      mats.iron = new THREE.MeshStandardMaterial({ map: it.map, normalMap: it.normalMap, normalScale: new THREE.Vector2(1.5, 1.5), roughness: 0.78, metalness: 0.3, vertexColors: true });
+      weather(mats.iron, { macro: 0.3, ground: 0, streaks: 0, dust: 0.35 });
+    }
+    mats.chromeDS = mats.chrome.clone();
+    mats.chromeDS.side = THREE.DoubleSide;
+    {
+      const ct = DT.crateTexture();
+      mats.crate.map = ct.map;
+      mats.crate.normalMap = ct.normalMap;
+      mats.crate.needsUpdate = true;
+    }
     // decalques e folhagem também recebem a oclusão de interiores
-    for (const k of ['streaks', 'soot', 'cracks', 'bullets', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs']) {
+    for (const k of ['streaks', 'soot', 'cracks', 'bullets', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs']) {
       weather(mats[k], { macro: 0, ground: 0, streaks: 0, dust: 0 });
     }
     setOcclusionVolumes([{ min: [ROOM.x0, -0.2, ROOM.z0], max: [ROOM.x1, ROOM.h + 0.25, ROOM.z1], k: 0.36 }]);
@@ -111,6 +135,7 @@ export default {
     const W = {
       B: new Builder(collision, { chunk: 64 }),
       I: new Instancer(),
+      win: new WindowBatch(),
       rng: makeRng(20251),
       quality,
       dishes: [],
@@ -118,11 +143,24 @@ export default {
       rubbleSpots: [],
       trashSpots: [],
     };
+    W.B.realShadows = quality.level === 'high' || quality.level === 'ultra';
     buildLayout(W);
     const tris = W.B.tris;
-    const decals = new Set(['streaks', 'soot', 'cracks', 'bullets', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs']);
+    const decals = new Set(['streaks', 'soot', 'cracks', 'bullets', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs']);
     const meshes = W.B.build(root, mats, { noShadow: new Set([...decals, 'room']) });
     const inst = W.I.build(root, mats);
+    this.windows = W.win.build(root, { grime: this.sets.grime, quality });
+
+    // ── colunas de fumaça de incêndios distantes ──
+    if (quality.level !== 'low') {
+      this.smoke = createSmoke([
+        { x: 30, z: -105, h: 70, w: 15, seed: 0.13 },
+        { x: -46, z: -140, h: 85, w: 20, seed: 0.57 },
+        { x: 70, z: -60, h: 55, w: 12, seed: 0.81 },
+        { x: -80, z: -40, h: 60, w: 15, seed: 0.33 },
+      ], ATMOS);
+      scene.add(this.smoke);
+    }
 
     // ── IBL ──
     // O ambiente vai em scene.environment (todos os PBR recebem IBL difuso e
@@ -142,18 +180,26 @@ export default {
       texMs: Math.round(genMs),
       meshes: meshes.length,
       instanced: inst.length,
+      windows: W.win.count,
       tris,
       colliders: collision.colliders.size,
     };
 
     const shotPoses = {
       street: { position: [-1.6, 0, 26], yaw: -0.07, pitch: 0.035 },
-      interior: { position: [17.2, ROOM.floor, -4.3], yaw: Math.PI / 2 + 0.05, pitch: -0.015 },
+      interior: { position: [17.2, ROOM.floor, -4.3], yaw: Math.PI / 2 + 0.05, pitch: -0.06 },
       viewmodel: { position: [-0.6, 0, 20], yaw: 0.2, pitch: -0.04 },
       ads: { position: [0, 0, 18], yaw: 0, pitch: 0.0 },
       combat: { position: [0, 0, 18], yaw: 0, pitch: 0.0 },
       menu: { position: [-3.5, 0.15, 33], yaw: -0.42, pitch: 0.09 },
     };
+
+    // depuração: ?wpose=x,y,z,yaw,pitch substitui a pose do preset atual
+    const wp = ctx.params.get('wpose');
+    if (wp && ctx.shot) {
+      const v = wp.split(',').map(Number);
+      shotPoses[ctx.shot.name] = { position: [v[0], v[1], v[2]], yaw: v[3] || 0, pitch: v[4] || 0 };
+    }
 
     ctx.provide('world', {
       root,
@@ -195,6 +241,12 @@ export default {
 
   frame(dt, ctx) {
     const cam = ctx.camera;
+    const tnow = ctx.time?.now ?? performance.now() / 1000;
+    FOLIAGE_U.uTime.value = tnow;
+    if (this.smoke) {
+      this.smoke.material.uniforms.uCam.value.copy(cam.position);
+      this.smoke.material.uniforms.uTime.value = tnow;
+    }
     // céu e montanhas centrados na câmera
     this.sky.position.copy(cam.position);
     this.mountains.position.set(cam.position.x, 0, cam.position.z);
@@ -211,5 +263,6 @@ export default {
   dispose(ctx) {
     this._off?.();
     ctx.scene.remove(this.root, this.sky, this.mountains);
+    if (this.smoke) ctx.scene.remove(this.smoke);
   },
 };
