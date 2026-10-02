@@ -19,7 +19,33 @@ import * as THREE from 'three';
 import { cylinder, cylBetween, cable, rebar, decal, contact } from './shapes.js';
 import { rubblePile, scatterBricks, crate, ammoCan, radiator, sandbagWall, trash, barrel } from './props.js';
 import { mat4, cached } from './geo.js';
-import { graffitiRect } from './decals.js';
+import { graffitiRect, bulletRect } from './decals.js';
+
+/** Placa de laje quebrada: retângulo com bordas serrilhadas, extrudado (espessura real). */
+function brokenSlabGeo(w, l, t, seed) {
+  return cached(`bslab_${w.toFixed(2)}_${l.toFixed(2)}_${t}_${seed}`, () => {
+    let s0 = seed * 9301 + 49297;
+    const r = () => ((s0 = (s0 * 16807) % 2147483647) / 2147483647);
+    const pts = [];
+    const edge = (x0, z0, x1, z1, n, jag) => {
+      for (let i = 0; i < n; i++) {
+        const t2 = i / n;
+        const nx = -(z1 - z0), nz = x1 - x0, nl = Math.hypot(nx, nz);
+        const j = (r() - 0.6) * jag;
+        pts.push(new THREE.Vector2(x0 + (x1 - x0) * t2 + (nx / nl) * j, z0 + (z1 - z0) * t2 + (nz / nl) * j));
+      }
+    };
+    const hw = w / 2, hl = l / 2;
+    edge(-hw, -hl, hw, -hl, 9, 0.1);
+    edge(hw, -hl, hw, hl, 7, 0.07);
+    edge(hw, hl, -hw, hl, 9, 0.12);
+    edge(-hw, hl, -hw, -hl, 7, 0.07);
+    const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: t, bevelEnabled: t > 0.05, bevelThickness: 0.015, bevelSize: 0.012, bevelSegments: 1, curveSegments: 1 });
+    g.translate(0, 0, -t / 2);
+    g.rotateX(-Math.PI / 2); // espessura em y, comprimento em z
+    return g;
+  });
+}
 
 export const ROOM = { x0: 9.5, x1: 23.5, z0: -14, z1: 2, h: 3.2, floor: 0.17, wall: 0.3 };
 
@@ -91,9 +117,27 @@ export function buildInterior(W, tint) {
       const hz = hole.z1 - 0.05, cx = (hole.x0 + hole.x1) / 2;
       const c = [cx, CEIL - Math.sin(th) * len / 2, hz - Math.cos(th) * len / 2];
       // eixo longo em z, inclinado: rotação em torno de x
-      B.obox(c, [wid, 0.16, len], [-th, 0, 0], 'concrete', { color: [0.7, 0.68, 0.64], collide: true });
-      const n = [0, Math.cos(th), -Math.sin(th)]; // normal de baixo → (0, -cos, +sin)
-      B.obox([c[0], c[1] - n[1] * 0.085, c[2] - n[2] * 0.085], [wid - 0.15, 0.012, len - 0.1], [-th, 0, 0], 'plasterIn', { color: ceilC.map((v) => v * 0.92) });
+      // laje partida em 3 placas articuladas pela armadura (dobra nas trincas),
+      // contorno serrilhado extrudado com espessura real, reboco do forro
+      // ainda colado embaixo (mais estreito, arrancado nas bordas)
+      const pieces = 3;
+      const ang = [-th - 0.08, -th + 0.05, -th + 0.16];
+      let hinge = [cx, CEIL - 0.04, hz];
+      for (let k = 0; k < pieces; k++) {
+        const pl = len / pieces;
+        const a = ang[k];
+        const dir = [0, Math.sin(a), Math.cos(a)];
+        // centro da placa = dobradiça + metade do comprimento no sentido -z inclinado
+        const pc = [hinge[0] + (k - 1) * 0.04, hinge[1] + dir[1] * pl / 2, hinge[2] - dir[2] * pl / 2];
+        const M = mat4(pc, [a, (k - 1) * 0.04, (k - 1) * 0.03]);
+        B.add(brokenSlabGeo(wid - k * 0.06, pl - 0.03, 0.17, 40 + k), 'concrete', M, { color: (p) => { const t = Math.min(1, Math.max(0, (CEIL - p.y) / 2.4)); return [0.72 - t * 0.18, 0.7 - t * 0.18, 0.66 - t * 0.17]; } });
+        // reboco do forro na face de baixo (camada fina, lascada)
+        B.add(brokenSlabGeo(wid - 0.3 - k * 0.06, pl - 0.18, 0.015, 60 + k), 'plasterIn', M.clone().multiply(mat4([0.02, -0.106, 0])), { color: ceilC.map((v) => v * 0.9) });
+        // vergalhões expostos na trinca entre placas
+        if (k > 0) for (let xx = hole.x0 + 0.2; xx < hole.x1 - 0.15; xx += 0.2) cylBetween(B, [xx, hinge[1] + 0.03, hinge[2] + 0.06], [xx + rng.range(-0.04, 0.04), hinge[1] - 0.05, hinge[2] - 0.08], 0.006, 'metal', { seg: 4, color: [0.42, 0.28, 0.2] });
+        hinge = [hinge[0], hinge[1] + dir[1] * pl, hinge[2] - dir[2] * pl];
+      }
+      B.collider([hole.x0, F, hz - Math.cos(th) * len - 0.1], [hole.x1, CEIL - 0.5, hz - 0.3], 'concrete');
       const tip = [CEIL - Math.sin(th) * len, hz - Math.cos(th) * len];
       for (let xx = hole.x0 + 0.15; xx < hole.x1 - 0.1; xx += 0.2) {
         cylBetween(B, [xx, CEIL + 0.02, hole.z1 + 0.05], [xx + rng.range(-0.03, 0.03), CEIL - 0.14, hz - 0.08], 0.006, 'metal', { seg: 4, color: [0.42, 0.28, 0.2] });
@@ -123,7 +167,7 @@ export function buildInterior(W, tint) {
   // infiltração e fuligem no teto
   decal(B, 'stains', [17, CEIL - 0.01, -9.5], 'ny', [3.5, 3], [0, 0, 0.5, 0.5], 0.4, [0.75, 0.62, 0.45]);
   decal(B, 'stains', [20.5, CEIL - 0.011, -2], 'ny', [2.5, 2.8], [0, 0.5, 0.5, 1], 1.1, [0.8, 0.66, 0.48]);
-  decal(B, 'cracks', [16, CEIL - 0.012, -4], 'ny', [3, 3], [0, 0, 1, 1], 0.7);
+  decal(B, 'cracks', [17.3, CEIL - 0.012, -3.6], 'ny', [2.2, 2.2], [0, 0, 1, 1], 0.7, [1.25, 1.2, 1.15]);
   decal(B, 'soot', [11.2, CEIL - 0.013, -7.1], 'ny', [3.4, 3.2]);
 
   /** Parede interna em painéis: barra embaixo, filete, tinta clara em cima. */
@@ -215,7 +259,7 @@ export function buildInterior(W, tint) {
     }
     // fuligem e lascas em volta do rombo (fora e dentro)
     decal(B, 'scorch', [fx0 - 0.012, cy + 0.4, cx], 'nx', [5, 4.6], [0, 0, 1, 1], 0.6);
-    decal(B, 'bullets', [fx0 - 0.013, 1.6, cx + 2.2], 'nx', [2.0, 2.0], [0, 0, 1, 1], 1.2);
+    decal(B, 'bullets', [fx0 - 0.013, 1.6, cx + 2.2], 'nx', [1.6, 1.6], bulletRect(1), 1.2);
     decal(B, 'chips', [fx1 + 0.012, cy + 0.3, cx - 1.9], 'px', [1.4, 1.1], [0, 0, 0.5, 0.5], 0.4);
     decal(B, 'chips', [fx1 + 0.0125, cy - 0.2, cx + 1.9], 'px', [1.2, 1.0], [0.5, 0.5, 1, 1], 2.4);
     decal(B, 'soot', [fx1 + 0.013, cy + 1.2, cx], 'px', [3.6, 3.4]);
@@ -266,12 +310,12 @@ export function buildInterior(W, tint) {
   contact(B, 17.4, F, -6.4, 1.1, 1.1, 0, 1);
   B.box(ix0, CEIL - 0.35, -6.6, ix1, CEIL, -6.2, 'concrete', { color: [0.8, 0.78, 0.74], collide: false });
   decal(B, 'chips', [17.4, 1.2, -6.6 - 0.011], 'nz', [0.5, 0.7], [0, 0.5, 0.5, 1], 0.3);
-  decal(B, 'bullets', [17.4, 1.5, -6.2 + 0.011], 'pz', [0.45, 0.9], [0.2, 0.2, 0.5, 0.8], 0);
+  decal(B, 'bullets', [17.4, 1.5, -6.2 + 0.011], 'pz', [0.45, 0.45], bulletRect(2), 0);
 
   // manchas e marcas nas paredes internas
   decal(B, 'cracks', [ix1 - 0.012, 2.2, -9], 'nx', [3, 2.4], [0, 0, 1, 1], 0.7);
   decal(B, 'streaks', [ix1 - 0.012, 2.4, -1], 'nx', [3, 1.6]);
-  decal(B, 'bullets', [ix1 - 0.013, 1.4, -4.5], 'nx', [2.0, 1.8], [0, 0, 1, 1], 2.1);
+  decal(B, 'bullets', [ix1 - 0.013, 1.4, -4.5], 'nx', [1.8, 1.6], bulletRect(0), 0.1);
   decal(B, 'graffiti', [ix1 - 0.014, 1.9, -11], 'nx', [2.0, 1.0], graffitiRect(2));
   decal(B, 'graffiti', [12.5, 1.75, iz0 + 0.014], 'pz', [1.6, 0.8], graffitiRect(10), 0.05);
   decal(B, 'cracks', [15, 2.3, iz1 - 0.012], 'nz', [2.5, 2], [0, 0, 1, 1], 2.0);

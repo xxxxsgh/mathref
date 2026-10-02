@@ -133,27 +133,38 @@ varying float vLife;
 uniform vec3 uSunDir;
 uniform vec3 uSunCol;
 uniform float uTime2;
-float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float h21(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float vn(vec2 p) {
   vec2 i = floor(p), f = fract(p);
   f = f * f * (3.0 - 2.0 * f);
   return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y);
 }
+float fbm(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 4; i++) { s += vn(p) * a; p = p * 2.07 + 5.3; a *= 0.5; }
+  return s;
+}
 void main() {
-  vec2 c = vUv - 0.5;
-  float d = length(c) * 2.0;
-  float n = vn(vUv * 4.0 + vSeed * 9.0) * 0.6 + vn(vUv * 9.0 - vSeed * 5.0) * 0.4;
-  float a = smoothstep(1.0, 0.25, d + (n - 0.5) * 0.7) * smoothstep(1.0, 0.6, d) * vA * 0.55;
-  // alfa pontilhado (como as colunas de smoke.js): grava profundidade, então
-  // o céu/névoa do compositor não pinta por cima; o TAA suaviza o pontilhado.
-  // Fase do pontilhado por puff: puffs sobrepostos somam cobertura.
-  float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy + vSeed * 97.0, vec2(0.06711056, 0.00583715))) + uTime2 * 37.0 * 0.618034 + vSeed);
-  if (a * 1.25 < dither * 0.98 + 0.01) discard;
-  // fumaça de pneu/óleo: preta embaixo, cinza-acastanhada no alto; borda do lado do sol mais clara
-  float lit = clamp(dot(normalize(vec3(c.x, -c.y, 0.4)), normalize(vec3(uSunDir.x, uSunDir.y, 0.3))) * 0.5 + 0.5, 0.0, 1.0);
-  vec3 col = mix(vec3(0.045, 0.04, 0.036), vec3(0.3, 0.28, 0.25), smoothstep(0.0, 0.8, vLife)) * (0.7 + 0.6 * lit);
-  col += uSunCol * 0.05 * lit * vLife;
-  gl_FragColor = vec4(col, 1.0);
+  vec2 c = (vUv - 0.5) * 2.0;
+  float r2 = dot(c, c);
+  if (r2 > 1.0) discard;
+  // alfa SUAVE (mistura normal): esfera difusa recortada por fBm distorcido
+  vec2 q = vUv * 2.4 + vSeed * 9.0;
+  float w = fbm(q * 0.8 + 1.7);
+  float n = fbm(q + (w - 0.5) * 1.5);
+  float dens = clamp((1.0 - sqrt(r2)) * 1.3 + (n - 0.5) * 1.2 - 0.06, 0.0, 1.0);
+  dens = smoothstep(0.0, 0.8, dens);
+  float a = dens * vA * 0.75;
+  if (a < 0.004) discard;
+  // iluminação: normal de esfera (tela) → lado do sol claro, núcleo denso escuro
+  float z = sqrt(max(0.0, 1.0 - r2));
+  vec3 nl = normalize(vec3(c.x, c.y, z + 0.2));
+  float lit = clamp(dot(nl, normalize(vec3(uSunDir.x, uSunDir.y, 0.35))) * 0.55 + 0.45, 0.0, 1.0);
+  lit *= mix(0.6, 1.0, 1.0 - dens * 0.5);
+  // fumaça de pneu/óleo: preta embaixo, cinza-acastanhada no alto
+  vec3 alb = mix(vec3(0.03, 0.028, 0.026), vec3(0.3, 0.28, 0.26), smoothstep(0.0, 0.8, vLife)) * (0.85 + 0.3 * n);
+  vec3 col = alb * (vec3(0.5, 0.56, 0.66) * (0.6 + 0.4 * c.y * 0.5 + 0.2) + uSunCol * 2.2 * lit);
+  gl_FragColor = vec4(col, a);
 }`;
 
 export function createFires(list, rng) {
@@ -239,8 +250,9 @@ export function createFires(list, rng) {
       vertexShader: PUFF_VERT,
       fragmentShader: PUFF_FRAG,
       uniforms: { uTime: uniforms.uTime, uTime2: uniforms.uTime, uCam: uniforms.uCam, uSunDir: { value: new THREE.Vector3(-0.32, 0.6, -0.73).normalize() }, uSunCol: { value: new THREE.Color(1.0, 0.86, 0.68) } },
-      transparent: false,
-      depthWrite: true,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.NormalBlending,
       side: THREE.FrontSide,
     });
     const puffs = new THREE.Mesh(sg, smat);

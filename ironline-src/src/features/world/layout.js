@@ -22,6 +22,8 @@ import * as VG from './vegetation.js';
 const ROAD = 6, WALK = 9.5, DEPTH = 14;
 const Z_N = 60, Z_S = -150;
 const CROSS = [-66, -52];
+/** Crateras de morteiro na avenida: [x, z, raio, semente]. */
+const CRATERS = [[0.9, 14.5, 1.3, 1], [-2.2, -17, 1.2, 2], [3.0, -41, 1.4, 3], [-1.0, -84, 1.1, 4], [2.4, -118, 1.3, 5]];
 
 export function buildLayout(W) {
   const { B, rng } = W;
@@ -94,8 +96,22 @@ function ground(W) {
   // terreno de fundo (terra) — sob tudo
   B.box(-260, -0.6, -320, 260, -0.02, 220, 'dirt', { color: [0.85, 0.8, 0.72], faces: { ny: null }, collide: false });
   B.collider([-260, -1, -320], [260, -0.02, 220], 'dirt');
-  // avenida (em fatias de 20 m para culling)
-  for (let z = Z_S; z < Z_N; z += 20) B.box(-ROAD, -0.4, z, ROAD, 0, Math.min(Z_N, z + 20), 'asphalt', { faces: { ny: null } });
+  // avenida (em fatias de 20 m para culling). Fatias com cratera: a face de
+  // cima vira um perfil COM FUROS (a cratera afunda de verdade no asfalto)
+  for (let z = Z_S; z < Z_N; z += 20) {
+    const z1 = Math.min(Z_N, z + 20);
+    const holes = CRATERS.filter(([cx, cz, r]) => cz - r > z && cz + r < z1);
+    if (!holes.length) {
+      B.box(-ROAD, -0.4, z, ROAD, 0, z1, 'asphalt', { faces: { ny: null } });
+      continue;
+    }
+    B.box(-ROAD, -0.4, z, ROAD, 0, z1, 'asphalt', { faces: { ny: null, py: null } });
+    const sh = new THREE.Shape([new THREE.Vector2(-ROAD, -z), new THREE.Vector2(ROAD, -z), new THREE.Vector2(ROAD, -z1), new THREE.Vector2(-ROAD, -z1)]);
+    for (const c of holes) sh.holes.push(new THREE.Path(RD.craterOutline(c).map(([x, zz]) => new THREE.Vector2(x, -zz))));
+    const g = new THREE.ShapeGeometry(sh, 1);
+    g.rotateX(-Math.PI / 2);
+    B.add(g, 'asphalt', null, { at: [0, (z + z1) / 2] });
+  }
   // transversal
   for (let x = -70; x < 70; x += 20) {
     if (x + 20 <= -ROAD || x >= ROAD) B.box(x, -0.4, CROSS[0] + 3.5, x + 20, 0, CROSS[1] - 3.5, 'asphalt', { faces: { ny: null } });
@@ -149,7 +165,10 @@ function ground(W) {
   // ── pintura de rua: faixa central tracejada, faixas de pedestre, linhas de parada ──
   for (let z = Z_S + 2; z < Z_N - 2; z += 6) {
     if (z > CROSS[0] - 6 && z < CROSS[1] + 4) continue;
-    decal(B, 'paint', [0, 0.012, z], 'py', [0.14, 3], [0, rng.next(), 1, rng.next() + 0.4], rng.range(-0.01, 0.01), [0.95, 0.85, 0.55]);
+    // faixa gasta: tom e desgaste variam por traço; alguns quase sumiram
+    if (rng.chance(0.12)) continue;
+    const fade = rng.chance(0.25) ? rng.range(0.35, 0.55) : rng.range(0.62, 0.9);
+    decal(B, 'paint', [rng.range(-0.03, 0.03), 0.012, z], 'py', [0.14, rng.range(2.6, 3)], [0, rng.next(), 1, rng.next() + 0.4], rng.range(-0.012, 0.012), [0.95 * fade, 0.85 * fade, 0.55 * fade]);
   }
   for (const zc of [CROSS[1] + 1.8, CROSS[0] - 1.8]) {
     for (let x = -ROAD + 0.8; x < ROAD - 0.4; x += 1.0) decal(B, 'paint', [x, 0.012, zc], 'py', [0.5, 3.0], [0, rng.next(), 1, rng.next() * 0.5 + 0.5]);
@@ -209,7 +228,33 @@ function skyline(W) {
     if (!broken) {
       B.box(x0, -0.1, z0, x0 + w, h, z0 + d, 'far', { ...fo, color: t, collide: false, faces: { ny: null } });
       B.box(x0 - 0.2, h, z0 - 0.2, x0 + w + 0.2, h + 0.7, z0 + d + 0.2, 'concrete', { color: [0.7, 0.68, 0.64], collide: false, faces: { ny: null } });
-      roofJunk(x0, z0, w, d, h + 0.7);
+      // relevo de fachada: faixas de sacadas/lajes salientes por andar (sombra
+      // real ao sol) e, às vezes, volume recuado no topo — a caixa deixa de
+      // ser uma caixa lisa com textura
+      const kind = rng.next();
+      if (kind < 0.55) {
+        const fh = 3.0;
+        const deep = rng.range(0.35, 0.8);
+        const tone = t.map((c) => c * rng.range(0.85, 0.97));
+        for (let y = fh; y < h - 1; y += fh) {
+          if (rng.chance(0.12)) continue;
+          B.box(x0 - deep, y - 0.12, z0 - deep, x0 + w + deep, y + 0.04, z0 + d + deep, 'concrete', { color: tone, collide: false });
+          // guarda-corpos maciços em trechos
+          if (rng.chance(0.5)) B.box(x0 - deep, y + 0.04, z0 - deep, x0 + w + deep, y + 0.95, z0 + d + deep, 'far', { ...fo, color: tone.map((c) => c * 0.95), collide: false, faces: { ny: null, py: null } });
+        }
+      } else if (kind < 0.8) {
+        // pilares/costelas verticais (prédio soviético de painéis)
+        const n = Math.max(2, Math.round(w / 3.2));
+        for (let i = 0; i <= n; i++) {
+          const xx = x0 + (i / n) * w;
+          B.box(xx - 0.2, -0.1, z0 - 0.45, xx + 0.2, h, z0 + d + 0.45, 'concrete', { color: t.map((c) => c * 0.93), collide: false, faces: { ny: null } });
+        }
+      }
+      if (rng.chance(0.35) && w > 8 && d > 8) {
+        const ih = rng.range(3, 7);
+        B.box(x0 + w * 0.25, h + 0.7, z0 + d * 0.25, x0 + w * 0.7, h + 0.7 + ih, z0 + d * 0.7, 'far', { ...fo, color: t.map((c) => c * 0.94), collide: false, faces: { ny: null } });
+        roofJunk(x0 + w * 0.25, z0 + d * 0.25, w * 0.45, d * 0.45, h + 0.7 + ih);
+      } else roofJunk(x0, z0, w, d, h + 0.7);
     } else {
       // topo desmoronado: colunas de alturas decrescentes (silhueta serrilhada)
       const n = Math.max(3, Math.round(w / 2.5));
@@ -247,8 +292,13 @@ function skyline(W) {
       }
     }
   }
+  // fundo da avenida ao norte (visto do cruzamento olhando +z): silhueta
+  // recortada em vez de céu vazio por cima do prédio que fecha a rua
+  add(-24, 78, 15, 14, 36, { broken: true });
+  add(-6, 84, 17, 15, 24, { broken: false });
+  add(13, 76, 14, 13, 30, { broken: false });
   // minaretes + cúpulas (silhueta característica)
-  for (const [mx, mz, mh] of [[70, -230, 44], [-95, -185, 36]]) {
+  for (const [mx, mz, mh] of [[70, -230, 44], [-95, -185, 36], [34, 96, 38]]) {
     B.add(cylGeo(), 'plaster', mat4([mx, mh / 2, mz], [0, 0, 0], [2.2, mh, 2.2]), { color: [0.92, 0.88, 0.8] });
     B.add(cylGeo(), 'plaster', mat4([mx, mh * 0.8, mz], [0, 0, 0], [3.2, 1.2, 3.2]), { color: [0.85, 0.8, 0.72] });
     B.add(cylGeo(), 'plaster', mat4([mx, mh + 1.5, mz], [0, 0, 0], [1.6, 3, 1.6]), { color: [0.9, 0.86, 0.78] });
@@ -397,6 +447,16 @@ function dressStreet(W) {
   treeSpot(7.9, -44.5);
   treeSpot(-7.7, -88);
   treeSpot(7.9, -96);
+  // mais verde: árvores de calçada crescidas sem poda e palmeiras
+  treeSpot(-7.7, -27.5, { species: 1 });
+  treeSpot(7.9, -27, { species: 2 });
+  treeSpot(-7.7, -110);
+  treeSpot(7.9, -122, { species: 1 });
+  treeSpot(7.9, -70);
+  treeSpot(-7.7, 48, { species: 2 });
+  P.palm(W, 8.1, 50.5, { h: 10 });
+  P.palm(W, -8.1, -116.5, { h: 9.5 });
+  P.palm(W, 8.0, -104.5, { h: 8 });
   P.palm(W, 8.0, -50.3, { h: 9 });
   P.palm(W, -8.0, -68.2, { h: 8 });
   P.palm(W, -18, -59, { h: 10 });
@@ -445,6 +505,8 @@ function dressStreet(W) {
   for (const [x, z, r, h, dry] of [
     [8.75, 9.2, 0.9, 1.3, 0], [-8.8, -13.5, 1.1, 1.6, 1], [8.7, -47.5, 0.8, 1.1, 0], [-8.8, -74, 1.0, 1.4, 0],
     [8.8, -88, 0.9, 1.2, 1], [-8.9, 38, 0.8, 1.1, 0], [8.8, 45, 1.0, 1.5, 0],
+    [-8.8, -2.5, 0.8, 1.2, 0], [8.8, -24, 0.9, 1.3, 0], [-8.9, -46, 1.0, 1.5, 1], [8.8, -63, 0.8, 1.0, 0],
+    [-8.8, -102, 1.1, 1.6, 0], [8.8, -128, 0.9, 1.3, 1], [-8.9, 26, 0.7, 1.0, 0], [8.8, 33, 0.7, 0.9, 1],
   ]) {
     VG.bush(W, x, z, r, h, { y: 0.15, sx: 0.7, dry });
     P.grassTufts(W, x, z, r * 1.2, 10, { y: 0.15 });
@@ -463,17 +525,20 @@ function dressStreet(W) {
 function streetGrime(W) {
   const { B, rng } = W;
   // faixa de areia/poeira acumulada junto ao meio-fio e na base das fachadas
-  for (let z = Z_S + 2; z < Z_N - 2; z += rng.range(3, 6)) {
+  for (let z = Z_S + 2; z < Z_N - 2; z += rng.range(2.5, 4.5)) {
     if (z > CROSS[0] - 1 && z < CROSS[1] + 1) continue;
     for (const s of [-1, 1]) {
       decal(B, 'stains', [s * (ROAD - rng.range(0.4, 0.7)), 0.013, z], 'py', [rng.range(1.0, 1.8), rng.range(4, 7)], [0, 0.5, 0.5, 1], rng.range(-0.15, 0.15), [1, 0.95, 0.85]);
-      if (rng.chance(0.6)) decal(B, 'stains', [s * (WALK - rng.range(0.3, 0.6)), 0.163, z], 'py', [rng.range(0.8, 1.4), rng.range(3, 6)], [0, 0.5, 0.5, 1], rng.range(-0.1, 0.1));
+      // poeira/terra acumulada no pé das fachadas (sempre) e no canto com o meio-fio
+      decal(B, 'stains', [s * (WALK - rng.range(0.25, 0.5)), 0.163, z], 'py', [rng.range(0.9, 1.6), rng.range(3.5, 6.5)], [0, 0.5, 0.5, 1], rng.range(-0.08, 0.08), [0.85, 0.8, 0.72]);
+      if (rng.chance(0.6)) decal(B, 'stains', [s * (ROAD + 0.35), 0.164, z + 1], 'py', [0.7, rng.range(2.5, 4.5)], [0, 0.5, 0.5, 1], rng.range(-0.05, 0.05), [0.8, 0.76, 0.7]);
       if (rng.chance(0.5)) P.scatterBricks(W, s * (ROAD - 0.35), z, 0.5, rng.int(2, 6));
     }
   }
   // crateras de morteiro (geometria: borda levantada, centro revolvido)
-  for (const [x, z, r] of [[0.9, 14.5, 1.3], [-2.2, -17, 1.2], [3.0, -41, 1.4], [-1.0, -84, 1.1], [2.4, -118, 1.3]]) {
-    RD.crater(W, x, z, r);
+  for (const c of CRATERS) {
+    const [x, z, r] = c;
+    RD.crater(W, c);
     P.scatterBricks(W, x, z, r * 2.5, 12, { brick: 0.1 });
   }
 }

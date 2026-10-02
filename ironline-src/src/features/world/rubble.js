@@ -88,7 +88,7 @@ export const slabGeo = (v) =>
       const w = Math.sin(x * 3.1 + v) * 0.025 + Math.cos(z * 2.7 + v * 2) * 0.02;
       P.setXYZ(i, x + (r() - 0.5) * 0.015, y + w + (r() - 0.5) * 0.012, z + (r() - 0.5) * 0.015);
     }
-    const ng = g.toNonIndexed();
+    const ng = g.index ? g.toNonIndexed() : g;
     ng.computeVertexNormals();
     return ng;
   });
@@ -227,7 +227,10 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
     const n = fbm2(lx * 1.3 + seed, lz * 1.3, seed);
     const lump = fbm2(lx * 3.1, lz * 3.1 + seed, seed + 1);
     const grit = vnoise(lx * 7.3, lz * 7.3, seed + 5);
-    return h * base * (0.62 + n * 0.7) + (lump - 0.5) * 0.26 * base + (grit - 0.5) * 0.09 * Math.sqrt(base);
+    // cristas (pedaços grandes enterrados sob o pó) + degraus de deslizamento
+    const ridge = 1 - Math.abs(2 * vnoise(lx * 2.3 + 11, lz * 2.3, seed + 9) - 1);
+    const ridge2 = 1 - Math.abs(2 * vnoise(lx * 5.1, lz * 5.1 + 7, seed + 13) - 1);
+    return h * base * (0.62 + n * 0.7) + (lump - 0.5) * 0.3 * base + ridge * ridge * 0.16 * base + ridge2 * ridge2 * 0.06 * Math.sqrt(base) + (grit - 0.5) * 0.1 * Math.sqrt(base);
   };
   const normalAt = (lx, lz) => {
     const e = 0.08;
@@ -238,7 +241,7 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
   };
   // ── monte base (malha radial) ──
   if (opts.mound !== false && h > 0.08) {
-    const rings = Math.max(9, Math.round(r * 6)), segs = Math.max(22, Math.round(r * 14));
+    const rings = Math.max(12, Math.round(r * 10)), segs = Math.max(28, Math.round(r * 24));
     const R = r * 1.08;
     const vtx = (ri, si) => {
       const t = ri / rings;
@@ -266,9 +269,11 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
     const uv = new Float32Array((pos.length / 3) * 2);
     g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     // AO/cor: base mais escura (contato), topo mais claro (pó assentado)
+    // (o cascalho triplanar já tem cor própria; aqui só AO de contato e um toque da tinta)
     const col = (p) => {
-      const k = 0.62 + 0.38 * Math.min(1, Math.max(0, (p.y - y0) / Math.max(0.2, h)));
-      return [tint[0] * 0.18 + 0.5 * k, tint[1] * 0.18 + 0.48 * k, tint[2] * 0.18 + 0.45 * k];
+      const t = Math.min(1, Math.max(0, (p.y - y0) / Math.max(0.2, h)));
+      const k = 0.42 + 0.58 * Math.pow(t, 0.55);
+      return [(0.8 + tint[0] * 0.2) * k, (0.8 + tint[1] * 0.2) * k, (0.8 + tint[2] * 0.2) * k];
     };
     B.add(g, 'rubbleD', null, { color: col, at: [x, z] });
   }
@@ -301,7 +306,7 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
     }
   }
   // ── pedaços médios ──
-  const nMed = Math.round(r * r * 16 * (opts.density ?? 1) * (r > 2 ? 1.5 : 1)) + 6;
+  const nMed = Math.round(r * r * 26 * (opts.density ?? 1) * (r > 2 ? 1.4 : 1)) + 10;
   for (let i = 0; i < nMed; i++) {
     const [lx, lz] = randIn(0.95);
     const n = normalAt(lx, lz);
@@ -323,17 +328,18 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
     }
   }
   // ── talude de cascalho miúdo (sem sombra) ──
-  const nSmall = Math.round(r * r * 9 * (opts.density ?? 1)) + 6;
+  const nSmall = Math.round(r * r * 34 * (opts.density ?? 1)) + 14;
   for (let i = 0; i < nSmall; i++) {
-    const a = rng.range(0, Math.PI * 2), d = r * rng.range(0.55, 1.25);
+    // cobre o monte inteiro (mais denso na encosta/pé) e transborda além da borda
+    const a = rng.range(0, Math.PI * 2), d = r * (rng.chance(0.65) ? rng.range(0.5, 1.3) : Math.sqrt(rng.next()) * 0.9);
     const lx = Math.cos(a) * d, lz = Math.sin(a) * d;
-    const s = rng.range(0.035, 0.1);
+    const s = rng.range(0.03, 0.12);
     const v = rng.int(0, 7);
     const red = rng.chance(brickK * 0.5);
     I.add('rchunk' + v, chunkGeo(v), 'rubbleC', mat4(place(lx, lz, s * 0.2), [rng.range(0, 6), rng.range(0, 6), rng.range(0, 6)], s), red ? rng.pick(BRICK_T) : rng.pick(CONC_T), { shadow: false });
   }
   // ── vergalhões, canos e tábuas ──
-  const nBar = Math.round(r * (opts.rebar ?? 1.2));
+  const nBar = Math.round(r * (opts.rebar ?? 2.2));
   for (let i = 0; i < nBar; i++) {
     const [lx, lz] = randIn(0.6);
     rebar(B, place(lx, lz, -0.05), [rng.range(-1, 1), rng.range(0.3, 1), rng.range(-1, 1)], rng.range(0.5, 1.5), rng);

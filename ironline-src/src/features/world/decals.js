@@ -160,8 +160,8 @@ export function crackTexture(seed = 7) {
     hg.beginPath(); hg.moveTo(a, b); hg.lineTo(cc, d); hg.stroke();
   }
   for (const [a, b, cc, d, w] of segs) {
-    g.strokeStyle = 'rgba(14,11,9,0.85)';
-    g.lineWidth = w;
+    g.strokeStyle = 'rgba(38,33,28,0.7)';
+    g.lineWidth = w * 0.8;
     g.beginPath(); g.moveTo(a, b); g.lineTo(cc, d); g.stroke();
     hg.strokeStyle = 'rgb(20,20,20)';
     hg.lineWidth = w;
@@ -188,48 +188,80 @@ export function crackTexture(seed = 7) {
  * Retorna { map, normalMap } — o relevo pega luz rasante do sol.
  */
 export function bulletHolesTexture(seed = 9) {
+  // atlas 2×2 de padrões DIFERENTES (rajada longa, grupo denso, impactos
+  // soltos de calibre variado, metralhadora pesada) — nada se repete igual
   const r = mulberry(seed);
-  const [c, g] = canvas(512, 512);
-  const [hc, hg] = canvas(512, 512);
+  const [c, g] = canvas(1024, 1024);
+  const [hc, hg] = canvas(1024, 1024);
   hg.fillStyle = 'rgb(128,128,128)';
-  hg.fillRect(0, 0, 512, 512);
-  const holes = [];
-  // 2 rajadas inclinadas + impactos soltos
-  for (let b = 0; b < 2; b++) {
-    const x0 = 80 + r() * 200, y0 = 120 + r() * 280, ang = (r() - 0.5) * 1.2, n = 5 + Math.floor(r() * 6);
-    for (let i = 0; i < n; i++) holes.push([x0 + Math.cos(ang) * i * (24 + r() * 16) + (r() - 0.5) * 14, y0 + Math.sin(ang) * i * 26 + (r() - 0.5) * 18, 5 + r() * 7]);
-  }
-  for (let i = 0; i < 9; i++) holes.push([40 + r() * 432, 40 + r() * 432, 4 + r() * 9]);
-  for (const [x, y, s] of holes) {
-    if (x < 20 || x > 492 || y < 20 || y > 492) continue;
-    // cratera lascada
-    blob(g, r, x, y, s * 2.3, 12, 0.55);
-    g.fillStyle = `rgba(${150 + r() * 25},${142 + r() * 20},${128 + r() * 18},0.92)`;
-    g.fill();
-    blob(hg, r, x, y, s * 2.3, 12, 0.55);
-    hg.fillStyle = 'rgb(88,88,88)';
-    hg.fill();
-    // borda escura fina (sombra da quebra)
-    g.strokeStyle = 'rgba(40,35,30,0.35)';
-    g.lineWidth = 1.2;
-    g.stroke();
-    // trincas radiais
-    for (let k = 0; k < 4; k++) {
-      const a = r() * Math.PI * 2, l = s * (2.2 + r() * 2.5);
-      g.strokeStyle = 'rgba(25,20,16,0.55)';
-      g.lineWidth = 0.9;
-      g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+  hg.fillRect(0, 0, 1024, 1024);
+  for (let t = 0; t < 4; t++) {
+    const ox = (t % 2) * 512, oy = Math.floor(t / 2) * 512;
+    const holes = [];
+    if (t === 0) {
+      // rajada longa levemente inclinada subindo (recuo)
+      const x0 = 50 + r() * 60, y0 = 300 + r() * 80, ang = -0.25 - r() * 0.2, n = 9 + Math.floor(r() * 4);
+      for (let i = 0; i < n; i++) holes.push([x0 + i * (34 + r() * 14), y0 + Math.sin(ang) * i * 34 + (r() - 0.5) * 24, 4 + r() * 4]);
+      for (let i = 0; i < 4; i++) holes.push([60 + r() * 392, 60 + r() * 392, 3 + r() * 3]);
+    } else if (t === 1) {
+      // grupo denso (alguém se escondeu aqui)
+      const cx = 256 + (r() - 0.5) * 80, cy = 256 + (r() - 0.5) * 80;
+      for (let i = 0; i < 22; i++) {
+        const a = r() * Math.PI * 2, d = Math.pow(r(), 0.7) * 150;
+        holes.push([cx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.8, 3 + r() * 4.5]);
+      }
+    } else if (t === 2) {
+      // poucos impactos espalhados, um de calibre grande
+      for (let i = 0; i < 6; i++) holes.push([60 + r() * 392, 60 + r() * 392, 3.5 + r() * 4]);
+      holes.push([200 + r() * 112, 200 + r() * 112, 14 + r() * 4]);
+    } else {
+      // metralhadora pesada: crateras grandes em linha
+      const y0 = 220 + r() * 70;
+      for (let i = 0; i < 5; i++) holes.push([70 + i * (80 + r() * 20), y0 + (r() - 0.5) * 60, 10 + r() * 7]);
     }
-    // miolo
-    blob(g, r, x, y, s * 0.75, 9, 0.5);
-    g.fillStyle = 'rgba(10,8,7,0.97)';
-    g.fill();
-    blob(hg, r, x, y, s * 0.75, 9, 0.5);
-    hg.fillStyle = 'rgb(0,0,0)';
-    hg.fill();
+    for (const [hx, hy, s] of holes) {
+      const x = ox + hx, y = oy + hy;
+      if (hx < 24 || hx > 488 || hy < 24 || hy > 488) continue;
+      // cratera lascada (cimento claro sob o reboco), tamanho/irregularidade variados
+      const cr = s * (1.8 + r() * 1.1);
+      blob(g, r, x, y, cr, 13, 0.5 + r() * 0.3);
+      g.fillStyle = `rgba(${138 + r() * 30},${132 + r() * 24},${120 + r() * 20},${0.75 + r() * 0.2})`;
+      g.fill();
+      blob(hg, r, x, y, cr, 13, 0.55);
+      hg.fillStyle = 'rgb(92,92,92)';
+      hg.fill();
+      g.strokeStyle = 'rgba(40,35,30,0.3)';
+      g.lineWidth = 1.2;
+      g.stroke();
+      // trincas radiais finas
+      const nk = 2 + Math.floor(r() * 4);
+      for (let k = 0; k < nk; k++) {
+        const a = r() * Math.PI * 2, l = s * (2 + r() * 3);
+        g.strokeStyle = 'rgba(25,20,16,0.45)';
+        g.lineWidth = 0.8;
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+      }
+      // fuligem de pó em volta (impacto recente) em alguns
+      if (r() < 0.4) {
+        const gr = g.createRadialGradient(x, y, cr * 0.6, x, y, cr * 2.4);
+        gr.addColorStop(0, 'rgba(60,55,50,0.25)');
+        gr.addColorStop(1, 'rgba(60,55,50,0)');
+        g.fillStyle = gr;
+        g.beginPath(); g.arc(x, y, cr * 2.4, 0, Math.PI * 2); g.fill();
+      }
+      // miolo escuro
+      blob(g, r, x, y, s * (0.55 + r() * 0.3), 9, 0.5);
+      g.fillStyle = 'rgba(14,12,10,0.95)';
+      g.fill();
+      blob(hg, r, x, y, s * 0.7, 9, 0.5);
+      hg.fillStyle = 'rgb(0,0,0)';
+      hg.fill();
+    }
   }
   return { map: tex(c), normalMap: canvasNormal(hc, 4) };
 }
+/** Retângulo de UV de uma variante (0..3) do atlas de tiros. */
+export const bulletRect = (q) => [(q % 2) * 0.5, 0.5 - Math.floor(q / 2) * 0.5, (q % 2) * 0.5 + 0.5, 1 - Math.floor(q / 2) * 0.5];
 
 /**
  * Lascas grandes de reboco (atlas 2×2): reboco arrancado expondo tijolo e
@@ -455,7 +487,60 @@ export function signsTexture(seed = 13) {
       g.fillStyle = grd;
       g.fillRect(x, y + 80, 3 + r() * 6, 48);
     }
-    const nh = Math.floor(r() * 5);
+    // ── guerra/tempo: desbotado pelo sol, encardido, escorridos, lascas, quebras ──
+    g.globalCompositeOperation = 'saturation';
+    g.fillStyle = `rgba(128,128,128,${0.3 + r() * 0.35})`;
+    g.fillRect(0, y, 1024, 128);
+    g.globalCompositeOperation = 'multiply';
+    for (let k = 0; k < 14; k++) {
+      const x = r() * 1024, yy = y + r() * 128, rr = 30 + r() * 120;
+      const grd = g.createRadialGradient(x, yy, 0, x, yy, rr);
+      const a = 0.12 + r() * 0.25;
+      grd.addColorStop(0, `rgba(118,104,86,${a})`);
+      grd.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grd;
+      g.fillRect(x - rr, yy - rr, rr * 2, rr * 2);
+    }
+    // escorridos de chuva a partir da borda de cima
+    for (let k = 0; k < 22; k++) {
+      const x = r() * 1024, l = 30 + r() * 98;
+      const grd = g.createLinearGradient(0, y, 0, y + l);
+      grd.addColorStop(0, `rgba(95,82,66,${0.25 + r() * 0.35})`);
+      grd.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grd;
+      g.fillRect(x, y, 2 + r() * 10, l);
+    }
+    // fuligem subindo da base (incêndio na loja) em algumas
+    if (r() < 0.4) {
+      const grd = g.createLinearGradient(0, y + 128, 0, y);
+      grd.addColorStop(0, 'rgba(30,26,22,0.75)');
+      grd.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grd;
+      g.fillRect(r() * 500, y, 300 + r() * 500, 128);
+    }
+    g.globalCompositeOperation = 'source-over';
+    // lascas de tinta (chapa cinza/ferrugem por baixo)
+    for (let k = 0; k < 60; k++) {
+      const x = r() * 1024, yy = y + r() * 128, rr = 1.5 + r() * (r() < 0.1 ? 14 : 5);
+      g.fillStyle = r() < 0.5 ? `rgba(${120 + r() * 30},${118 + r() * 25},${112 + r() * 20},0.9)` : `rgba(${95 + r() * 30},${52 + r() * 15},${28 + r() * 10},0.85)`;
+      g.beginPath();
+      for (let q = 0; q < 6; q++) {
+        const a = (q / 6) * Math.PI * 2;
+        g.lineTo(x + Math.cos(a) * rr * (0.5 + r()), yy + Math.sin(a) * rr * (0.5 + r()));
+      }
+      g.fill();
+    }
+    // pedaço quebrado/arrancado (aparece a caixa escura atrás) numa borda
+    if (r() < 0.45) {
+      const x0 = r() < 0.5 ? r() * 200 : 824 + r() * 200, top = r() < 0.5;
+      g.fillStyle = '#26241f';
+      g.beginPath();
+      g.moveTo(x0 - 40 - r() * 60, top ? y : y + 128);
+      for (let q = 0; q < 5; q++) g.lineTo(x0 - 40 + q * 25 + (r() - 0.5) * 20, (top ? y : y + 128) + (top ? 1 : -1) * (20 + r() * 60));
+      g.lineTo(x0 + 80 + r() * 60, top ? y : y + 128);
+      g.fill();
+    }
+    const nh = 2 + Math.floor(r() * 7);
     for (let k = 0; k < nh; k++) {
       const x = 40 + r() * 944, yy = y + 20 + r() * 88;
       g.fillStyle = 'rgba(200,195,185,0.7)'; g.beginPath(); g.arc(x, yy, 7, 0, 7); g.fill();
@@ -940,7 +1025,9 @@ export function contactTexture() {
       const u = (x + 0.5) / 64 - 1, v = (y + 0.5) / 64 - 1;
       // superelipse (cantos arredondados) para caber em caixas e carros
       const d = Math.pow(Math.pow(Math.abs(u), 4) + Math.pow(Math.abs(v), 4), 0.25);
-      const a = Math.pow(Math.max(0, 1 - d), 1.6);
+      // núcleo escuro largo e queda curta: escurece JUSTO na linha de contato
+      const t = Math.min(1, Math.max(0, (d - 0.45) / 0.55));
+      const a = Math.pow(1 - t * t * (3 - 2 * t), 1.3) * 0.92;
       const i = (y * 128 + x) * 4;
       img.data[i] = 8; img.data[i + 1] = 7; img.data[i + 2] = 6;
       img.data[i + 3] = Math.min(255, a * 255 * 1.15);

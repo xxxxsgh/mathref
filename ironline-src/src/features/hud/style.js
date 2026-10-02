@@ -40,8 +40,8 @@ export const CSS = /* css */ `
   mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, transparent 42%, rgba(0,0,0,.55) 70%, #000 100%); }
 #hud .edge { position: absolute; inset: 0; }
 #hud .edge .eg { position: absolute; inset: 0; opacity: 0;
-  -webkit-mask-image: radial-gradient(ellipse 64% 62% at 50% 50%, transparent 55%, #000 100%);
-  mask-image: radial-gradient(ellipse 64% 62% at 50% 50%, transparent 55%, #000 100%); }
+  -webkit-mask-image: radial-gradient(ellipse 66% 64% at 50% 50%, transparent 66%, #000 100%);
+  mask-image: radial-gradient(ellipse 66% 64% at 50% 50%, transparent 66%, #000 100%); }
 /* pulso do impacto: borda curta e quente + franja ciano deslocada (aberração cromática) */
 #hud .flash { position: absolute; inset: 0; opacity: 0;
   background: radial-gradient(ellipse 70% 66% at 50% 50%, rgba(120,0,0,0) 62%, rgba(170,14,6,.34) 88%, rgba(110,0,0,.55) 100%);
@@ -174,12 +174,12 @@ export const CSS = /* css */ `
 #hud .wpn .count .mag.empty { color: var(--red2); }
 #hud .wpn .count .res { display: flex; align-items: flex-end; gap: 6px; padding-bottom: 2px; color: var(--ink2); }
 #hud .wpn .count .res .rl { color: var(--ink3); }
-#hud .wpn .ticks { display: flex; gap: 2px; height: 12px; margin-top: 4px; }
-#hud .wpn .ticks i { width: 5px; height: 12px; background: #f2f4ef; box-shadow: 0 0 0 1px rgba(0,0,0,.45); transition: opacity .12s, background .15s; }
-#hud .wpn .ticks i.g { margin-left: 5px; }
-#hud .wpn .ticks i.s { opacity: .16; }
-#hud .wpn .ticks.low i { background: #ffbf3c; }
-#hud .wpn .ticks.empty i { background: var(--red2); }
+#hud .wpn .ticks { display: flex; gap: 4px; height: 8px; margin-top: 6px; width: 232px; }
+#hud .wpn .ticks i { position: relative; flex: 1; height: 8px; background: rgba(242,244,239,.14); box-shadow: 0 0 0 1px rgba(0,0,0,.5); transform: skewX(-24deg); overflow: hidden; }
+#hud .wpn .ticks i b { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #f2f4ef; transition: width .08s linear, background .15s; }
+#hud .wpn .ticks i.p b { background: linear-gradient(90deg, #f2f4ef, #c9ccc6); }
+#hud .wpn .ticks.low i b { background: #ffbf3c; box-shadow: 0 0 8px rgba(255,191,60,.6); }
+#hud .wpn .ticks.empty i { background: rgba(255,80,60,.28); }
 #hud .wpn .reload { width: 100%; height: 3px; background: rgba(255,255,255,.12); opacity: 0; transition: opacity .15s; }
 #hud .wpn .reload i { display: block; height: 100%; width: 0; background: var(--amber); }
 #hud .wpn .state { position: absolute; right: 18px; top: -16px; height: 22px; padding: 0 8px; display: none; align-items: center; }
@@ -465,8 +465,10 @@ export const CSS = /* css */ `
 #hud .me-strip .pcard .cc { height: 100px; background-size: cover; background-position: center; }
 #hud .me-strip .pcard .pi { display: flex; align-items: center; gap: 14px; padding: 12px 16px; }
 #hud .me-strip .pcard .pl { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--amber); }
-#hud .me-strip .tiles { flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--line); border: 1px solid rgba(255,255,255,.08); }
-#hud .me-strip .tiles > div { background: rgba(10,13,16,.9); padding: 22px 18px; display: flex; flex-direction: column; justify-content: center; gap: 16px; animation: tileIn .5s ease both; }
+#hud .me-strip .tiles { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid rgba(255,255,255,.08); }
+#hud .me-strip .tiles > div { position: relative; background: linear-gradient(180deg, rgba(14,18,22,.92), rgba(8,10,13,.92)); padding: 22px 14px; display: flex; flex-direction: column; justify-content: center; gap: 14px; overflow: hidden; animation: tileIn .5s ease both; }
+#hud .me-strip .tiles > div::before { content: ''; position: absolute; left: 16px; top: 0; width: 28px; height: 3px; background: var(--amber); }
+#hud .me-strip .tiles .sub { color: var(--ink3); border-top: 1px solid var(--line); padding-top: 10px; }
 #hud .me-strip .tiles .k { color: var(--ink2); }
 @keyframes tileIn { from { opacity: 0; transform: translateY(10px); } }
 #hud .rcol { display: flex; flex-direction: column; gap: 12px; }

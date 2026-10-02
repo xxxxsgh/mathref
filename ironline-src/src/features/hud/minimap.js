@@ -60,10 +60,10 @@ export class Minimap {
     const rect = (bx, grow = 0) => [(bx.min.x - minX) * ppm - grow, (bx.min.z - minZ) * ppm - grow, (bx.max.x - bx.min.x) * ppm + grow * 2, (bx.max.z - bx.min.z) * ppm + grow * 2];
 
     // terreno: tom escuro levemente esverdeado (fora da área jogável mais escuro)
-    g.fillStyle = '#0e1214';
+    g.fillStyle = '#0b0f11';
     g.fillRect(0, 0, w, h);
     if (b) {
-      g.fillStyle = '#161b1e';
+      g.fillStyle = '#151b1e';
       g.fillRect((b.min.x - minX) * ppm, (b.min.z - minZ) * ppm, (b.max.x - b.min.x) * ppm, (b.max.z - b.min.z) * ppm);
     }
     // classifica
@@ -84,10 +84,10 @@ export class Minimap {
       else low.push(bx);
     }
     // calçadas
-    g.fillStyle = '#353d42';
+    g.fillStyle = '#2b3438';
     for (const bx of walk) g.fillRect(...rect(bx));
     // pista + meio-fio + faixa tracejada no eixo longo
-    g.fillStyle = '#20262a';
+    g.fillStyle = '#101417';
     for (const bx of road) g.fillRect(...rect(bx));
     g.strokeStyle = 'rgba(214,190,120,.55)';
     g.lineWidth = Math.max(1.2, ppm * 0.18);
@@ -113,7 +113,7 @@ export class Minimap {
       const r = rect(bx);
       g.fillStyle = 'rgba(0,0,0,.45)';
       g.fillRect(r[0] + 2, r[1] + 2, r[2], r[3]);
-      g.fillStyle = '#6b757c';
+      g.fillStyle = '#56636a';
       g.fillRect(...r);
       g.strokeStyle = 'rgba(0,0,0,.6)';
       g.lineWidth = 1;
@@ -130,18 +130,30 @@ export class Minimap {
       g.fillRect(r[0] + off, r[1] + off, r[2], r[3]);
     }
     // contorno engordado (união) atrás
-    g.fillStyle = '#e4eaee';
-    for (const bx of tall) g.fillRect(...rect(bx, 1.8));
+    g.fillStyle = 'rgba(178,206,218,.95)';
+    for (const bx of tall) g.fillRect(...rect(bx, 1.4));
     for (const bx of tall) {
       const r = rect(bx);
       const t = (bx.max.y - hMin) / span; // elevação
-      const base = 104 + t * 52;
+      // ardósia azulada: mais alto = mais claro (leitura de elevação)
+      const base = 56 + t * 46;
       const gr = g.createLinearGradient(r[0], r[1], r[0] + r[2], r[1] + r[3]);
-      gr.addColorStop(0, `rgb(${base + 14},${base + 20},${base + 24})`);
-      gr.addColorStop(1, `rgb(${base - 10},${base - 5},${base - 2})`);
+      gr.addColorStop(0, `rgb(${base + 8},${base + 22},${base + 30})`);
+      gr.addColorStop(1, `rgb(${base - 12},${base},${base + 8})`);
       g.fillStyle = gr;
       g.fillRect(...r);
     }
+    // hachura diagonal fina dentro dos prédios (estilo carta tática)
+    g.save();
+    g.beginPath();
+    for (const bx of tall) g.rect(...rect(bx));
+    g.clip();
+    g.strokeStyle = 'rgba(200,226,236,.07)';
+    g.lineWidth = 1;
+    g.beginPath();
+    for (let d = -h; d < w; d += 6) { g.moveTo(d, 0); g.lineTo(d + h, h); }
+    g.stroke();
+    g.restore();
     // aresta de luz (topo/esquerda) e de sombra (base/direita) por bloco
     for (const bx of tall) {
       const [x, y, rw, rh] = rect(bx);
@@ -256,6 +268,13 @@ export class Minimap {
     }
     g.lineWidth = 1.2;
     g.stroke();
+    // marcador de rumo fixo no topo (antes dos cardeais: o selo N o cobre)
+    if (this.rotate) {
+      g.fillStyle = '#f2f4ef';
+      g.beginPath();
+      g.moveTo(cx, cy - R + 1); g.lineTo(cx - 5, cy - R - 6); g.lineTo(cx + 5, cy - R - 6); g.closePath();
+      g.fill();
+    }
     // cardeais no bisel
     const card = [['N', 0], ['E', 1], ['S', 2], ['W', 3]];
     for (const [l, q] of card) {
@@ -267,13 +286,6 @@ export class Minimap {
       g.lineWidth = 1.2;
       g.beginPath(); g.arc(x, y, isN ? 11 : 9, 0, Math.PI * 2); g.fill(); g.stroke();
       drawText(g, l, x, y - (isN ? 5.5 : 4.5), { size: isN ? 11 : 9, weight: isN ? 2 : 1.6, align: 'center', color: isN ? '#121110' : '#f2f4ef' });
-    }
-    // marcador de rumo fixo no topo (direção para onde olho)
-    if (this.rotate) {
-      g.fillStyle = '#f2f4ef';
-      g.beginPath();
-      g.moveTo(cx, cy - R + 1); g.lineTo(cx - 5, cy - R - 6); g.lineTo(cx + 5, cy - R - 6); g.closePath();
-      g.fill();
     }
     // jogador
     g.save();

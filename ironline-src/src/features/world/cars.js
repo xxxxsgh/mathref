@@ -14,6 +14,8 @@
 import * as THREE from 'three';
 import { cached, mat4 } from './geo.js';
 import { cyl, torus, decal, contact } from './shapes.js';
+import { bulletRect } from './decals.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const KINDS = {
   sedan: {
@@ -37,41 +39,181 @@ const KINDS = {
 };
 export const CAR_TINTS = [[0.85, 0.85, 0.82], [0.62, 0.64, 0.66], [0.75, 0.68, 0.55], [0.18, 0.24, 0.36], [0.55, 0.15, 0.12], [0.22, 0.22, 0.22], [0.35, 0.42, 0.3], [0.86, 0.84, 0.72]];
 
-/** Perfil da parte baixa com caixas de roda (arcos) recortadas. */
+// ─── carroceria por LOFT de seções (superfícies curvas, não chapas) ─────
+/** Interseções de uma vertical x com um polígono fechado → [min y, max y]. */
+function spanAt(poly, x) {
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const [x0, y0] = poly[i], [x1, y1] = poly[(i + 1) % poly.length];
+    if ((x < Math.min(x0, x1)) || (x > Math.max(x0, x1)) || x0 === x1) continue;
+    const y = y0 + ((x - x0) / (x1 - x0)) * (y1 - y0);
+    lo = Math.min(lo, y);
+    hi = Math.max(hi, y);
+  }
+  return [lo, hi];
+}
+const spow = (v, e) => Math.sign(v) * Math.pow(Math.abs(v), e);
+
+/**
+ * Malha de loft: `secs` = [{ x, ring: [[z, y], …] }] (mesmo nº de pontos por
+ * anel). `cls(i, j, x, z, y)` → índice de grupo por quadrilátero (várias
+ * geometrias: pintura, vidro, borracha…). Tampa as pontas em leque.
+ */
+function loft(secs, groups, cls = () => 0) {
+  const M = secs[0].ring.length;
+  const out = Array.from({ length: groups }, () => []);
+  const V = (i, j) => { const s0 = secs[i], q = s0.ring[j % M]; return [s0.x, q[1], q[0]]; };
+  for (let i = 0; i < secs.length - 1; i++) {
+    for (let j = 0; j < M; j++) {
+      const a = V(i, j), b = V(i + 1, j), c = V(i + 1, j + 1), d = V(i, j + 1);
+      const cx = (a[0] + c[0]) / 2, cy = (a[1] + b[1] + c[1] + d[1]) / 4, cz = (a[2] + b[2] + c[2] + d[2]) / 4;
+      const g = cls(i, j, cx, cz, cy);
+      if (g < 0) continue;
+      out[g].push(...a, ...b, ...c, ...a, ...c, ...d);
+    }
+  }
+  // tampas
+  for (const [i, flip] of [[0, true], [secs.length - 1, false]]) {
+    const ring = secs[i].ring;
+    let zc = 0, yc = 0;
+    for (const q of ring) { zc += q[0]; yc += q[1]; }
+    zc /= M; yc /= M;
+    const ctr = [secs[i].x, yc, zc];
+    const g = Math.max(0, cls(i, 0, secs[i].x, 0, yc));
+    for (let j = 0; j < M; j++) {
+      const a = V(i, j), b = V(i, j + 1);
+      if (flip) out[g].push(...ctr, ...a, ...b);
+      else out[g].push(...ctr, ...b, ...a);
+    }
+  }
+  return out.map((pos) => {
+    let g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    // normais suaves: solda vértices por posição
+    g = mergeByPos(g);
+    g.computeVertexNormals();
+    return g;
+  });
+}
+function mergeByPos(g) {
+  const P = g.attributes.position;
+  const map = new Map(), verts = [], idx = [];
+  for (let i = 0; i < P.count; i++) {
+    const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
+    const k = Math.round(x * 2000) + ',' + Math.round(y * 2000) + ',' + Math.round(z * 2000);
+    let j = map.get(k);
+    if (j === undefined) { j = verts.length / 3; map.set(k, j); verts.push(x, y, z); }
+    idx.push(j);
+  }
+  const o = new THREE.BufferGeometry();
+  o.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  o.setIndex(idx);
+  return o;
+}
+/** Abscissas com espaçamento cosseno (densas nas pontas arredondadas). */
+function xsamples(x0, x1, n) {
+  const out = [];
+  for (let i = 0; i <= n; i++) out.push(x0 + (x1 - x0) * (0.5 - 0.5 * Math.cos((i / n) * Math.PI)));
+  return out;
+}
+
+/** Parte baixa: seções superelípticas, ombro arredondado, cantos em planta, arcos de roda. */
 function lowerGeo(kind) {
-  return cached('carlow_' + kind, () => {
+  return cached('carlow2_' + kind, () => {
     const K = KINDS[kind];
-    const ax = K.wb / 2, ar = K.rw + 0.07, ay = K.rw + 0.02;
-    const sh = new THREE.Shape();
-    const p = K.low;
-    sh.moveTo(p[0][0], p[0][1]);
-    for (let i = 1; i < p.length; i++) sh.lineTo(p[i][0], p[i][1]);
-    // fundo: de trás para frente, subindo nos arcos das rodas
-    sh.lineTo(ax + ar, p[p.length - 1][1]);
-    sh.absarc(ax, ay, ar, 0, Math.PI, false);
-    sh.lineTo(-ax + ar, p[0][1]);
-    sh.absarc(-ax, ay, ar, 0, Math.PI, false);
-    sh.lineTo(p[0][0], p[0][1]);
-    const w = K.w - 0.16;
-    const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.06, bevelSegments: 3, curveSegments: 10 });
-    g.translate(0, 0, -w / 2);
-    g.computeVertexNormals();
-    return g;
+    const ax = K.wb / 2, ar = K.rw + 0.08, ay = K.rw + 0.02;
+    let xmin = Infinity, xmax = -Infinity;
+    for (const [x] of K.low) { xmin = Math.min(xmin, x); xmax = Math.max(xmax, x); }
+    const M = 28, hw0 = K.w / 2;
+    const secs = [];
+    for (const x of xsamples(xmin + 0.004, xmax - 0.004, 46)) {
+      let [b, t] = spanAt(K.low, x);
+      // caixa de roda: o fundo sobe no arco
+      for (const wx of [-ax, ax]) {
+        const d = Math.abs(x - wx);
+        if (d < ar) b = Math.max(b, ay + Math.sqrt(ar * ar - d * d));
+      }
+      if (t - b < 0.02) b = t - 0.02;
+      const endD = x > 0 ? xmax - x : x - xmin;
+      const e = Math.max(0, 1 - endD / 0.7);
+      const hw = hw0 * (1 - 0.13 * Math.pow(e, 2.0));
+      const mid = (t + b) / 2, hh = (t - b) / 2;
+      const ring = [];
+      for (let j = 0; j < M; j++) {
+        const th = (j / M) * Math.PI * 2;
+        const c = Math.cos(th), sn = Math.sin(th);
+        const up = sn > 0;
+        let z = hw * spow(c, up ? 0.42 : 0.22);
+        const y = mid + hh * spow(sn, up ? 0.5 : 0.2);
+        // tumblehome: lateral fecha um pouco acima da linha de cintura
+        z *= 1 - 0.045 * Math.max(0, (y - mid) / Math.max(hh, 0.01));
+        ring.push([z, y]);
+      }
+      secs.push({ x, ring });
+    }
+    return loft(secs, 1)[0];
   });
 }
-/** Estufa (vidros): perfil extrudado mais estreito. */
+/**
+ * Estufa: 0 = vidro, 1 = pintura (teto, colunas, calhas), 2 = borracha
+ * (vedação). Seção trapezoidal arredondada estreitando para cima.
+ */
 function greenGeo(kind, inset = 0) {
-  return cached('cargreen_' + kind + inset, () => {
+  return cached('cargreen2_' + kind + inset, () => {
     const K = KINDS[kind];
-    const pts = K.green.map(([x, y]) => new THREE.Vector2(x, y));
-    const sh = new THREE.Shape(pts);
-    const w = K.gw - 0.1 - inset;
-    const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.03, bevelSegments: 2, curveSegments: 2 });
-    g.translate(0, 0, -w / 2);
-    g.computeVertexNormals();
-    return g;
+    const g = K.green;
+    const M = 24;
+    const x0 = g[0][0], x3 = g[g.length - 1][0];
+    const roof0 = g[1][0], roof1 = g[2][0];
+    const bx = K.doors[1];
+    const hwB = (K.gw - inset) / 2, hwT = hwB - 0.13;
+    const secs = [];
+    const xs = xsamples(x0 + 0.01, x3 - 0.01, 40);
+    for (const x of xs) {
+      let [b, t] = spanAt(g, x);
+      b -= 0.04;
+      if (t - b < 0.02) t = b + 0.02;
+      const mid = (t + b) / 2, hh = (t - b) / 2;
+      const ring = [];
+      for (let j = 0; j < M; j++) {
+        const th = (j / M) * Math.PI * 2;
+        const c = Math.cos(th), sn = Math.sin(th);
+        const y = mid + hh * spow(sn, 0.28);
+        const k = (y - b) / Math.max(0.01, t - b);
+        const hw = hwB + (hwT - hwB) * k;
+        ring.push([hw * spow(c, 0.3), y]);
+      }
+      secs.push({ x, ring });
+    }
+    return loft(secs, 3, (i, j, x, z, y) => {
+      const th = ((j + 0.5) / M) * Math.PI * 2;
+      const sn = Math.sin(th), c = Math.abs(Math.cos(th));
+      if (sn < -0.2) return 1; // fundo (escondido)
+      const [bb, tt] = spanAt(g, x);
+      const roof = x > roof0 + 0.06 && x < roof1 - 0.06;
+      if (sn > 0.93) return roof ? 1 : 0; // topo: teto pintado ou para-brisa/vigia
+      if (sn > 0.55 && c > 0.3) return 1; // calha/coluna A e C (canto)
+      // laterais
+      if (y < bb + 0.025) return 2; // vedação de borracha
+      if (Math.abs(x - bx) < 0.055) return 1; // coluna B
+      if (kind === 'van' && x > bx) return 1; // furgão: baú sem janelas laterais
+      if (x < roof0 + 0.12 && kind !== 'van') return 1; // coluna C larga
+      void tt;
+      return 0;
+    });
   });
 }
+/** Para-choque arredondado. */
+const bumperGeo = () => cached('carbumper', () => new RoundedBoxGeometry(1, 1, 1, 3, 0.18));
+/** Aro de aço estampado (perfil em torno: aba, prato fundo, cubo). */
+const rimGeo = () =>
+  cached('carrim', () => {
+    const pr = [[0.04, 0.05], [0.07, 0.055], [0.1, 0.035], [0.135, 0.02], [0.16, 0.03], [0.175, 0.055], [0.19, 0.06], [0.2, 0.0], [0.19, -0.06]];
+    const g = new THREE.LatheGeometry(pr.map(([r, y]) => new THREE.Vector2(r, y)), 22);
+    g.rotateX(Math.PI / 2);
+    return g;
+  });
+
 /** Pneu com perfil arredondado (torno). */
 const tireGeo = () =>
   cached('cartire', () => {
@@ -107,82 +249,100 @@ export function car(W, x, z, yaw, opts = {}) {
   const bodyMat = burnt ? 'burnt' : 'carpaint';
   const hx = K.len / 2, ax = K.wb / 2, hw = K.w / 2;
 
-  // carroceria
-  B.add(lowerGeo(kind), bodyMat, CM, { color: tint, ao: [lift + 0.3, lift + 0.85, 0.5] });
-  // estufa: vidro (ou vazio queimado) + colunas + teto
-  if (!burnt) B.add(greenGeo(kind), 'glass', CM, { color: [1, 1, 1] });
-  // queimado: sem vidros — cabine carbonizada escura atrás das colunas
-  else B.add(greenGeo(kind, 0.1), 'black', CM, { color: [0.35, 0.33, 0.3] });
+  // carroceria (loft: superfícies curvas com ombro, cantos arredondados em planta)
+  B.add(lowerGeo(kind), bodyMat, CM, { color: tint, ao: [lift + 0.3, lift + 0.8, 0.55] });
+  // estufa: vidro reflexivo (transparente: bancos e o outro lado aparecem) +
+  // teto/colunas/calhas na cor da carroceria + vedação de borracha
+  const gg = greenGeo(kind);
+  if (!burnt) B.add(gg[0], 'carglass', CM, { color: [1, 1, 1] });
+  else B.add(greenGeo(kind, 0.12)[0], 'black', CM, { color: [0.3, 0.28, 0.26] });
+  B.add(gg[1], bodyMat, CM, { color: tint });
+  B.add(gg[2], 'black', CM, { color: [0.5, 0.5, 0.5] });
   const g = K.green;
   const roofY = Math.max(g[1][1], g[2][1]);
-  const pillar = (a, b, wdt = 0.08) => {
-    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
-    const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
-    const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    for (const s of [-1, 1]) B.add(UNIT(), bodyMat, L([mx, my, s * (K.gw / 2 - 0.02)], [0, 0, ang], [l + 0.02, wdt, 0.05]), { color: tint });
-  };
-  pillar(g[0], g[1]); // coluna A
-  pillar(g[2], g[3], 0.12); // coluna C
-  // coluna B (vertical no meio das portas)
-  const bxp = K.doors[1];
-  for (const s of [-1, 1]) B.add(UNIT(), bodyMat, L([bxp, (g[0][1] + roofY) / 2, s * (K.gw / 2 - 0.03)], [0, 0, 0.08], [0.09, roofY - g[0][1], 0.05]), { color: burnt ? tint : [0.08, 0.08, 0.08] });
-  // teto
-  B.add(UNIT(), bodyMat, L([(g[1][0] + g[2][0]) / 2, roofY + 0.015, 0], [0, 0, 0], [g[2][0] - g[1][0] + 0.06, 0.05, K.gw - 0.06]), { color: tint });
+  // superfície lateral em (x, y) — para colar vincos, frisos e maçanetas
+  const sz = (xx, yy) => sideZ(K, xx, yy) + 0.003;
 
-  // vincos (linhas de painel escuras, 5 mm) nas laterais
+  // vincos (linhas de painel escuras) seguindo a curvatura lateral
   const seam = (x0, y0, x1, y1) => {
-    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, l = Math.hypot(x1 - x0, y1 - y0), a = Math.atan2(y1 - y0, x1 - x0);
-    for (const s of [-1, 1]) B.add(UNIT(), 'black', L([mx, my, s * (hw + 0.002)], [0, 0, a], [l, 0.006, 0.012]), { color: [1, 1, 1] });
+    const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / 0.08));
+    for (let k = 0; k < n; k++) {
+      const xa = x0 + ((x1 - x0) * k) / n, ya = y0 + ((y1 - y0) * k) / n;
+      const xb = x0 + ((x1 - x0) * (k + 1)) / n, yb = y0 + ((y1 - y0) * (k + 1)) / n;
+      const mx = (xa + xb) / 2, my = (ya + yb) / 2, l = Math.hypot(xb - xa, yb - ya), a = Math.atan2(yb - ya, xb - xa);
+      for (const s of [-1, 1]) B.add(UNIT(), 'black', L([mx, my, s * sz(mx, my)], [0, 0, a], [l + 0.004, 0.006, 0.01]), { color: [1, 1, 1] });
+    }
   };
   if (!burnt) {
-    for (const dx of K.doors) seam(dx, 0.36, dx, 0.92);
-    seam(K.doors[0], 0.36, K.doors[K.doors.length - 1], 0.36);
-    // capô e tampa traseira (linhas no topo)
-    const hood = K.low[4];
-    for (const s of [-1, 1]) B.add(UNIT(), 'black', L([(hood[0] + K.low[3][0]) / 2 + 0.3, hood[1] + 0.015, s * (hw - 0.22)], [0, 0, -0.1], [Math.abs(hood[0] - K.low[3][0]) + 0.5, 0.004, 0.006]), { color: [1, 1, 1] });
-    // maçanetas
-    for (const dx of K.doors.slice(0, -1)) for (const s of [-1, 1]) B.add(UNIT(), 'chrome', L([dx + 0.32, 0.82, s * (hw + 0.005)], [0, 0, 0], [0.16, 0.025, 0.02]), { color: [0.6, 0.6, 0.58] });
-    // retrovisores
+    for (const dx of K.doors) seam(dx, 0.38, dx + 0.02, g[0][1] - 0.03);
+    // friso de borracha lateral (proteção de porta) e soleira escura
     for (const s of [-1, 1]) {
-      B.add(UNIT(), bodyMat, L([g[0][0] + 0.18, g[0][1] + 0.08, s * (hw + 0.06)], [0, s * 0.2, 0], [0.1, 0.1, 0.16]), { color: tint });
-      B.add(UNIT(), 'glass', L([g[0][0] + 0.235, g[0][1] + 0.08, s * (hw + 0.07)], [0, 0, 0], [0.01, 0.07, 0.12]), { color: [1, 1, 1] });
+      const xs0 = K.doors[0] - 0.05, xs1 = K.doors[K.doors.length - 1] + 0.05;
+      for (let x = xs0; x < xs1 - 0.01; x += 0.25) {
+        const xm = Math.min(xs1, x + 0.25);
+        B.add(UNIT(), 'black', L([(x + xm) / 2, 0.58, s * (sz((x + xm) / 2, 0.58) + 0.006)], [0, 0, 0], [xm - x + 0.005, 0.045, 0.02]), { color: [0.7, 0.7, 0.7] });
+      }
+    }
+    // maçanetas embutidas
+    for (const dx of K.doors.slice(0, -1)) for (const s of [-1, 1]) B.add(UNIT(), 'chrome', L([dx + 0.32, 0.8, s * (sz(dx + 0.32, 0.8) + 0.004)], [0, 0, 0], [0.15, 0.024, 0.018]), { color: [0.6, 0.6, 0.58] });
+    // retrovisores (braço + concha + espelho)
+    for (const s of [-1, 1]) {
+      const mx = g[0][0] + 0.2, my = g[0][1] + 0.08;
+      const zb = sz(mx, g[0][1] - 0.02);
+      B.add(UNIT(), bodyMat, L([mx, my - 0.05, s * (zb + 0.04)], [0, 0, 0], [0.06, 0.03, 0.09]), { color: tint });
+      B.add(cached('mirror', () => new RoundedBoxGeometry(1, 1, 1, 2, 0.3)), bodyMat, L([mx, my, s * (zb + 0.11)], [0, s * 0.15, 0], [0.11, 0.1, 0.17]), { color: tint });
+      B.add(UNIT(), 'carglass', L([mx + 0.057, my, s * (zb + 0.11)], [0, s * 0.15, 0], [0.006, 0.075, 0.14]), { color: [1, 1, 1] });
     }
     // limpadores
-    for (const s of [-0.3, 0.3]) B.add(UNIT(), 'black', L([g[0][0] + 0.12, g[0][1] + 0.04, s], [0, 0.25, 0.55], [0.5, 0.012, 0.012]), { color: [1, 1, 1] });
+    for (const s of [-0.3, 0.3]) B.add(UNIT(), 'black', L([g[0][0] + 0.1, g[0][1] + 0.03, s], [0, 0.25, 0.5], [0.5, 0.012, 0.012]), { color: [1, 1, 1] });
   }
-  // para-choques, faróis, lanternas, placas
-  const fx = K.low[1][0], bx = K.low[K.low.length - 2][0];
-  const bump = burnt ? [0.12, 0.1, 0.09] : kind === 'van' ? [0.25, 0.25, 0.25] : tint.map((c) => c * 0.95);
-  B.add(UNIT(), 'plastic', L([fx - 0.02, 0.42, 0], [0, 0, 0], [0.16, 0.2, K.w - 0.1]), { color: bump });
-  B.add(UNIT(), 'plastic', L([bx + 0.02, 0.42, 0], [0, 0, 0], [0.16, 0.2, K.w - 0.1]), { color: bump });
+  // para-choques (arredondados, envolvendo as quinas), faróis com refletor
+  // cromado sob lente, lanternas, grade com aletas, placas
+  let xmin = Infinity, xmax = -Infinity;
+  for (const [px] of K.low) { xmin = Math.min(xmin, px); xmax = Math.max(xmax, px); }
+  const bump = burnt ? [0.12, 0.1, 0.09] : kind === 'van' ? [0.22, 0.22, 0.22] : rng.chance(0.5) ? [0.16, 0.16, 0.16] : tint.map((c) => c * 0.95);
+  B.add(bumperGeo(), 'plastic', L([xmin + 0.07, 0.42, 0], [0, 0, 0], [0.2, 0.2, K.w * 0.94]), { color: bump });
+  B.add(bumperGeo(), 'plastic', L([xmax - 0.07, 0.42, 0], [0, 0, 0], [0.2, 0.2, K.w * 0.94]), { color: bump });
+  const lens = cached('carlens', () => new RoundedBoxGeometry(1, 1, 1, 2, 0.25));
   if (!burnt) {
+    const [, tF] = spanAt(K.low, xmin + 0.06);
+    const hy = Math.min(0.68, tF - 0.1);
     for (const s of [-1, 1]) {
-      B.add(UNIT(), 'glass', L([K.low[2][0] + 0.02, 0.66, s * (hw - 0.3)], [0, 0, 0], [0.08, 0.13, 0.36]), { color: [2.2, 2.2, 2.0] });
-      B.add(UNIT(), 'plastic', L([K.low[K.low.length - 3][0] - 0.02, 0.72, s * (hw - 0.26)], [0, 0, 0], [0.08, 0.15, 0.3]), { color: [1.6, 0.18, 0.14] });
+      const zc = s * (hw - 0.3);
+      B.add(UNIT(), 'chrome', L([xmin + 0.05, hy, zc], [0, 0, 0], [0.03, 0.12, 0.3]), { color: [0.85, 0.85, 0.82] });
+      B.add(cyl(14), 'chrome', L([xmin + 0.035, hy, zc + s * 0.06], [0, 0, Math.PI / 2], [0.045, 0.02, 0.045]), { color: [1.2, 1.18, 1.1] });
+      B.add(lens, 'carglass', L([xmin + 0.03, hy, zc], [0, 0, 0], [0.05, 0.14, 0.33]), { color: [1, 1, 1] });
+      // pisca âmbar no canto
+      B.add(lens, 'taillight', L([xmin + 0.06, hy - 0.11, s * (hw - 0.14)], [0, 0, 0], [0.04, 0.05, 0.12]), { color: [1.0, 0.45, 0.08] });
+      const [, tR] = spanAt(K.low, xmax - 0.06);
+      B.add(lens, 'taillight', L([xmax - 0.04, Math.min(0.74, tR - 0.1), s * (hw - 0.26)], [0, 0, 0], [0.05, 0.15, 0.3]), { color: [1, 0.12, 0.08] });
     }
-    B.add(UNIT(), 'chrome', L([fx - 0.06, 0.66, 0], [0, 0, 0], [0.04, 0.12, 0.62]), { color: [0.2, 0.2, 0.2] }); // grade
-    B.add(UNIT(), 'metal', L([fx - 0.11, 0.42, 0], [0, 0, 0], [0.02, 0.11, 0.5]), { color: [0.95, 0.95, 0.9] });
-    B.add(UNIT(), 'metal', L([bx + 0.11, 0.5, 0], [0, 0, 0], [0.02, 0.11, 0.5]), { color: [0.95, 0.95, 0.9] });
+    // grade: moldura escura + aletas cromadas
+    B.add(UNIT(), 'black', L([xmin + 0.04, hy, 0], [0, 0, 0], [0.03, 0.13, 0.62]), { color: [1, 1, 1] });
+    for (let k = 0; k < 3; k++) B.add(UNIT(), 'chrome', L([xmin + 0.025, hy - 0.04 + k * 0.04, 0], [0, 0, 0], [0.012, 0.012, 0.6]), { color: [0.55, 0.55, 0.52] });
+    B.add(UNIT(), 'metal', L([xmin - 0.035, 0.42, 0], [0, 0, 0], [0.012, 0.11, 0.5]), { color: [0.95, 0.95, 0.9] });
+    B.add(UNIT(), 'metal', L([xmax - 0.01, 0.56, 0], [0, 0, 0], [0.012, 0.11, 0.5]), { color: [0.95, 0.95, 0.9] });
   }
-  // rodas: para-lama interno escuro, pneu, aro com raios
+  // rodas: para-lama interno escuro, pneu, aro de aço estampado com porcas
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
       const wx = sx * ax, wz = sz * (hw - 0.17);
-      B.add(cached('archliner', () => new THREE.CylinderGeometry(1, 1, 1, 14, 1, true, -Math.PI / 2, Math.PI)), 'black', L([wx, K.rw + 0.02, sz * (hw - 0.3)], [-Math.PI / 2, 0, 0], [K.rw + 0.06, 0.4, K.rw + 0.06]), { color: [1, 1, 1] });
+      B.add(cached('archliner', () => new THREE.CylinderGeometry(1, 1, 1, 14, 1, true, -Math.PI / 2, Math.PI)), 'black', L([wx, K.rw + 0.02, sz * (hw - 0.3)], [-Math.PI / 2, 0, 0], [K.rw + 0.07, 0.42, K.rw + 0.07]), { color: [1, 1, 1] });
       const isFlat = flat && sx === 1 && sz === 1;
       const ry = isFlat ? K.rw - 0.06 : K.rw;
       if (!burnt) {
         B.add(tireGeo(), 'rubber', L([wx, ry, wz], [0, 0, 0], [K.rw / 0.32, isFlat ? 0.75 : 1, K.rw / 0.32]), { color: [1, 1, 1] });
-        B.add(cyl(14), 'chrome', L([wx, ry, wz + sz * 0.06], [Math.PI / 2, 0, 0], [0.17, 0.02, 0.17]), { color: [0.5, 0.5, 0.48] });
-        for (let k = 0; k < 5; k++) {
-          const a = (k / 5) * Math.PI * 2;
-          B.add(UNIT(), 'chrome', L([wx + Math.cos(a) * 0.09, ry + Math.sin(a) * 0.09, wz + sz * 0.07], [0, 0, a], [0.13, 0.035, 0.02]), { color: [0.45, 0.45, 0.43] });
+        const rimC = rng.chance(0.5) ? [0.55, 0.55, 0.53] : [0.2, 0.2, 0.2];
+        B.add(rimGeo(), 'chrome', L([wx, ry, wz + sz * 0.02], [0, sz > 0 ? 0 : Math.PI, 0], [K.rw / 0.32, K.rw / 0.32, 1]), { color: rimC });
+        for (let k = 0; k < 4; k++) {
+          const a = (k / 4) * Math.PI * 2 + 0.4;
+          B.add(cyl(6), 'chrome', L([wx + Math.cos(a) * 0.055, ry + Math.sin(a) * 0.055, wz + sz * 0.075], [Math.PI / 2, 0, 0], [0.012, 0.02, 0.012]), { color: [0.4, 0.4, 0.38] });
         }
-        B.add(cyl(8), 'chrome', L([wx, ry, wz + sz * 0.08], [Math.PI / 2, 0, 0], [0.04, 0.02, 0.04]), { color: [0.35, 0.35, 0.33] });
+        B.add(cyl(12), 'chrome', L([wx, ry, wz + sz * 0.07], [Math.PI / 2, 0, 0], [0.035, 0.015, 0.035]), { color: [0.7, 0.7, 0.68] });
       } else {
         // só o aro (pneu derretido), carro apoiado nele
         B.add(torus(0.12, 14), 'burnt', L([wx, 0.34, wz], [0, 0, 0], [0.19, 0.19, 0.3]), { color: [1, 1, 1] });
-        B.add(cyl(14), 'burnt', L([wx, 0.34, wz], [Math.PI / 2, 0, 0], [0.17, 0.12, 0.17]), { color: [0.8, 0.8, 0.8] });
+        B.add(rimGeo(), 'burnt', L([wx, 0.34, wz], [0, sz > 0 ? 0 : Math.PI, 0], [1, 1, 1]), { color: [0.8, 0.8, 0.8] });
       }
     }
   }
@@ -201,7 +361,7 @@ export function car(W, x, z, yaw, opts = {}) {
   if (dmg > 0.3) {
     const side = rng.sign();
     const p = new THREE.Vector3(rng.range(-1, 1), 0.7, side * (hw + 0.012)).applyMatrix4(CM);
-    decal(B, 'bullets', [p.x, p.y, p.z], side > 0 ? sideNormal(yaw, 1) : sideNormal(yaw, -1), [0.9, 0.5], [0.2, 0.3, 0.8, 0.7], rng.range(0, 6), [0.32, 0.3, 0.28]);
+    decal(B, 'bullets', [p.x, p.y, p.z], side > 0 ? sideNormal(yaw, 1) : sideNormal(yaw, -1), [0.7, 0.7], bulletRect(rng.pick([1, 2])), rng.range(0, 6), [0.3, 0.28, 0.27]);
   }
   if (burnt) {
     decal(B, 'scorch', [x, 0.022, z], 'py', [K.len + 3, 5], [0, 0, 1, 1], -yaw);
@@ -216,6 +376,26 @@ export function car(W, x, z, yaw, opts = {}) {
   const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, (roofY + 0.2) / 2, 0), new THREE.Vector3(K.len, roofY - 0.1, K.w)).applyMatrix4(CM);
   B.collider(box.min.toArray(), box.max.toArray(), 'carpaint', { surface: 'metal' });
   return { kind, CM };
+}
+
+/** Meia-largura da superfície lateral da parte baixa no ponto (x, y) — mesma fórmula do loft. */
+function sideZ(K, x, y) {
+  let xmin = Infinity, xmax = -Infinity;
+  for (const [px] of K.low) { xmin = Math.min(xmin, px); xmax = Math.max(xmax, px); }
+  const [b, t] = spanAt(K.low, Math.min(xmax - 0.01, Math.max(xmin + 0.01, x)));
+  const endD = x > 0 ? xmax - x : x - xmin;
+  const e = Math.max(0, 1 - endD / 0.7);
+  const hw = (K.w / 2) * (1 - 0.13 * e * e);
+  const mid = (t + b) / 2, hh = Math.max(0.01, (t - b) / 2);
+  const q = Math.max(-1, Math.min(1, (y - mid) / hh));
+  if (q > 0) {
+    const sn = q * q;
+    const c = Math.sqrt(Math.max(0, 1 - sn * sn));
+    return hw * Math.pow(c, 0.42) * (1 - 0.045 * q);
+  }
+  const sn = Math.pow(-q, 5);
+  const c = Math.sqrt(Math.max(0, 1 - sn * sn));
+  return hw * Math.pow(c, 0.22);
 }
 
 /** Normal lateral do carro mais próxima de um eixo (para decalques). */

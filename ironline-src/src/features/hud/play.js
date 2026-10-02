@@ -34,14 +34,16 @@ function makeVignette() {
       const nx = (x / (w - 1)) * 2 - 1, ny = (y / (h - 1)) * 2 - 1;
       // superelipse (p=3.2): bordas retas, cantos mais carregados
       const e = Math.pow(Math.pow(Math.abs(nx), 3.2) + Math.pow(Math.abs(ny) * 1.04, 3.2), 1 / 3.2);
-      let a = ss(0.7, 1.12, e);
-      a = Math.pow(a, 1.55);
+      // faixa útil só nos ~20% externos: o miolo (≈ 60–65%) fica intocado
+      let a = ss(0.8, 1.2, e);
+      a = Math.pow(a, 1.9);
       const i = (y * w + x) * 4;
-      const deep = ss(0.88, 1.2, e);
-      img.data[i] = 150 - deep * 95 + (rnd() - 0.5) * 6;
-      img.data[i + 1] = 8 - deep * 6;
-      img.data[i + 2] = 10 - deep * 6;
-      img.data[i + 3] = 255 * a * 0.92 + (rnd() - 0.5) * 3 * a;
+      // vermelho sangue na transição → quase preto na borda extrema
+      const deep = ss(0.9, 1.25, e);
+      img.data[i] = 128 - deep * 92 + (rnd() - 0.5) * 6;
+      img.data[i + 1] = 6 - deep * 5;
+      img.data[i + 2] = 8 - deep * 6;
+      img.data[i + 3] = 255 * a * 0.94 + (rnd() - 0.5) * 3 * a;
     }
   }
   g.putImageData(img, 0, 0);
@@ -354,8 +356,8 @@ export class PlayHud {
       d.el.style.opacity = (ea * Math.min(1, d.k)).toFixed(3);
       // brilho de borda: centro de um elipse na borda, na direção relativa
       const rr = (rel * Math.PI) / 180;
-      const ex = 50 + Math.sin(rr) * 62, ey = 50 - Math.cos(rr) * 62;
-      d.eg.style.background = `radial-gradient(ellipse 46% 52% at ${clamp(ex, -8, 108).toFixed(1)}% ${clamp(ey, -8, 108).toFixed(1)}%, rgba(170,14,8,.42), rgba(140,10,6,.16) 45%, rgba(120,0,0,0) 72%)`;
+      const ex = 50 + Math.sin(rr) * 68, ey = 50 - Math.cos(rr) * 68;
+      d.eg.style.background = `radial-gradient(ellipse 30% 40% at ${clamp(ex, -8, 108).toFixed(1)}% ${clamp(ey, -8, 108).toFixed(1)}%, rgba(150,10,6,.34), rgba(120,8,4,.12) 40%, rgba(110,0,0,0) 66%)`;
       d.eg.style.opacity = (ea * 0.9 * Math.min(1, d.k)).toFixed(3);
     }
 
@@ -365,7 +367,7 @@ export class PlayHud {
     const miss = 1 - frac;
     this.flashA = damp(this.flashA, 0, 2.6, rdt);
     const pulse = frac < 0.35 ? 0.1 * (0.5 + 0.5 * Math.sin(ctx.time.now * 6.5)) : 0;
-    const vigA = clamp(Math.pow(miss, 0.9) * 1.1 + this.flashA * 0.3 + pulse, 0, 1);
+    const vigA = clamp(Math.pow(miss, 0.8) * 1.05 + this.flashA * 0.3 + pulse, 0, 1);
     this.set('vig', vigA.toFixed(3), (v) => (this.vig.style.opacity = v));
     this.set('desat', clamp(miss * 1.5 - 0.15 + this.flashA * 0.35, 0, 1).toFixed(2), (v) => (this.desat.style.opacity = v));
     this.set('flash', this.flashA.toFixed(3), (v) => (this.flash.style.opacity = v));
@@ -423,16 +425,20 @@ export class PlayHud {
         E.mag.className = 'mag' + (v === 0 ? ' empty' : low ? ' low' : '');
       });
       this.set('res', res, (v) => (E.res.innerHTML = T(String(v), { size: 18, weight: 1.4, tracking: 1.4, heavy: true })));
-      // carregador: pentes de 5 (leitura "de relance" — grupos, não pente fino)
+      // carregador: blocos de 5 cartuchos com preenchimento parcial — lê-se
+      // "quantos blocos sobram" de relance, sem contar riscos
+      const nb = Math.ceil(mag / 5);
       if (this._ticksN !== mag) {
         this._ticksN = mag;
-        let h = '';
-        for (let i = 0; i < mag; i++) h += `<i${i % 5 === 0 && i ? ' class="g"' : ''}></i>`;
-        E.ticks.innerHTML = h;
+        E.ticks.innerHTML = '<i><b></b></i>'.repeat(nb);
         this.cache.tick = -1;
       }
       this.set('tick', ammo + '|' + low, () => {
-        [...E.ticks.children].forEach((t, i) => t.classList.toggle('s', i >= ammo));
+        [...E.ticks.children].forEach((t, i) => {
+          const f = clamp((ammo - i * 5) / 5, 0, 1);
+          t.firstChild.style.width = (f * 100).toFixed(0) + '%';
+          t.className = f >= 1 ? 'f' : f > 0 ? 'p' : '';
+        });
         E.ticks.className = 'ticks' + (ammo === 0 ? ' empty' : low ? ' low' : '');
       });
       const ws = w.reloading ? 'reloading' : ammo === 0 ? (res === 0 ? 'noammo' : 'empty') : low ? 'low' : '';

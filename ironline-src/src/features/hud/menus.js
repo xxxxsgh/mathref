@@ -339,7 +339,7 @@ export class Screens {
         <td class="c-n">${T(r.name, { size: 14, weight: 1.55, tracking: 1.9 })}${r.me ? '' : `<span class="tm-r">${t11('HOSTILE')}</span>`}</td>
         <td>${N(r.score, 15)}</td><td>${N(r.kills, 15)}</td><td>${N(r.deaths, 15)}</td><td>${N((r.deaths ? r.kills / r.deaths : r.kills).toFixed(2), 15)}</td><td>${N(r.hs, 15)}</td><td>${N(r.acc, 15)}</td></tr>`;
     const hdr = ['#', 'LV', 'PLAYER', 'SCORE', 'KILLS', 'DEATHS', 'K/D', 'HS', 'ACC'];
-    const tile = (k, v, d = 0) => `<div style="animation-delay:${0.35 + d * 0.06}s"><span class="k">${t11(k)}</span>${N(v, 40)}</div>`;
+    const tile = (k, v, d = 0, sub = '') => `<div style="animation-delay:${0.35 + d * 0.06}s"><span class="k">${t11(k)}</span>${N(v, 32)}${sub ? `<span class="sub">${t11(sub, { size: 11 })}</span>` : ''}</div>`;
     const g = this.hud.gunIcon;
     const wname = this.ctx.services.weapon?.name || 'KR-9';
     const wkills = Math.max(0, m.kills - (m.fragKills || 0));
@@ -360,8 +360,8 @@ export class Screens {
           <div class="panel stand sh"><table><thead><tr>${hdr.map((h, i) => `<th class="${i < 3 ? ['c-r', 'c-l', 'c-n'][i] : ''}">${t11(h)}</th>`).join('')}</tr></thead><tbody>${all.map(row).join('')}</tbody></table></div>
           <div class="me-strip sh">
             <div class="pcard"><div class="cc" style="background-image:url(${this.card})"></div><div class="pi">${emblemSVG('vance', 56, 'gold')}<div>${T(P.callsign, { size: 20, weight: 1.75, tracking: 2.4 })}<div class="pl">${rankSVG(lv, '', 22)}${t11('LEVEL ' + lv)}</div></div></div>
-              <div class="xpbk">${[['KILLS', m.kills * 100], ['HEADSHOTS', m.headshots * 50], ['MEDALS', medals.reduce((a, [, v]) => a + v.n * 50, 0)], [win ? 'VICTORY BONUS' : 'MATCH BONUS', win ? 1500 : 300]].map(([k, v]) => `<div>${t11(k)}<span>${N('+' + v, 13)}</span></div>`).join('')}</div></div>
-            <div class="tiles">${tile('ELIMINATIONS', m.kills, 0)}${tile('DEATHS', m.deaths, 1)}${tile('K/D RATIO', m.kd.toFixed(2), 2)}${tile('ACCURACY', Math.round(m.accuracy * 100) + '%', 3)}${tile('SCORE', m.score, 4)}</div>
+              <div class="xpbk">${[['KILLS', m.kills * 100], ['HEADSHOTS', m.headshots * 50], ['MEDALS', medals.reduce((a, [, v]) => a + v.n * 50, 0)], [win ? 'WIN BONUS' : 'MATCH BONUS', win ? 1500 : 300]].map(([k, v]) => `<div>${t11(k)}<span>${N('+' + v, 13)}</span></div>`).join('')}</div></div>
+            <div class="tiles">${tile('ELIMINATIONS', m.kills, 0, 'BEST STREAK ' + m.bestStreak)}${tile('DEATHS', m.deaths, 1, 'DMG ' + Math.round(m.damage))}${tile('K/D RATIO', m.kd.toFixed(2), 2, 'CAREER ' + (P.kills / Math.max(1, P.matches * 6)).toFixed(2))}${tile('ACCURACY', Math.round(m.accuracy * 100) + '%', 3, m.hits + ' / ' + m.shots + ' HITS')}${tile('SCORE', m.score, 4, 'SPM ' + Math.round(m.score / Math.max(1, m.playTime / 60)))}</div>
           </div>
           <div class="acts">
             <div class="btn pri" data-act="restart" tabindex="0">${T('PLAY AGAIN', { size: 19, weight: 2, tracking: 3.4 })}<span class="chev">${T('>>', { size: 14, weight: 2.2, tracking: 0.8 })}</span></div>

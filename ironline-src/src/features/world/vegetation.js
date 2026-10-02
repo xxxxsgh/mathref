@@ -284,7 +284,7 @@ export function tree(W, x, z, opts = {}) {
   const u0 = (cell % 2) * 0.5, v0 = 0.5 - Math.floor(cell / 2) * 0.5;
   const v3 = new THREE.Vector3();
   for (const t of tips) {
-    const n = Math.max(2, Math.round(rng.int(5, 8) * q));
+    const n = Math.max(3, Math.round(rng.int(8, 12) * q));
     for (let i = 0; i < n; i++) {
       const s = rng.range(0.9, 1.5);
       const M = mat4([t[0] + rng.range(-0.55, 0.55), t[1] + rng.range(-0.35, 0.5), t[2] + rng.range(-0.55, 0.55)], [rng.range(-1.3, 1.3), rng.range(0, 6.28), rng.range(-1.3, 1.3)], [s, s, s]);

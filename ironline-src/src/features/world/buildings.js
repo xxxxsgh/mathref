@@ -14,8 +14,10 @@
 import * as THREE from 'three';
 import { cylinder, cylBetween, cable, rebar, decal, cyl, torus } from './shapes.js';
 import { mat4, cached } from './geo.js';
-import { SIGN_COUNT, GRAFFITI_N, graffitiRect } from './decals.js';
+import { SIGN_COUNT, GRAFFITI_N, graffitiRect, bulletRect } from './decals.js';
 import { awning } from './infra.js';
+import { brickGeo, chunkGeo } from './rubble.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const UNITB = () => cached('unitbox', () => new THREE.BoxGeometry(1, 1, 1));
 
@@ -68,6 +70,15 @@ function fbox(B, F, u0, u1, y0, y1, d0, d1, mat, opts = {}) {
       faces[ax[0]] = opts.sides;
       faces[ax[1]] = opts.sides;
     }
+  }
+  if (opts.round && !faces) {
+    // aresta boleada (bisel real): pega luz/sombra como concreto moldado
+    const sx = Math.abs(c[0] - a[0]), sy = Math.abs(y1 - y0), sz = Math.abs(c[1] - a[1]);
+    const rr = Math.min(opts.round, sx / 2.2, sy / 2.2, sz / 2.2);
+    const q = (v) => Math.round(v * 200) / 200;
+    const g = cached(`rbox_${q(sx)}_${q(sy)}_${q(sz)}_${q(rr)}`, () => new RoundedBoxGeometry(q(sx), q(sy), q(sz), 1, q(rr)));
+    B.add(g, mat, mat4([(a[0] + c[0]) / 2, (y0 + y1) / 2, (a[1] + c[1]) / 2]), { color: opts.color, uvRand: opts.uvRand });
+    return;
   }
   B.box(a[0], y0, a[1], c[0], y1, c[1], mat, { collide: false, ...opts, faces });
 }
@@ -188,7 +199,7 @@ function facade(W, s, F, k) {
     const shop = f === 0 && s.shop;
     // laje entre andares (dentro do vazio) e faixa de cornija na fachada
     if (!(f === s.startFloor && f > 0)) fbox(B, F, 0.3, F.W - 0.3, y - (f ? 0.22 : 0), y + 0.02, -D, -0.3, 'room');
-    if (f > 0) fbox(B, F, -0.06, F.W + 0.06, y - 0.12, y + 0.06, 0, 0.09, trimMat, { color: trimTint });
+    if (f > 0) fbox(B, F, -0.06, F.W + 0.06, y - 0.12, y + 0.06, 0, 0.09, trimMat, { color: trimTint, round: 0.02 });
 
     // vãos deste andar
     const openings = [];
@@ -205,8 +216,9 @@ function facade(W, s, F, k) {
       // rombo de granada/tanque atravessando a parede (prédios danificados)
       const forced = (s.blasts || []).some((b) => b.f === f && b.i === i);
       if ((rng.chance(s.cond * 0.11) && i > 0 && i < nb - 1) || forced) {
-        const hw = Math.min(bw * 0.62, rng.range(0.9, 1.5));
-        openings.push({ kind: 'blast', u0: c - hw, u1: c + hw, y0: y, y1: yTop, i });
+        // o rombo ocupa o vão inteiro (sem pilares): o furo fica dentro, com sobra para o reboco descascado
+        const hw = Math.min(bw * 0.5 - 0.3, rng.range(0.8, 1.2));
+        openings.push({ kind: 'blast', u0: bs, u1: be, hw, y0: y, y1: yTop, i });
         continue;
       }
       const balcony = f > 0 && rng.chance(balconyP) && !(s.brokenTop && f === s.floors - 1);
@@ -245,7 +257,7 @@ function facade(W, s, F, k) {
   if (!s.brokenTop) {
     fbox(B, F, -0.06, F.W + 0.06, H - 0.42, H - 0.3, 0, 0.07, trimMat, { color: trimTint });
     fbox(B, F, -0.1, F.W + 0.1, H - 0.3, H - 0.16, 0, 0.15, trimMat, { color: trimTint });
-    fbox(B, F, -0.14, F.W + 0.14, H - 0.16, H + 0.04, 0, 0.26, trimMat, { color: trimTint });
+    fbox(B, F, -0.14, F.W + 0.14, H - 0.16, H + 0.04, 0, 0.26, trimMat, { color: trimTint, round: 0.03 });
   }
   // cunhais (pedras de quina) nas pontas das fachadas de reboco
   if (s.style === 'plaster' && k.quoins) {
@@ -303,8 +315,9 @@ function facade(W, s, F, k) {
   const holes = rng.int(1, 4) + Math.round(s.cond * 3);
   for (let i = 0; i < holes; i++) {
     const p = P3(F, rng.range(1, F.W - 1), rng.chance(0.6) ? rng.range(0.6, 3.5) : rng.range(3.5, Math.min(H - 1, 10)), 0.013 + i * 0.0004);
-    const sz = rng.range(0.9, 2.2);
-    decal(B, 'bullets', p, F.front, [sz, sz * rng.range(0.8, 1.2)], [0, 0, 1, 1], rng.range(0, 6.28));
+    const q = rng.int(0, 3);
+    const sz = q === 3 ? rng.range(1.4, 2.2) : rng.range(0.8, 1.8);
+    decal(B, 'bullets', p, F.front, [sz, sz * rng.range(0.85, 1.15)], bulletRect(q), q === 0 || q === 3 ? rng.range(-0.35, 0.35) : rng.range(0, 6.28), [rng.range(0.85, 1.05), rng.range(0.85, 1.0), rng.range(0.82, 0.98)]);
   }
   if (rng.chance(0.6)) {
     const p = P3(F, rng.range(1, F.W - 1), rng.range(2, Math.min(H - 1, 9)), 0.011);
@@ -372,33 +385,98 @@ function cladding(W, F, u0, u1, y) {
 }
 
 /**
- * Rombo de explosão atravessando a fachada: colunas de 0.15 m com perfil
- * irregular (elipse + ruído), faces de quebra em tijolo, vergalhões
- * pendurados, fuligem, lascas e entulho na calçada. O cômodo aparece pelo
- * interior mapping (quad atrás da parede).
+ * Rombo de explosão atravessando a fachada — geometria real, não decalque:
+ *
+ *  - parede do vão como PERFIL COM FURO extrudado (contorno irregular de
+ *    ~30 pontos com ruído e mordidas), em duas camadas: alvenaria de
+ *    tijolo (espessura da parede, faces de quebra em tijolo) e, por cima,
+ *    o reboco com um furo MAIOR e mais recortado → anel de tijolo exposto
+ *    em volta do rombo, como em parede de verdade;
+ *  - tijolos soltos meio presos na borda (instanciados), vergalhões
+ *    retorcidos pendendo da verga, entulho no peitoril do rombo;
+ *  - fuligem/lascas em volta, entulho caído na calçada abaixo; o cômodo
+ *    aparece pelo interior mapping (quad atrás da parede).
  */
 function blastHole(W, s, F, o, y, yTop, wallMat, tint, f) {
-  const { B, rng } = W;
-  const c = (o.u0 + o.u1) / 2, hw = (o.u1 - o.u0) / 2;
-  const cy = y + rng.range(1.1, 1.5), ry = Math.min(rng.range(0.9, 1.3), (yTop - y) * 0.48);
-  const n = Math.max(4, Math.round((o.u1 - o.u0) / 0.15));
-  const cut = s.style === 'brick' ? 'brick' : 'brick';
-  const wo = { color: tint, back: 'room', sides: cut, top: cut, bottom: cut };
-  for (let i = 0; i < n; i++) {
-    const ua = o.u0 + (i / n) * (o.u1 - o.u0), ub = o.u0 + ((i + 1) / n) * (o.u1 - o.u0);
-    const t = ((ua + ub) / 2 - c) / hw;
-    const half = Math.sqrt(Math.max(0, 1 - t * t)) * ry;
-    const yb = Math.max(y, cy - half + rng.range(-0.12, 0.18));
-    const yt = Math.min(yTop, cy + half + rng.range(-0.15, 0.12));
-    if (yb > y + 0.01) fbox(B, F, ua, ub, y, yb, -0.3 + rng.range(0, 0.08), 0, wallMat, { ...wo, top: cut });
-    if (yt < yTop - 0.01) fbox(B, F, ua, ub, yt, yTop, -0.3 + rng.range(0, 0.08), 0, wallMat, { ...wo, bottom: cut });
-    if (yt < yTop - 0.05 && rng.chance(0.35)) rebar(B, P3(F, (ua + ub) / 2, yt + 0.03, -0.15), [F.n[0] * 0.3 + rng.range(-0.2, 0.2), -1, F.n[1] * 0.3 + rng.range(-0.2, 0.2)], rng.range(0.25, 0.7), rng);
+  const { B, I, rng } = W;
+  const c = (o.u0 + o.u1) / 2 + rng.range(-0.15, 0.15), hw = o.hw ?? (o.u1 - o.u0) / 2 - 0.3;
+  const cy = y + rng.range(1.15, 1.45), ry = Math.min(rng.range(0.85, 1.2), (yTop - y) * 0.42);
+  const brickStyle = s.style === 'brick';
+  // base local da face: X = u, Y = altura, Z = normal (para fora)
+  const M = new THREE.Matrix4().makeBasis(new THREE.Vector3(F.u[0], 0, F.u[1]), new THREE.Vector3(0, 1, 0), new THREE.Vector3(F.n[0], 0, F.n[1])).setPosition(F.o[0], 0, F.o[1]);
+  const seed = rng.next() * 100;
+  const noise1 = (a, k) => Math.sin(a * 3 + seed) * 0.5 + Math.sin(a * 7 + seed * 1.7) * 0.3 + Math.sin(a * 13 + seed * 2.3) * 0.2 * k;
+  const N = 34;
+  const outline = (scale, jag, bites) => {
+    const pts = [];
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2;
+      let k = scale * (1 + noise1(a, 1) * jag) * (rng.chance(bites) ? rng.range(0.78, 0.92) : 1);
+      // tijolo quebra em degraus pequenos (fiadas de 7,5 cm), não em escada grossa
+      let uu = c + Math.cos(a) * hw * k, yy = cy + Math.sin(a) * ry * k;
+      yy = y + Math.round((yy - y) / 0.075) * 0.075 + rng.range(-0.02, 0.02);
+      uu = Math.min(o.u1 - 0.05, Math.max(o.u0 + 0.05, uu));
+      yy = Math.min(yTop - 0.06, Math.max(y + 0.06, yy));
+      pts.push(new THREE.Vector2(uu, yy));
+    }
+    return pts;
+  };
+  const inner = outline(1, 0.14, 0.25);
+  const rect = () => {
+    const sh = new THREE.Shape();
+    sh.moveTo(o.u0, y); sh.lineTo(o.u1, y); sh.lineTo(o.u1, yTop); sh.lineTo(o.u0, yTop); sh.lineTo(o.u0, y);
+    return sh;
+  };
+  const layer = (holePts, d0, d1, mat, color) => {
+    const sh = rect();
+    sh.holes.push(new THREE.Path([...holePts].reverse()));
+    const g = new THREE.ExtrudeGeometry(sh, { depth: d1 - d0, bevelEnabled: false, curveSegments: 1 });
+    g.translate(0, 0, d0);
+    B.add(g, mat, M, { color, faceMats: undefined });
+  };
+  // alvenaria (tijolo à vista nas faces de quebra)
+  const brickTint = brickStyle ? tint : [0.92, 0.9, 0.88];
+  layer(inner, -0.3, brickStyle ? 0 : -0.035, 'brick', brickTint);
+  if (!brickStyle) {
+    // reboco com furo maior e mais mordido (descascou em volta do impacto)
+    const outer = outline(rng.range(1.22, 1.45), 0.22, 0.4);
+    layer(outer, -0.035, 0, wallMat, tint);
   }
-  winQuad(W, F, o.u0, o.u1, y, yTop, -0.27, { depth: rng.range(3, 4.5), sill: 0.02, margin: 0.4, top: 0.1, kind: rng.chance(0.5) ? 2 : 1 });
-  decal(B, 'scorch', P3(F, c, cy + 0.2, 0.012), F.front, [hw * 4.2, ry * 4.2], [0, 0, 1, 1], rng.range(0, 6.28));
+  // tijolos soltos presos na borda, apontando para dentro do rombo
+  const nb = rng.int(6, 11);
+  for (let i = 0; i < nb; i++) {
+    const p = inner[rng.int(0, N - 1)];
+    const v = rng.int(0, 3);
+    const dirU = c - p.x, dirY = cy - p.y;
+    const l = Math.hypot(dirU, dirY) || 1;
+    const pu = p.x + (dirU / l) * 0.06, py = p.y + (dirY / l) * 0.06;
+    const w3 = P3(F, pu, py, rng.range(-0.25, -0.05));
+    const yaw = Math.atan2(F.u[0], F.u[1]) - Math.PI / 2 + rng.range(-0.5, 0.5);
+    I.add('rbrick' + v, brickGeo(v), 'rubbleB', mat4(w3, [rng.range(-0.4, 0.4), yaw, Math.atan2(dirY, dirU) * 0.3 + rng.range(-0.3, 0.3)], 1), brickStyle ? [0.62, 0.36, 0.26] : [0.66, 0.42, 0.3]);
+  }
+  // vergalhões / ferros da verga retorcidos pendendo
+  const nr = rng.int(3, 6);
+  for (let i = 0; i < nr; i++) {
+    const t = (i + 0.5) / nr;
+    const idx = Math.floor(N * (0.12 + t * 0.26)) % N; // arco de cima
+    const p = inner[idx];
+    rebar(B, P3(F, p.x, p.y + 0.02, rng.range(-0.22, -0.08)), [F.n[0] * rng.range(0.1, 0.6) + rng.range(-0.3, 0.3), -1, F.n[1] * rng.range(0.1, 0.6) + rng.range(-0.3, 0.3)], rng.range(0.3, 0.9), rng);
+  }
+  // entulho no peitoril do rombo (lado de baixo do contorno)
+  let yMin = Infinity, uMin = c;
+  for (const p of inner) if (p.y < yMin) { yMin = p.y; uMin = p.x; }
+  for (let i = 0; i < 10; i++) {
+    const v = rng.int(0, 7);
+    const sc = rng.range(0.06, 0.2);
+    const uu = uMin + rng.range(-0.5, 0.5) * hw;
+    I.add('rchunk' + v, chunkGeo(v), 'rubbleC', mat4(P3(F, uu, yMin + sc * 0.3, rng.range(-0.28, -0.02)), [rng.range(0, 6), rng.range(0, 6), rng.range(0, 6)], sc), rng.chance(0.4) ? [0.62, 0.38, 0.28] : tint.map((v2) => v2 * 0.8));
+  }
+  winQuad(W, F, o.u0, o.u1, y, yTop, -0.29, { depth: rng.range(3, 4.5), sill: 0.02, margin: 0.4, top: 0.1, kind: rng.chance(0.5) ? 2 : 1 });
+  decal(B, 'scorch', P3(F, c, cy + 0.35, 0.012), F.front, [hw * 4.6, ry * 4.4], [0, 0, 1, 1], rng.range(0, 6.28));
+  decal(B, 'soot', P3(F, c, cy + ry + 1.2, 0.0125), F.front, [hw * 2.6, 2.8]);
   for (let k = 0; k < 3; k++) {
     const q = rng.int(0, 3);
-    decal(B, 'chips', P3(F, c + rng.range(-1, 1) * hw * 1.3, cy + rng.range(-1, 1) * ry * 1.2, 0.0115 + k * 0.0003), F.front, [rng.range(0.6, 1.2), rng.range(0.5, 1)], [(q % 2) * 0.5, Math.floor(q / 2) * 0.5, (q % 2) * 0.5 + 0.5, Math.floor(q / 2) * 0.5 + 0.5], rng.range(0, 6.28));
+    decal(B, 'chips', P3(F, c + rng.range(-1, 1) * hw * 1.5, cy + rng.range(-1, 1) * ry * 1.4, 0.0115 + k * 0.0003), F.front, [rng.range(0.5, 1.0), rng.range(0.4, 0.9)], [(q % 2) * 0.5, Math.floor(q / 2) * 0.5, (q % 2) * 0.5 + 0.5, Math.floor(q / 2) * 0.5 + 0.5], rng.range(0, 6.28));
   }
   // entulho caído na calçada abaixo
   if (s.startFloor === 0 || f > 0) W.rubbleSpots.push({ p: P3(F, c, 0.15, 1.1), r: 0.9 + hw * 0.5, n: 16, small: false });
@@ -420,7 +498,7 @@ function opening(W, s, F, o, f, k) {
   if (f === 0 && !isBal && rng.chance(0.6)) state = state === 'glass' ? 'barred' : state;
 
   // peitoril
-  if (!isBal) fbox(B, F, o.u0 - 0.1, o.u1 + 0.1, o.y0 - 0.07, o.y0, -0.12, 0.12, k.trimMat, { color: k.trimTint });
+  if (!isBal) fbox(B, F, o.u0 - 0.1, o.u1 + 0.1, o.y0 - 0.07, o.y0, -0.12, 0.12, k.trimMat, { color: k.trimTint, round: 0.018 });
   // verga
   if (s.style !== 'concrete') fbox(B, F, o.u0 - 0.12, o.u1 + 0.12, o.y1, o.y1 + 0.18, 0, 0.04, k.trimMat, { color: k.trimTint });
   // guarnição saliente em volta do vão + fecho (prédios de reboco "clássicos")
@@ -503,7 +581,7 @@ function opening(W, s, F, o, f, k) {
     if (uu > 0.5 && uu < F.W - 0.5) {
       B.cast = true;
       const acT = rng.pick([[0.82, 0.81, 0.76], [0.74, 0.72, 0.66], [0.66, 0.66, 0.63]]);
-      fbox(B, F, uu - 0.4, uu + 0.4, o.y0 - 0.2, o.y0 + 0.36, 0, 0.3, 'metal', { color: acT, uvRand: true });
+      fbox(B, F, uu - 0.4, uu + 0.4, o.y0 - 0.2, o.y0 + 0.36, 0, 0.3, 'metal', { color: acT, uvRand: true, round: 0.025 });
       // frente: grelha do ventilador (anel + cruzeta + hélice escura) e aletas
       const fc = P3(F, uu - 0.1, o.y0 + 0.08, 0.305);
       const yawF = Math.atan2(F.n[0], F.n[1]);
@@ -533,12 +611,14 @@ function balcony(W, s, F, o, k) {
   const depth = rng.range(0.8, 1.1);
   const y = o.y0 - 0.02;
   // laje com bordas quebradas às vezes
-  fbox(B, F, u0, u1, y - 0.16, y + 0.02, 0, depth, 'concrete', { color: [0.72, 0.7, 0.67] });
+  fbox(B, F, u0, u1, y - 0.16, y + 0.02, 0, depth, 'concrete', { color: [0.72, 0.7, 0.67], round: 0.035 });
+  // pingadeira sob a laje (sombra fina) e manchas de umidade na borda
+  fbox(B, F, u0 + 0.04, u1 - 0.04, y - 0.2, y - 0.16, 0.05, depth - 0.06, 'concrete', { color: [0.6, 0.58, 0.55] });
   const kind = rng.next();
   if (kind < 0.45) {
     // guarda-corpo de barras metálicas
     const tint = rng.pick([[0.15, 0.15, 0.15], [0.3, 0.42, 0.35], [0.5, 0.48, 0.45]]);
-    fbox(B, F, u0, u1, y + 0.95, y + 1.0, depth - 0.05, depth, 'metal', { color: tint });
+    fbox(B, F, u0, u1, y + 0.95, y + 1.0, depth - 0.05, depth, 'metal', { color: tint, round: 0.02 });
     fbox(B, F, u0, u0 + 0.04, y, y + 1.0, 0, depth, 'metal', { color: tint, front: null });
     fbox(B, F, u1 - 0.04, u1, y, y + 1.0, 0, depth, 'metal', { color: tint, front: null });
     fbox(B, F, u0, u0 + 0.04, y + 0.95, y + 1.0, 0, depth, 'metal', { color: tint });
@@ -552,11 +632,11 @@ function balcony(W, s, F, o, k) {
     // parapeito maciço de alvenaria
     const bm = s.style === 'brick' ? 'brick' : s.style === 'concrete' ? 'concrete' : 'plaster';
     const bc = s.style === 'brick' ? [1, 1, 1] : s.style === 'concrete' ? [0.72, 0.7, 0.67] : s.tint;
-    fbox(B, F, u0, u1, y, y + 1.0, depth - 0.12, depth, bm, { color: bc });
-    fbox(B, F, u0, u0 + 0.12, y, y + 1.0, 0, depth, bm, { color: bc });
-    fbox(B, F, u1 - 0.12, u1, y, y + 1.0, 0, depth, bm, { color: bc });
+    fbox(B, F, u0, u1, y, y + 1.0, depth - 0.12, depth, bm, { color: bc, round: 0.025 });
+    fbox(B, F, u0, u0 + 0.12, y, y + 1.0, 0, depth - 0.1, bm, { color: bc, round: 0.025 });
+    fbox(B, F, u1 - 0.12, u1, y, y + 1.0, 0, depth - 0.1, bm, { color: bc, round: 0.025 });
     // rufo de concreto no topo do parapeito
-    fbox(B, F, u0 - 0.02, u1 + 0.02, y + 1.0, y + 1.06, -0.02, depth + 0.03, 'concrete', { color: [0.66, 0.64, 0.6] });
+    fbox(B, F, u0 - 0.02, u1 + 0.02, y + 1.0, y + 1.06, -0.02, depth + 0.03, 'concrete', { color: [0.66, 0.64, 0.6], round: 0.02 });
     decal(B, 'streaks', P3(F, (u0 + u1) / 2, y - 1.0, depth + 0.01), F.front, [u1 - u0, 2.0]);
   } else {
     // sacada fechada com chapa ondulada e vidro (puxadinho)

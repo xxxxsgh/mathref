@@ -89,6 +89,13 @@ export default {
       signs: new THREE.MeshStandardMaterial({ map: DT.signsTexture(), roughness: 0.55, metalness: 0.1, vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }),
       ...vegetationMaterials(),
     });
+    // vidro de carro: escuro, liso, reflexo do céu (IBL); transparente o
+    // bastante para ver bancos e o vidro do outro lado
+    mats.carglass = new THREE.MeshStandardMaterial({ color: 0x1b2427, roughness: 0.03, metalness: 0.1, transparent: true, opacity: 0.8, envMapIntensity: 1.25, vertexColors: true, depthWrite: true });
+    // lanternas/piscas: plástico translúcido colorido com leve emissão
+    mats.taillight = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.18, metalness: 0, emissive: 0x2a0402, vertexColors: true, envMapIntensity: 1.2 });
+    // poça: água turva e lisa (espelho do céu), sem intemperismo
+    mats.puddle = new THREE.MeshStandardMaterial({ color: 0x15120f, roughness: 0.02, metalness: 0, envMapIntensity: 1.4, vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
     mats.mesh = new THREE.MeshStandardMaterial({ map: meshTexture(), alphaTest: 0.35, side: THREE.DoubleSide, roughness: 0.45, metalness: 0.8, vertexColors: true });
     mats.fabricDS = mats.fabric.clone();
     mats.fabricDS.side = THREE.DoubleSide;
@@ -173,7 +180,9 @@ export default {
       const fires = [
         { x: -2.8, y: 0.42, z: -12, w: 1.7, d: 1.2, h: 1.6, light: 45, range: 10, tongues: 7, embers: 40, smoke: 26, smokeH: 16 },
         { x: -3.5, y: 0.75, z: -12.9, w: 0.7, h: 0.7, tongues: 3, embers: 8 },
-        { x: 6.6, y: 0.18, z: 2.0, w: 0.9, h: 1.1, light: quality.level === 'low' ? 0 : 30, range: 9, tongues: 5, embers: 24, smoke: 14, smokeH: 10 },
+        // luz pontual NÃO projeta sombra: esta pilha fica colada ao interior jogável,
+        // então sem luz própria (vazaria pela parede e acenderia o teto da sala)
+        { x: 6.6, y: 0.18, z: 2.0, w: 0.9, h: 1.1, light: 0, range: 9, tongues: 5, embers: 24, smoke: 14, smokeH: 10 },
         { x: 6.6, y: 0.88, z: -29.5, w: 0.5, h: 0.75, tongues: 4, embers: 14 },
         { x: -8.3, y: 0.9, z: -96, w: 1.2, h: 1.2, tongues: 5, embers: 16 },
         { x: 3.2, y: 0.5, z: -78, w: 1.3, h: 1.3, tongues: 5, embers: 16 },

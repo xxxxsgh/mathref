@@ -135,39 +135,75 @@ export function drainGrate(W, x, z, side) {
   decal(B, 'stains', [x - side * 0.3, 0.012, z], 'py', [1.2, 2.4], [0, 0, 0.5, 0.5], 0, [0.7, 0.7, 0.7]);
 }
 
-/**
- * Cratera de morteiro no asfalto: placas levantadas em anel (inclinadas
- * para fora), terra revolvida no centro, queimado e respingos radiais.
- */
-export function crater(W, x, z, r = 1.2) {
-  const { B, I, rng } = W;
-  decal(B, 'scorch', [x, 0.015, z], 'py', [r * 5, r * 5], [0, 0, 1, 1], rng.range(0, 6));
-  decal(B, 'stains', [x, 0.017, z], 'py', [r * 2.4, r * 2.4], [0.5, 0.5, 1, 1], rng.range(0, 6), [0.55, 0.52, 0.5]);
-  // centro: terra/cascalho revolvido (disco irregular baixo)
-  const n = 18;
-  const pos = [];
-  const pt = (a, rr, yy) => [x + Math.cos(a) * rr, yy, z + Math.sin(a) * rr];
-  const jag = Array.from({ length: n }, () => rng.range(0.75, 1.0));
+/** Contorno irregular da boca da cratera (determinístico pela semente). */
+export function craterOutline([x, z, r, seed]) {
+  const rr = mulberry(900 + seed * 31);
+  const n = 22, out = [];
   for (let i = 0; i < n; i++) {
-    const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
-    const r0 = r * 0.72 * jag[i], r1 = r * 0.72 * jag[(i + 1) % n];
-    pos.push(...pt(0, 0, 0.035), ...pt(a1, r1, 0.02), ...pt(a0, r0, 0.02));
-    pos.push(...pt(a0, r0, 0.02), ...pt(a1, r1, 0.02), ...pt(a1, r1 * 1.12, -0.01));
-    pos.push(...pt(a0, r0, 0.02), ...pt(a1, r1 * 1.12, -0.01), ...pt(a0, r0 * 1.12, -0.01));
+    const a = (i / n) * Math.PI * 2;
+    const k = r * 0.78 * (0.82 + rr() * 0.3 + Math.sin(a * 3 + seed) * 0.06);
+    out.push([x + Math.cos(a) * k, z + Math.sin(a) * k]);
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.computeVertexNormals();
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array((pos.length / 3) * 2), 2));
-  B.add(g, 'rubbleD', null, { color: [0.55, 0.5, 0.45] });
-  // anel de placas de asfalto levantadas
+  return out;
+}
+
+/**
+ * Cratera de morteiro no asfalto — com PROFUNDIDADE: o asfalto da fatia tem
+ * um furo (layout.js) e aqui entra a bacia: borda com a camada de asfalto
+ * (5 cm) em corte, base de brita e terra revolvida descendo até ~35 cm,
+ * poça no fundo, placas de asfalto levantadas e tombadas em anel, queimado
+ * radial e respingos de pedra.
+ */
+export function crater(W, c) {
+  const { B, I, rng } = W;
+  const [x, z, r] = c;
+  const outline = craterOutline(c);
+  const depth = 0.22 + r * 0.1;
+  decal(B, 'scorch', [x, 0.015, z], 'py', [r * 5, r * 5], [0, 0, 1, 1], rng.range(0, 6));
+  decal(B, 'stains', [x, 0.017, z], 'py', [r * 2.4, r * 2.4], [0.5, 0.5, 1, 1], rng.range(0, 6), [0.4, 0.38, 0.36]);
+  // bacia: anéis do contorno (y = 0) até o fundo, perfil em "tigela" com ruído
+  const rings = 7, n = outline.length;
+  const P = (i, k) => {
+    const t = k / rings;
+    const [ox, oz] = outline[i % n];
+    const rad = 1 - t;
+    const nz = Math.sin(i * 1.7 + k * 2.3 + c[3]) * 0.03 + Math.sin(i * 4.1 - k * 1.3) * 0.02;
+    const y = k === 0 ? 0.0 : k === 1 ? -0.06 : -depth * Math.pow(Math.sin((t * Math.PI) / 2), 0.8) + nz;
+    const sc = k === 1 ? 0.97 : rad * (1 + nz);
+    return [x + (ox - x) * sc, y, z + (oz - z) * sc];
+  };
+  const bowl = [], lip = [];
+  for (let k = 0; k < rings; k++) {
+    for (let i = 0; i < n; i++) {
+      const a = P(i, k), b = P(i + 1, k), cc = P(i + 1, k + 1), d = P(i, k + 1);
+      (k === 0 ? lip : bowl).push(...a, ...cc, ...b, ...a, ...d, ...cc);
+    }
+  }
+  for (const [pos, mat, col] of [[bowl, 'rubbleD', (p) => { const t = Math.min(1, -p.y / depth); return [0.62 - t * 0.2, 0.58 - t * 0.2, 0.53 - t * 0.2]; }], [lip, 'asphalt', [0.55, 0.53, 0.5]]]) {
+    let g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    B.add(g, mat, null, { color: col, at: [x, z] });
+  }
+  // poça de água suja no fundo (espelha o céu)
+  const pr = r * rng.range(0.22, 0.32);
+  B.add(cached('puddleDisc', () => new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2)), 'puddle', mat4([x + rng.range(-0.1, 0.1), -depth + 0.04, z + rng.range(-0.1, 0.1)], [0, rng.range(0, 6), 0], [pr * 1.3, 1, pr]), { color: [1, 1, 1] });
+  // pedras no fundo e na encosta
+  for (let i = 0; i < Math.round(r * 14); i++) {
+    const a = rng.range(0, Math.PI * 2), d = r * 0.7 * Math.sqrt(rng.next());
+    const t = d / (r * 0.78);
+    const yy = -depth * Math.pow(Math.cos((t * Math.PI) / 2), 0.8);
+    const s = rng.range(0.04, 0.12);
+    const v = rng.int(0, 7);
+    I.add('rchunk' + v, chunkGeo(v), 'rubbleC', mat4([x + Math.cos(a) * d, yy + s * 0.2, z + Math.sin(a) * d], [rng.range(0, 6), rng.range(0, 6), 0], s), rng.chance(0.4) ? [0.3, 0.29, 0.28] : [0.5, 0.48, 0.45], { shadow: false });
+  }
+  // anel de placas de asfalto levantadas, inclinadas para fora
   const m = Math.round(r * 9);
   for (let i = 0; i < m; i++) {
     const a = (i / m) * Math.PI * 2 + rng.range(-0.15, 0.15);
-    const d = r * rng.range(0.75, 1.05);
+    const d = r * rng.range(0.8, 1.05);
     const s = rng.range(0.25, 0.5);
     const M = mat4([x + Math.cos(a) * d, 0.03, z + Math.sin(a) * d], [0, -a, rng.range(0.25, 0.6)], [s, 0.6, s * 0.8]);
-    // inclina para fora: rotação em torno do eixo tangente (via Euler YXZ com yaw = -a)
     I.add('rslab' + (i % 4), slabGeo(i % 4), 'asphalt', M, [0.8, 0.8, 0.8]);
   }
   // respingos de pedras em volta

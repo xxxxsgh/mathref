@@ -125,10 +125,12 @@ export function genBrick(N, seed = 31) {
     const t = r(), k = r();
     let c;
     // tons de olaria dessaturados (tijolo velho, curtido de sol e poeira)
-    if (k < 0.5) c = [lerp(0.5, 0.6, t), lerp(0.34, 0.4, t), lerp(0.27, 0.31, t)];
-    else if (k < 0.72) c = [lerp(0.42, 0.5, t), lerp(0.29, 0.34, t), lerp(0.24, 0.27, t)];
-    else if (k < 0.88) c = [lerp(0.6, 0.68, t), lerp(0.46, 0.52, t), lerp(0.36, 0.41, t)];
-    else c = [lerp(0.5, 0.58, t), lerp(0.46, 0.52, t), lerp(0.42, 0.47, t)];
+    if (k < 0.4) c = [lerp(0.5, 0.62, t), lerp(0.33, 0.4, t), lerp(0.26, 0.31, t)];
+    else if (k < 0.58) c = [lerp(0.34, 0.44, t), lerp(0.22, 0.28, t), lerp(0.18, 0.22, t)]; // queimado/escuro
+    else if (k < 0.76) c = [lerp(0.6, 0.7, t), lerp(0.45, 0.52, t), lerp(0.35, 0.41, t)]; // claro/amarelado
+    else if (k < 0.88) c = [lerp(0.62, 0.7, t), lerp(0.36, 0.41, t), lerp(0.24, 0.28, t)]; // alaranjado
+    else if (k < 0.95) c = [lerp(0.48, 0.56, t), lerp(0.45, 0.5, t), lerp(0.41, 0.46, t)]; // acinzentado
+    else c = [lerp(0.25, 0.3, t), lerp(0.2, 0.23, t), lerp(0.18, 0.2, t)]; // fuligem forte
     tone[i * 6] = c[0]; tone[i * 6 + 1] = c[1]; tone[i * 6 + 2] = c[2];
     tone[i * 6 + 3] = r(); // fuligem / sujeira do tijolo
     tone[i * 6 + 4] = (r() - 0.5) * 2; // inclinação x
@@ -161,7 +163,7 @@ export function genBrick(N, seed = 31) {
       const ch = smooth(0.55, 0.85, chip[i]) * 0.012;
       const e = Math.min(ex, ey) - ch;
       edge[i] = e;
-      const mortar = 0.005;
+      const mortar = 0.0065;
       const b = smooth(mortar, mortar + 0.0035, e);
       isB[i] = b;
       const bevel = smooth(mortar, mortar + 0.012, e);
@@ -170,8 +172,8 @@ export function genBrick(N, seed = 31) {
     }
   }
   const hb = blur(h, N, 1);
-  const normal = heightToNormal(hb, N, 4);
-  const cav = cavity(hb, N, 2, 1.6);
+  const normal = heightToNormal(hb, N, 5);
+  const cav = cavity(hb, N, 2, 2.2);
   const { albedo, orm } = pack(N, (i, c, m) => {
     const b = isB[i];
     const t = bid[i] * 6;
@@ -181,7 +183,7 @@ export function genBrick(N, seed = 31) {
     // lasca recente: miolo do tijolo mais claro/alaranjado
     const fresh = smooth(0.7, 0.9, chip[i]) * (1 - smooth(0.004, 0.02, edge[i])) * b;
     br = lerp(br, 0.6, fresh * 0.5); bg = lerp(bg, 0.38, fresh * 0.5); bb = lerp(bb, 0.28, fresh * 0.5);
-    const mo = 0.62 + n2[i] * 0.1 + (sand[i] - 0.5) * 0.12;
+    const mo = 0.56 + n2[i] * 0.1 + (sand[i] - 0.5) * 0.12;
     let cr = lerp(mo, br, b), cg = lerp(mo * 0.97, bg, b), cb = lerp(mo * 0.92, bb, b);
     // eflorescência salina (velatura esbranquiçada, mais na argamassa)
     const ef = smooth(0.66, 0.9, eff[i]) * (0.35 + 0.4 * (1 - b));
@@ -319,7 +321,7 @@ export function genPaintedMetal(N, seed = 61, rustT = 0.74) {
     const pv = 0.78 + (big[i] - 0.5) * 0.15 - (fine[i] - 0.5) * 0.05;
     const rv = 0.6 + fine[i] * 0.5;
     // ferrugem é escrita "negativa" no canal de tinta: o shader não a tinge
-    c[0] = lerp(pv, 0.42 * rv, rr); c[1] = lerp(pv, 0.2 * rv, rr); c[2] = lerp(pv, 0.1 * rv, rr);
+    c[0] = lerp(pv, 0.37 * rv, rr); c[1] = lerp(pv, 0.21 * rv, rr); c[2] = lerp(pv, 0.12 * rv, rr);
     m[0] = 1; m[1] = lerp(0.45 + fine[i] * 0.15, 0.85, rr); m[2] = lerp(0.35, 0.05, rr);
   });
   return { albedo, normal, orm, world: 1.5, rust };
@@ -341,11 +343,11 @@ export function genCorrugated(N, seed = 71) {
   const normal = heightToNormal(h, N, 1.6 * (N / 1024) * 4);
   const { albedo, orm } = pack(N, (i, c, m) => {
     // ferrugem nas bordas de baixo/escorrida, não em manchas pretas grandes
-    const rr = clamp01(smooth(0.6, 0.8, rustN[i]) * 0.85 + smooth(0.6, 0.85, streak[i]) * 0.35);
+    const rr = clamp01(smooth(0.68, 0.84, rustN[i]) * 0.6 + smooth(0.62, 0.86, streak[i]) * 0.45);
     const groove = 0.85 + h[i] * 0.15;
     const pv = (0.66 + (fine[i] - 0.5) * 0.12 + (streak[i] - 0.5) * 0.1) * groove;
     const rv = (0.6 + fine[i] * 0.5) * groove;
-    c[0] = lerp(pv, 0.5 * rv, rr); c[1] = lerp(pv, 0.28 * rv, rr); c[2] = lerp(pv, 0.15 * rv, rr);
+    c[0] = lerp(pv, 0.4 * rv, rr); c[1] = lerp(pv, 0.25 * rv, rr); c[2] = lerp(pv, 0.15 * rv, rr);
     m[0] = 0.75 + groove * 0.25; m[1] = lerp(0.5, 0.88, rr); m[2] = lerp(0.4, 0.1, rr);
   });
   return { albedo, normal, orm, world: 2.4 };
@@ -651,4 +653,73 @@ export function makeSet(gen, N, anisotropy) {
     orm: toTexture(g.orm, N, { anisotropy, repeat: rep }),
     world: g.world,
   };
+}
+
+// ─── cascalho de entulho: pedras de 3 tamanhos empilhadas ──────────────
+/**
+ * Superfície de monte de entulho vista de perto: pedaços angulosos de
+ * concreto, reboco pintado e tijolo moído (Worley em 3 escalas, o maior
+ * por cima), vãos escuros cheios de pó e sombra (cavidade forte), arestas
+ * de quebra claras. Usado em triplanar (sem UV) no monte base.
+ */
+export function genGravel(N, seed = 181) {
+  const L = [worley(N, 7, seed, { jitter: 0.9 }), worley(N, 17, seed + 1, { jitter: 0.95 }), worley(N, 44, seed + 2, { jitter: 1 })];
+  const big = fbm(N, seed + 3, { period: 3, octaves: 5 });
+  const wn = white(N, seed + 4);
+  const fine = fbm(N, seed + 5, { period: 64, octaves: 2 });
+  const h = new Float32Array(N * N), sid = new Float32Array(N * N), lay = new Uint8Array(N * N);
+  const cover = [0.3, 0.42, 0.58]; // fração de células que têm pedra em cada camada
+  for (let i = 0; i < N * N; i++) {
+    let hh = 0.05 + big[i] * 0.12 + fine[i] * 0.05, id = -1, ly = 3;
+    for (let l = 2; l >= 0; l--) {
+      const w = L[l];
+      if (w.id[i] > cover[l]) continue;
+      // interior da pedra: borda pela diferença f2-f1 (polígonos angulosos)
+      const e = w.f2[i] - w.f1[i];
+      const inside = smooth(0.04, 0.16 + l * 0.02, e);
+      if (inside <= 0) continue;
+      // topo facetado (não domo liso): plano inclinado por pedra + quina
+      const tilt = (w.id[i] * 7.3) % 1;
+      const top = (0.35 + 0.65 * Math.pow(Math.min(1, e * 2.2), 0.6)) * (0.55 + 0.45 * tilt) * [1.0, 0.7, 0.42][l];
+      const v = 0.18 + l * -0.04 + top;
+      if (v * inside > hh) {
+        hh = Math.max(hh, v * inside + 0.02);
+        id = w.id[i];
+        ly = l;
+      }
+    }
+    h[i] = hh + (wn[i] - 0.5) * 0.025;
+    sid[i] = id;
+    lay[i] = ly;
+  }
+  const hb = blur(h, N, 1);
+  const normal = heightToNormal(hb, N, 3.2);
+  const cav = cavity(hb, N, 3, 3.5);
+  const PAL = [
+    [0.62, 0.6, 0.56], [0.55, 0.53, 0.5], [0.7, 0.67, 0.61], [0.47, 0.45, 0.42], // concreto
+    [0.78, 0.72, 0.6], [0.72, 0.68, 0.6], // reboco/pintura
+    [0.52, 0.35, 0.27], [0.45, 0.3, 0.24], [0.58, 0.41, 0.32], // tijolo
+    [0.32, 0.3, 0.28], // escuro (queimado/asfalto)
+  ];
+  const { albedo, orm } = pack(N, (i, c, m) => {
+    const id = sid[i];
+    let r, g, b;
+    if (id < 0) {
+      // vão: pó/areia de argamassa moída com grãos (ruído branco)
+      const k = 0.4 + big[i] * 0.16 + fine[i] * 0.1 + (wn[i] - 0.5) * 0.14;
+      r = k * 1.04; g = k * 0.98; b = k * 0.88;
+    } else {
+      const p = PAL[Math.floor(((id * 97.13) % 1) * PAL.length)];
+      const v = 0.86 + ((id * 31.7) % 1) * 0.22 + (wn[i] - 0.5) * 0.08 + (fine[i] - 0.5) * 0.15;
+      r = p[0] * v; g = p[1] * v; b = p[2] * v;
+      // poeira assentada nas pedras menores
+      // tudo coberto de pó (dessatura), mais nas pedras pequenas e nas manchas de ruído
+      const dust = (lay[i] === 2 ? 0.55 : lay[i] === 1 ? 0.4 : 0.28) * (0.5 + big[i]);
+      r = lerp(r, 0.56, dust); g = lerp(g, 0.53, dust); b = lerp(b, 0.48, dust);
+    }
+    const k = 0.3 + cav[i] * 0.7;
+    c[0] = r * k; c[1] = g * k; c[2] = b * k;
+    m[0] = 0.35 + cav[i] * 0.65; m[1] = id < 0 ? 0.98 : 0.86; m[2] = 0;
+  });
+  return { albedo, normal, orm, world: 1.3 };
 }

@@ -315,23 +315,43 @@ export function dish(W, p, n) {
   cylBetween(B, p, [p[0] + n[0] * 0.4, p[1] - 0.1, p[2] + n[1] * 0.4], 0.015, 'metal', { color: [0.5, 0.5, 0.5] });
 }
 
-/** Saco de lixo plástico (instanciado): esfera amassada com nó em cima. */
+/** Saco de lixo plástico (instanciado): corpo assentado com vincos de plástico, nó com orelhas. */
 const bagGeo = (v) =>
-  cached('trashbag' + v, () => {
-    // saco cheio: corpo assentado, vincos, nó pequeno em cima
-    const g = new THREE.SphereGeometry(1, 18, 14);
+  cached('trashbag2_' + v, () => {
+    const g = new THREE.SphereGeometry(1, 30, 22);
     const P = g.attributes.position;
+    const ph = v * 1.7;
     for (let i = 0; i < P.count; i++) {
-      const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
+      let x = P.getX(i), y = P.getY(i), z = P.getZ(i);
       const a = Math.atan2(z, x);
-      const fold = 1 + 0.07 * Math.sin(a * 7 + y * 5 + v) + 0.05 * Math.sin(a * 13 - y * 9);
-      const sag = y < 0 ? 0.62 : 1;
-      const neck = y > 0.9 ? 0.45 : 1;
-      P.setXYZ(i, x * fold * neck, y * sag, z * fold * neck);
+      // vincos: dobras em crista (|sin|) radiais convergindo para o nó + amassados
+      const crease = Math.abs(Math.sin(a * 6 + y * 2.5 + ph)) * 0.09 + Math.abs(Math.sin(a * 11 - y * 4 + ph * 2)) * 0.05;
+      const dent = Math.sin(x * 4 + ph) * Math.sin(z * 5 - ph) * 0.06;
+      let k = 1 - crease + dent;
+      // apoiado no chão: fundo achatado e "derramado" para os lados
+      if (y < -0.25) {
+        const t = (-0.25 - y) / 0.75;
+        y = -0.25 - t * 0.38;
+        k *= 1 + t * 0.18;
+      }
+      // pescoço afunilando até o nó
+      if (y > 0.55) k *= 1 - Math.pow((y - 0.55) / 0.45, 1.5) * 0.82;
+      P.setXYZ(i, x * k * (1 + 0.08 * Math.sin(ph)), y * (y > 0 ? 0.92 : 1), z * k);
     }
-    const j = jitterGeometry(g, 0.06, 300 + v * 7);
-    j.computeVertexNormals();
-    return j;
+    const body = jitterGeometry(g, 0.035, 300 + v * 7);
+    // nó com duas orelhas de plástico torcido
+    const knot = new THREE.ConeGeometry(0.1, 0.32, 7, 2);
+    knot.translate(0, 1.0, 0);
+    const ears = [];
+    for (const s of [-1, 1]) {
+      const e = new THREE.ConeGeometry(0.07, 0.3, 5, 1);
+      e.rotateZ(s * 1.1 + v * 0.2);
+      e.translate(s * 0.13, 1.12, 0.02 * s);
+      ears.push(e);
+    }
+    const m = mergeSimple([body, knot, ...ears]);
+    m.computeVertexNormals();
+    return m;
   });
 
 /**

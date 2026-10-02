@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { cached, mat4 } from './geo.js';
 import { cylBetween, decal, torus, contact } from './shapes.js';
-import { graffitiRect } from './decals.js';
+import { graffitiRect, bulletRect } from './decals.js';
 
 const UNIT = () => cached('unitbox', () => new THREE.BoxGeometry(1, 1, 1));
 
@@ -46,6 +46,12 @@ export function jersey(W, x, z, yaw, opts = {}) {
   if (axisAligned) {
     const c = new THREE.Vector3(side * 0.112, 0.36, rng.range(-1, 1)).applyMatrix4(M);
     decal(B, 'chips', [c.x, c.y, c.z], face, [0.6, 0.35], [0.5, 0.5, 1, 1], rng.range(0, 6));
+    // escorridos de ferrugem descendo das alças
+    for (const k of [-0.75, 0.75]) {
+      if (rng.chance(0.3)) continue;
+      const cs = new THREE.Vector3(side * 0.09, 0.55, k + rng.range(-0.05, 0.05)).applyMatrix4(M);
+      decal(B, 'streaks', [cs.x, cs.y, cs.z], face, [rng.range(0.25, 0.45), 0.55], [0, 0, 1, 1], 0, [0.75, 0.55, 0.4]);
+    }
   }
   decal(B, 'stains', [x, 0.02 + rng.range(0, 0.002), z], 'py', [1.6, 3.6], [0, 0.5, 0.5, 1], -yaw, [0.9, 0.85, 0.8]);
   contact(B, x, 0, z, 1.0, len + 0.35, yaw, 2);
@@ -103,7 +109,7 @@ export function twalls(W, x, z, yaw, count, opts = {}) {
       const n = new THREE.Vector3(side, 0, 0).applyMatrix4(M3);
       const face = Math.abs(n.x) > Math.abs(n.z) ? (n.x > 0 ? 'px' : 'nx') : (n.z > 0 ? 'pz' : 'nz');
       const c = new THREE.Vector3(side * 0.093, rng.range(1.2, 3.0), rng.range(-0.5, 0.5)).applyMatrix4(M);
-      if (rng.chance(0.5)) decal(B, 'bullets', [c.x, c.y, c.z], face, [rng.range(0.6, 1.2), rng.range(0.6, 1.2)], [0, 0, 1, 1], rng.range(0, 6));
+      if (rng.chance(0.5)) decal(B, 'bullets', [c.x, c.y, c.z], face, [rng.range(0.6, 1.2), rng.range(0.6, 1.2)], bulletRect(rng.int(0, 3)), rng.range(0, 6));
       if (rng.chance(0.4)) {
         const c2 = new THREE.Vector3(side * 0.096, rng.range(0.8, 2.8), rng.chance(0.5) ? 0.66 : -0.66).applyMatrix4(M);
         decal(B, 'chips', [c2.x, c2.y, c2.z], face, [0.5, 0.7], [0, 0.5, 0.5, 1], rng.range(0, 6));
