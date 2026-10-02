@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { bootGeometries, bootTextures, soleTexture } from './boot.js';
 
 /**
  * Corpo em primeira pessoa ("full body awareness"): quadril, pernas e botas
@@ -137,23 +138,6 @@ function fabricTextures() {
   return { map: dataTex(col, N, true), normalMap: dataTex(nrm, N, false) };
 }
 
-/** Couro camurça coyote com arranhões/poeira (bota) e borracha (solado). */
-function bootTexture() {
-  const N = 256;
-  const n = fbm(N, 4242, 16, 5, 0.6);
-  const big = fbm(N, 4343, 4, 4, 0.6);
-  const d = new Uint8Array(N * N * 4);
-  for (let i = 0; i < N * N; i++) {
-    const k = 0.82 + n[i] * 0.3;
-    const dust = clamp((big[i] - 0.55) * 2.5, 0, 1) * 0.35;
-    d[i * 4] = g22(0.19 * k * (1 - dust) + 0.27 * dust);
-    d[i * 4 + 1] = g22(0.135 * k * (1 - dust) + 0.24 * dust);
-    d[i * 4 + 2] = g22(0.08 * k * (1 - dust) + 0.2 * dust);
-    d[i * 4 + 3] = 255;
-  }
-  return dataTex(d, N, true);
-}
-
 // ─── geometria ──────────────────────────────────────────────────────────
 function hash(i) {
   const s = Math.sin(i * 127.1 + 311.7) * 43758.5453;
@@ -208,48 +192,6 @@ function tubeGeometry(L, prof, { rings = 18, seg = 20, folds = 0, seed = 1, uvLe
   g.setIndex(idx);
   g.computeVertexNormals();
   return g;
-}
-
-/**
- * Bota: perfil lateral (x = frente, y = cima, origem no tornozelo) extrudado
- * na largura com bisel generoso → bico arredondado. Retorna no espaço da
- * bota: -Z = frente, +Y = cima, X = lado.
- */
-function bootGeometries() {
-  const s = new THREE.Shape();
-  s.moveTo(-0.07, -0.072);
-  s.lineTo(0.14, -0.072);
-  s.bezierCurveTo(0.19, -0.072, 0.215, -0.062, 0.215, -0.04);
-  s.bezierCurveTo(0.215, -0.018, 0.19, -0.008, 0.15, -0.002);
-  s.bezierCurveTo(0.1, 0.008, 0.07, 0.03, 0.055, 0.075);
-  s.lineTo(0.045, 0.135);
-  s.lineTo(-0.055, 0.135);
-  s.bezierCurveTo(-0.062, 0.06, -0.06, 0.0, -0.075, -0.03);
-  s.bezierCurveTo(-0.085, -0.055, -0.082, -0.072, -0.07, -0.072);
-  const W = 0.072;
-  const upper = new THREE.ExtrudeGeometry(s, { depth: W, bevelEnabled: true, bevelThickness: 0.016, bevelSize: 0.014, bevelSegments: 4, curveSegments: 10 });
-  const sole = new THREE.Shape();
-  sole.moveTo(-0.08, -0.1);
-  sole.lineTo(0.16, -0.1);
-  sole.bezierCurveTo(0.21, -0.1, 0.232, -0.088, 0.232, -0.07);
-  sole.lineTo(0.2, -0.066);
-  sole.lineTo(-0.085, -0.066);
-  sole.lineTo(-0.09, -0.09);
-  sole.lineTo(-0.08, -0.1);
-  const soleG = new THREE.ExtrudeGeometry(sole, { depth: W + 0.012, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.006, bevelSegments: 2, curveSegments: 6 });
-  // (x frente, y cima, z largura) → (-Z frente, Y, X)
-  const m = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0));
-  upper.translate(0, 0, -W / 2);
-  soleG.translate(0, 0, -(W + 0.012) / 2);
-  upper.applyMatrix4(m);
-  soleG.applyMatrix4(m);
-  // UV planar lateral (o extrude gera UV em metros; amplia para o ruído)
-  for (const g of [upper, soleG]) {
-    const p = g.attributes.position, uv = g.attributes.uv;
-    for (let i = 0; i < p.count; i++) uv.setXY(i, p.getZ(i) * 4 + p.getX(i) * 2, p.getY(i) * 4);
-    uv.needsUpdate = true;
-  }
-  return { upper, sole: soleG };
 }
 
 // ─── IK e poses ─────────────────────────────────────────────────────────
@@ -330,11 +272,13 @@ export class Body {
     const fab = fabricTextures();
     const fabric = new THREE.MeshStandardMaterial({ map: fab.map, normalMap: fab.normalMap, normalScale: new THREE.Vector2(0.9, 0.9), roughness: 0.92, metalness: 0 });
     fabric.map.repeat.set(1, 1);
-    const boot = new THREE.MeshStandardMaterial({ map: bootTexture(), roughness: 0.88, metalness: 0 });
-    const rubber = new THREE.MeshStandardMaterial({ color: 0x1d1b19, roughness: 0.95 });
+    const bt = bootTextures();
+    const boot = new THREE.MeshStandardMaterial({ map: bt.map, normalMap: bt.normalMap, normalScale: new THREE.Vector2(0.8, 0.8), roughnessMap: bt.roughnessMap, roughness: 1, metalness: 0 });
+    const rubber = new THREE.MeshStandardMaterial({ map: soleTexture(), roughness: 0.93, metalness: 0 });
+    const lace = new THREE.MeshStandardMaterial({ color: 0x2a2419, roughness: 0.9, metalness: 0 });
     const pad = new THREE.MeshStandardMaterial({ color: 0x4a4636, roughness: 0.5, metalness: 0.0 });
     const webbing = new THREE.MeshStandardMaterial({ color: 0x3a3a2c, roughness: 0.85 });
-    this.mats = [fabric, boot, rubber, pad, webbing];
+    this.mats = [fabric, boot, rubber, pad, webbing, lace];
 
     const thighG = tubeGeometry(
       THIGH + 0.04,
@@ -342,8 +286,10 @@ export class Body {
       { folds: 0.045, seed: 3, uvLen: 1.4 },
     );
     thighG.translate(0, -0.02, 0);
+    // calça termina ~10 cm acima do tornozelo, "embolada" sobre o cano da
+    // bota (o cadarço do cano fica à mostra, como numa bota real)
     const shinG = tubeGeometry(
-      SHIN + 0.04,
+      SHIN - 0.08,
       (t) => {
         const calf = Math.exp(-Math.pow((t - 0.3) / 0.2, 2));
         // barra da calça "embolada" sobre o cano da bota (flare no fim)
@@ -359,6 +305,8 @@ export class Body {
     padG.scale(0.068, 0.085, 0.05);
     const strapG = new THREE.TorusGeometry(0.067, 0.008, 6, 20);
     strapG.rotateX(Math.PI / 2);
+    const kneeG = new THREE.SphereGeometry(1, 20, 14);
+    kneeG.scale(0.068, 0.07, 0.07);
     const pocketG = new RoundedBoxGeometry(0.035, 0.17, 0.14, 2, 0.012);
     // quadril: elipsoide (sem quinas) + cinto como anel elíptico
     const pelvisG = new THREE.SphereGeometry(1, 24, 14);
@@ -402,8 +350,11 @@ export class Body {
         pad: mk(padG, pad, 'pad' + side),
         strap: mk(strapG, webbing, 'strap' + side),
         pocket: mk(pocketG, fabric, 'pocket' + side),
+        // articulação do joelho: esconde as tampas dos tubos coxa/canela
+        kneeBall: mk(kneeG, fabric, 'knee' + side),
         boot: mk(boots.upper, boot, 'boot' + side),
         sole: mk(boots.sole, rubber, 'sole' + side),
+        laces: mk(boots.laces, lace, 'laces' + side),
         hip: new THREE.Vector3(),
         knee: new THREE.Vector3(),
         ankle: new THREE.Vector3(),
@@ -466,10 +417,12 @@ export class Body {
       // recostado para trás: pelve à frente da coluna da câmera, perna
       // esquerda estendida (o que se vê), direita dobrada por baixo
       const sv = clamp(speed / 8, 0.5, 1);
-      P.pelvis.set(0.0, 0.2, -0.04);
+      // joelho esquerdo levemente dobrado e erguido (~20 cm): coxa, joelheira
+      // e canela entram no quadro em perspectiva legível, não só a bota
+      P.pelvis.set(0.0, 0.2, -0.1);
       P.pelvisPitch = 0.75;
-      P.L.ankle.set(-0.2, 0.12 + 0.012 * Math.sin(slideT * 40), -0.92 - 0.03 * sv);
-      P.L.pole.set(-0.1, 1, -0.2);
+      P.L.ankle.set(-0.25, 0.11 + 0.01 * Math.sin(slideT * 40), -0.86 - 0.04 * sv);
+      P.L.pole.set(-0.25, 1, -0.05);
       P.L.toe = 0.95; // bico para cima, calcanhar raspando
       P.L.roll = -0.12;
       // perna direita em "4": joelho aberto para fora e para baixo, pé sob o joelho esquerdo
@@ -569,6 +522,7 @@ export class Body {
       segMatrix(leg.thigh.matrix, leg.hip, leg.knee, kneeDir);
       // canela: "frente" = direção do joelho (joelheira para fora da dobra)
       segMatrix(leg.shin.matrix, leg.knee, leg.ankle, kneeDir);
+      leg.kneeBall.matrix.copy(leg.shin.matrix).setPosition(leg.knee);
       // joelheira/tira na frente do joelho, alinhadas à canela
       leg.pad.matrix.copy(leg.shin.matrix).multiply(_m2.makeTranslation(0, 0.035, -0.058));
       leg.strap.matrix.copy(leg.shin.matrix).multiply(_m2.makeTranslation(0, 0.12, 0.004));
@@ -586,6 +540,7 @@ export class Body {
       _m.multiply(_m2).setPosition(leg.ankle);
       leg.boot.matrix.copy(_m);
       leg.sole.matrix.copy(_m);
+      leg.laces.matrix.copy(_m);
       // recalcula a pelve para a próxima perna
       _m.makeRotationX(C.pelvisPitch).setPosition(C.pelvis);
     }
@@ -608,6 +563,7 @@ export class Body {
     for (const m of this.mats) {
       m.map?.dispose();
       m.normalMap?.dispose();
+      m.roughnessMap?.dispose();
       m.dispose();
     }
   }

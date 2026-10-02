@@ -41,7 +41,7 @@ export class Minimap {
   /** Rasteriza a planta a partir dos colisores estáticos. */
   build(ctx) {
     const cols = [...ctx.collision.colliders.values()].filter((c) => !c.dynamic && c.box && !c.trigger && c.tag !== 'player');
-    this.builtCount = ctx.collision.colliders.size;
+    this.builtCount = cols.length;
     const b = ctx.services.world?.bounds;
     let minX = b ? b.min.x : Infinity, maxX = b ? b.max.x : -Infinity, minZ = b ? b.min.z : Infinity, maxZ = b ? b.max.z : -Infinity;
     if (!b) for (const c of cols) {
@@ -166,20 +166,125 @@ export class Minimap {
       g.fillRect(x + rw - 2, y, 2, rh);
     }
     this.plan = cv;
+    this.boxes = { tall, low, road, w, h };
+    try {
+      this.aerial(ctx, { minX, maxX, minZ, maxZ, ppm, w, h });
+    } catch (err) {
+      console.warn('[hud] foto aérea do minimapa indisponível', err);
+    }
+  }
+
+  /**
+   * "Foto aérea" do mapa: renderiza a cena real de cima (câmera ortográfica,
+   * sem neblina, sem inimigos) uma única vez, no próprio canvas do jogo,
+   * antes do frame normal ser desenhado por cima — e copia para a planta.
+   * Depois gradua (dessatura/escurece, como uma carta tática sobre imagem
+   * de satélite) e sobrepõe contornos finos dos prédios por legibilidade.
+   * Eixo longo do mapa (Z) vai na horizontal da tela para usar a resolução.
+   */
+  aerial(ctx, { minX, maxX, minZ, maxZ, ppm, w, h }) {
+    const THREE = ctx.THREE, r = ctx.renderer, scene = ctx.scene;
+    if (!THREE || !r || !scene) return;
+    const pr = r.getPixelRatio();
+    const cw = r.domElement.width, ch = r.domElement.height;
+    const Lx = maxX - minX, Lz = maxZ - minZ;
+    const k = Math.min(cw / Lz, ch / Lx);
+    const vw = Math.floor(Lz * k), vh = Math.floor(Lx * k);
+    if (vw < 64 || vh < 64) return;
+    const cam = new THREE.OrthographicCamera(-Lz / 2, Lz / 2, Lx / 2, -Lx / 2, 1, 400);
+    cam.up.set(1, 0, 0);
+    cam.position.set((minX + maxX) / 2, 180, (minZ + maxZ) / 2);
+    cam.lookAt((minX + maxX) / 2, 0, (minZ + maxZ) / 2);
+    cam.updateMatrixWorld();
+    // esconde o que não é "terreno": inimigos, corpos, câmera do jogador
+    const hidden = [];
+    const hide = (o) => { if (o && o.visible) { o.visible = false; hidden.push(o); } };
+    for (const e of ctx.services.enemies?.list || []) { hide(e.group); hide(e.ragdoll?.group); }
+    scene.traverse((o) => { if (o.isSkinnedMesh || o.isPoints || o.isSprite) hide(o); });
+    hide(ctx.camera);
+    const fog = scene.fog;
+    scene.fog = null;
+    const vp = new THREE.Vector4(), sc = new THREE.Vector4();
+    r.getViewport(vp); r.getScissor(sc);
+    const scT = r.getScissorTest();
+    const prevRT = r.getRenderTarget();
+    try {
+      r.setRenderTarget(null);
+      r.setViewport(0, 0, vw / pr, vh / pr);
+      r.setScissor(0, 0, vw / pr, vh / pr);
+      r.setScissorTest(true);
+      r.render(scene, cam);
+      // copia já com tone mapping/sRGB; WebGL lê de baixo para cima
+      const snap = document.createElement('canvas');
+      snap.width = vw; snap.height = vh;
+      snap.getContext('2d').drawImage(r.domElement, 0, ch - vh, vw, vh, 0, 0, vw, vh);
+      // checagem: imagem vazia (contexto perdido etc.) → mantém a planta
+      const px = snap.getContext('2d').getImageData(0, 0, vw, vh).data;
+      let sum = 0;
+      for (let i = 0; i < px.length; i += 4 * 97) sum += px[i] + px[i + 1] + px[i + 2];
+      if (sum / (px.length / (4 * 97)) < 6) return;
+      this.compose(snap, { Lx, Lz, minX, minZ, ppm, w, h });
+    } finally {
+      r.setViewport(vp); r.setScissor(sc); r.setScissorTest(scT);
+      r.setRenderTarget(prevRT);
+      scene.fog = fog;
+      for (const o of hidden) o.visible = true;
+    }
+  }
+
+  compose(snap, { Lx, Lz, minX, minZ, ppm, w, h }) {
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#121518';
+    g.fillRect(0, 0, w, h);
+    // transposição: snap x = Z, snap y = (maxX − x)
+    const Wx = Lx * ppm;
+    g.save();
+    g.setTransform(0, ppm * Lz / snap.width, -ppm * Lx / snap.height, 0, Wx, 0);
+    g.filter = 'grayscale(.55) sepia(.12) brightness(.82) contrast(1.12)';
+    g.drawImage(snap, 0, 0);
+    g.restore();
+    g.filter = 'none';
+    // véu escuro uniforme: dá contraste para seta/pings sem esconder a foto
+    g.fillStyle = 'rgba(10,13,15,.22)';
+    g.fillRect(0, 0, w, h);
+    // contornos finos dos prédios (legibilidade de "carta")
+    const rect = (bx) => [(bx.min.x - minX) * ppm, (bx.min.z - minZ) * ppm, (bx.max.x - bx.min.x) * ppm, (bx.max.z - bx.min.z) * ppm];
+    g.strokeStyle = 'rgba(236,235,228,.42)';
+    g.lineWidth = Math.max(1, ppm * 0.16);
+    for (const bx of this.boxes.tall) {
+      const [x, y, rw, rh] = rect(bx);
+      if (rw < 4 || rh < 4) continue;
+      g.strokeRect(x, y, rw, rh);
+    }
+    this.plan = cv;
+    this.aerialOk = true;
   }
 
   draw(ctx, { yaw, pos, pings = [] }) {
-    if (!this.plan || (ctx.collision.colliders.size !== this.builtCount && ctx.time.frame % 60 === 0)) this.build(ctx);
+    // reconstrói só se o conjunto ESTÁTICO mudar (checado a cada ~2 s)
+    if (!this.plan) this.build(ctx);
+    else if (ctx.time.frame % 120 === 0) {
+      let n = 0;
+      for (const c of ctx.collision.colliders.values()) if (!c.dynamic && c.box && !c.trigger && c.tag !== 'player') n++;
+      if (n !== this.builtCount) this.build(ctx);
+    }
     const g = this.g, k = this.k;
     g.setTransform(k, 0, 0, k, 0, 0);
     g.clearRect(0, 0, S, S);
     const cx = S / 2, cy = S / 2;
     const rot = this.rotate ? yaw : 0;
-    // fundo + recorte circular
+    // quadro quadrado (cantos levemente chanfrados) — leitura de carta
+    const P = 10, E = S - P * 2, C = 10; // margem, lado útil, chanfro
+    const frame = () => {
+      g.beginPath();
+      g.moveTo(P + C, P); g.lineTo(P + E, P); g.lineTo(P + E, P + E - C); g.lineTo(P + E - C, P + E);
+      g.lineTo(P, P + E); g.lineTo(P, P + C); g.closePath();
+    };
     g.save();
-    g.beginPath();
-    g.arc(cx, cy, R, 0, Math.PI * 2);
-    g.fillStyle = 'rgba(10,13,15,.9)';
+    frame();
+    g.fillStyle = 'rgba(14,17,19,.86)';
     g.fill();
     g.clip();
     if (this.plan) {
@@ -191,113 +296,83 @@ export class Minimap {
       g.scale(sc, sc);
       g.translate(-(pos.x - o.x) * o.ppm, -(pos.z - o.z) * o.ppm);
       g.imageSmoothingEnabled = true;
-      g.globalAlpha = 0.96;
+      g.imageSmoothingQuality = 'high';
       g.drawImage(this.plan, 0, 0);
-      g.globalAlpha = 1;
       g.restore();
     }
-    // anéis de distância (10 m / 20 m / 30 m)
-    g.strokeStyle = 'rgba(242,244,239,.07)';
-    g.lineWidth = 1;
-    for (const m of [10, 20, 30]) { g.beginPath(); g.arc(cx, cy, m * VIEW, 0, Math.PI * 2); g.stroke(); }
-    // cone de visão
-    const fov = 0.62;
+    // cone de visão: leque branco muito sutil
+    const fov = 0.55;
     const dir = this.rotate ? -Math.PI / 2 : -Math.PI / 2 - yaw;
-    const cg = g.createRadialGradient(cx, cy, 0, cx, cy, R);
-    cg.addColorStop(0, 'rgba(255,214,140,.30)');
-    cg.addColorStop(0.7, 'rgba(255,214,140,.08)');
-    cg.addColorStop(1, 'rgba(255,214,140,0)');
+    const cg = g.createRadialGradient(cx, cy, 0, cx, cy, E * 0.55);
+    cg.addColorStop(0, 'rgba(236,235,228,.24)');
+    cg.addColorStop(1, 'rgba(236,235,228,0)');
     g.fillStyle = cg;
     g.beginPath();
     g.moveTo(cx, cy);
-    g.arc(cx, cy, R, dir - fov, dir + fov);
+    g.arc(cx, cy, E * 0.55, dir - fov, dir + fov);
     g.closePath();
     g.fill();
-    // pings de inimigos (posições de disparo) — presos na borda se longe
+    // pings de inimigos: pontos vermelhos, presos na borda se longe
     for (const p of pings) {
       let dx = (p.x - pos.x) * VIEW, dz = (p.z - pos.z) * VIEW;
       if (this.rotate) {
         const cs = Math.cos(rot), sn = Math.sin(rot);
         [dx, dz] = [dx * cs - dz * sn, dx * sn + dz * cs];
       }
-      const d = Math.hypot(dx, dz);
-      const lim = R - 9;
-      if (d > lim) { dx *= lim / d; dz *= lim / d; }
+      const lim = E / 2 - 8;
+      const m = Math.max(Math.abs(dx), Math.abs(dz));
+      if (m > lim) { dx *= lim / m; dz *= lim / m; }
       const x = cx + dx, y = cy + dz;
       g.globalAlpha = Math.min(1, p.a * 1.5);
-      g.fillStyle = 'rgba(255,61,51,.28)';
-      g.beginPath(); g.arc(x, y, 10, 0, Math.PI * 2); g.fill();
-      g.fillStyle = '#ff3d33';
-      g.strokeStyle = 'rgba(0,0,0,.75)';
-      g.lineWidth = 1.2;
-      g.beginPath(); g.moveTo(x, y - 6); g.lineTo(x + 5.5, y); g.lineTo(x, y + 6); g.lineTo(x - 5.5, y); g.closePath();
-      g.fill(); g.stroke();
+      g.fillStyle = 'rgba(217,72,61,.25)';
+      g.beginPath(); g.arc(x, y, 8, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#e04b3f';
+      g.strokeStyle = 'rgba(0,0,0,.7)';
+      g.lineWidth = 1;
+      g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill(); g.stroke();
     }
     g.globalAlpha = 1;
-    // vinheta interna (profundidade)
-    const vg = g.createRadialGradient(cx, cy, R * 0.55, cx, cy, R);
+    // escurece levemente as bordas (profundidade)
+    const vg = g.createRadialGradient(cx, cy, E * 0.35, cx, cy, E * 0.75);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(0,0,0,.5)');
+    vg.addColorStop(1, 'rgba(0,0,0,.38)');
     g.fillStyle = vg;
     g.fillRect(0, 0, S, S);
     g.restore();
 
-    // ── moldura com bisel de rumo ──
-    // anel escuro
-    g.beginPath();
-    g.arc(cx, cy, R + 8, 0, Math.PI * 2);
-    g.arc(cx, cy, R, 0, Math.PI * 2, true);
-    g.fillStyle = 'rgba(8,10,12,.82)';
-    g.fill();
-    g.strokeStyle = 'rgba(242,244,239,.5)';
-    g.lineWidth = 1.5;
-    g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
-    g.strokeStyle = 'rgba(242,244,239,.16)';
+    // ── moldura: linha fina + cantoneiras ──
+    frame();
+    g.strokeStyle = 'rgba(236,235,228,.28)';
     g.lineWidth = 1;
-    g.beginPath(); g.arc(cx, cy, R + 8, 0, Math.PI * 2); g.stroke();
-    // marcas a cada 10° no bisel (giram com o mapa)
-    const nRot = (this.rotate ? rot : 0) - Math.PI / 2; // ângulo de tela do norte
-    g.strokeStyle = 'rgba(242,244,239,.55)';
-    g.beginPath();
-    for (let i = 0; i < 36; i++) {
-      if (i % 9 === 0) continue;
-      const a = nRot + (i / 36) * Math.PI * 2;
-      const r0 = R + 2, r1 = R + (i % 3 === 0 ? 7 : 4.5);
-      g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
-      g.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
-    }
-    g.lineWidth = 1.2;
     g.stroke();
-    // marcador de rumo fixo no topo (antes dos cardeais: o selo N o cobre)
-    if (this.rotate) {
-      g.fillStyle = '#f2f4ef';
-      g.beginPath();
-      g.moveTo(cx, cy - R + 1); g.lineTo(cx - 5, cy - R - 6); g.lineTo(cx + 5, cy - R - 6); g.closePath();
-      g.fill();
-    }
-    // cardeais no bisel
-    const card = [['N', 0], ['E', 1], ['S', 2], ['W', 3]];
-    for (const [l, q] of card) {
-      const a = nRot + (q * Math.PI) / 2;
-      const x = cx + Math.cos(a) * (R + 4), y = cy + Math.sin(a) * (R + 4);
-      const isN = l === 'N';
-      g.fillStyle = isN ? '#ffb22e' : 'rgba(14,17,20,.95)';
-      g.strokeStyle = isN ? 'rgba(0,0,0,.6)' : 'rgba(242,244,239,.6)';
-      g.lineWidth = 1.2;
-      g.beginPath(); g.arc(x, y, isN ? 11 : 9, 0, Math.PI * 2); g.fill(); g.stroke();
-      drawText(g, l, x, y - (isN ? 5.5 : 4.5), { size: isN ? 11 : 9, weight: isN ? 2 : 1.6, align: 'center', color: isN ? '#121110' : '#f2f4ef' });
-    }
-    // jogador
+    g.strokeStyle = 'rgba(236,235,228,.8)';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(P + E - 18, P); g.lineTo(P + E, P); g.lineTo(P + E, P + 18);
+    g.moveTo(P + 18, P + E); g.lineTo(P, P + E); g.lineTo(P, P + E - 18);
+    g.stroke();
+    // norte: letra pequena na borda, na direção do norte do mapa
+    const nA = (this.rotate ? rot : 0) - Math.PI / 2;
+    const ux = Math.cos(nA), uy = Math.sin(nA);
+    const t = (E / 2) / Math.max(Math.abs(ux), Math.abs(uy));
+    const nx = cx + ux * t, ny = cy + uy * t;
+    g.fillStyle = 'rgba(10,12,14,.9)';
+    g.fillRect(nx - 8, ny - 8, 16, 16);
+    g.strokeStyle = 'rgba(226,180,90,.9)';
+    g.lineWidth = 1;
+    g.strokeRect(nx - 7.5, ny - 7.5, 15, 15);
+    drawText(g, 'N', nx, ny - 4.5, { size: 9, weight: 1.6, align: 'center', color: '#e2b45a' });
+    // jogador: seta branca com contorno escuro
     g.save();
     g.translate(cx, cy);
     if (!this.rotate) g.rotate(-yaw);
-    g.shadowColor = 'rgba(255,178,46,.7)';
-    g.shadowBlur = 8;
-    g.fillStyle = '#ffc13a';
-    g.strokeStyle = 'rgba(0,0,0,.8)';
-    g.lineWidth = 1.5;
+    g.shadowColor = 'rgba(0,0,0,.6)';
+    g.shadowBlur = 4;
+    g.fillStyle = '#f2f1ea';
+    g.strokeStyle = 'rgba(0,0,0,.85)';
+    g.lineWidth = 1.4;
     g.beginPath();
-    g.moveTo(0, -11); g.lineTo(8, 8); g.lineTo(0, 3.5); g.lineTo(-8, 8);
+    g.moveTo(0, -9); g.lineTo(6.5, 7); g.lineTo(0, 3); g.lineTo(-6.5, 7);
     g.closePath();
     g.fill();
     g.shadowBlur = 0;

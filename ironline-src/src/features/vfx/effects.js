@@ -317,9 +317,9 @@ export class Effects {
     // estouro de entrada: curto, denso, volta para o atirador
     for (let i = 0, k = this.n(4) + 3; i < k; i++) {
       const v = this.cone(back, 0.7).multiplyScalar(this.R(1.5, 3.5) * sc);
-      ps.emit(point.clone().addScaledVector(back, 0.03), v, {
+      ps.emit(point.clone().addScaledVector(back, 0.06), v, {
         life: this.R(0.22, 0.4), drag: 8, gravity: 0.05, size: 0.1 * sc, size1: this.R(0.35, 0.55) * sc, rot: this.R(0, 6.3), spin: this.R(-2, 2),
-        color: red, alpha: 0.85, tile: PT.BLOOD, sunlit: lit, fadeIn: 0.015, erode: 0.6, soft: 0.1, seed: this.rng.next(),
+        color: red, alpha: 0.85, tile: PT.BLOOD, sunlit: lit, fadeIn: 0.015, erode: 0.6, soft: 0.03, seed: this.rng.next(),
       });
     }
     // cone de saída (atravessa o corpo): o elemento mais visível — névoa que
@@ -388,18 +388,18 @@ export class Effects {
     // eixo do cano = −Z local da boca
     const fwd = new THREE.Vector3(0, 0, -1).transformDirection(muzzle.matrixWorld);
     const k = this.R(0.7, 1.15); // variação tiro a tiro (carga, gás residual)
-    const s = (1 - 0.35 * ads) * k;
+    const s = (1 - 0.35 * ads) * k * 1.35;
     const white = C(1, 0.86, 0.66);
     const hot = C(1, 0.66, 0.34);
     const cool = C(1, 0.4, 0.14);
     const life = this.R(0.04, 0.055);
     // cone quente do gás, ao longo do eixo
     vps.emit(p.clone(), fwd, {
-      life, size: this.R(0.02, 0.026) * s, mode: 3, stretch: this.R(2.2, 3.2), tile: PT.CONE, additive: true, emissive: 6 * k, color: white,
+      life, size: this.R(0.026, 0.034) * s, mode: 3, stretch: this.R(2.2, 3.2), tile: PT.CONE, additive: true, emissive: 6 * k, color: white,
     });
     // clarão frontal irregular, girado a cada tiro
     vps.emit(p.clone().addScaledVector(fwd, 0.018 * s), null, {
-      life, size: this.R(0.045, 0.065) * s, tile: PT.BURST, additive: true, emissive: 3.2 * k, color: hot, rot: this.R(0, 6.3),
+      life, size: this.R(0.065, 0.09) * s, tile: PT.BURST, additive: true, emissive: 4.2 * k, color: hot, rot: this.R(0, 6.3),
     });
     // pétalas do quebra-chamas: 2–4 janelas, comprimentos e brilhos diferentes
     const petals = 2 + ((this.rng.next() * 3) | 0);

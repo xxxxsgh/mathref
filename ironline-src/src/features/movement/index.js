@@ -68,7 +68,7 @@ const tap = (t, a) => [[t, a, true], [t + 0.06, a, false]];
 const SCRIPTS = {
   sprint: { ev: [[0, 'forward', true], ...tap(0.05, 'sprint')], capture: 1.5 },
   tactical: { ev: [[0, 'forward', true], ...tap(0.05, 'sprint'), ...tap(0.3, 'sprint')], capture: 1.35 },
-  slide: { ev: [[0, 'forward', true], ...tap(0.05, 'sprint'), ...tap(0.3, 'sprint'), ...tap(1.05, 'crouch')], capture: 1.32, pitch: -0.16 },
+  slide: { ev: [[0, 'forward', true], ...tap(0.05, 'sprint'), ...tap(0.3, 'sprint'), ...tap(1.05, 'crouch')], capture: 1.32, pitch: -0.2 },
   crouch: { ev: tap(0.05, 'crouch'), capture: 0.7 },
   prone: { ev: [[0.05, 'crouch', true], [0.9, 'crouch', false]], capture: 1.4 },
   leanL: { ev: [[0.05, 'leanLeft', true]], capture: 0.7 },

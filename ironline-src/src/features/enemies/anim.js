@@ -156,7 +156,8 @@ export class Animator {
     const still = 1 - gait;
     const athletic = aim * still * (1 - crouch);
     const shift = still * (1 - aim) * Math.sin(this.t * 0.37 + this.seed * 5) * 0.034 - athletic * 0.03;
-    const hipsY = 0.952 - crouch * 0.36 - bob - run * 0.04 - Math.abs(lh) * 0.05 - athletic * 0.05 - Math.abs(shift) * 0.25;
+    const kneelH = clamp((crouch - 0.72) / 0.28, 0, 1) * (1 - gait);
+    const hipsY = 0.952 - crouch * 0.36 - kneelH * 0.06 - bob - run * 0.04 - Math.abs(lh) * 0.05 - athletic * 0.05 - Math.abs(shift) * 0.25;
     this._shift = shift;
     Pm[B.hips].set(p.lean * 0.04 + Math.sin(ph * TAU) * 0.018 * gait + shift, hipsY, crouch * -0.04 + run * 0.02 - athletic * 0.02);
     const hipYaw = Math.sin(ph * TAU) * 0.12 * gait + p.aimYaw * 0.25 - blade * 1.35;
@@ -328,11 +329,17 @@ export class Animator {
         fz = lerp(fz, 0, gait) + mz * off * gait;
         fy += lift * gait;
       }
-      // agachado: calcanhar de trás levanta
+      // agachado: calcanhar de trás levanta; bem agachado e parado, o
+      // joelho de trás desce ao chão (ajoelhado de cobertura), peito do pé
+      // apoiado nos dedos
+      const kneel = clamp((crouch - 0.72) / 0.28, 0, 1) * (1 - gait);
       if (side === 'R' && crouch > 0) {
-        fy += 0.05 * crouch;
-        pitch -= 0.6 * crouch;
+        fy += 0.05 * crouch * (1 - kneel);
+        pitch -= 0.6 * crouch + 0.55 * kneel;
+        fz -= 0.2 * kneel;
+        fx -= 0.03 * kneel;
       }
+      if (side === 'L') fz += 0.1 * kneel;
       const target = _v.set(fx, fy, fz);
       const H = Pm[th];
       const pole = _v2.copy(fwd);

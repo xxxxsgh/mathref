@@ -325,20 +325,24 @@ export default {
     }
     if (preset?.combat) {
       const cs = this.profile.callsign;
-      this.play.feed({ killer: 'self', victim: 'HALVARD', head: false, weapon: 'frag' }, cs);
-      this.play.feed({ killer: 'self', victim: 'NOMAD', head: false, weapon: 'rifle' }, cs);
+      this.play.feed({ killer: 'self', victim: 'NOMAD', head: false, weapon: 'frag' }, cs);
       this.play.feed({ killer: 'RAZOR', victim: 'self', head: false, weapon: 'hostile' }, cs);
       this.play.feed({ killer: 'self', victim: 'KESTREL', head: true, weapon: 'rifle' }, cs);
-      for (const r of this.play.el.feed.children) r.style.animation = 'none';
-      this.play.xp([['ENEMY KILLED', 100], ['HEADSHOT', 50]], 150);
-      this.play.xpT = 0.5;
+      // idades diferentes: as linhas antigas já esmaeceram um pouco
+      const ages = [0.7, 3.9, 5.3];
+      [...this.play.el.feed.children].forEach((r, i) => { r.style.animation = 'none'; r._t = ages[i] ?? 5; });
+      this.play.xp([['KILL', 100], ['HEADSHOT', 50]], 150);
       this.play.hitmarker({ head: true, kill: true });
       this.play.medal('head', 'HEADSHOT', 150);
-      this.play.medalT = 0.9;
       const mm = this.play.el.medal.firstChild;
       if (mm) mm.style.animation = 'none';
-      // o shot.mjs captura ~23 frames depois do init: o marcador cai no meio da vida
-      this.play.hitT = -0.26;
+      for (const el of this.play.el.xp.querySelectorAll('.tot,.row')) el.style.animation = 'none';
+      // estado congelado (independe de quantos frames o shot.mjs renderiza):
+      // abate recém-confirmado, toast e medalha no meio da vida
+      this.play.hitPin = true;
+      this.play.hitT = 0.05;
+      this.play.xpT = 0.5;
+      this.play.medalT = 0.9;
     }
   },
 

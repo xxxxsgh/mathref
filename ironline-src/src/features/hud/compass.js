@@ -69,7 +69,7 @@ export class Compass {
       g.fillRect(Math.round(x) - 1, 34 - th, 2, th);
       g.globalAlpha = a;
       if (card) {
-        drawText(g, card, x, 7, { size: card.length === 1 ? 15 : 12, weight: card.length === 1 ? 1.75 : 1.5, align: 'center', color: deg === 0 ? '#ffb22e' : '#f2f4ef' });
+        drawText(g, card, x, 7, { size: card.length === 1 ? 15 : 12, weight: card.length === 1 ? 1.75 : 1.5, align: 'center', color: deg === 0 ? '#e2b45a' : '#f2f4ef' });
       } else if (major) {
         g.globalAlpha = a * 0.6;
         drawText(g, String(deg), x, 10, { size: 11, weight: 1.4, tracking: 1.4, align: 'center', color: '#f2f4ef' });
@@ -91,29 +91,32 @@ export class Compass {
       if (Math.abs(off) > SPAN) continue;
       const x = cx + off * ppd;
       g.globalAlpha = Math.min(1, p.a * 1.4) * fade(x);
-      g.fillStyle = '#ff3d33';
+      g.fillStyle = '#d9483d';
+      g.fillRect(Math.round(x) - 1.5, 20, 3, 14);
       g.beginPath();
-      g.moveTo(x, 26);
-      g.lineTo(x + 5.5, 33);
-      g.lineTo(x, 40);
-      g.lineTo(x - 5.5, 33);
-      g.closePath();
+      g.moveTo(x - 4.5, 20); g.lineTo(x + 4.5, 20); g.lineTo(x, 15); g.closePath();
       g.fill();
     }
     g.globalAlpha = 1;
-    // marcador central + rumo
-    g.fillStyle = '#ffb22e';
+    // marcador central + rumo: número limpo sob o ponteiro, sem caixa —
+    // colchetes finos dão o "visor" de leitura
+    g.fillStyle = '#ecebe4';
     g.beginPath();
-    g.moveTo(cx - 6, 39);
-    g.lineTo(cx + 6, 39);
-    g.lineTo(cx, 45);
+    g.moveTo(cx - 5, 38);
+    g.lineTo(cx + 5, 38);
+    g.lineTo(cx, 43);
     g.closePath();
     g.fill();
     const hd = String(Math.round(heading) % 360).padStart(3, '0');
-    g.fillStyle = 'rgba(8,10,12,.78)';
-    g.fillRect(cx - 24, 47, 48, 21);
-    g.fillStyle = 'rgba(255,178,46,.9)';
-    g.fillRect(cx - 24, 47, 48, 1.5);
-    drawText(g, hd, cx, 52, { size: 12, weight: 1.4, tracking: 1.4, align: 'center', color: '#f2f4ef', heavy: true });
+    g.fillStyle = 'rgba(236,235,228,.55)';
+    for (const sx of [-1, 1]) {
+      g.fillRect(cx + sx * 24 - (sx > 0 ? 1 : 0), 49, 1, 13);
+      g.fillRect(cx + sx * 24 - (sx > 0 ? 5 : 0), 49, 5, 1);
+      g.fillRect(cx + sx * 24 - (sx > 0 ? 5 : 0), 61, 5, 1);
+    }
+    g.shadowColor = 'rgba(0,0,0,.85)';
+    g.shadowBlur = 3;
+    drawText(g, hd, cx, 50, { size: 12, weight: 1.45, tracking: 1.6, align: 'center', color: '#f1f0ea', heavy: true });
+    g.shadowBlur = 0;
   }
 }

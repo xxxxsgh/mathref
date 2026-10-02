@@ -40,10 +40,11 @@ function makeVignette() {
       const i = (y * w + x) * 4;
       // vermelho sangue na transição → quase preto na borda extrema
       const deep = ss(0.9, 1.25, e);
-      img.data[i] = 128 - deep * 92 + (rnd() - 0.5) * 6;
-      img.data[i + 1] = 6 - deep * 5;
-      img.data[i + 2] = 8 - deep * 6;
-      img.data[i + 3] = 255 * a * 0.94 + (rnd() - 0.5) * 3 * a;
+      // vermelho escuro e pouco saturado (sangue/perda de visão), sem chegar ao preto
+      img.data[i] = 112 - deep * 58 + (rnd() - 0.5) * 6;
+      img.data[i + 1] = 14 - deep * 8;
+      img.data[i + 2] = 12 - deep * 7;
+      img.data[i + 3] = 255 * a * 0.78 + (rnd() - 0.5) * 3 * a;
     }
   }
   g.putImageData(img, 0, 0);
@@ -210,15 +211,15 @@ export class PlayHud {
     const id = 'dg' + (this._dgi = (this._dgi || 0) + 1);
     const tip = [P(R + 9, 0), P(R + 18, 0), P(R + 9, -0.035), P(R + 9, 0.035)];
     el.innerHTML = `<defs>
-        <linearGradient id="${id}a" x1="-66" y1="0" x2="66" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ff2b1c" stop-opacity="0"/><stop offset=".5" stop-color="#ff5038"/><stop offset="1" stop-color="#ff2b1c" stop-opacity="0"/></linearGradient>
-        <radialGradient id="${id}t" cx="0" cy="0" r="${R}" gradientUnits="userSpaceOnUse"><stop offset=".72" stop-color="#ff2a1a" stop-opacity="0"/><stop offset="1" stop-color="#ff2a1a" stop-opacity=".2"/></radialGradient>
+        <linearGradient id="${id}a" x1="-66" y1="0" x2="66" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#c8392c" stop-opacity="0"/><stop offset=".5" stop-color="#d9493a"/><stop offset="1" stop-color="#c8392c" stop-opacity="0"/></linearGradient>
+        <radialGradient id="${id}t" cx="0" cy="0" r="${R}" gradientUnits="userSpaceOnUse"><stop offset=".72" stop-color="#b8301f" stop-opacity="0"/><stop offset="1" stop-color="#b8301f" stop-opacity=".14"/></radialGradient>
         <filter id="${id}f" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
       </defs>
       <path class="tail" d="${wedge(R - 12, 18, A * 0.5)}" fill="url(#${id}t)"/>
-      <path class="glow" d="${wedge(R, 14, A * 1.05)}" fill="#ff2a1a" opacity=".55" filter="url(#${id}f)"/>
+      <path class="glow" d="${wedge(R, 14, A * 1.05)}" fill="#b8301f" opacity=".35" filter="url(#${id}f)"/>
       <path d="${wedge(R, 6.5, A)}" fill="url(#${id}a)"/>
-      <path d="${wedge(R + 0.5, 2.2, A * 0.55)}" fill="#ffd2c4" opacity=".85"/>
-      <path d="M${tip[2].join(',')} L${tip[1].join(',')} L${tip[3].join(',')} Z" fill="#ff6a50"/>`;
+      <path d="${wedge(R + 0.5, 2.2, A * 0.55)}" fill="#f0c6b8" opacity=".55"/>
+      <path d="M${tip[2].join(',')} L${tip[1].join(',')} L${tip[3].join(',')} Z" fill="#d9493a"/>`;
     this.el.dmg.appendChild(el);
     // brilho na borda da tela na direção do atacante ("pressão" de borda)
     const eg = document.createElement('div');
@@ -239,27 +240,27 @@ export class PlayHud {
     row.className = 'k' + mine;
     const wk = weapon || (killer === 'self' ? 'rifle' : 'hostile');
     row.innerHTML = `<span class="nm ${kc}">${T(kn, { size: 13, weight: 1.45, tracking: 1.9 })}</span>
-      <span class="kw">${weaponIcon(wk, 17, (h) => this.gunImg(h))}</span>${head ? `<span class="hs">${headshotSVG('', 18)}</span>` : ''}
+      <span class="kw">${weaponIcon(wk, 20, (h) => this.gunImg(h))}</span>${head ? `<span class="hs">${headshotSVG('', 17)}</span>` : ''}
       <span class="nm ${vc}">${T(vn, { size: 13, weight: 1.45, tracking: 1.9 })}</span>`;
     this.el.feed.prepend(row);
     row._t = 0;
     while (this.el.feed.children.length > 5) this.el.feed.lastElementChild.remove();
   }
   xp(lines, total) {
-    // substitui a pilha anterior (como os jogos do gênero fazem)
+    // um único toast: total + uma linha discreta com a composição
     const X = this.el.xp;
     X.innerHTML = '';
     const head = document.createElement('div');
     head.className = 'tot';
-    head.innerHTML = `${T('+' + total, { size: 30, weight: 1.6, tracking: 1.4, heavy: true })}`;
+    head.innerHTML = T('+' + total, { size: 22, weight: 1.55, tracking: 1.2, heavy: true });
     X.appendChild(head);
-    lines.forEach(([label, v], i) => {
+    if (lines.length) {
       const r = document.createElement('div');
-      r.className = 'row' + (/HEADSHOT|KILL STREAK|DOUBLE|TRIPLE|LONGSHOT|PAYBACK/.test(label) ? ' bonus' : '');
-      r.style.animationDelay = 0.07 * (i + 1) + 's';
-      r.innerHTML = `<span class="lab">${T(label, { size: 12, weight: 1.45, tracking: 2.2 })}</span><span class="pts">${T('+' + v, { size: 12, weight: 1.45, heavy: true })}</span>`;
+      r.className = 'row';
+      r.style.animationDelay = '.06s';
+      r.innerHTML = lines.map(([label, v]) => T(`${label} ${v}`, { size: 11, weight: 1.35, tracking: 1.9 })).join('<span class="dot"></span>');
       X.appendChild(r);
-    });
+    }
     X.classList.remove('on', 'out');
     void X.offsetWidth;
     X.classList.add('on');
@@ -268,7 +269,8 @@ export class PlayHud {
   medal(kind, title, pts) {
     const m = document.createElement('div');
     m.className = 'm';
-    m.innerHTML = `<div class="ic">${medalSVG(kind, 84)}</div><div class="mt">${T(title, { size: 19, weight: 1.6, tracking: 2.6 })}</div><div class="mp">${T('+' + pts, { size: 13, weight: 1.4, heavy: true })}</div>`;
+    // sem pontos aqui: a pontuação aparece só no toast sob a mira
+    m.innerHTML = `<div class="ic">${medalSVG(kind, 54)}</div><div class="mt">${T(title, { size: 13, weight: 1.45, tracking: 2.6 })}</div>`;
     this.el.medal.innerHTML = '';
     this.el.medal.appendChild(m);
     this.medalT = 0;
@@ -318,26 +320,20 @@ export class PlayHud {
       });
     }
 
-    // hitmarker: punch de escala, normal branco / headshot âmbar / abate
-    // vermelho com anel secundário e "estilhaços" externos
-    this.hitT += rdt;
+    // hitmarker: quatro riscos finos (2 px). Acerto = branco, ~150 ms;
+    // headshot = riscos um pouco mais longos; abate = vermelho, ~300 ms.
+    // Leve "punch" de afastamento no primeiro instante, sem anel nem brilho.
+    if (!this.hitPin) this.hitT += rdt;
     const kill = this.hitKind.includes('kill');
-    const life = kill ? 0.55 : 0.26;
+    const life = kill ? 0.3 : 0.16;
     const hT = Math.max(0, this.hitT);
     const ht = hT / life;
     if (ht < 1) {
-      const pop = kill ? 1 + 0.6 * Math.exp(-hT * 16) : 1 + 0.45 * Math.exp(-hT * 26);
-      const gap = (kill ? 10 : 7.5) * pop + (this.hitKind.includes('head') ? 1.5 : 0);
+      const pop = 1 + 0.35 * Math.exp(-hT * 30);
+      const gap = (kill ? 7 : 6) * pop + (this.hitKind.includes('head') ? 1 : 0);
       const angs = [45, 135, 225, 315];
-      E.hitI.forEach((i, n) => (i.style.transform = `rotate(${angs[n]}deg) translateY(${gap.toFixed(2)}px) scaleY(${(0.85 + 0.15 * pop).toFixed(3)})`));
-      E.hit.style.opacity = ht < 0.55 ? 1 : (1 - (ht - 0.55) / 0.45).toFixed(3);
-      if (kill) {
-        const og = 24 + hT * 46;
-        E.hitO.forEach((i, n) => (i.style.transform = `rotate(${angs[n]}deg) translateY(${og.toFixed(1)}px)`));
-        const rk = hT / 0.42;
-        E.ring.style.opacity = rk < 1 ? ((1 - rk) * 0.95).toFixed(3) : 0;
-        E.ring.style.transform = `scale(${(0.35 + rk * 0.95).toFixed(3)})`;
-      } else E.ring.style.opacity = 0;
+      E.hitI.forEach((i, n) => (i.style.transform = `rotate(${angs[n]}deg) translateY(${gap.toFixed(2)}px)`));
+      E.hit.style.opacity = ht < 0.5 ? 1 : (1 - (ht - 0.5) / 0.5).toFixed(3);
     } else this.set('hitOff', this.hitT > 0, () => (E.hit.style.opacity = 0));
 
     // indicadores de dano (acompanham a direção da fonte) + pressão de borda
@@ -400,17 +396,20 @@ export class PlayHud {
     // feed: envelhecimento
     for (const row of [...E.feed.children]) {
       row._t = (row._t || 0) + rdt;
+      // envelhece: linhas antigas esmaecem antes de sair
+      const fo = row._t < 2.5 ? 1 : Math.max(0.5, 1 - (row._t - 2.5) * 0.16);
+      if (row._fo !== fo.toFixed(2)) { row._fo = fo.toFixed(2); row.style.opacity = row._fo; }
       if (row._t > 6 && !row.classList.contains('out')) row.classList.add('out');
       if (row._t > 6.5) row.remove();
     }
     if (this.xpT !== undefined) {
-      this.xpT += rdt;
+      if (!this.hitPin) this.xpT += rdt;
       if (this.xpT > 2.4 && !E.xp._out) { E.xp.classList.add('out'); E.xp._out = true; }
       if (this.xpT > 2.9) { E.xp.innerHTML = ''; E.xp.classList.remove('on', 'out'); this.xpT = undefined; }
       else if (this.xpT < 0.1) E.xp._out = false;
     }
     if (this.medalT !== undefined) {
-      this.medalT += rdt;
+      if (!this.hitPin) this.medalT += rdt;
       if (this.medalT > 2.4) E.medal.firstChild?.classList.add('out');
       if (this.medalT > 2.8) { E.medal.innerHTML = ''; this.medalT = undefined; }
     }
@@ -480,8 +479,9 @@ export class PlayHud {
     });
     E.hpLag.style.width = clamp(this.hpLag, 0, 100) + '%';
     this.set('streak', m.streak, (v) => {
-      let s = T('STREAK', { size: 11, weight: 1.3, tracking: 2 });
+      let s = `<span class="sl">${T('STREAK', { size: 11, weight: 1.4, tracking: 2.2 })}</span>`;
       for (let i = 0; i < 5; i++) s += `<b class="${i < v ? 'on' : ''}"></b>`;
+      s += `<span class="sv">${T(String(v), { size: 12, weight: 1.4, heavy: true })}</span>`;
       E.streak.innerHTML = s;
     });
   }

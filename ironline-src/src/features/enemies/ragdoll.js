@@ -103,10 +103,8 @@ for (const s of ['L', 'R']) {
   link('pelvis', 'kn' + s, 0.5, 1, 0.32);
 }
 // "tônus" fraco: pernas e tronco tendem a ficar estendidos
-for (const s of ['L', 'R']) {
-  link('hip' + s, 'an' + s, 0.06, 0, null, 0.95);
-  link('sh' + s, 'wr' + s, 0.03, 0, null, 0.85);
-}
+// (o tônus de cada membro — perna esticada ou dobrada, braço aberto ou
+// recolhido — é sorteado por corpo em \`slump\`: cada queda assenta diferente)
 link('pelvis', 'neck', 0.08, 0, null, 1);
 link('hipL', 'knR', 0.3, 1, 0.16);
 link('hipR', 'knL', 0.3, 1, 0.16);
@@ -142,6 +140,7 @@ export class Ragdoll {
       this.x[i].applyMatrix4(this.m);
       this.px[i].copy(this.x[i]).addScaledVector(vel, -dt);
     }
+    this.C = C;
     this.t = 0;
     this.still = 0;
     this.asleep = false;
@@ -161,7 +160,7 @@ export class Ragdoll {
     const x = this.x, px = this.px;
     const vel = x.map((p, i) => p.clone().sub(px[i]));
     for (let it = 0; it < 24; it++) {
-      for (const [a, b, k, mode, len] of C) {
+      for (const [a, b, k, mode, len] of this.C) {
         _d.subVectors(x[b], x[a]);
         const d = _d.length();
         if (d < 1e-6) continue;
@@ -194,16 +193,41 @@ export class Ragdoll {
     this.still = 0;
   }
 
-  /** empurrão inicial "dramático" mas plausível: joelhos cedem, tronco tomba */
+  /**
+   * Empurrão inicial "dramático" mas plausível: joelhos cedem, tronco tomba
+   * e gira. Sorteia o tônus de cada membro (perna estendida, joelho dobrado,
+   * braço preso sob o corpo ou largado ao lado) — dois corpos nunca caem
+   * na mesma pose esticada.
+   */
   slump(dir, rng) {
     const dt = 1 / 60;
     const side = (rng() - 0.5) * 0.8;
+    const tone = [];
+    const dist = (a, b) => restPos[P[a]].distanceTo(restPos[P[b]]);
+    // uma perna quase reta, a outra dobrada (joelho caído para o lado)
+    const bent = rng() < 0.5 ? 'L' : 'R';
+    for (const s of ['L', 'R']) {
+      const sc = s === bent ? 0.58 + rng() * 0.18 : 0.86 + rng() * 0.1;
+      tone.push([P['hip' + s], P['an' + s], 0.09, 0, dist('hip' + s, 'an' + s) * sc]);
+      // braços: recolhido (mão perto do peito/rosto) ou aberto
+      const ac = rng() < 0.5 ? 0.45 + rng() * 0.2 : 0.8 + rng() * 0.15;
+      tone.push([P['sh' + s], P['wr' + s], 0.05, 0, dist('sh' + s, 'wr' + s) * ac]);
+    }
+    // pés não ficam juntos e paralelos
+    tone.push([P.anL, P.anR, 0.05, 1, 0.22 + rng() * 0.25]);
+    this.Ctone = C.concat(tone);
+    this.C = this.Ctone;
     for (const n of ['knL', 'knR']) this.px[P[n]].addScaledVector(_v.set(0, 0, 1).transformDirection(this.m), -0.35 * dt);
+    // joelho da perna dobrada vai para fora (corpo rola sobre ele)
+    this.px[P['kn' + bent]].addScaledVector(_v.set(bent === 'L' ? 1 : -1, 0, 0).transformDirection(this.m), -0.6 * dt);
     this.px[P.pelvis].y += 0.6 * dt;
     for (const n of ['chest', 'neck', 'head', 'shL', 'shR']) {
       this.px[P[n]].addScaledVector(dir, -1.1 * dt);
       this.px[P[n]].x += side * dt;
     }
+    // torção: um ombro cai antes do outro (o corpo assenta de lado/de bruços)
+    const sh = rng() < 0.5 ? 'shL' : 'shR';
+    this.px[P[sh]].y += 0.9 * dt;
   }
 
   _updateGround(all = false) {
@@ -218,11 +242,20 @@ export class Ragdoll {
   step(dt) {
     if (this.asleep) return;
     this.t += dt;
+    // o tônus sorteado só vale durante a queda; depois o corpo fica mole e
+    // a gravidade assenta os joelhos no chão
+    if (this.t > 0.9 && this.C !== C) this.C = C;
     const x = this.x, px = this.px;
     const g = -9.8 * dt * dt;
     let maxMove = 0;
+    // amortecimento cresce depois da queda: o corpo assenta em vez de
+    // tremer para sempre entre restrições e limites articulares
+    const damp = this.t < 1.2 ? 0.995 : this.t < 2.5 ? 0.97 : 0.9;
     for (let i = 0; i < NP; i++) {
-      const vx = (x[i].x - px[i].x) * 0.995, vy = (x[i].y - px[i].y) * 0.995, vz = (x[i].z - px[i].z) * 0.995;
+      // o fuzil (corpo rígido solto) mantém o amortecimento leve: termina de
+      // tombar e deita no chão em vez de congelar "em pé" equilibrado
+      const dk = i >= P.gun ? 0.995 : damp;
+      const vx = (x[i].x - px[i].x) * dk, vy = (x[i].y - px[i].y) * dk, vz = (x[i].z - px[i].z) * dk;
       px[i].copy(x[i]);
       x[i].x += vx;
       x[i].y += vy + g;
@@ -230,7 +263,7 @@ export class Ragdoll {
     }
     this._updateGround();
     for (let it = 0; it < 10; it++) {
-      for (const [a, b, k, mode, len] of C) {
+      for (const [a, b, k, mode, len] of this.C) {
         _d.subVectors(x[b], x[a]);
         const d = _d.length();
         if (d < 1e-6) continue;
@@ -270,6 +303,22 @@ export class Ragdoll {
         }
       }
     }
+    // fuzil "em pé" (equilibrado na coronha ou escorado pela bandoleira):
+    // depois da queda, a ponta mais alta desce devagar (cinemático) até ele
+    // deitar — um fuzil solto nunca fica de pé sozinho
+    if (this.t > 1.2) {
+      let lifted = false;
+      for (const i of [P.gun, P.muzzle, P.gunTop]) {
+        const gy = this.ground[i] + RADIUS[i] * 0.85;
+        if (x[i].y > gy + 0.05) {
+          const d = Math.min(0.012, x[i].y - gy - 0.05);
+          x[i].y -= d;
+          px[i].y -= d;
+          lifted = true;
+        }
+      }
+      if (lifted) maxMove = Math.max(maxMove, 0.01);
+    }
     if (this.t > 0.8 && maxMove < 0.0012) this.still++;
     else this.still = 0;
     if (this.still > 40 || this.t > 9) this.asleep = true;
@@ -284,6 +333,9 @@ export class Ragdoll {
     // as correções dos limites são CINEMÁTICAS: movem também a posição
     // anterior, então não injetam velocidade (senão o joelho empurrado
     // "para frente" de um corpo deitado vira um foguete)
+    // corpo já assentado: os limites (descontínuos perto da perna reta)
+    // só realimentariam oscilação — o chão e o amortecimento seguram a pose
+    if (this.t > 2.2) return;
     const x = this.x, px = this.px;
     const kn0 = _k0.copy(x[P.knL]), kn1 = _k1.copy(x[P.knR]);
     const up = _lu.subVectors(x[P.spine], x[P.pelvis]).normalize();
@@ -298,20 +350,39 @@ export class Ragdoll {
       const mid = _lm.copy(h).addScaledVector(ha, 0.5);
       const off = _lo.subVectors(k, mid);
       const axis = ha.divideScalar(len);
-      // plano de dobra: normal = lado do quadril
-      const lat = off.dot(side);
-      k.addScaledVector(side, -lat * 0.6);
+      // plano de dobra: o joelho pode cair para FORA (rotação externa do
+      // quadril — perna dobrada deitada de lado no chão), nunca para dentro
+      const out = s === 'L' ? 1 : -1;
+      const lat = off.dot(side) * out;
+      const room = off.length() * 0.9;
+      if (lat < 0) k.addScaledVector(side, -lat * 0.6 * out);
+      else if (lat > room) k.addScaledVector(side, -(lat - room) * 0.6 * out);
       const fw = off.dot(fwd) - off.dot(axis) * axis.dot(fwd);
-      if (fw < 0.02) k.addScaledVector(fwd, (0.02 - fw) * 0.8);
+      // (perna reta é permitida; só não hiperestende)
+      if (fw < 0) k.addScaledVector(fwd, -fw * 0.8);
       // coxa: abdução/extensão limitadas
       const th = _lo.subVectors(k, h);
       const tl = th.length() || 1;
       const ab = th.dot(side) * (s === 'L' ? 1 : -1);
-      if (ab > tl * 0.55) k.addScaledVector(side, (s === 'L' ? -1 : 1) * (ab - tl * 0.55) * 0.8);
+      if (ab > tl * 0.68) k.addScaledVector(side, (s === 'L' ? -1 : 1) * (ab - tl * 0.68) * 0.8);
       if (ab < -tl * 0.2) k.addScaledVector(side, (s === 'L' ? 1 : -1) * (-tl * 0.2 - ab) * 0.8);
       const ext = th.dot(fwd);
       if (ext < -tl * 0.35) k.addScaledVector(fwd, (-tl * 0.35 - ext) * 0.8);
+      // flexão do quadril limitada (~90°): a coxa não sobe "colada" ao
+      // tronco — sem isso o corpo dobra ao meio como canivete e vira um monte
+      const flex = th.dot(up);
+      if (flex > tl * 0.05) k.addScaledVector(up, -(flex - tl * 0.05) * 0.8);
     }
+    // os limites nunca empurram o joelho para dentro do chão (o chão
+    // devolveria a correção como velocidade — "bomba" de energia)
+    for (const n of [P.knL, P.knR]) {
+      const gy = this.ground[n] + RADIUS[n] * 0.85;
+      if (x[n].y < gy) x[n].y = gy;
+    }
+    // depois da queda (amortecimento forte), a correção vira velocidade
+    // normal e é amortecida — cinemática para sempre, ela "anda" sozinha
+    // (desliza a perna pelo chão a velocidade constante)
+    if (this.t > 1.2) return;
     px[P.knL].add(_k0.subVectors(x[P.knL], kn0));
     px[P.knR].add(_k1.subVectors(x[P.knR], kn1));
   }

@@ -167,7 +167,8 @@ export class CameraMotion {
 
     // ─ roll: strafe, slide, lean, mantle ─
     const tiltSide = clamp(side / T.sprint, -1, 1);
-    const rollT = -tiltSide * 0.016 * (sliding ? 0 : 1) + (sliding ? 0.055 : 0);
+    // slide: cabeça tomba ~5° para o lado da perna de apoio (como no slide real)
+    const rollT = -tiltSide * 0.018 * (sliding ? 0 : 1) + (sliding ? 0.088 : 0);
     this.roll = damp(this.roll, rollT, 6, dt);
     roll += this.roll;
     if (c.mantle) {
@@ -204,9 +205,9 @@ export class CameraMotion {
 
     // ─ FOV ─
     let f = 1;
-    if (sliding) f = 1.07;
-    else if (sprint === 2 && hs > 5) f = 1.095;
-    else if (sprint === 1 && hs > 3) f = 1.045;
+    if (sliding) f = 1.1;
+    else if (sprint === 2 && hs > 5) f = 1.11;
+    else if (sprint === 1 && hs > 3) f = 1.05;
     f = 1 + (f - 1) * (1 - ads);
     this.fov = damp(this.fov, f, f > this.fov ? 5.5 : 8, dt);
     if (Math.abs(this.fov - 1) < 1e-4) p.fovFactors.delete('move');

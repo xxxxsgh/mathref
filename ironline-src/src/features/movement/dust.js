@@ -29,6 +29,9 @@ const TINT = {
   metal: [0.4, 0.4, 0.4],
 };
 
+/** Quanto cada superfície solta de poeira no slide (0..1). */
+const SURF = { dirt: 1, grass: 0.55, brick: 0.6, asphalt: 0.32, concrete: 0.4, wood: 0.3, metal: 0.15 };
+
 function puffTexture() {
   const N = 128;
   const d = new Uint8Array(N * N * 4);
@@ -139,7 +142,10 @@ export class Dust {
       // abre para os lados; o arrasto a faz ficar para trás em ~0.5 s
       const side = (rng.next() - 0.5) * 2.4;
       _s.set(dir.x * speed * 1.05 - dir.z * side, 0.3 + rng.next() * 0.5, dir.z * speed * 1.05 + dir.x * side);
-      this.spawn(_p, _s, { life: 0.9 + k * 0.6, size: 0.3, grow: 1.2 + k * 0.8, alpha: 0.4 + k * 0.25, material });
+      // superfície lisa e varrida (asfalto/concreto) solta pouca poeira —
+      // só um véu fino; terra/grama levantam a nuvem cheia
+      const m = SURF[material] ?? 0.5;
+      this.spawn(_p, _s, { life: 0.9 + k * 0.6, size: 0.3, grow: 1.2 + k * 0.8, alpha: (0.4 + k * 0.25) * m, material });
     }
   }
 
@@ -177,7 +183,7 @@ export class Dust {
       mesh.setMatrixAt(n, _m);
       // entra rápido, some devagar; e some perto da câmera (sem "parede")
       const dc = q.pos.distanceTo(cam.position);
-      const near = Math.min(1, Math.max(0, (dc - 0.35) / 0.6));
+      const near = Math.min(1, Math.max(0, (dc - 0.6) / 0.9));
       this.alpha.array[n] = q.a * Math.min(1, u / 0.08) * Math.pow(1 - u, 1.4) * near;
       mesh.setColorAt(n, this.color.setRGB(q.col[0], q.col[1], q.col[2]));
       n++;

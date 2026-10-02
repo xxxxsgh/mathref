@@ -8,7 +8,9 @@
  * bolsos, coldre de perna; joelheiras, bolsos cargo, botas com sola e
  * cadarço; luvas com protetor de nós; e o fuzil (osso `weapon`).
  *
- * Variantes (`variant`) mudam paleta do equipamento e alguns acessórios.
+ * Variantes (`variant`) mudam paleta, cobertura de cabeça (capacete com NVG,
+ * capacete com óculos, boné, chapéu de aba), mangas e acessórios — silhuetas
+ * diferentes de verdade num mesmo esquadrão.
  */
 import { SkinBuilder, GROUPS } from './geo.js';
 import { B } from './rig.js';
@@ -100,30 +102,35 @@ const headW = (p) => {
 
 // ─── paletas de equipamento ──────────────────────────────────────────────
 export const VARIANTS = [
-  // fuzileiro: camuflagem verde escura, colete ranger green, mochila
-  { name: 'rifleman', camo: 'woodland', gear: '#434635', gear2: '#36392c', helmetCamo: 1, belt: '#2f3027', glove: '#2a2a27', boot: '#3a3026', bala: '#4a4b40', shirt: '#4b4d41', ruck: true, face: 'bala', nvg: true, lens: '#8593a0' },
-  // metralhador: uniforme cinza-urbano, equipamento preto
-  { name: 'gunner', camo: 'urban', gear: '#2c2d2a', gear2: '#232421', helmetCamo: 0, helmet: '#3a3c37', belt: '#252623', glove: '#22221f', boot: '#2a241e', bala: '#44453e', shirt: '#3b3d39', ruck: false, face: 'bala', nvg: true, elbow: true, lens: '#9a8a66' },
-  // líder: colete coyote, camuflagem árida
-  { name: 'lead', camo: 'arid', gear: '#6c5d45', gear2: '#5a4c3a', helmetCamo: 1, belt: '#4a4034', glove: '#3d3429', boot: '#4d3c2b', bala: '#5e5444', shirt: '#57524a', ruck: true, face: 'bala', scarf: true, nvg: false, lens: '#6d7378' },
+  // fuzileiro: multi-terreno verde, colete ranger green, mochila, capacete com
+  // NVG binocular rebatido (rente à calota), balaclava e óculos fumê
+  { name: 'rifleman', camo: 'woodland', gear: '#434635', gear2: '#36392c', helmetCamo: 1, belt: '#2f3027', glove: '#2a2a27', boot: '#2e261e', bala: '#3f4036', shirt: '#4b4d41', ruck: true, face: 'bala', head: 'helmet', nvg: true, lens: '#1d2023' },
+  // metralhador: uniforme cinza-urbano, equipamento preto, capacete liso sem
+  // NVG com óculos de proteção presos na calota, mangas arregaçadas
+  { name: 'gunner', camo: 'urban', gear: '#2c2d2a', gear2: '#232421', helmetCamo: 0, helmet: '#3a3c37', belt: '#252623', glove: '#22221f', boot: '#2a241e', bala: '#34352f', shirt: '#3b3d39', ruck: false, face: 'bala', head: 'helmet', nvg: false, goggles: true, elbow: true, sleeves: 'rolled', lens: '#22201c' },
+  // líder: colete coyote, camuflagem árida, boné + abafadores, lenço no rosto
+  { name: 'lead', camo: 'arid', gear: '#6c5d45', gear2: '#5a4c3a', helmetCamo: 1, belt: '#4a4034', glove: '#3d3429', boot: '#3e3124', bala: '#4d473a', shirt: '#57524a', ruck: true, face: 'bala', head: 'cap', cap: '#5b5241', scarf: true, nvg: false, lens: '#241c15' },
+  // atirador de flanco: chapéu de aba (boonie), chest rig leve, sem mochila
+  { name: 'scout', camo: 'woodland', gear: '#4f4c3a', gear2: '#3f3d2f', helmetCamo: 1, belt: '#36342a', glove: '#33302a', boot: '#2f271f', bala: '#45463b', shirt: '#4b4d41', ruck: false, face: 'bala', head: 'boonie', scarf: true, nvg: false, sleeves: 'rolled', lens: '#1c1e20' },
 ];
 
 export function buildSoldierGeometry(variant = VARIANTS[0]) {
   const b = new SkinBuilder();
   const V = variant;
   const M = {
-    uniform: { color: '#e9e6dc', rough: 0.9, camo: 1, fabric: 1 },
+    uniform: { color: '#d8d4c8', rough: 0.88, camo: 1, fabric: 1 },
     shirt: { color: V.shirt, rough: 0.92, fabric: 1 },
-    gear: { color: V.gear, rough: 0.7, fabric: 0.8 },
-    gearPlain: { color: V.gear, rough: 0.7, fabric: 0.7 },
-    gear2: { color: V.gear2, rough: 0.72, fabric: 0.7 },
-    webbing: { color: V.gear2, rough: 0.74, fabric: 0.75 },
-    belt: { color: V.belt, rough: 0.74, fabric: 0.75 },
+    gear: { color: V.gear, rough: 0.6, fabric: 0.8 },
+    gearPlain: { color: V.gear, rough: 0.6, fabric: 0.7 },
+    gear2: { color: V.gear2, rough: 0.62, fabric: 0.7 },
+    webbing: { color: V.gear2, rough: 0.52, fabric: 0.75 },
+    belt: { color: V.belt, rough: 0.58, fabric: 0.75 },
     bala: { color: V.bala, rough: 0.96, fabric: 1 },
     skin: { color: '#9a705a', rough: 0.5, fabric: 0.5 },
+    arm: { color: '#6a4a38', rough: 0.58, fabric: 0.45 },
     eye: { color: '#1a1512', rough: 0.15, fabric: 0.1 },
     brow: { color: '#2a1f18', rough: 0.9, fabric: 1 },
-    buckle: { color: '#141413', rough: 0.45, fabric: 0.1 },
+    buckle: { color: '#141413', rough: 0.32, fabric: 0.1 },
     flash: { color: '#4a4c45', rough: 0.4, metal: 0.55, fabric: 0.1 },
     frag: { color: '#3b4231', rough: 0.55, fabric: 0.1 },
     sling: { color: '#2a2a25', rough: 0.78, fabric: 0.75 },
@@ -145,8 +152,9 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
     rubber: { color: '#151515', rough: 0.85, fabric: 0.5 },
     metal: { color: '#26272a', rough: 0.36, metal: 0.7, fabric: 0 },
     metalWorn: { color: '#3c3d40', rough: 0.3, metal: 0.85, fabric: 0 },
-    // lente espelhada/fumê por variante: reflete o céu (o rosto não vira um buraco preto)
-    lens: { color: V.lens || '#7d8a94', rough: 0.07, metal: 1, fabric: 0 },
+    // lente fumê escura (pouco metálica): brilho especular nítido, sem virar
+    // um "disco claro" refletindo o céu no lugar do rosto
+    lens: { color: V.lens || '#1d2023', rough: 0.06, metal: 0.35, fabric: 0 },
     lensRed: { color: '#30100c', rough: 0.05, metal: 0.9, fabric: 0 },
     patch: { color: '#45463a', rough: 0.95, fabric: 0.75 },
     mag: { color: '#2c2c29', rough: 0.5, fabric: 0.1 },
@@ -254,7 +262,7 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
     b.box([0.07, 0.12, 0.012], { p: [0.035, 1.46, 0.14], r: [-0.25, 0, 0.15] }, sc, B.chest, core, 0.006);
   }
   {
-    // óculos balísticos: lente curva espelhada (reflete o céu) + armação
+    // óculos balísticos: lente curva fumê + armação
     b.loft(
       [
         { c: [0, 1.69, 0.012], ru: 0.09, rv: 0.11, n: 2 },
@@ -312,7 +320,7 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
   b.ellipsoid([0.012, 0.01, 0.012], { p: [0.025, 1.636, 0.115] }, M.rubber, B.head, core, 8, 6);
 
   // ── capacete high-cut ──
-  {
+  if (V.head === 'helmet') {
     const hc = [0, 1.708, -0.006];
     const rx = 0.113, ry = 0.124, rz = 0.13;
     const rings = [];
@@ -378,15 +386,18 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
     }
   }
 
+  // boné / chapéu de aba (variantes sem capacete)
+  if (V.head !== 'helmet') addSoftHat(b, M, V);
+
   // ═══ BRAÇOS ═══════════════════════════════════════════════════════════
   for (const side of ['L', 'R']) {
     const sx = side === 'L' ? 1 : -1;
     const grp = side === 'L' ? GROUPS.armL : GROUPS.armR;
     const w = armW(side);
     const X = (x) => sx * x;
-    // manga (camuflada) do ombro ao punho
-    b.tube(
-      [
+    // manga (camuflada) do ombro ao punho — ou arregaçada acima do cotovelo
+    const rolled = V.sleeves === 'rolled';
+    const sleeve = [
         { p: [X(0.17), 1.5, -0.012], ru: 0.05, rv: 0.06 },
         { p: [X(0.188), 1.45, -0.015], ru: 0.066, rv: 0.068 },
         { p: [X(0.192), 1.38, -0.017], ru: 0.066, rv: 0.066 },
@@ -397,12 +408,31 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
         { p: [X(0.203), 1.03, -0.016], ru: 0.05, rv: 0.046 },
         { p: [X(0.206), 0.96, -0.01], ru: 0.044, rv: 0.04 },
         { p: [X(0.207), 0.925, -0.007], ru: 0.04, rv: 0.036 },
-      ],
-      M.uniform,
-      w,
-      grp,
-      { seg: 16, caps: [true, true] },
-    );
+    ];
+    if (!rolled) b.tube(sleeve, M.uniform, w, grp, { seg: 16, caps: [true, true] });
+    else {
+      // manga até logo abaixo do cotovelo, dobra grossa (avesso mais claro)
+      const top = sleeve.filter((q) => q.p[1] >= 1.1);
+      top.push({ p: [X(0.2), 1.085, -0.021], ru: 0.06, rv: 0.058 });
+      b.tube(top, M.uniform, w, grp, { seg: 16, caps: [true, true] });
+      for (const [y0, y1, r] of [[1.07, 1.1, 0.064], [1.098, 1.122, 0.066]])
+        b.cyl([X(0.2), y0, -0.02], [X(0.199), y1, -0.022], r, r * 0.98, y0 < 1.08 ? M.shirt : M.uniform, w, grp, 16);
+      // antebraço: pele com volume muscular (afina até o punho)
+      b.tube(
+        [
+          { p: [X(0.2), 1.09, -0.02], ru: 0.046, rv: 0.05 },
+          { p: [X(0.202), 1.04, -0.016], ru: 0.044, rv: 0.046 },
+          { p: [X(0.205), 0.98, -0.011], ru: 0.037, rv: 0.036 },
+          { p: [X(0.207), 0.93, -0.007], ru: 0.031, rv: 0.028 },
+        ],
+        M.arm,
+        w,
+        grp,
+        { seg: 14, caps: [false, true] },
+      );
+      // relógio no pulso esquerdo
+      if (sx > 0) b.cyl([X(0.207), 0.945, -0.008], [X(0.207), 0.965, -0.009], 0.034, 0.034, M.rubber, w, grp, 14);
+    }
     // deltoide
     b.ellipsoid([0.07, 0.06, 0.07], { p: [X(0.18), 1.445, -0.014] }, M.uniform, (p) => [[B['upperArm.' + side], 0.75], [B.chest, 0.25]], grp, 14, 10);
     // bolso de ombro com velcro (patch)
@@ -511,7 +541,19 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
   // rádio nas costas (esquerda) + antena
   b.box([0.07, 0.15, 0.05], { p: [0.115, 1.32, -0.185] }, M.gear2, chestW, core, 0.01);
   b.box([0.06, 0.13, 0.04], { p: [0.115, 1.33, -0.19] }, M.radio, chestW, core, 0.008);
-  if (V.ruck) b.cyl([0.13, 1.4, -0.19], [0.17, 1.76, -0.25], 0.0055, 0.003, M.rubber, B.chest, core, 6);
+  // antena de fita, dobrada para trás e presa na alça (abaixo da cabeça)
+  b.tube(
+    [
+      { p: [0.13, 1.41, -0.19], ru: 0.0045 },
+      { p: [0.142, 1.52, -0.22], ru: 0.004 },
+      { p: [0.148, 1.58, -0.27], ru: 0.0035 },
+      { p: [0.15, 1.6, -0.33], ru: 0.003 },
+    ],
+    M.rubber,
+    B.chest,
+    core,
+    { seg: 5 },
+  );
   b.cyl([0.13, 1.4, -0.19], [0.13, 1.42, -0.19], 0.012, 0.01, M.poly, B.chest, core, 8);
   // cabo do PTT
   b.tube(
@@ -583,6 +625,90 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
   addRifle(b, M);
 
   return b.build();
+}
+
+/**
+ * Cobertura de cabeça sem capacete: boné com abafadores por cima (líder) ou
+ * chapéu de aba mole (boonie). Abas com as DUAS faces (o material é de face
+ * única) e leve caimento — a silhueta muda de verdade entre variantes.
+ */
+function addSoftHat(b, M, V) {
+  const core = GROUPS.core;
+  const hc = [0, 1.712, -0.004];
+  const capM = V.head === 'cap' ? { color: V.cap || '#5b5241', rough: 0.9, fabric: 0.72 } : { ...M.helmet };
+  if (V.head === 'cap') {
+    // copa: 6 gomos sugeridos por anéis levemente achatados
+    b.loft(
+      [
+        { c: [hc[0], 1.735, hc[2]], ru: 0.1, rv: 0.112, n: 2.1 },
+        { c: [0, 1.77, -0.006], ru: 0.098, rv: 0.11, n: 2.1 },
+        { c: [0, 1.8, -0.01], ru: 0.085, rv: 0.096, n: 2.05 },
+        { c: [0, 1.822, -0.012], ru: 0.058, rv: 0.066, n: 2 },
+        { c: [0, 1.832, -0.012], ru: 0.02, rv: 0.024, n: 2 },
+      ],
+      capM,
+      B.head,
+      core,
+      { seg: 28, caps: [false, true] },
+    );
+    b.ellipsoid([0.008, 0.005, 0.008], { p: [0, 1.834, -0.012] }, capM, B.head, core, 8, 6);
+    // pala curva (duas faces) + costuras
+    const brim = (y, flip) => {
+      const R = [];
+      for (let k = 0; k <= 2; k++) {
+        const t = k / 2;
+        R.push({ c: [0, y - t * 0.012, 0.075 + t * 0.07], ru: 0.088 - t * 0.012, rv: 0.004, n: 2, u: [1, 0, 0], v: [0, 1, -0.25] });
+      }
+      if (flip) R.reverse();
+      return R;
+    };
+    b.loft(brim(1.742, false), capM, B.head, core, { seg: 12, caps: [true, true] });
+    // velcro (patch) na frente da copa
+    b.box([0.05, 0.03, 0.006], { p: [0, 1.785, 0.098], r: [-0.35, 0, 0] }, M.patch, B.head, core, 0.002);
+    return;
+  }
+  // boonie: copa cilíndrica baixa, fita e aba larga caída
+  b.loft(
+    [
+      { c: [0, 1.73, -0.004], ru: 0.108, rv: 0.118, n: 2.2 },
+      { c: [0, 1.79, -0.006], ru: 0.104, rv: 0.114, n: 2.3 },
+      { c: [0, 1.82, -0.008], ru: 0.096, rv: 0.104, n: 2.3 },
+      { c: [0, 1.832, -0.008], ru: 0.05, rv: 0.055, n: 2 },
+    ],
+    capM,
+    B.head,
+    core,
+    { seg: 28, caps: [false, true] },
+  );
+  b.loft(
+    [
+      { c: [0, 1.752, -0.005], ru: 0.11, rv: 0.12, n: 2.2 },
+      { c: [0, 1.776, -0.005], ru: 0.109, rv: 0.119, n: 2.2 },
+    ],
+    M.webbing,
+    B.head,
+    core,
+    { seg: 28, caps: [false, false] },
+  );
+  // aba: anel de cima (face para cima) e de baixo (face para baixo)
+  const rings = (dy) => [
+    { c: [0, 1.738 + dy, -0.004], ru: 0.106, rv: 0.116, n: 2.1 },
+    { c: [0, 1.722 + dy, -0.006], ru: 0.16, rv: 0.17, n: 2.05 },
+    { c: [0, 1.695 + dy, -0.008], ru: 0.19, rv: 0.2, n: 2 },
+  ];
+  b.loft(rings(0), capM, B.head, core, { seg: 32, caps: [false, false] });
+  b.loft(rings(-0.005).reverse(), capM, B.head, core, { seg: 32, caps: [false, false] });
+  // borda costurada da aba
+  b.loft(
+    [
+      { c: [0, 1.692, -0.008], ru: 0.191, rv: 0.201, n: 2 },
+      { c: [0, 1.7, -0.008], ru: 0.191, rv: 0.201, n: 2 },
+    ],
+    capM,
+    B.head,
+    core,
+    { seg: 32, caps: [false, false] },
+  );
 }
 
 /** Malha a partir de anéis de pontos (fecha no topo com um leque). */
@@ -665,9 +791,11 @@ function addBoot(b, side, M, grp) {
   const fb = B['foot.' + side];
   const legw = legW(side);
   const X = 0.104 * sx, Z = -0.012;
-  // sola com salto
-  b.box([0.105, 0.03, 0.29], { p: [X, 0.015, Z + 0.07] }, M.sole, fb, grp, 0.012);
-  b.box([0.098, 0.012, 0.28], { p: [X, 0.035, Z + 0.07] }, M.rubber, fb, grp, 0.004);
+  // sola com contorno de pegada (mais larga na planta, estreita no arco)
+  // e entressola um pouco recuada
+  const foot = (y, k) => ({ c: [X, y, Z + 0.075], ru: 0.052 * k, rv: 0.148 * k, rvb: 0.142 * k, n: 2.5 });
+  b.loft([foot(0.0, 0.97), foot(0.006, 1), foot(0.028, 1), foot(0.034, 0.97)], M.sole, fb, grp, { seg: 24, caps: [true, true] });
+  b.loft([foot(0.032, 0.95), foot(0.044, 0.93)], M.rubber, fb, grp, { seg: 24, caps: [false, true] });
   // gáspea + biqueira
   b.loft(
     [
@@ -701,9 +829,9 @@ function addBoot(b, side, M, grp) {
   // laço do cadarço no alto + língua da bota
   b.box([0.04, 0.012, 0.012], { p: [X, 0.205, Z + 0.068], r: [-0.3, 0, 0.4] }, M.lace, legw, grp, 0.003);
   b.box([0.045, 0.05, 0.012], { p: [X, 0.2, Z + 0.06], r: [-0.25, 0, 0] }, M.boot, legw, grp, 0.005);
-  // cravos da sola (aparecem no corpo caído) e faixa lateral texturizada
-  for (let k = 0; k < 7; k++) b.box([0.09, 0.008, 0.022], { p: [X, -0.002, Z - 0.06 + k * 0.038] }, M.sole, fb, grp, 0.002);
-  for (const s of [1, -1]) for (let k = 0; k < 9; k++) b.box([0.004, 0.014, 0.012], { p: [X + s * 0.053, 0.016, Z - 0.06 + k * 0.03] }, M.rubber, fb, grp, 0.001, 1);
+  // cravos rasos da sola (só aparecem no corpo caído): blocos em V
+  for (let k = 0; k < 6; k++)
+    for (const s of [1, -1]) b.box([0.034, 0.004, 0.014], { p: [X + s * 0.019, -0.001, Z - 0.03 + k * 0.042], r: [0, s * 0.35, 0] }, M.sole, fb, grp, 0.0015, 1);
 }
 
 /** Pontos notáveis do fuzil (espaço do osso `weapon`). */
@@ -782,16 +910,18 @@ function addRifle(b, M) {
 function addExtras(b, M, V, chestW) {
   const core = GROUPS.core;
   // ── capacete ──
-  if (V.nvg) {
-    // suporte + braço articulado + binóculo rebatido para cima
+  if (V.head === 'helmet' && V.nvg) {
+    // suporte + braço articulado + binocular REBATIDO: as duas objetivas
+    // ficam deitadas para trás, rentes à frente da calota (perfil baixo —
+    // nada de "orelhas" espetadas na silhueta)
     b.box([0.034, 0.03, 0.03], { p: [0, 1.8, 0.148], r: [-0.55, 0, 0] }, M.poly, B.head, core, 0.006);
-    b.box([0.022, 0.06, 0.02], { p: [0, 1.83, 0.168], r: [-0.25, 0, 0] }, M.metal, B.head, core, 0.004);
-    b.box([0.07, 0.022, 0.03], { p: [0, 1.852, 0.17], r: [-0.25, 0, 0] }, M.poly, B.head, core, 0.006);
+    b.box([0.024, 0.04, 0.022], { p: [0, 1.822, 0.165], r: [-0.7, 0, 0] }, M.metal, B.head, core, 0.004);
+    b.box([0.078, 0.034, 0.036], { p: [0, 1.842, 0.168], r: [-0.95, 0, 0] }, M.poly, B.head, core, 0.008);
     for (const sx of [1, -1]) {
-      b.cyl([sx * 0.032, 1.845, 0.18], [sx * 0.034, 1.94, 0.158], 0.018, 0.016, M.poly, B.head, core, 14);
-      b.cyl([sx * 0.034, 1.94, 0.158], [sx * 0.034, 1.946, 0.157], 0.0145, 0.0145, M.lens, B.head, core, 14);
+      b.cyl([sx * 0.03, 1.835, 0.183], [sx * 0.031, 1.872, 0.15], 0.0175, 0.0165, M.poly, B.head, core, 14);
+      b.cyl([sx * 0.031, 1.872, 0.15], [sx * 0.031, 1.876, 0.146], 0.0145, 0.0145, M.lens, B.head, core, 14);
       // anel de foco (relevo)
-      b.cyl([sx * 0.0325, 1.87, 0.175], [sx * 0.033, 1.885, 0.172], 0.0195, 0.0195, M.rubber, B.head, core, 14);
+      b.cyl([sx * 0.0302, 1.846, 0.174], [sx * 0.0304, 1.854, 0.167], 0.019, 0.019, M.rubber, B.head, core, 14);
     }
     // cabo da bateria (contrapeso → NVG) por cima da capa
     b.tube(
@@ -807,21 +937,56 @@ function addExtras(b, M, V, chestW) {
       { seg: 6 },
     );
   }
-  // lanterna no trilho direito + strobe IR no topo traseiro
-  b.cyl([-0.13, 1.738, 0.02], [-0.132, 1.738, 0.105], 0.0125, 0.014, M.poly, B.head, core, 12);
-  b.cyl([-0.132, 1.738, 0.105], [-0.132, 1.738, 0.107], 0.012, 0.012, M.lens, B.head, core, 12);
-  b.box([0.03, 0.018, 0.04], { p: [0, 1.826, -0.07], r: [0.4, 0, 0] }, M.poly, B.head, core, 0.006);
-  // elástico (bungee) em volta da capa
-  b.loft(
-    [
-      { c: [0, 1.757, -0.006], ru: 0.106, rv: 0.122, n: 2 },
-      { c: [0, 1.764, -0.006], ru: 0.106, rv: 0.122, n: 2 },
-    ],
-    M.rubber,
-    B.head,
-    core,
-    { seg: 36, caps: [false, false] },
-  );
+  if (V.head === 'helmet' && V.goggles) {
+    // óculos de proteção presos na frente da calota (elástico em volta)
+    b.loft(
+      [
+        { c: [0, 1.785, 0.0], ru: 0.118, rv: 0.13, n: 2 },
+        { c: [0, 1.815, -0.004], ru: 0.114, rv: 0.126, n: 2 },
+      ],
+      M.poly,
+      B.head,
+      core,
+      { seg: 18, caps: [false, false], arc: [0.2 * Math.PI, 0.8 * Math.PI] },
+    );
+    b.loft(
+      [
+        { c: [0, 1.79, 0.004], ru: 0.121, rv: 0.133, n: 2 },
+        { c: [0, 1.808, 0.0], ru: 0.118, rv: 0.13, n: 2 },
+      ],
+      M.lens,
+      B.head,
+      core,
+      { seg: 18, caps: [false, false], arc: [0.27 * Math.PI, 0.73 * Math.PI] },
+    );
+    b.loft(
+      [
+        { c: [0, 1.79, -0.008], ru: 0.117, rv: 0.13, n: 2 },
+        { c: [0, 1.806, -0.008], ru: 0.117, rv: 0.13, n: 2 },
+      ],
+      M.webbing,
+      B.head,
+      core,
+      { seg: 30, caps: [false, false] },
+    );
+  }
+  if (V.head === 'helmet') {
+    // lanterna no trilho direito + strobe IR no topo traseiro
+    b.cyl([-0.13, 1.738, 0.02], [-0.132, 1.738, 0.105], 0.0125, 0.014, M.poly, B.head, core, 12);
+    b.cyl([-0.132, 1.738, 0.105], [-0.132, 1.738, 0.107], 0.012, 0.012, M.lens, B.head, core, 12);
+    b.box([0.03, 0.018, 0.04], { p: [0, 1.826, -0.07], r: [0.4, 0, 0] }, M.poly, B.head, core, 0.006);
+    // elástico (bungee) em volta da capa
+    b.loft(
+      [
+        { c: [0, 1.757, -0.006], ru: 0.106, rv: 0.122, n: 2 },
+        { c: [0, 1.764, -0.006], ru: 0.106, rv: 0.122, n: 2 },
+      ],
+      M.rubber,
+      B.head,
+      core,
+      { seg: 36, caps: [false, false] },
+    );
+  }
 
   // ── granadas no cummerbund ──
   // duas de luz (lado esquerdo), uma de fragmentação ou fumígena (direito)
@@ -905,10 +1070,6 @@ function addExtras(b, M, V, chestW) {
     b.cyl([-0.15, 1.18, -0.2], [-0.15, 1.33, -0.205], 0.034, 0.034, M.gear2, chestW, core, 12);
     b.cyl([-0.15, 1.33, -0.205], [-0.15, 1.35, -0.205], 0.018, 0.018, M.poly, chestW, core, 10);
     for (const yy of [1.22, 1.3]) b.box([0.27, 0.014, 0.006], { p: [-0.01, yy, -0.229] }, M.webbing, chestW, core, 0.002, 1);
-    if (V.name === 'rifleman') b.cyl([0.09, 1.44, -0.22], [0.12, 1.98, -0.32], 0.0045, 0.0025, M.rubber, B.chest, core, 6);
-  } else {
-    // antena do rádio mais alta (gunner)
-    b.cyl([0.13, 1.42, -0.19], [0.15, 1.85, -0.27], 0.0045, 0.0025, M.rubber, B.chest, core, 6);
   }
 
   // ── alça da bandoleira pelo ombro esquerdo e costas até a axila direita ──

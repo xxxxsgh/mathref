@@ -2,7 +2,7 @@
  * Feature `enemies` — soldados inimigos.
  *
  *   soldier.js  modelo procedural (corpo + equipamento tático + fuzil),
- *               3 variantes, 1 malha skinnada / 1 draw call por soldado
+ *               4 variantes de silhueta, 1 malha skinnada / 1 draw call por soldado
  *   material.js PBR com camuflagem/trama/rugas/sujeira triplanar e AO assado
  *   rig.js      esqueleto (19 ossos), IK de 2 ossos, raio × cápsula
  *   anim.js     animação procedural (marcha sem deslizar, mira, recuo,
@@ -11,7 +11,7 @@
  *   nav.js      grade de navegação + mapa de coberturas (A*)
  *   brain.js    IA (percepção, cobertura, flanco, supressão, rajadas, callouts)
  *   sling.js    bandoleira de 2 pontos (ossos livres esticados entre fuzil e corpo)
- *   contact.js  sombras de contato no chão (pés, corpo, cadáver) — 1 draw call
+ *   contact.js  sombras de contato no chão (pés, corpo, cadáver) + poças de sangue
  *
  * Contrato: services.enemies { list, spawn(pose), count() } + extras
  * (nav, squad, kill(e), clear()). Eventos: enemy:fire, enemy:damage,
@@ -178,8 +178,9 @@ class Enemy {
     const dmg = amount * (PART_MULT[part] ?? 1);
     const dir = info.dir ? info.dir.clone().normalize() : new THREE.Vector3(0, 0, -1);
     if (!this.alive) {
-      // corpo: só física
-      if (this.ragdoll && info.point) this.ragdoll.impulse(info.point, dir, 1.6);
+      // corpo: só um tranco local (bala de fuzil não "arrasta" um corpo de
+      // 80 kg); tiros perdidos de outros inimigos não mexem no cadáver
+      if (this.ragdoll && info.point && info.source !== 'enemy') this.ragdoll.impulse(info.point, dir, 0.45);
       return;
     }
     this.health -= dmg;
@@ -208,7 +209,10 @@ class Enemy {
     const pt = info?.point || this.joint(B.chest, new THREE.Vector3());
     const strength = part === 'head' ? 3.2 : part === 'leg' ? 1.6 : 2.4;
     this.ragdoll.impulse(pt, dir, strength);
-    this.ragdoll.slump(_v.copy(dir).setY(0).normalize(), () => ctx.rng.next());
+    // sorteio da queda com semente própria do soldado: o mesmo tiro dá a
+    // mesma queda (independe de quantas features consumiram o rng global)
+    let seed = (this.id * 2654435761) % 2147483647 || 1;
+    this.ragdoll.slump(_v.copy(dir).setY(0).normalize(), () => (seed = (seed * 16807) % 2147483647) / 2147483647);
     if (info?.silent) return;
     ctx.bus.emit('enemy:death', { enemy: this, info: info || {} });
     // um companheiro avisa
@@ -297,6 +301,11 @@ class Enemy {
     const d2 = cam.distanceToSquared(this.group.position);
     this._skip = (this._skip || 0) + 1;
     if (d2 > 60 * 60 && this._skip % 2) return;
+    // screenshot: o corredor encenado congela no meio da passada depois do
+    // aquecimento (como uma foto) — a pose não muda entre os frames de
+    // acumulação temporal e não deixa "fantasma" nas pernas/fuzil
+    this._animN = (this._animN || 0) + 1;
+    if (this.ctx.shot && this.scripted?.speed && this._animN > 40) return;
     this.anim.update(Math.min(dt, 1 / 20));
   }
 
@@ -392,6 +401,7 @@ export default {
       squad: this.squad,
       stats: () => this.stats,
       hitboxes: HITBOXES,
+      variants: VARIANTS.length,
     });
   },
 
@@ -417,16 +427,16 @@ export default {
     // quina da van (x≈3.8..5.7, z≈3.6..8.4): espiada pela direita
     // (o clarão "preso" do modo combat fica no ÚLTIMO a atirar: o da jersey,
     // mais longe — o da van mira sem atirar e continua legível)
-    const main = mk([P[0] + 3.1, 0, P[2] - 1.0], 0, { aim: 1, lean: -0.9, crouch: 0.12 });
+    const main = mk([P[0] + 3.1, 0, P[2] - 1.0], 0, { aim: 1, lean: -0.9, crouch: 0.38 });
     // atrás da jersey central, atirando por cima
     mk([-0.9, 0, -3.75], 1, { fire: true, aim: 1, crouch: 0.45, interval: 0.21 });
     // flanqueando pela calçada esquerda, corrida agachada
-    mk([-4.4, 0, 3.6], 2, { speed: 4.3, dir: [0.22, 0, 0.97], aim: 0.3, crouch: 0.25, face: false }, 0.22);
+    mk([-4.4, 0, 3.6], 3, { speed: 4.5, dir: [0.22, 0, 0.97], aim: 0.25, crouch: 0.2, face: false }, 0.22);
     // escondido atrás da jersey do fundo (recarregando)
-    const hid = mk([3.35, 0, -7.25], 0, { aim: 0.4, crouch: 1 });
+    const hid = mk([3.35, 0, -7.25], 2, { aim: 0.4, crouch: 1 });
     hid.anim.p.reload = 0.4;
     // corpo na pista
-    const dead = mk([1.7, 0, 9.4], 2, { aim: 1 });
+    const dead = mk([1.7, 0, 9.4], 1, { aim: 1 });
     for (const e of this.list) for (let i = 0; i < 40; i++) {
       e.update(1 / 60);
       e.frame(1 / 60);
@@ -434,7 +444,7 @@ export default {
     const T = THREE;
     this.list.find((e) => e === dead) &&
       dead.damage(1e4, { part: 'torso', silent: true, point: dead.joint(B.chest, new T.Vector3()), dir: new T.Vector3(0.25, 0, -1).normalize() });
-    for (let i = 0; i < 360; i++) dead.update(1 / 60);
+    for (let i = 0; i < 560; i++) dead.update(1 / 60);
     dead.frame(1 / 60);
     this.main = main;
   },
@@ -475,5 +485,6 @@ export default {
     for (const e of this.list) e.dispose();
     this.list.length = 0;
     this.contact?.mesh.removeFromParent();
+    this.contact?.blood?.removeFromParent();
   },
 };

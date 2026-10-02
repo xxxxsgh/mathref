@@ -46,11 +46,11 @@ const LIGHT = {
 /** paletas de camuflagem (sRGB) — 4 tons: fundo + 3 manchas */
 export const CAMO = {
   // verde/marrom multi-terreno (contraste moderado, como tecido real)
-  woodland: ['#5d5b43', '#434830', '#6b5b41', '#27251d'],
+  woodland: ['#55533f', '#41452f', '#5f533d', '#26241c'],
   // árido multi-terreno (areia, oliva, claro e "galhos" escuros)
-  arid: ['#8b7b5e', '#6b6747', '#a28f6f', '#463a2a'],
+  arid: ['#7a6c53', '#5f5b41', '#8a7a5f', '#3f3527'],
   // urbano cinza-oliva
-  urban: ['#585a52', '#3e403a', '#6c6d66', '#252621'],
+  urban: ['#4f514a', '#393b35', '#5f605a', '#22231f'],
 };
 
 /** Atualiza direção/cor do sol nos uniforms (uma vez por frame). */
@@ -150,7 +150,7 @@ float hash12(vec2 p) {
         `#include <color_fragment>
 vec3 tw = triW();
 vec3 nR = normalize(vRestN);
-vec4 cm = tri(uCamoTex, 3.1, tw);
+vec4 cm = tri(uCamoTex, 4.3, tw);
 vec4 dtl = tri(uDetailTex, 2.4, tw);      // rugas (G) e manchas (A)
 vec4 dtf = tri(uDetailTex, 15.0, tw);     // trama ripstop (R) e granulado (B)
 vec4 dtc = tri(uDetailTex, 7.0, tw);      // trama grossa da cordura (R)
@@ -200,8 +200,8 @@ diffuseColor.rgb *= mix(1.0, 0.85 + 0.3 * dtl.g, isLeather * 0.5);
 float low = 1.0 - smoothstep(0.05, 0.7, vRest.y);
 float dirt = clamp(low * (0.45 + 0.7 * dtl.a) + (dtl.a - 0.66) * 0.7, 0.0, 1.0) * (1.0 - vSurf.y * 0.7);
 dirt *= mix(0.25, 1.0, isCloth + isCord) * (1.0 - isGun * 0.85);
-diffuseColor.rgb = mix(diffuseColor.rgb, uDust * (0.75 + 0.35 * dtl.a), dirt * 0.45);
-diffuseColor.rgb *= mix(1.0, vAO, 0.4);`,
+diffuseColor.rgb = mix(diffuseColor.rgb, uDust * (0.6 + 0.3 * dtl.a), dirt * 0.3);
+diffuseColor.rgb *= mix(1.0, vAO, 0.55);`,
       )
       .replace(
         '#include <roughnessmap_fragment>',
@@ -250,6 +250,6 @@ diffuseColor.rgb *= mix(1.0, vAO, 0.4);`,
 }`,
       );
   };
-  mat.customProgramCacheKey = () => 'ironline-soldier-v4';
+  mat.customProgramCacheKey = () => 'ironline-soldier-v5';
   return mat;
 }
