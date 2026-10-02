@@ -162,19 +162,25 @@ const ROAD_FRAG = /* glsl */ `
   vec2 cid = floor(q / cs);
   float hp = wHash(cid + 17.0);
   if (hp > 0.72 && al < 5.6) {
+    // remendo de corte serrado mas GASTO: borda ondulada pelo ruído, tom só
+    // um pouco mais escuro (envelhece junto com o resto), agregado mais fino
     vec2 lc = fract(q / cs);
     vec2 a0 = vec2(wHash(cid + 3.1), wHash(cid + 5.7)) * 0.35;
     vec2 a1 = 1.0 - vec2(wHash(cid + 7.3), wHash(cid + 9.9)) * 0.35;
     vec2 dd = min(lc - a0, a1 - lc) * cs;
-    float ins = min(dd.x, dd.y);
+    float ins = min(dd.x, dd.y) + (nB.r - 0.5) * 0.09 + (texture2D(uWeather, p * 0.9).a - 0.5) * 0.05;
     if (ins > 0.0) {
-      float k = hp > 0.86 ? 0.62 : 0.78;
+      float age = wHash(cid + 23.0);
+      float k = mix(0.8, 0.94, age) * (0.94 + 0.12 * nA.g);
       diffuseColor.rgb *= k;
-      wRough -= 0.06;
-      float seam = 1.0 - smoothstep(0.0, 0.06, ins);
-      diffuseColor.rgb *= 1.0 - 0.45 * seam;
-      wRough -= 0.3 * seam;
-      H -= 0.004 * seam;
+      // bordas do remendo sujas de pó e piche escorrido
+      float seam = 1.0 - smoothstep(0.0, 0.05, ins);
+      diffuseColor.rgb *= 1.0 - 0.3 * seam * (0.5 + 0.5 * nB.a);
+      wRough -= 0.05 + 0.18 * seam;
+      H -= 0.003 * seam;
+      // o remendo também racha (retração): rede fina
+      float rc = texture2D(uRoad, p / 3.1 + 0.37).b;
+      diffuseColor.rgb *= 1.0 - 0.35 * rc * (1.0 - age);
     }
   }
   // rachaduras (abertas), selante de piche e couro de jacaré
@@ -189,22 +195,7 @@ const ROAD_FRAG = /* glsl */ `
   wRough -= 0.12 * seal;
   diffuseColor.rgb *= 1.0 - 0.7 * max(opn, gtr * 0.85);
   H -= 0.006 * max(opn, gtr) - 0.0015 * seal;
-  // buracos (com água no fundo)
-  vec2 ps = vec2(5.0, 7.5);
-  vec2 pid = floor(q / ps);
-  float hh = wHash(pid + 41.0);
-  float pot = 0.0;
-  if (hh > 0.8 && al < 5.0) {
-    vec2 c = (pid + 0.25 + 0.5 * vec2(wHash(pid + 1.3), wHash(pid + 2.9))) * ps;
-    float rad = 0.25 + 0.45 * wHash(pid + 4.4);
-    float dist = length((q - c) * vec2(1.0, 0.8)) / rad + (nB.g - 0.5) * 0.6;
-    pot = 1.0 - smoothstep(0.75, 1.0, dist);
-    float rim = smoothstep(0.7, 1.0, dist) * (1.0 - smoothstep(1.0, 1.35, dist));
-    diffuseColor.rgb *= 1.0 - 0.45 * pot;
-    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.28, 0.25), rim * 0.35);
-    H -= 0.05 * pot;
-    wWet = max(wWet, smoothstep(0.35, 0.05, dist) * 0.95);
-  }
+  // (buracos: agora são geometria de verdade — crateras pequenas em layout.js)
   // manchas de óleo no meio das faixas (carros parados): escuras e ACETINADAS
   {
     vec2 os = vec2(2.2, 5.5);
@@ -257,6 +248,9 @@ const FLOOR_FRAG = /* glsl */ `
   vec4 nB = texture2D(uWeather, p * 0.31 + 0.5);
   // tom por ladrilho
   diffuseColor.rgb *= 0.88 + 0.22 * wHash(cell + 7.0);
+  // granito/ladrilho velho amarelado (o branco limpo lia como azulejo novo)
+  diffuseColor.rgb *= vec3(0.66, 0.63, 0.57) * (0.9 + 0.2 * nB.g);
+  wRough += 0.22; // esmalte gasto e coberto de pó: sem espelho do céu
   float e = min(min(lc.x, 1.0 - lc.x), min(lc.y, 1.0 - lc.y)) * 0.25;
   // ladrilhos faltando (agrupados por ruído): contrapiso de cimento com borda
   float zoneM = smoothstep(0.62, 0.85, nA.r);
@@ -289,8 +283,11 @@ const FLOOR_FRAG = /* glsl */ `
   wRough += dust * 0.5 - path * 0.15;
   // encardido escuro em manchas (água parada, óleo, fuligem pisada) e marcas de bota
   vec4 nC = texture2D(uWeather, p * 0.045 + 0.71);
-  float grime = smoothstep(0.48, 0.75, nC.r) * (0.55 + 0.45 * nB.a);
+  float grime = smoothstep(0.42, 0.72, nC.r) * (0.55 + 0.45 * nB.a);
   diffuseColor.rgb *= 1.0 - 0.6 * grime;
+  // marcas de arrasto/fuligem pisada em faixas largas e manchas de água seca (anel)
+  float ring = smoothstep(0.5, 0.53, nC.b) * (1.0 - smoothstep(0.53, 0.58, nC.b));
+  diffuseColor.rgb *= 1.0 - 0.25 * ring;
   // ladrilhos quebrados soltos: sombra fina no recorte
   diffuseColor.rgb *= 1.0 - 0.25 * step(0.93, wHash(cell + 21.7)) * (1.0 - smoothstep(0.0, 0.03, abs(lc.x + lc.y - 1.0 - (wHash(cell + 4.4) - 0.5) * 0.5)));
   wRough -= 0.12 * grime * smoothstep(0.7, 0.85, nC.g);
@@ -599,7 +596,7 @@ export function createMaterials(q, renderer) {
     concrete: std(sets.concrete, { normalScale: new THREE.Vector2(1.6, 1.6) }, { ground: 0.8, streaks: 0.75, dust: 0.45, tb: true }, true),
     brick: std(sets.brick, { normalScale: new THREE.Vector2(1.3, 1.3) }, { ground: 0.9, streaks: 0.7, dust: 0.25, macro: 0.75 }, true),
     asphalt: std(sets.asphalt, {}, { ground: 0, streaks: 0, dust: 0.1, macro: 0.7, tb: true, road: true }, true),
-    pavers: std(sets.pavers, {}, { ground: 0, streaks: 0, dust: 0.25, macro: 0.8, tb: true }, true),
+    pavers: std(sets.pavers, { color: 0xc9c1b4 }, { ground: 0, streaks: 0, dust: 0.25, macro: 0.8, tb: true }, true),
     metal: std(sets.metal, {}, { ground: 0.5, streaks: 0.4, dust: 0.3, protectRust: 1 }),
     carpaint: std(sets.car, { roughness: 0.55, envMapIntensity: 0.8 }, { ground: 0.9, streaks: 0.45, dust: 0.7, macro: 0.8, protectRust: 1 }),
     corrugated: std(sets.corrugated, {}, { ground: 0.5, streaks: 0.3, dust: 0.2, protectRust: 1 }),
@@ -610,7 +607,7 @@ export function createMaterials(q, renderer) {
     far: std(sets.far, {}, { ground: 0.3, streaks: 0.5, dust: 0, macro: 0.5 }, true),
     bark: std(sets.bark, { normalMap: null, roughnessMap: null, metalnessMap: null, aoMap: null, roughness: 0.92, metalness: 0 }, { tri: 1 / 1.2, ground: 0.4, streaks: 0, dust: 0.3, macro: 0.3 }, true),
     burnt: std(sets.burnt, { envMapIntensity: 0.5 }, { ground: 0.3, streaks: 0.25, dust: 0.12, macro: 0.5 }),
-    bag: std(null, { color: 0xffffff, roughness: 0.5, envMapIntensity: 0.6 }, { ground: 0.2, streaks: 0, dust: 0.6, macro: 0.2 }),
+    bag: std(null, { color: 0xffffff, roughness: 0.3, envMapIntensity: 1.0 }, { ground: 0.2, streaks: 0, dust: 0.6, macro: 0.2 }),
     // caixas de munição (textura de face com estêncil, montada no index)
     crate: std(null, { roughness: 0.85 }, { ground: 0.3, streaks: 0, dust: 0.45, macro: 0.3 }, true),
     // entulho: triplanar (sem UV), relevo por bump do próprio albedo

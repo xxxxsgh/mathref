@@ -428,6 +428,9 @@ void main() {
     if (uBleed > 0.0 && occ > 0.01) {
       vec3 b1 = texture(tBleed, vUv).rgb, b2 = texture(tBleed2, vUv).rgb;
       bleed = (b1 * 0.55 + b2 * 0.45) * uBleed * occ * mix(1.0, ao, 0.8 * uAoStrength);
+      // a vista pela janela é rua ensolarada (quente): sem dessaturar, o teto
+      // inteiro fica laranja. Luz rebatida real é quase neutra (céu + fachadas)
+      bleed = mix(vec3(luma(bleed)), bleed, 0.45);
     }
     vec3 delta = (ambNew - ambScene) + sunE * (visTrue - visScene) + gi + bleed;
     col = max(col + albedo * delta, col * 0.04);
@@ -699,7 +702,7 @@ uniform float uKaris;
 vec3 s(vec2 o) {
   vec3 c = min(texture(tSrc, vUv + o * uTexel).rgb, vec3(256.0));
   if (uKaris > 0.5) {
-    float l = luma(c), k = 14.0;
+    float l = luma(c), k = 9.0;
     if (l > k) c *= (k + (l - k) / (1.0 + (l - k) / k)) / l;
   }
   return c;
@@ -797,6 +800,7 @@ uniform vec2 uRes;
 uniform float uBloomNorm;   // 1/nº de níveis: a cadeia de upsample SOMA os níveis
 uniform float uBlack;       // ponto de preto (compensação de flare, em exibição linear)
 uniform float uFrame;
+uniform float uTonemapper;  // 0 = ACES (ajuste RRT/ODT), 1 = AgX (padrão: fotográfico, sem desvio de matiz)
 
 const mat3 ACESIn = mat3(vec3(0.59719, 0.07600, 0.02840), vec3(0.35458, 0.90834, 0.13383), vec3(0.04823, 0.01566, 0.83777));
 const mat3 ACESOut = mat3(vec3(1.60475, -0.10208, -0.00327), vec3(-0.53108, 1.10813, -0.07276), vec3(-0.07367, -0.00605, 1.07602));
@@ -810,6 +814,26 @@ vec3 aces(vec3 c) {
   c = rrtOdt(c);
   c = ACESOut * c;
   return clamp(c, 0.0, 1.0);
+}
+// AgX (Sobotka; versão Blender/Filament): curva sigmoide em log2 aplicada num
+// espaço "inset" (Rec.2020 comprimido). Altas luzes dessaturam rumo ao branco
+// como em filme/sensor (fogo laranja não vira amarelo-limão, céu não vira
+// ciano) — é o que separa a imagem "fotográfica" da "de jogo".
+const mat3 SRGB2REC2020 = mat3(vec3(0.6274, 0.0691, 0.0164), vec3(0.3293, 0.9195, 0.0880), vec3(0.0433, 0.0113, 0.8956));
+const mat3 REC20202SRGB = mat3(vec3(1.6605, -0.1246, -0.0182), vec3(-0.5876, 1.1329, -0.1006), vec3(-0.0728, -0.0083, 1.1187));
+const mat3 AgXInset = mat3(vec3(0.856627153315983, 0.137318972929847, 0.11189821299995),
+  vec3(0.0951212405381588, 0.761241990602591, 0.0767994186031903),
+  vec3(0.0482516061458583, 0.101439036467562, 0.811302368396859));
+const mat3 AgXOutset = mat3(vec3(1.1271005818144368, -0.1413297634984383, -0.14132976349843826),
+  vec3(-0.11060664309660323, 1.157823702216272, -0.11060664309660294),
+  vec3(-0.016493938717834573, -0.016493938717834257, 1.2519364065950405));
+vec3 agx(vec3 c) {
+  c = AgXInset * (SRGB2REC2020 * c);
+  c = clamp((log2(max(c, 1e-10)) + 12.47393) / 16.5, 0.0, 1.0);
+  vec3 x2 = c * c, x4 = x2 * x2;
+  c = 15.5 * x4 * x2 - 40.14 * x4 * c + 31.96 * x4 - 6.868 * x2 * c + 0.4298 * x2 + 0.1191 * c - 0.00232;
+  c = pow(max(AgXOutset * c, 0.0), vec3(2.2));
+  return clamp(REC20202SRGB * c, 0.0, 1.0);
 }
 vec3 toSRGB(vec3 c) {
   return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
@@ -857,8 +881,8 @@ void main() {
   vec3 kC = mix(vec3(uContrast), vec3(1.04), smoothstep(0.18, 2.0, col));
   col = 0.18 * pow(col / 0.18 + 1e-6, kC);
 
-  // ACES (o three também divide por 0.6)
-  col = aces(col / 0.6);
+  // curva de filme: AgX (padrão) ou ACES (o three também divide por 0.6)
+  col = uTonemapper > 0.5 ? agx(col) : aces(col / 0.6);
 
   // split-toning e lift/gain em espaço de exibição linear
   float Ld = luma(col);
@@ -875,9 +899,14 @@ void main() {
 
   // dithering ANTES da quantização para 8 bits (o alvo LDR é RGBA8): ruído
   // triangular de ±1 LSB em sRGB — céu, névoa e fumaça sem degraus
+  // (hash inteiro PCG: o IGN tinha estrutura diagonal visível no céu liso)
   vec3 o = toSRGB(clamp(col, 0.0, 1.0));
-  float n1 = ign(gl_FragCoord.xy + mod(uFrame, 64.0) * 7.31);
-  float n2 = ign(gl_FragCoord.yx * 1.37 + 11.0 + mod(uFrame, 64.0) * 3.17);
+  uvec3 dp = uvec3(uvec2(gl_FragCoord.xy), uint(mod(uFrame, 4093.0)));
+  dp = dp * 1664525u + 1013904223u;
+  dp.x += dp.y * dp.z; dp.y += dp.z * dp.x; dp.z += dp.x * dp.y;
+  dp ^= dp >> 16u;
+  dp.x += dp.y * dp.z; dp.y += dp.z * dp.x;
+  float n1 = float(dp.x & 0xffffu) / 65535.0, n2 = float(dp.y & 0xffffu) / 65535.0;
   o += (n1 + n2 - 1.0) / 255.0;
   outColor = vec4(o, 1.0);
 }`;

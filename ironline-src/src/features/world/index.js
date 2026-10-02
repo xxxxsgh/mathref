@@ -73,6 +73,7 @@ export default {
       soot: decalMat(DT.sootTexture()),
       cracks: decalMat(null, { ...nrm(DT.crackTexture()) }),
       bullets: decalMat(null, { ...nrm(DT.bulletHolesTexture()) }),
+      bulletsM: decalMat(null, { ...nrm(DT.metalHolesTexture()), roughness: 0.55, metalness: 0.3 }),
       chips: decalMat(null, { ...nrm(DT.chipsTexture()), roughness: 0.95 }),
       scorch: decalMat(DT.scorchTexture(), { roughness: 0.98 }),
       shards: decalMat(DT.shardsTexture(), { roughness: 0.12, metalness: 0.0 }),
@@ -113,7 +114,7 @@ export default {
       mats.crate.needsUpdate = true;
     }
     // decalques e folhagem também recebem a oclusão de interiores
-    for (const k of ['streaks', 'soot', 'cracks', 'bullets', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs', 'contact']) {
+    for (const k of ['streaks', 'soot', 'cracks', 'bullets', 'bulletsM', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs', 'contact']) {
       weather(mats[k], { macro: 0, ground: 0, streaks: 0, dust: 0 });
     }
     setOcclusionVolumes([{ min: [ROOM.x0, -0.2, ROOM.z0], max: [ROOM.x1, ROOM.h + 0.25, ROOM.z1], k: 0.36 }]);
@@ -129,7 +130,7 @@ export default {
     scene.add(mountains);
     this.mountains = mountains;
 
-    const hemi = new THREE.HemisphereLight(0xb9c8dc, 0x6a5a48, 0.55);
+    const hemi = new THREE.HemisphereLight(0xb9c8dc, 0x6a5a48, 0.46);
     hemi.name = 'world-hemi';
     root.add(hemi);
     const sun = new THREE.DirectionalLight(ATMOS.sunColor.clone(), 3.6);
@@ -159,7 +160,7 @@ export default {
     W.B.realShadows = quality.level === 'high' || quality.level === 'ultra';
     buildLayout(W);
     const tris = W.B.tris;
-    const decals = new Set(['streaks', 'soot', 'cracks', 'bullets', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs', 'contact']);
+    const decals = new Set(['streaks', 'soot', 'cracks', 'bullets', 'bulletsM', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs', 'contact']);
     const meshes = W.B.build(root, mats, { noShadow: new Set([...decals, 'room']) });
     const inst = W.I.build(root, mats);
     this.windows = W.win.build(root, { grime: this.sets.grime, quality });

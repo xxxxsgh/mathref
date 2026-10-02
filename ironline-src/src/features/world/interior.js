@@ -19,6 +19,7 @@ import * as THREE from 'three';
 import { cylinder, cylBetween, cable, rebar, decal, contact } from './shapes.js';
 import { rubblePile, scatterBricks, crate, ammoCan, radiator, sandbagWall, trash, barrel } from './props.js';
 import { mat4, cached } from './geo.js';
+import { brickGeo } from './rubble.js';
 import { graffitiRect, bulletRect } from './decals.js';
 
 /** Placa de laje quebrada: retângulo com bordas serrilhadas, extrudado (espessura real). */
@@ -50,7 +51,7 @@ function brokenSlabGeo(w, l, t, seed) {
 export const ROOM = { x0: 9.5, x1: 23.5, z0: -14, z1: 2, h: 3.2, floor: 0.17, wall: 0.3 };
 
 export function buildInterior(W, tint) {
-  const { B, rng } = W;
+  const { B, I, rng } = W;
   const R = ROOM;
   const ix0 = R.x0 + R.wall, ix1 = R.x1 - R.wall, iz0 = R.z0 + R.wall, iz1 = R.z1 - R.wall;
   const lower = [0.47, 0.6, 0.55]; // barra verde-água a óleo
@@ -233,29 +234,99 @@ export function buildInterior(W, tint) {
   frontWall(z, R.z1, 0, CEIL);
   extSkin(z, R.z1, 0, CEIL);
 
-  // rombo de explosão: colunas de 0.15 m com borda irregular; quebra em tijolo
+  // rombo de explosão: parede ESPESSA extrudada com contorno serrilhado.
+  // Núcleo de tijolo (faces de quebra em tijolo), reboco interno/externo com
+  // furo maior e mordido (descascou em volta → anel de tijolo à vista nas
+  // duas faces), tijolos soltos na borda e vergalhões da cinta pendendo.
   {
-    const hz0 = -8.6, hz1 = -5.6, cx = (hz0 + hz1) / 2, cy = 1.35;
-    const n = Math.round((hz1 - hz0) / 0.15);
-    for (let i = 0; i < n; i++) {
-      const za = hz0 + (i / n) * (hz1 - hz0), zb = hz0 + ((i + 1) / n) * (hz1 - hz0);
-      const t = ((za + zb) / 2 - cx) / ((hz1 - hz0) / 2); // -1..1
-      const half = Math.sqrt(Math.max(0, 1 - t * t)) * 1.05 + rng.range(-0.18, 0.12);
-      const yb = Math.max(F, cy - half - rng.range(0, 0.15));
-      const yt = Math.min(CEIL, cy + half * 1.05 + rng.range(-0.1, 0.15));
-      const faces = { nx: null, px: 'plasterIn', py: 'brick', ny: 'brick', pz: 'brick', nz: 'brick' };
-      const dz = rng.range(-0.06, 0);
-      if (yb > 0.02) {
-        B.box(fx0, 0, za, fx1 + dz, yb, zb, 'plasterIn', { color: lower, faces, collide: false });
-        B.collider([fx0, 0, za], [fx1, yb, zb], 'brick');
-        extSkin(za, zb, 0, yb);
+    const hz0 = -8.6, hz1 = -5.6, cx = (hz0 + hz1) / 2, cy = 1.3;
+    const N = 46, ph = [rng.range(0, 6), rng.range(0, 6), rng.range(0, 6)];
+    const jag = (a) => Math.sin(a * 2 + ph[0]) * 0.1 + Math.sin(a * 5 + ph[1]) * 0.09 + Math.sin(a * 11 + ph[2]) * 0.05 + Math.sin(a * 19 + ph[0]) * 0.03;
+    const outline = (sz, sy, bite) => {
+      const pts = [];
+      for (let i = 0; i < N; i++) {
+        const a = (i / N) * Math.PI * 2;
+        const k = (1 + jag(a) + rng.range(-0.05, 0.05)) * (rng.chance(bite) ? rng.range(0.74, 0.9) : 1);
+        // fundo achatado (peitoril de entulho), topo em arco quebrado
+        const sv = Math.sin(a) < 0 ? sy * 0.82 : sy;
+        let zz = cx + Math.cos(a) * sz * k, yy = cy + Math.sin(a) * sv * k;
+        zz = Math.min(hz1 - 0.04, Math.max(hz0 + 0.04, zz));
+        yy = Math.min(CEIL - 0.12, Math.max(F + 0.18, yy));
+        pts.push(new THREE.Vector2(zz, yy));
       }
-      if (yt < CEIL - 0.02) {
-        B.box(fx0, yt, za, fx1 + dz, CEIL, zb, 'plasterIn', { color: yt > DADO ? upper : lower, faces, collide: false });
-        B.collider([fx0, yt, za], [fx1, CEIL, zb], 'brick');
-        extSkin(za, zb, yt, CEIL);
+      return pts;
+    };
+    const core = outline(1.38, 1.08, 0.3);
+    const skinIn = outline(1.62, 1.3, 0.45);
+    const skinOut = outline(1.58, 1.26, 0.45);
+    // base local: X → +z do mundo, Y → y, Z → -x (extruda de fx1 para fora)
+    const BM = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0), new THREE.Vector3(-1, 0, 0));
+    const zA = iz0 - R.wall, zB = R.z1; // trecho: só o vão do rombo
+    const slab = (pts, d0, d1) => {
+      const sh = new THREE.Shape([new THREE.Vector2(hz0, 0), new THREE.Vector2(hz1, 0), new THREE.Vector2(hz1, CEIL), new THREE.Vector2(hz0, CEIL)]);
+      sh.holes.push(new THREE.Path([...pts].reverse()));
+      const g = new THREE.ExtrudeGeometry(sh, { depth: d1 - d0, bevelEnabled: false, curveSegments: 1 });
+      g.translate(0, 0, d0);
+      return g.index ? g.toNonIndexed() : g;
+    };
+    const P = new THREE.Vector3(), Q = new THREE.Vector3(), Rr = new THREE.Vector3();
+    // classifica a face pelo eixo local: tampa interna (-z), tampa externa (+z), lados
+    const faceKind = (g) => (f) => {
+      const A = g.attributes.position;
+      P.fromBufferAttribute(A, f * 3); Q.fromBufferAttribute(A, f * 3 + 1); Rr.fromBufferAttribute(A, f * 3 + 2);
+      const n = Q.sub(P).cross(Rr.sub(P)).normalize();
+      // bordas externas do retângulo ficam escondidas nas paredes vizinhas
+      const onRect = (v) => Math.abs(v.x - hz0) < 1e-3 || Math.abs(v.x - hz1) < 1e-3 || v.y < 1e-3 || Math.abs(v.y - CEIL) < 1e-3;
+      if (Math.abs(n.z) < 0.5 && onRect(P) && onRect(new THREE.Vector3().fromBufferAttribute(A, f * 3 + 1))) return 'rect';
+      return n.z < -0.5 ? 'in' : n.z > 0.5 ? 'out' : 'side';
+    };
+    const M = BM.clone().setPosition(fx1, 0, 0);
+    const brickC = (p) => { const v = 0.82 + 0.18 * Math.sin(p.y * 9.1 + p.z * 3.3); return [0.82 * v, 0.76 * v, 0.72 * v]; };
+    const wallC = (p) => tinted(p.y < DADO ? lower : upper, 'x0')({ x: fx1, y: p.y, z: p.z });
+    // núcleo de tijolo
+    {
+      const g = slab(core, 0.022, R.wall - 0.012);
+      const k = faceKind(g);
+      B.add(g, 'brick', M, { color: brickC, faceMats: (f) => (k(f) === 'rect' ? null : 'brick') });
+    }
+    // reboco interno (2 cm) e pele externa (1.2 cm, cor do prédio)
+    {
+      const g = slab(skinIn, 0, 0.022);
+      const k = faceKind(g);
+      B.add(g, 'plasterIn', M, { color: (p) => (p.x > fx1 - 0.004 ? wallC(p) : [0.86, 0.83, 0.77]), faceMats: (f) => (k(f) === 'rect' || k(f) === 'out' ? null : 'plasterIn') });
+      const g2 = slab(skinOut, R.wall - 0.012, R.wall + 0.005);
+      const k2 = faceKind(g2);
+      B.add(g2, 'plaster', M, { color: tint, faceMats: (f) => (k2(f) === 'rect' || k2(f) === 'in' ? null : 'plaster') });
+    }
+    // colisores por fatias de 0.15 m a partir do contorno real do núcleo
+    const yRange = (z) => {
+      let lo = Infinity, hi = -Infinity;
+      for (let i = 0; i < N; i++) {
+        const a = core[i], b = core[(i + 1) % N];
+        if ((a.x - z) * (b.x - z) > 0 || a.x === b.x) continue;
+        const y = a.y + ((z - a.x) / (b.x - a.x)) * (b.y - a.y);
+        lo = Math.min(lo, y); hi = Math.max(hi, y);
       }
-      if (rng.chance(0.4)) rebar(B, [fx0 + 0.15, yt, (za + zb) / 2], [rng.range(-1, 1), -1, rng.range(-0.3, 0.3)], rng.range(0.3, 0.7), rng);
+      return [lo, hi];
+    };
+    for (let za = hz0; za < hz1 - 1e-3; za += 0.15) {
+      const zb = Math.min(hz1, za + 0.15);
+      const [lo, hi] = yRange((za + zb) / 2);
+      if (!isFinite(lo)) { B.collider([fx0, 0, za], [fx1, CEIL, zb], 'brick'); continue; }
+      B.collider([fx0, 0, za], [fx1, lo, zb], 'brick');
+      B.collider([fx0, hi, za], [fx1, CEIL, zb], 'brick');
+    }
+    // tijolos soltos meio presos na borda do núcleo, apontando para dentro
+    for (let i = 0; i < 16; i++) {
+      const pt = core[rng.int(0, N - 1)];
+      const dz = cx - pt.x, dy = cy - pt.y, l = Math.hypot(dz, dy) || 1;
+      const v = rng.int(0, 3);
+      I.add('rbrick' + v, brickGeo(v), 'rubbleB', mat4([rng.range(fx0 + 0.05, fx1 - 0.05), pt.y + (dy / l) * 0.05, pt.x + (dz / l) * 0.05], [rng.range(-0.4, 0.4), Math.PI / 2 + rng.range(-0.5, 0.5), Math.atan2(dy, dz) * 0.3 + rng.range(-0.3, 0.3)], 1), [0.64, 0.4, 0.3]);
+    }
+    // cinta de concreto sobre o rombo: vergalhões pendendo do topo
+    for (let i = 0; i < 6; i++) {
+      const pt = core[Math.floor(N * (0.15 + (i / 6) * 0.2)) % N];
+      rebar(B, [rng.range(fx0 + 0.06, fx1 - 0.06), pt.y + 0.02, pt.x], [rng.range(-0.6, 0.6), -1, rng.range(-0.4, 0.4)], rng.range(0.3, 0.8), rng);
     }
     // fuligem e lascas em volta do rombo (fora e dentro)
     decal(B, 'scorch', [fx0 - 0.012, cy + 0.4, cx], 'nx', [5, 4.6], [0, 0, 1, 1], 0.6);

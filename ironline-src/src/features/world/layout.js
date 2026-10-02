@@ -23,7 +23,10 @@ const ROAD = 6, WALK = 9.5, DEPTH = 14;
 const Z_N = 60, Z_S = -150;
 const CROSS = [-66, -52];
 /** Crateras de morteiro na avenida: [x, z, raio, semente]. */
-const CRATERS = [[0.9, 14.5, 1.3, 1], [-2.2, -17, 1.2, 2], [3.0, -41, 1.4, 3], [-1.0, -84, 1.1, 4], [2.4, -118, 1.3, 5]];
+// [x, z, raio, semente] — as pequenas (r < 0.8) são buracos de estilhaço/
+// asfalto afundado; todas com bacia real (furo na fatia da pista)
+const CRATERS = [[0.9, 14.5, 1.3, 1], [-2.2, -17, 1.2, 2], [3.0, -41, 1.4, 3], [-1.0, -84, 1.1, 4], [2.4, -118, 1.3, 5],
+  [-2.3, 18.2, 0.62, 6], [3.3, 5.5, 0.55, 7], [-3.0, -27, 0.7, 8], [-2.6, -100, 0.6, 9], [2.8, 36, 0.58, 10]];
 
 export function buildLayout(W) {
   const { B, rng } = W;
@@ -168,7 +171,7 @@ function ground(W) {
     // faixa gasta: tom e desgaste variam por traço; alguns quase sumiram
     if (rng.chance(0.12)) continue;
     const fade = rng.chance(0.25) ? rng.range(0.35, 0.55) : rng.range(0.62, 0.9);
-    decal(B, 'paint', [rng.range(-0.03, 0.03), 0.012, z], 'py', [0.14, rng.range(2.6, 3)], [0, rng.next(), 1, rng.next() + 0.4], rng.range(-0.012, 0.012), [0.95 * fade, 0.85 * fade, 0.55 * fade]);
+    decal(B, 'paint', [rng.range(-0.03, 0.03), 0.012, z], 'py', [0.14, rng.range(2.6, 3)], [0, rng.next(), 1, rng.next() + 0.4], rng.range(-0.012, 0.012), [0.8 * fade, 0.7 * fade, 0.45 * fade]);
   }
   for (const zc of [CROSS[1] + 1.8, CROSS[0] - 1.8]) {
     for (let x = -ROAD + 0.8; x < ROAD - 0.4; x += 1.0) decal(B, 'paint', [x, 0.012, zc], 'py', [0.5, 3.0], [0, rng.next(), 1, rng.next() * 0.5 + 0.5]);
@@ -454,6 +457,9 @@ function dressStreet(W) {
   treeSpot(7.9, -122, { species: 1 });
   treeSpot(7.9, -70);
   treeSpot(-7.7, 48, { species: 2 });
+  treeSpot(-7.7, -40, { species: 0 });
+  treeSpot(-7.7, -57.5, { species: 1 });
+  treeSpot(7.9, -80, { species: 2 });
   P.palm(W, 8.1, 50.5, { h: 10 });
   P.palm(W, -8.1, -116.5, { h: 9.5 });
   P.palm(W, 8.0, -104.5, { h: 8 });

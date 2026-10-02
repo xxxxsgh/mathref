@@ -270,12 +270,54 @@ export function barrel(W, x, z, opts = {}) {
   else B.collider([x - 0.3, y0, z - 0.3], [x + 0.3, y0 + 0.88, z + 0.3], 'metal');
 }
 
+/**
+ * Pneu de verdade (torno): perfil com flanco abaulado, ombro arredondado,
+ * talão e banda de rodagem com BLOCOS (sulcos em V e canal central) —
+ * deslocamento radial por ângulo × posição lateral. Eixo = Y (deitado).
+ */
+const tireGeo = (v = 0) =>
+  cached('tire3_' + v, () => {
+    const R = 0.33, Ri = 0.21, Wd = 0.2;
+    const prof = [];
+    // de dentro (talão, embaixo) → flanco → banda → flanco → talão (em cima)
+    const n = 22;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, a = -Math.PI / 2 + t * Math.PI;
+      // superelipse: banda larga e quase plana, ombro arredondado
+      const c = Math.cos(a), s2 = Math.sin(a);
+      const rr = Ri + (R - Ri) * Math.pow(Math.abs(c), 0.35);
+      prof.push(new THREE.Vector2(rr, Math.sign(s2) * Math.pow(Math.abs(s2), 0.55) * Wd / 2));
+    }
+    const g = new THREE.LatheGeometry(prof, 72);
+    const P = g.attributes.position;
+    const seg = 36 + v * 4;
+    for (let i = 0; i < P.count; i++) {
+      const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
+      const r = Math.hypot(x, z);
+      if (r < R - 0.035) continue;
+      const a = Math.atan2(z, x);
+      const lat = y / (Wd / 2); // -1..1
+      // sulcos em V alternados nas duas metades + canal central
+      const ph = a * seg + Math.abs(lat) * 2.2 * (lat > 0 ? 1 : -1);
+      const block = Math.sin(ph) > -0.35 ? 1 : 0;
+      const groove = Math.abs(lat) < 0.12 ? 0 : block;
+      const d = (1 - groove) * 0.012 * Math.min(1, (r - (R - 0.035)) / 0.02);
+      const k = (r - d) / r;
+      P.setXYZ(i, x * k, y, z * k);
+    }
+    g.computeVertexNormals();
+    return g;
+  });
+
 export function tire(W, x, z, opts = {}) {
-  const { B, rng } = W;
+  const { B, I, rng } = W;
   const flat = opts.flat ?? rng.chance(0.6);
   const y0 = opts.y || 0;
-  const M = flat ? mat4([x, y0 + 0.11, z], [Math.PI / 2 + (opts.tilt || 0), 0, 0], [0.3, 0.3, 0.4]) : mat4([x, y0 + 0.33, z], [rng.range(-0.2, 0.2), rng.range(0, 6), 0], [0.3, 0.3, 0.45]);
-  B.add(torus(0.42, 16), 'rubber', M, { color: [1, 1, 1] });
+  const v = rng.int(0, 1);
+  const M = flat ? mat4([x, y0 + 0.1, z], [opts.tilt || 0, rng.range(0, 6), rng.range(-0.04, 0.04)]) : new THREE.Matrix4().makeRotationY(rng.range(0, 6.28)).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2 + rng.range(-0.12, 0.12))).setPosition(x, y0 + 0.33, z);
+  // pneus usados: borracha preta levemente acinzentada pelo pó
+  const tone = rng.range(0.75, 1.0);
+  I.add('tire' + v, tireGeo(v), 'rubber', M, [tone, tone, tone * 0.97]);
   if (flat) contact(B, x, opts.y || 0, z, 0.95, 0.95, 0, 1);
 }
 
@@ -284,8 +326,30 @@ export function dumpster(W, x, z, yaw) {
   const M = mat4([x, 0, z], [0, yaw, 0]);
   const L = (p, sc, r = [0, 0, 0]) => M.clone().multiply(mat4(p, r, sc));
   const UNIT = cached('unitbox', () => new THREE.BoxGeometry(1, 1, 1));
-  B.add(UNIT, 'metal', L([0, 0.75, 0], [1.9, 1.1, 1.1]), { color: [0.28, 0.4, 0.3], ao: [0, 0.6, 0.6] });
-  B.add(UNIT, 'plastic', L([0, 1.38, -0.2], [1.95, 0.06, 0.9], [-0.35, 0, 0]), { color: [0.25, 0.25, 0.25] });
+  // caçamba de verdade: corpo em tronco de pirâmide (boca mais larga),
+  // chapa com bisel, aba dobrada na boca, nervuras verticais, bolsos de
+  // içamento nas laterais, tampas de plástico (uma aberta, empenada)
+  const body = cached('dumpsterBody', () => {
+    const sh = new THREE.Shape([new THREE.Vector2(-0.47, 0.2), new THREE.Vector2(0.47, 0.2), new THREE.Vector2(0.57, 1.32), new THREE.Vector2(-0.57, 1.32)]);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 1.86, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.025, bevelSegments: 2, curveSegments: 1 });
+    g.translate(0, 0, -0.93);
+    g.rotateY(Math.PI / 2);
+    return g;
+  });
+  const green = [0.24, 0.36, 0.27];
+  B.add(body, 'metal', M, { color: green, ao: [0.15, 0.8, 0.55] });
+  // aba da boca
+  for (const s of [-1, 1]) B.add(UNIT, 'metal', L([0, 1.31, s * 0.585], [1.96, 0.06, 0.05]), { color: green });
+  for (const s of [-1, 1]) B.add(UNIT, 'metal', L([s * 0.985, 1.31, 0], [0.05, 0.06, 1.2]), { color: green });
+  // nervuras verticais (seguem a inclinação da parede)
+  for (const s of [-1, 1]) for (const u of [-0.62, 0, 0.62]) B.add(UNIT, 'metal', L([u, 0.76, s * 0.535], [0.07, 1.12, 0.05], [s * -0.09, 0, 0]), { color: green.map((c) => c * 0.92) });
+  // bolsos de içamento
+  for (const s of [-1, 1]) B.add(UNIT, 'metal', L([s * 1.0, 0.95, 0], [0.12, 0.16, 0.5]), { color: [0.2, 0.2, 0.19] });
+  // base/chassi escuro
+  B.add(UNIT, 'metal', L([0, 0.17, 0], [1.8, 0.08, 0.9]), { color: [0.12, 0.12, 0.11] });
+  // tampas: uma fechada, outra aberta para trás
+  B.add(UNIT, 'plastic', L([-0.48, 1.38, 0.0], [0.94, 0.05, 1.18], [0.04, 0, 0.02]), { color: [0.2, 0.2, 0.19] });
+  B.add(UNIT, 'plastic', L([0.48, 1.62, -0.72], [0.94, 0.05, 0.62], [-1.15, 0, 0]), { color: [0.2, 0.2, 0.19] });
   for (const s of [-0.8, 0.8]) for (const t of [-0.45, 0.45]) B.add(cyl(8), 'rubber', L([s, 0.1, t], [0.1, 0.06, 0.1], [Math.PI / 2, 0, 0]), { color: [1, 1, 1] });
   const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, 0.7, 0), new THREE.Vector3(1.9, 1.4, 1.1)).applyMatrix4(M);
   B.collider(box.min.toArray(), box.max.toArray(), 'metal');
@@ -318,7 +382,7 @@ export function dish(W, p, n) {
 /** Saco de lixo plástico (instanciado): corpo assentado com vincos de plástico, nó com orelhas. */
 const bagGeo = (v) =>
   cached('trashbag2_' + v, () => {
-    const g = new THREE.SphereGeometry(1, 30, 22);
+    const g = new THREE.SphereGeometry(1, 44, 30);
     const P = g.attributes.position;
     const ph = v * 1.7;
     for (let i = 0; i < P.count; i++) {
@@ -327,7 +391,9 @@ const bagGeo = (v) =>
       // vincos: dobras em crista (|sin|) radiais convergindo para o nó + amassados
       const crease = Math.abs(Math.sin(a * 6 + y * 2.5 + ph)) * 0.09 + Math.abs(Math.sin(a * 11 - y * 4 + ph * 2)) * 0.05;
       const dent = Math.sin(x * 4 + ph) * Math.sin(z * 5 - ph) * 0.06;
-      let k = 1 - crease + dent;
+      // rugas finas do plástico fino esticado sobre o conteúdo (caixas, garrafas)
+      const wr = Math.abs(Math.sin(a * 23 + y * 9 + ph * 3)) * 0.022 + Math.max(0, Math.sin(x * 7.3 - z * 6.1 + y * 5 + ph)) * 0.05;
+      let k = 1 - crease + dent - wr;
       // apoiado no chão: fundo achatado e "derramado" para os lados
       if (y < -0.25) {
         const t = (-0.25 - y) / 0.75;
@@ -338,7 +404,7 @@ const bagGeo = (v) =>
       if (y > 0.55) k *= 1 - Math.pow((y - 0.55) / 0.45, 1.5) * 0.82;
       P.setXYZ(i, x * k * (1 + 0.08 * Math.sin(ph)), y * (y > 0 ? 0.92 : 1), z * k);
     }
-    const body = jitterGeometry(g, 0.035, 300 + v * 7);
+    const body = jitterGeometry(g, 0.018, 300 + v * 7);
     // nó com duas orelhas de plástico torcido
     const knot = new THREE.ConeGeometry(0.1, 0.32, 7, 2);
     knot.translate(0, 1.0, 0);
@@ -349,9 +415,9 @@ const bagGeo = (v) =>
       e.translate(s * 0.13, 1.12, 0.02 * s);
       ears.push(e);
     }
-    const m = mergeSimple([body, knot, ...ears]);
-    m.computeVertexNormals();
-    return m;
+    // normais calculadas por peça ANTES de mesclar (corpo liso, sem facetas)
+    for (const e of [knot, ...ears]) e.computeVertexNormals();
+    return mergeSimple([body, knot, ...ears]);
   });
 
 /**
@@ -369,7 +435,7 @@ export function clutter(W, x, z, r, n = 6, opts = {}) {
     if (k < 0.45) {
       const s = rng.range(0.22, 0.34);
       const v = rng.int(0, 2);
-      I.add('trashbag' + v, bagGeo(v), 'bag', mat4([px, y + s * 0.6, pz], [rng.range(-0.3, 0.3), rng.range(0, 6), rng.range(-0.3, 0.3)], [s * 1.1, s, s]), rng.pick([[0.1, 0.1, 0.1], [0.12, 0.14, 0.12], [0.15, 0.2, 0.3], [0.5, 0.5, 0.48]]));
+      I.add('trashbag' + v, bagGeo(v), 'bag', mat4([px, y + s * 0.6, pz], [rng.range(-0.3, 0.3), rng.range(0, 6), rng.range(-0.3, 0.3)], [s * 1.1, s, s]), rng.pick([[0.06, 0.06, 0.06], [0.08, 0.08, 0.075], [0.07, 0.09, 0.07], [0.1, 0.12, 0.16], [0.32, 0.31, 0.29]]));
     } else if (k < 0.7) {
       // caixa de papelão (às vezes aberta/amassada)
       const w = rng.range(0.3, 0.6), h = rng.range(0.2, 0.45), dd = rng.range(0.25, 0.45);

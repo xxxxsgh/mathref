@@ -179,7 +179,9 @@ export function crater(W, c) {
       (k === 0 ? lip : bowl).push(...a, ...cc, ...b, ...a, ...d, ...cc);
     }
   }
-  for (const [pos, mat, col] of [[bowl, 'rubbleD', (p) => { const t = Math.min(1, -p.y / depth); return [0.62 - t * 0.2, 0.58 - t * 0.2, 0.53 - t * 0.2]; }], [lip, 'asphalt', [0.55, 0.53, 0.5]]]) {
+  // bacia: terra revolvida marrom (umidade/sombra no fundo), sem anel claro;
+  // a borda (corte do asfalto) no mesmo tom da pista, só um pouco queimada
+  for (const [pos, mat, col] of [[bowl, 'rubbleD', (p) => { const t = Math.min(1, -p.y / depth); return [0.5 - t * 0.16, 0.43 - t * 0.14, 0.35 - t * 0.12]; }], [lip, 'asphalt', [0.72, 0.7, 0.67]]]) {
     let g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.computeVertexNormals();
@@ -195,22 +197,26 @@ export function crater(W, c) {
     const yy = -depth * Math.pow(Math.cos((t * Math.PI) / 2), 0.8);
     const s = rng.range(0.04, 0.12);
     const v = rng.int(0, 7);
-    I.add('rchunk' + v, chunkGeo(v), 'rubbleC', mat4([x + Math.cos(a) * d, yy + s * 0.2, z + Math.sin(a) * d], [rng.range(0, 6), rng.range(0, 6), 0], s), rng.chance(0.4) ? [0.3, 0.29, 0.28] : [0.5, 0.48, 0.45], { shadow: false });
+    I.add('rchunk' + v, chunkGeo(v), 'rubbleC', mat4([x + Math.cos(a) * d, yy + s * 0.2, z + Math.sin(a) * d], [rng.range(0, 6), rng.range(0, 6), 0], s), rng.chance(0.4) ? [0.26, 0.24, 0.22] : [0.44, 0.4, 0.35], { shadow: false });
   }
   // anel de placas de asfalto levantadas, inclinadas para fora
-  const m = Math.round(r * 9);
+  // duas voltas: placas grandes levantadas na boca + lascas menores tombadas
+  // para fora (a explosão empurra o asfalto em "pétalas")
+  const m = Math.round(r * 13);
   for (let i = 0; i < m; i++) {
-    const a = (i / m) * Math.PI * 2 + rng.range(-0.15, 0.15);
-    const d = r * rng.range(0.8, 1.05);
-    const s = rng.range(0.25, 0.5);
-    const M = mat4([x + Math.cos(a) * d, 0.03, z + Math.sin(a) * d], [0, -a, rng.range(0.25, 0.6)], [s, 0.6, s * 0.8]);
-    I.add('rslab' + (i % 4), slabGeo(i % 4), 'asphalt', M, [0.8, 0.8, 0.8]);
+    const a = (i / m) * Math.PI * 2 + rng.range(-0.2, 0.2);
+    const outer = i % 3 === 2;
+    const d = r * (outer ? rng.range(1.05, 1.5) : rng.range(0.74, 0.98));
+    const s = outer ? rng.range(0.14, 0.3) : rng.range(0.28, 0.55);
+    const tilt = outer ? rng.range(0.05, 0.3) : rng.range(0.35, 0.85);
+    const M = mat4([x + Math.cos(a) * d, outer ? 0.012 : 0.04 + s * 0.08, z + Math.sin(a) * d], [rng.range(-0.1, 0.1), -a + rng.range(-0.3, 0.3), tilt], [s, 0.42, s * rng.range(0.6, 0.9)]);
+    I.add('rslab' + (i % 4), slabGeo(i % 4), 'asphalt', M, outer ? [0.9, 0.88, 0.84] : [1.0, 0.98, 0.95]);
   }
   // respingos de pedras em volta
   for (let i = 0; i < Math.round(r * 16); i++) {
     const a = rng.range(0, Math.PI * 2), d = r * rng.range(1.0, 2.6);
     const s = rng.range(0.03, 0.09);
     const v = rng.int(0, 7);
-    I.add('rchunk' + v, chunkGeo(v), 'rubbleC', mat4([x + Math.cos(a) * d, s * 0.25, z + Math.sin(a) * d], [rng.range(0, 6), rng.range(0, 6), 0], s), [0.45, 0.43, 0.4], { shadow: false });
+    I.add('rchunk' + v, chunkGeo(v), 'rubbleC', mat4([x + Math.cos(a) * d, s * 0.25, z + Math.sin(a) * d], [rng.range(0, 6), rng.range(0, 6), 0], s), rng.chance(0.5) ? [0.3, 0.29, 0.28] : [0.46, 0.42, 0.37], { shadow: false });
   }
 }

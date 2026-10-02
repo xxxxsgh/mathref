@@ -188,7 +188,8 @@ function merge(geos) {
 }
 
 const BRICK_T = [[0.62, 0.34, 0.25], [0.5, 0.29, 0.22], [0.7, 0.46, 0.33], [0.55, 0.47, 0.4], [0.66, 0.38, 0.27], [0.36, 0.24, 0.2]];
-const CONC_T = [[0.72, 0.7, 0.66], [0.64, 0.62, 0.59], [0.78, 0.74, 0.68], [0.56, 0.55, 0.52], [0.68, 0.64, 0.58]];
+// concreto quente e sujo de pó (cinza puro lia azulado sob o céu)
+const CONC_T = [[0.62, 0.58, 0.52], [0.53, 0.5, 0.45], [0.68, 0.63, 0.55], [0.43, 0.41, 0.38], [0.58, 0.54, 0.47], [0.36, 0.34, 0.31]];
 
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
@@ -230,7 +231,12 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
     // cristas (pedaços grandes enterrados sob o pó) + degraus de deslizamento
     const ridge = 1 - Math.abs(2 * vnoise(lx * 2.3 + 11, lz * 2.3, seed + 9) - 1);
     const ridge2 = 1 - Math.abs(2 * vnoise(lx * 5.1, lz * 5.1 + 7, seed + 13) - 1);
-    return h * base * (0.62 + n * 0.7) + (lump - 0.5) * 0.3 * base + ridge * ridge * 0.16 * base + ridge2 * ridge2 * 0.06 * Math.sqrt(base) + (grit - 0.5) * 0.1 * Math.sqrt(base);
+    // cascalho grosso: pedras de 5–15 cm moldando a superfície (Worley
+    // aproximado por |ruído| em duas escalas) — não um domo liso
+    const peb = 1 - Math.abs(2 * vnoise(lx * 9.7 + 3, lz * 9.7, seed + 17) - 1);
+    const peb2 = 1 - Math.abs(2 * vnoise(lx * 17.3, lz * 17.3 + 5, seed + 19) - 1);
+    const sb = Math.sqrt(base);
+    return h * base * (0.62 + n * 0.7) + (lump - 0.5) * 0.3 * base + ridge * ridge * 0.16 * base + ridge2 * ridge2 * 0.07 * sb + (grit - 0.5) * 0.1 * sb + (peb * peb * peb * 0.075 + peb2 * peb2 * 0.03) * sb;
   };
   const normalAt = (lx, lz) => {
     const e = 0.08;
@@ -241,7 +247,7 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
   };
   // ── monte base (malha radial) ──
   if (opts.mound !== false && h > 0.08) {
-    const rings = Math.max(12, Math.round(r * 10)), segs = Math.max(28, Math.round(r * 24));
+    const rings = Math.max(16, Math.round(r * 15)), segs = Math.max(40, Math.round(r * 36));
     const R = r * 1.08;
     const vtx = (ri, si) => {
       const t = ri / rings;
@@ -272,7 +278,8 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
     // (o cascalho triplanar já tem cor própria; aqui só AO de contato e um toque da tinta)
     const col = (p) => {
       const t = Math.min(1, Math.max(0, (p.y - y0) / Math.max(0.2, h)));
-      const k = 0.42 + 0.58 * Math.pow(t, 0.55);
+      // AO de contato forte no pé (encontro com asfalto/parede) + cavidades
+      const k = (0.28 + 0.72 * Math.pow(t, 0.6)) * (0.82 + 0.18 * vnoise(p.x * 6.1, p.z * 6.1, seed + 29));
       return [(0.8 + tint[0] * 0.2) * k, (0.8 + tint[1] * 0.2) * k, (0.8 + tint[2] * 0.2) * k];
     };
     B.add(g, 'rubbleD', null, { color: col, at: [x, z] });
@@ -328,7 +335,7 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
     }
   }
   // ── talude de cascalho miúdo (sem sombra) ──
-  const nSmall = Math.round(r * r * 34 * (opts.density ?? 1)) + 14;
+  const nSmall = Math.round(r * r * 60 * (opts.density ?? 1)) + 24;
   for (let i = 0; i < nSmall; i++) {
     // cobre o monte inteiro (mais denso na encosta/pé) e transborda além da borda
     const a = rng.range(0, Math.PI * 2), d = r * (rng.chance(0.65) ? rng.range(0.5, 1.3) : Math.sqrt(rng.next()) * 0.9);
@@ -339,7 +346,7 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
     I.add('rchunk' + v, chunkGeo(v), 'rubbleC', mat4(place(lx, lz, s * 0.2), [rng.range(0, 6), rng.range(0, 6), rng.range(0, 6)], s), red ? rng.pick(BRICK_T) : rng.pick(CONC_T), { shadow: false });
   }
   // ── vergalhões, canos e tábuas ──
-  const nBar = Math.round(r * (opts.rebar ?? 2.2));
+  const nBar = Math.round(r * (opts.rebar ?? 3.4));
   for (let i = 0; i < nBar; i++) {
     const [lx, lz] = randIn(0.6);
     rebar(B, place(lx, lz, -0.05), [rng.range(-1, 1), rng.range(0.3, 1), rng.range(-1, 1)], rng.range(0.5, 1.5), rng);

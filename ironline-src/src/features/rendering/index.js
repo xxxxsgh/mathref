@@ -24,7 +24,7 @@
  *                                        interior, névoa/Mie, god rays, vm+DOF
  *      → TAA (reprojeção, Catmull-Rom, recorte YCoCg)
  *      → cadeia de bloom (13-tap/tenda) → exposição automática
- *      → tonemap: ACES + gradação + aberração + sujeira de lente + vinheta
+ *      → tonemap: AgX (ou ACES) + gradação + aberração + sujeira de lente + vinheta
  *      → final: FXAA ou nitidez CAS, grão de filme, dithering → tela
  *  - Presets de qualidade (low/medium/high/ultra) com orçamento por passe
  *    (ver ORÇAMENTO abaixo) e troca ao vivo por `quality:change`.
@@ -89,17 +89,20 @@ function defaultParams() {
     fog: { density: 0.0011, falloff: 0.045, base: 0.0, start: 22, max: 0.8, tint: new THREE.Color(0.93, 0.92, 0.88), sun: 0.12 },
     taa: { alpha: 0.1, gamma: 1.0 },
     vol: { density: 0.0025, falloff: 0.09, base: 0.0, maxDist: 70, strength: 0.55, phaseG: 0.6, indoorDust: 22 },
-    bloom: { strength: 0.07, radius: 1.0, dirt: 0.7 },
+    bloom: { strength: 0.055, radius: 1.0, dirt: 0.5 },
+    // gradação "fotográfica": AgX + contraste em log, saturação levemente
+    // abaixo de 1, split-toning quase neutro (sem laranja/azul-petróleo de
+    // trailer) — a referência é foto de reportagem, não pôster de jogo
     grade: {
-      whiteBalance: new THREE.Color(1.02, 1.0, 0.965),
-      contrast: 1.3,
-      saturation: 1.08,
-      // split-toning: sombras levemente frias (azul-petróleo), altas quentes
-      shadowTint: new THREE.Color(0.93, 0.99, 1.06),
-      highlightTint: new THREE.Color(1.06, 1.0, 0.92),
-      lift: new THREE.Color(0.004, 0.006, 0.009),
-      gain: new THREE.Color(1.0, 1.0, 1.0),
-      black: 0.0035,        // ponto de preto (flare) — pretos profundos
+      tonemapper: 'agx',    // 'agx' | 'aces'
+      whiteBalance: new THREE.Color(1.0, 1.0, 0.985),
+      contrast: 1.32,
+      saturation: 0.9,
+      shadowTint: new THREE.Color(0.985, 1.0, 1.02),
+      highlightTint: new THREE.Color(1.02, 1.0, 0.975),
+      lift: new THREE.Color(0.003, 0.004, 0.005),
+      gain: new THREE.Color(1.06, 1.06, 1.06), // AgX entrega brancos ~0,94: devolve o topo
+      black: 0.004,         // ponto de preto (flare) — pretos profundos
     },
     clarity: 0.08,          // contraste local (micro-contraste estilo 'clarity')
     lens: { ca: 0.006, vignette: 0.3, grain: 0.02, sharpen: null },
@@ -117,6 +120,8 @@ const rendering = {
     const { renderer, scene, camera, quality, bus } = ctx;
     this.ctx = ctx;
     this.params = defaultParams();
+    // ?tm=aces|agx — compara as curvas de filme sem rebuild
+    if (ctx.params.get('tm')) this.params.grade.tonemapper = ctx.params.get('tm');
     this.flashAmt = 0;
     this.debugView = null;
     this.frameIndex = 0;
@@ -326,7 +331,7 @@ const rendering = {
         uWhiteBalance: U(new THREE.Color()), uContrast: U(1), uSaturation: U(1),
         uShadowTint: U(new THREE.Color()), uHighlightTint: U(new THREE.Color()), uLift: U(new THREE.Color()), uGain: U(new THREE.Color()),
         uVignette: U(0.3), uFlash: U(0), uClarity: U(0), uRes: U(new THREE.Vector2()),
-        uBloomNorm: U(1), uBlack: U(0), uFrame: U(0),
+        uBloomNorm: U(1), uBlack: U(0), uFrame: U(0), uTonemapper: U(1),
       }),
       final: postMaterial('final', FINAL_FRAG, {
         ...common(), tLdr: U(null), uTexel: U(new THREE.Vector2()), uGrain: U(0.03), uSharpen: U(0), uFxaa: U(0), uTime: U(0),
@@ -922,6 +927,7 @@ const rendering = {
       u.uCA.value = P.lens.ca;
       u.uMenuBlur.value = P.menuBlur;
       u.uWhiteBalance.value.copy(G.whiteBalance);
+      u.uTonemapper.value = G.tonemapper === 'aces' ? 0 : 1;
       u.uContrast.value = G.contrast;
       u.uSaturation.value = G.saturation;
       u.uShadowTint.value.copy(G.shadowTint);

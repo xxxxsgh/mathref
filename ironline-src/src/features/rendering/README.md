@@ -45,8 +45,10 @@ Iluminação global e compositor HDR do IRONLINE. Tudo procedural, sem assets.
    média é progressiva (supersample limpo).
 8. Bloom (13-tap Jimenez + tenda), exposição automática (média log ponderada).
 9. Tonemap: micro-contraste, bloom, sujeira de lente (só fontes fortes),
-   aberração cromática, ACES, gradação (WB, contraste, saturação,
-   split-toning frio/quente, lift/gain), vinheta → sRGB.
+   aberração cromática, curva de filme AgX (padrão; `?tm=aces` ou
+   `setGrade({ tonemapper: 'aces' })` volta ao ACES), gradação fotográfica
+   (WB quase neutro, contraste em log, saturação 0,9, split-toning sutil,
+   lift/gain), vinheta → sRGB com dithering PCG (sem padrão fixo).
 10. Final: FXAA (low) ou nitidez CAS, grão de filme, dithering.
 
 Sombras suaves com endurecimento de contato (PCSS): no combine, a busca de

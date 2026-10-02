@@ -260,6 +260,57 @@ export function bulletHolesTexture(seed = 9) {
   }
   return { map: tex(c), normalMap: canvasNormal(hc, 4) };
 }
+/**
+ * Furos de bala em CHAPA (carros, caçambas, portas de aço): furo pequeno
+ * e limpo, borda de metal nu repuxada (anel claro fino), tinta lascada em
+ * volta e um escorrido de ferrugem em alguns. Mesmo layout 2×2 do atlas de
+ * reboco (bulletRect serve para os dois).
+ */
+export function metalHolesTexture(seed = 31) {
+  const r = mulberry(seed);
+  const [c, g] = canvas(1024, 1024);
+  const [hc, hg] = canvas(1024, 1024);
+  hg.fillStyle = 'rgb(128,128,128)';
+  hg.fillRect(0, 0, 1024, 1024);
+  for (let t = 0; t < 4; t++) {
+    const ox = (t % 2) * 512, oy = Math.floor(t / 2) * 512;
+    const holes = [];
+    const n = [10, 18, 6, 4][t];
+    const cx = 256 + (r() - 0.5) * 120, cy = 256 + (r() - 0.5) * 120;
+    for (let i = 0; i < n; i++) {
+      const a = r() * Math.PI * 2, d = Math.pow(r(), t === 1 ? 0.8 : 0.5) * (t === 0 ? 200 : 170);
+      holes.push([cx + Math.cos(a) * d * (t === 0 ? 1.2 : 1), cy + Math.sin(a) * d * (t === 0 ? 0.35 : 0.8), t === 3 ? 7 + r() * 4 : 2.6 + r() * 2.2]);
+    }
+    for (const [hx, hy, s] of holes) {
+      if (hx < 30 || hx > 482 || hy < 30 || hy > 482) continue;
+      const x = ox + hx, y = oy + hy;
+      // tinta lascada (mostra primer cinza) em volta
+      blob(g, r, x, y, s * (2.2 + r() * 1.6), 11, 0.6);
+      g.fillStyle = `rgba(${120 + r() * 25},${118 + r() * 20},${112 + r() * 15},${0.55 + r() * 0.3})`;
+      g.fill();
+      // escorrido de ferrugem abaixo (furos antigos)
+      if (r() < 0.45) {
+        const l = s * (6 + r() * 14);
+        const grd = g.createLinearGradient(0, y, 0, y + l);
+        grd.addColorStop(0, 'rgba(110,52,20,0.7)');
+        grd.addColorStop(1, 'rgba(110,52,20,0)');
+        g.fillStyle = grd;
+        g.fillRect(x - s * 0.5, y, s * (0.8 + r() * 0.6), l);
+      }
+      // anel de metal nu repuxado (claro) + relevo saliente
+      g.beginPath(); g.arc(x, y, s * 1.25, 0, Math.PI * 2);
+      g.fillStyle = 'rgba(176,172,164,0.95)'; g.fill();
+      hg.beginPath(); hg.arc(x, y, s * 1.35, 0, Math.PI * 2);
+      hg.fillStyle = 'rgb(190,190,190)'; hg.fill();
+      // furo
+      blob(g, r, x, y, s * 0.8, 8, 0.25);
+      g.fillStyle = 'rgba(6,5,4,1)'; g.fill();
+      blob(hg, r, x, y, s * 0.8, 8, 0.25);
+      hg.fillStyle = 'rgb(0,0,0)'; hg.fill();
+    }
+  }
+  return { map: tex(c), normalMap: canvasNormal(hc, 3) };
+}
 /** Retângulo de UV de uma variante (0..3) do atlas de tiros. */
 export const bulletRect = (q) => [(q % 2) * 0.5, 0.5 - Math.floor(q / 2) * 0.5, (q % 2) * 0.5 + 0.5, 1 - Math.floor(q / 2) * 0.5];
 
@@ -540,6 +591,41 @@ export function signsTexture(seed = 13) {
       g.lineTo(x0 + 80 + r() * 60, top ? y : y + 128);
       g.fill();
     }
+    // tinta das letras descascada: pedaços das letras somem (cor de fundo
+    // desbotada por cima, contorno roído)
+    for (let k = 0, nl = 4 + Math.floor(r() * 6); k < nl; k++) {
+      const x = 150 + r() * 724, yy = y + 30 + r() * 70, rr = 8 + r() * 26;
+      g.fillStyle = sg.bg;
+      g.globalAlpha = 0.6 + r() * 0.35;
+      g.beginPath();
+      for (let q = 0; q < 9; q++) {
+        const a = (q / 9) * Math.PI * 2;
+        g.lineTo(x + Math.cos(a) * rr * (0.4 + r() * 0.9), yy + Math.sin(a) * rr * (0.4 + r() * 0.9));
+      }
+      g.fill();
+      g.globalAlpha = 1;
+    }
+    // sol: metade de cima mais desbotada (lavada), cores menos saturadas
+    g.globalCompositeOperation = 'screen';
+    const sb = g.createLinearGradient(0, y, 0, y + 128);
+    sb.addColorStop(0, `rgba(120,112,98,${0.25 + r() * 0.25})`);
+    sb.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = sb; g.fillRect(0, y, 1024, 128);
+    // pó/fuligem geral em manchas grandes (não uniforme) + borda encardida
+    g.globalCompositeOperation = 'multiply';
+    for (let k = 0; k < 8; k++) {
+      const x = r() * 1024, yy = y + r() * 128, rr = 60 + r() * 200;
+      const grd = g.createRadialGradient(x, yy, 0, x, yy, rr);
+      grd.addColorStop(0, `rgba(105,92,76,${0.3 + r() * 0.35})`);
+      grd.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grd;
+      g.fillRect(x - rr, yy - rr, rr * 2, rr * 2);
+    }
+    const eg = g.createLinearGradient(0, y, 0, y + 128);
+    eg.addColorStop(0, 'rgba(80,70,58,0.55)'); eg.addColorStop(0.12, 'rgba(255,255,255,0)');
+    eg.addColorStop(0.85, 'rgba(255,255,255,0)'); eg.addColorStop(1, 'rgba(70,60,50,0.7)');
+    g.fillStyle = eg; g.fillRect(0, y, 1024, 128);
+    g.globalCompositeOperation = 'source-over';
     const nh = 2 + Math.floor(r() * 7);
     for (let k = 0; k < nh; k++) {
       const x = 40 + r() * 944, yy = y + 20 + r() * 88;

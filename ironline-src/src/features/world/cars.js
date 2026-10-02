@@ -361,7 +361,7 @@ export function car(W, x, z, yaw, opts = {}) {
   if (dmg > 0.3) {
     const side = rng.sign();
     const p = new THREE.Vector3(rng.range(-1, 1), 0.7, side * (hw + 0.012)).applyMatrix4(CM);
-    decal(B, 'bullets', [p.x, p.y, p.z], side > 0 ? sideNormal(yaw, 1) : sideNormal(yaw, -1), [0.7, 0.7], bulletRect(rng.pick([1, 2])), rng.range(0, 6), [0.3, 0.28, 0.27]);
+    decal(B, 'bulletsM', [p.x, p.y, p.z], side > 0 ? sideNormal(yaw, 1) : sideNormal(yaw, -1), [rng.range(0.5, 0.9), rng.range(0.5, 0.9)], bulletRect(rng.int(0, 3)), rng.range(-0.3, 0.3), [1, 1, 1]);
   }
   if (burnt) {
     decal(B, 'scorch', [x, 0.022, z], 'py', [K.len + 3, 5], [0, 0, 1, 1], -yaw);
