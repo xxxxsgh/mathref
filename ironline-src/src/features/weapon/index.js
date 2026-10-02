@@ -30,7 +30,7 @@ const PIVOT = new THREE.Vector3(0, -0.035, -0.14); // perto do poço do carregad
 // hip: arma mais longe, baixa e à direita (enquadramento de shooter moderno:
 // a boca aponta para a mira, a ótica ocupa ~7% da largura do quadro, a mão
 // de apoio entra pela parte de baixo, perto do centro)
-const HIP = { pos: new THREE.Vector3(0.085, -0.11, -0.31), rot: new THREE.Euler(0.03, 0.1, 0.0) };
+const HIP = { pos: new THREE.Vector3(0.085, -0.12, -0.3), rot: new THREE.Euler(0.05, 0.12, 0.0) };
 const EYE_RELIEF = 0.2; // distância olho → ponto de visada no ADS
 const ADS = { pos: new THREE.Vector3(), rot: new THREE.Euler(0, 0, 0) };
 const SPRINT = { pos: new THREE.Vector3(-0.03, -0.045, 0.03), rot: new THREE.Euler(-0.32, 0.62, 0.42) };
@@ -57,11 +57,12 @@ function basisFD(F, D, pos) {
 }
 const HAND_R = basis([0.06, -1, -0.18], [1, 0.05, 0.12], [0.034, -0.088, 0.052]);
 // mão de apoio (resolvida em grip.js no init, contra a geometria real):
-// hip — pega por cima: palma no flanco esquerdo, dedos passam por cima do
-// guarda-mão, dorso e nós voltados para a câmera, antebraço sobe da borda
-// inferior; ADS — C-clamp baixo: dedos por baixo, polegar no flanco
-// (nada entra na janela da ótica)
-const GRIP_L = { phi: 3.35, z: -0.37, fwd: 0.3, thumbUp: -0.03, thumbX: -0.012, over: true };
+// hip — palma no flanco esquerdo-baixo, dedos apontando para a frente e
+// abraçando por baixo, polegar subindo pelo flanco até o trilho; o dorso da
+// mão fica de frente para a câmera e o antebraço desce para fora do quadro;
+// ADS — C-clamp baixo: dedos por baixo, polegar no flanco (nada entra na
+// janela da ótica)
+const GRIP_L = { phi: 3.5, z: -0.255, fwd: 1.1, thumbUp: 0.015, thumbX: -0.018 };
 const GRIP_ADS = { phi: 4.1, z: -0.32, fwd: 0.35, thumbUp: -0.014 };
 const HAND_L = { guard: null, guardAds: null };
 
@@ -227,7 +228,23 @@ export default {
     OCC.uOccN.value = this.occ.length;
     // "ombros" (âncoras dos antebraços) no espaço do rig
     this.anchorR = new THREE.Vector3(0.3, -0.45, -0.08);
-    this.anchorL = new THREE.Vector3(-0.13, -0.75, -0.05);
+    this.anchorL = new THREE.Vector3(-0.3, -0.9, -0.05);
+    this.followL = 0;
+    this.wristBlend = 0.4;
+    // ?whip=x,y,z,rx,ry,rz — testa outro enquadramento de hip; ?warm=x,y,z — ombro esquerdo (QA)
+    const wh = ctx.params.get('whip');
+    if (wh) {
+      const v = wh.split(',').map(Number);
+      HIP.pos.set(v[0], v[1], v[2]);
+      if (v.length > 3) HIP.rot.set(v[3], v[4], v[5] || 0);
+    }
+    const wa2 = ctx.params.get('warm');
+    if (wa2) {
+      const v = wa2.split(',').map(Number);
+      this.anchorL.set(v[0], v[1], v[2]);
+      if (v.length > 3) this.followL = v[3];
+      if (v.length > 4) this.wristBlend = v[4];
+    }
 
     // ─── luzes da viewmodel ──────────────────────────────────────────────
     const vs = vm.scene;
@@ -257,7 +274,7 @@ export default {
     // clarão de boca
     this.flash = new THREE.PointLight(0xffa457, 0, 2.0, 2);
     R.muzzle.add(this.flash);
-    this.flash.position.set(-0.01, 0.035, 0.03);
+    this.flash.position.set(-0.012, 0.02, -0.04);
     // ambiente fallback (sem a feature rendering)
     if (!ctx.service('rendering')?.environment && !vs.environment) {
       import('three/addons/environments/RoomEnvironment.js').then(({ RoomEnvironment }) => {
@@ -696,7 +713,7 @@ export default {
       aL = this.anchorL.clone().applyMatrix4(_m2);
     }
     this.placeSleeve(this.sleeveR, this.handR.root, aR, 0.3);
-    this.placeSleeve(this.sleeveL, this.handL.root, aL, 0.3);
+    this.placeSleeve(this.sleeveL, this.handL.root, aL, this.followL ?? 0.3);
 
     // ─ chute de câmera (canal aditivo, sem sobrescrever outros donos) ─
     const kp = this.climb.p + S.kickP.x * 0.02;
@@ -783,20 +800,22 @@ export default {
     _q.copy(handRoot.getWorldQuaternion(_q2));
     this.rig.getWorldQuaternion(_q2).invert();
     _q.premultiply(_q2);
-    const up = _v2.set(0, 1, 0).applyQuaternion(_q);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(_q);
     // o antebraço segue o eixo da mão (+Z local = para trás do punho),
     // puxado em direção ao "ombro"
     const back = new THREE.Vector3(0, 0, 1).applyQuaternion(_q);
     const toAnchor = new THREE.Vector3().subVectors(anchor, _v).normalize();
-    const dir = back.multiplyScalar(follow).add(toAnchor.multiplyScalar(1 - follow)).normalize();
-    const L = 0.34;
-    const elbow = new THREE.Vector3().copy(_v).addScaledVector(dir, L);
+    const dir = back.clone().multiplyScalar(follow).add(toAnchor.multiplyScalar(1 - follow)).normalize();
+    // manga com 2 ossos (ver buildSleeve): punho alinhado à mão, antebraço
+    // apontando para o cotovelo; o grupo fica no punho, sem rotação
+    sleeve.position.copy(_v);
+    sleeve.quaternion.identity();
+    const elbow = new THREE.Vector3().copy(_v).addScaledVector(dir, 0.34);
     _m.lookAt(elbow, _v, up);
-    sleeve.quaternion.setFromRotationMatrix(_m);
-    // a manga começa no fim do punho da luva (no eixo da mão) e segue p/ o cotovelo
-    // a manga começa atrás do punho da luva (o manguito e o velcro ficam à mostra)
-    sleeve.position.copy(_v).addScaledVector(_v2.set(0, 0, 1).applyQuaternion(_q), 0.012 * Math.min(1, follow / 0.3)).addScaledVector(dir, 0.006);
-    sleeve.userData.sleeve.scale.z = L;
+    sleeve.userData.bArm.quaternion.setFromRotationMatrix(_m);
+    // punho: meio caminho entre o eixo da mão e o do antebraço (o pulso
+    // flexiona; a manga não sai "reta" do punho da luva)
+    sleeve.userData.bWrist.quaternion.copy(_q).slerp(sleeve.userData.bArm.quaternion, this.wristBlend);
     const w = sleeve.userData.watch;
     if (w) w.position.set(0.0, 0.03, 0.06);
   },
@@ -902,10 +921,11 @@ export default {
     st.flashT = Math.max(0, st.flashT - dt);
     const f = st.flashT > 0 ? st.flashT / 0.055 : 0;
     // clarão curto e quente que ilumina luvas e receptor (pico forte, cauda curta)
-    this.flash.intensity = f > 0 ? (0.35 + 0.65 * f) * 2.6 : 0;
-    this.flash.color.setRGB(1, 0.55 + 0.25 * f, 0.26 + 0.1 * f);
+    this.flash.intensity = f > 0 ? (0.35 + 0.65 * f) * 3.2 : 0;
+    // pólvora queimando: branco-amarelado no pico, alaranjado na cauda
+    this.flash.color.setRGB(1, 0.62 + 0.24 * f, 0.36 + 0.24 * f);
     // retículo: um pouco mais brilhante de dia
-    this.lens.material.uniforms.uIntensity.value = lerp(1.5, 2.3, st.sunVis * (1 - st.indoor));
+    this.lens.material.uniforms.uIntensity.value = lerp(1.3, 1.7, st.sunVis * (1 - st.indoor));
   },
 
   dispose(ctx) {

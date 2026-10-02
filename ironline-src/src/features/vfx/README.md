@@ -7,7 +7,7 @@ Tudo procedural (shaders e geometria gerados no código). Nenhum asset baixado.
 | Arquivo | O que faz |
 |---|---|
 | `index.js` | feature: pools, eventos do bus, serviço `vfx`, luzes de clarão, tremor de câmera, balística |
-| `atlas.js` | atlas gerados NA GPU uma vez: partículas (poeira/fumaça com normais, couve-flor de explosão, estrela e pétalas de clarão, faísca, anel, lasca) e marcas de tiro PBR (albedo + normal) por material; textura de detalhe tileável (CPU) para erosão/bolsões de calor e textura dos detritos |
+| `atlas.js` | atlas gerados NA GPU uma vez: partículas (poeira/fumaça com normais, couve-flor de explosão em domínio deformado, clarão frontal de lóbulos irregulares, cone quente do gás, pétalas, faísca, anel, lasca) e marcas de tiro PBR (albedo + normal) por material; textura de detalhe tileável (CPU) para erosão/bolsões de calor e textura dos detritos |
 | `particles.js` | partículas instanciadas com trajetória analítica no vertex shader (1 draw call por cena); turbulência; luz do sol/céu com espalhamento frontal e auto-sombra (Beer); luzes pontuais da vfx (clarões/fogo) acendem a fumaça; fogo de corpo negro com bolsões animados; erosão por ruído ("flipbook" procedural); suaves por profundidade e por plano |
 | `decals.js` | marcas de tiro/sangue/queimado (InstancedMesh `MeshStandardMaterial`, ring buffer) |
 | `surface.js` | índice de triângulos das malhas estáticas → a marca assenta na fachada VISÍVEL (o colisor AABB pode estar a centímetros dela) |
@@ -30,7 +30,7 @@ Tudo procedural (shaders e geometria gerados no código). Nenhum asset baixado.
 
 | Evento | Efeito |
 |---|---|
-| `weapon:fire` | clarão multicamada na viewmodel (estrela + pétalas + brilho), luz na arma e no mundo, fumaça e faíscas da boca, cápsula, traçante a cada 3 tiros, fiapos do cano quente após rajadas |
+| `weapon:fire` | clarão compacto e variável tiro a tiro na viewmodel (cone quente + lóbulos irregulares + 2–4 pétalas do quebra-chamas), luz na arma (queda linear: acende antebraço e luva também) e no mundo, fiapos ralos de fumaça, cápsula, traçante a cada 3 tiros, fiapos do cano quente após rajadas |
 | `weapon:hit` | impacto pelo material do colisor; sem `ballistic: true`, faz penetração **visual** (furo de saída + impacto atrás) em materiais finos |
 | `enemy:fire` | clarão de 3ª pessoa + luz + traçante + impacto onde o tiro bate |
 | `explosion` / `grenade:explode` | `{ point|position, radius?, normal? }` → explosão completa |
@@ -60,3 +60,19 @@ Emite `vfx:explosion` `{ point, radius, intensity }` (áudio/HUD podem reagir).
   boca. Senão (a arma anima a própria cápsula na viewmodel), a vfx solta a
   "herdeira" no mundo fora do quadro, que cai, quica e fica no chão.
 - Payload opcional de `weapon:fire`: `suppressed: true` (sem clarão), `ads` (0..1).
+
+## Realismo (rodada 3)
+
+- **Explosão**: domo de fuligem marrom-escura com fogo só em bolsões/filamentos
+  no miolo (limiar sobre ruído animado), que esfria em ~0,5 s; capuz de
+  fuligem que rola por cima; haste ligando a nuvem ao chão; saia de poeira
+  rasteira achatada (atributo `aspect`); detritos de vários materiais e
+  tamanhos log-uniformes com traço de desfoque de movimento; queimado difuso
+  sem raios; luz de clarão (2500) + fogo (320) que acende fachadas e veículos.
+  Sem aberração cromática.
+- **Poeira** com albedo ≈ 1,3× o do material (não fica branca contra a parede).
+- **Faíscas de ricochete**: traços curtos, finos, quase brancos, com gravidade.
+- **Sangue**: cone de saída em névoa escura + estouro de entrada + névoa rosada
+  que se desfaz, gotículas balísticas, spray na parede e no chão.
+- **Marcas em metal**: aço nu metálico (metalness por instância só onde o
+  albedo é claro), tinta lascada em escamas, borda repuxada.

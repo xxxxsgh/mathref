@@ -36,6 +36,7 @@ attribute vec4 aMisc;   // tile, modo, iluminação do sol (0..1), aditivo
 attribute vec4 aFx;     // emissão, expoente de decaimento do calor, fade-in, esticamento
 attribute vec4 aPlane;  // plano suave: normal.xyz, d
 attribute vec4 aExt;    // turbulência (m), erosão (0..1), suavidade de profundidade (m), semente
+attribute float aAsp;   // proporção largura/altura (billboard e deitada): poeira rasteira achatada
 
 uniform float uTime;
 uniform vec3 uWind;
@@ -96,7 +97,9 @@ void main() {
     float cs = cos(rot), sn = sin(rot);
     axX = camRight * cs + camUp * sn;
     axY = -camRight * sn + camUp * cs;
-    W = P + (axX * c.x + axY * c.y) * size;
+    // proporção: alarga em x da TELA (não gira junto) — saia de poeira rente ao chão
+    vec2 cc = vec2(c.x * cs - c.y * sn, c.x * sn + c.y * cs) * vec2(aAsp, 1.0);
+    W = P + (camRight * cc.x + camUp * cc.y) * size;
   } else if (mode < 2.5) {
     vec3 dir = mode < 1.5 ? V : aVel;
     float sp = length(dir);
@@ -127,7 +130,7 @@ void main() {
     float cs = cos(rot), sn = sin(rot);
     axX = t * cs + b * sn;
     axY = -t * sn + b * cs;
-    W = P + (axX * c.x + axY * c.y) * size;
+    W = P + (axX * c.x * aAsp + axY * c.y) * size;
   }
   vec3 axZ = normalize(cross(axX, axY));
   if (dot(axZ, toCam) < 0.0) axZ = -axZ;
@@ -193,11 +196,13 @@ float linDepth(float d) {
 }
 
 vec3 blackbody(float t) {
-  // rampa artística: brasa vermelho-escura → laranja → amarelo → branco-quente
+  // corpo negro aproximado (1000 K → 2600 K, cores medidas de chama de
+  // hidrocarboneto), menos saturado que uma rampa "de jogo": brasa marrom-
+  // avermelhada → laranja queimado → amarelo-palha → quase branco
   t = clamp(t, 0.0, 1.0);
-  vec3 c = mix(vec3(0.35, 0.03, 0.0), vec3(1.0, 0.28, 0.03), smoothstep(0.0, 0.45, t));
-  c = mix(c, vec3(1.0, 0.62, 0.18), smoothstep(0.4, 0.8, t));
-  return mix(c, vec3(1.0, 0.9, 0.7), smoothstep(0.85, 1.0, t)) * (0.08 + 2.2 * t * t);
+  vec3 c = mix(vec3(0.30, 0.05, 0.01), vec3(0.95, 0.36, 0.09), smoothstep(0.0, 0.45, t));
+  c = mix(c, vec3(1.0, 0.66, 0.32), smoothstep(0.4, 0.8, t));
+  return mix(c, vec3(1.0, 0.88, 0.72), smoothstep(0.85, 1.0, t)) * (0.05 + 2.4 * t * t);
 }
 
 void main() {
@@ -262,8 +267,11 @@ void main() {
   if (vMisc.x < 2.5) n = normalize(mix(vec3(0.0, 0.0, 1.0), n, 0.45));
   // auto-sombreamento: a luz atravessa a densidade (Beer) pelo lado oposto ao sol
   float ndl = dot(n, vSunLocal);
-  float selfSh = exp(-dens * 2.2 * clamp(0.6 - ndl * 0.8, 0.0, 1.2));
-  float wrap = clamp(ndl * 0.55 + 0.45, 0.0, 1.0) * mix(0.35, 1.0, selfSh);
+  float selfSh = exp(-dens * 2.6 * clamp(0.6 - ndl * 0.9, 0.0, 1.3));
+  // baforadas grandes (couve-flor, tiles 3–5): luz mais dura — topo aceso pelo
+  // sol, barriga e frestas na sombra (é o que dá volume a uma coluna real)
+  float big = step(2.5, vMisc.x) * step(vMisc.x, 5.5);
+  float wrap = clamp(ndl * mix(0.55, 0.8, big) + mix(0.45, 0.2, big), 0.0, 1.0) * mix(mix(0.35, 0.2, big), 1.0, selfSh);
   // espalhamento frontal (sol atrás da fumaça): HG g=0.55, mais forte nas bordas finas
   float gg = 0.55;
   float hg = (1.0 - gg * gg) / pow(1.0 + gg * gg - 2.0 * gg * vScatter, 1.5) * 0.0796;
@@ -272,7 +280,7 @@ void main() {
   float sunlit = vMisc.z >= 10.0 ? smoothstep(vMisc.z - 11.5, vMisc.z - 8.5, vWorld.y) : vMisc.z;
   // céu de cima, chão por baixo, miolo denso mais escuro (auto-sombra), bordas finas mais claras
   vec3 wn = normalize(vAxX * n.x + vAxY * n.y + vAxZ * n.z);
-  vec3 amb = mix(uGroundAmbient, uAmbient, wn.y * 0.5 + 0.5) * (0.55 + 0.45 * n.z) * (0.75 + 0.25 * det);
+  vec3 amb = mix(uGroundAmbient, uAmbient, wn.y * 0.5 + 0.5) * mix(0.55 + 0.45 * n.z, 0.35 + 0.65 * n.z * n.z, big) * (0.75 + 0.25 * det);
   // luzes pontuais (clarões, explosão): difusa "wrap" com transmissão
   vec3 pl = vec3(0.0);
   for (int i = 0; i < NL; i++) {
@@ -283,15 +291,19 @@ void main() {
     vec3 l = L * inversesqrt(d2);
     float w = clamp(1.0 - pow(d2 / (r * r), 2.0), 0.0, 1.0);
     float nl = dot(wn, l) * 0.5 + 0.5;
-    pl += uLCol[i] * (w * w / max(d2, 1.0)) * (nl * 0.8 + 0.2 + thin * 0.6);
+    pl += uLCol[i] * (w * w / max(d2, 4.0)) * (nl * 0.8 + 0.2 + thin * 0.6);
   }
   vec3 albedo = vColor.rgb;
   // esticadas (modo 1) quase não espalham para frente: viram "barra de luz" contra o sol
   float hgK = vMisc.y > 0.5 && vMisc.y < 1.5 ? 0.08 : 0.5;
-  vec3 lit = albedo * (amb + uSunColor * sunlit * (wrap * 0.3183 + min(hg * thin, 0.35) * hgK) + pl * 0.06);
-  // fogo: emissão por densidade × calor; o detalhe animado cria bolsões quentes e frios
+  vec3 lit = albedo * (amb + uSunColor * sunlit * (wrap * 0.3183 + min(hg * thin, 0.35) * hgK) + pl * 0.03);
+  // fogo: emissão por densidade × calor. Não é um disco quente por baforada:
+  // o fogo aparece em BOLSÕES e filamentos (limiar sobre o ruído animado),
+  // mais no miolo da partícula; a borda é fuligem fria que rola por cima.
+  float rr = length(vLocal) * 2.0;
+  float pocket = smoothstep(0.25, 0.7, det * 0.7 + dens * 0.45 - rr * 0.3 + min(heat, 1.0) * 0.25);
   float core = dens * (0.55 + 0.45 * n.z);
-  float t = min(heat, 1.0) * (0.1 + 0.9 * core * core) * (0.7 + 0.6 * det);
+  float t = min(heat, 1.0) * (0.08 + 0.92 * core * pocket);
   vec3 emit = heat > 0.0 ? blackbody(t) * uFireIntensity * min(heat, 1.5) * smoothstep(0.05, 0.3, heat) : vec3(0.0);
   gl_FragColor = vec4((lit + emit) * a, a * (1.0 - min(heat, 1.0) * 0.3));
 }`;
@@ -316,8 +328,9 @@ export class ParticleSystem {
       return a;
     };
     this.attr = {
-      aPos: mk(3), aVel: mk(3), aTime: mk(4), aSize: mk(4), aColor: mk(4), aMisc: mk(4), aFx: mk(4), aPlane: mk(4), aExt: mk(4),
+      aPos: mk(3), aVel: mk(3), aTime: mk(4), aSize: mk(4), aColor: mk(4), aMisc: mk(4), aFx: mk(4), aPlane: mk(4), aExt: mk(4), aAsp: mk(1),
     };
+    this.attr.aAsp.array.fill(1);
     // nascem "mortas"
     const t = this.attr.aTime.array;
     for (let i = 0; i < capacity; i++) {
@@ -399,7 +412,7 @@ export class ParticleSystem {
    * Emite uma partícula. p: Vector3 (posição), v: Vector3|null.
    * o: { life, drag, gravity, size, size1, rot, spin, color(Color|hex), alpha,
    *      tile, mode, sunlit, additive, emissive, heatPow, fadeIn, stretch, plane: [nx,ny,nz,d], delay,
-   *      turb (m), erode (0..1), soft (m, fade contra a profundidade), seed }
+   *      turb (m), erode (0..1), soft (m, fade contra a profundidade), seed, aspect (largura/altura) }
    */
   emit(p, v, o) {
     const i = this.head;
@@ -427,6 +440,7 @@ export class ParticleSystem {
     else { pl[j] = 0; pl[j + 1] = 0; pl[j + 2] = 0; pl[j + 3] = 0; }
     const ex = A.aExt.array;
     ex[j] = o.turb ?? 0; ex[j + 1] = o.erode ?? 0; ex[j + 2] = o.soft ?? 0; ex[j + 3] = o.seed ?? Math.random();
+    A.aAsp.array[i] = o.aspect ?? 1;
     if (i < this.dirtyMin) this.dirtyMin = i;
     if (i > this.dirtyMax) this.dirtyMax = i;
     return i;

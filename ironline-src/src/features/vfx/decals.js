@@ -58,9 +58,11 @@ export class Decals {
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying vec4 vDecal;')
         .replace('#include <map_fragment>', '#include <map_fragment>\n diffuseColor.a *= vDecal.y;')
-        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = vDecal.z;');
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = vDecal.z;')
+        // aço exposto (metal): só onde o albedo é claro (borda arrancada), não na fuligem
+        .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = vDecal.w * smoothstep(0.12, 0.3, dot(diffuseColor.rgb, vec3(0.33)));');
     };
-    mat.customProgramCacheKey = () => 'vfx-decals';
+    mat.customProgramCacheKey = () => 'vfx-decals-2';
     this.mesh = new THREE.InstancedMesh(geo, mat, capacity);
     this.mesh.name = 'vfx-decals';
     this.mesh.frustumCulled = false;
@@ -132,7 +134,7 @@ export class Decals {
     d[i * 4] = tile;
     d[i * 4 + 1] = 0;
     d[i * 4 + 2] = rough;
-    d[i * 4 + 3] = 0;
+    d[i * 4 + 3] = kind === 'metal' ? 0.85 : 0;
     this.aDecal.needsUpdate = true;
     this.mesh.count = Math.max(this.mesh.count, i + 1);
     this.fading.push({ i, a: 0, target: alpha });

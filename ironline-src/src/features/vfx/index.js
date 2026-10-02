@@ -91,7 +91,8 @@ export default {
     const decals = new Decals({ capacity: Math.round(320 * Math.max(0.5, budget)), albedo: tex.decalAlbedo, normal: tex.decalNormal, rng: ctx.rng, surface });
     scene.add(decals.mesh);
 
-    const brassMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.78, 0.5, 0.18), metalness: 1, roughness: 0.27, envMapIntensity: 1.2 });
+    // latão deflagrado: um pouco oxidado/fosco (não é ouro polido)
+    const brassMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.62, 0.43, 0.17), metalness: 1, roughness: 0.36, envMapIntensity: 1.0 });
     brassMat.name = 'vfx-brass';
     const audio = () => ctx.services.audio;
     const brass = new RigidPool(brassGeometry(), brassMat, {
@@ -135,7 +136,8 @@ export default {
       scene.add(light);
       lights.push({ light, t0: -1e6, life: 1, peak: 0, hold: false, flicker: 0.3, curve: 2 });
     }
-    const vmL = new THREE.PointLight(0xffa060, 0, 1.6, 2);
+    // queda linear (decay 1): ilumina arma, luva e antebraço por igual
+    const vmL = new THREE.PointLight(0xffa868, 0, 2.6, 1);
     vmL.name = 'vfx-vm-flash';
     vm.scene.add(vmL);
     const vmLight = { light: vmL, t0: -1e6, life: 1, peak: 0 };

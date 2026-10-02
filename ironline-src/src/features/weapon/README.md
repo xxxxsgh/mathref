@@ -12,8 +12,8 @@ Viewmodel em primeira pessoa e lógica de tiro do IRONLINE. Tudo procedural.
 | `materials.js` | PBR com detalhe injetado: triplanar, desgaste de quina por curvatura em tela, arranhões, sujeira, poeira, manchas de dedo (rugosidade), estrias de usinagem (brilho pseudo-anisotrópico ao longo do cano), AA especular geométrico; tecido com trama e sheen. **Oclusão de contato analítica** (cápsulas: palmas, guarda-mão, empunhaduras, ótica, carregador) e IBL dessaturado (a arma não fica azul com o céu). Paleta separada por valor/rugosidade: anodizado acetinado, trilho, cerakote tungstênio, polímero fosco, aço fosfatizado |
 | `textures.js` | geradores CPU: grime, cordura, camuflagem original, gravação a laser |
 | `optic.js` | lente da holográfica: retículo no infinito (sem paralaxe), traço nítido com cobertura analítica, revestimento AR de filme fino (âmbar/verde) com Fresnel, manchas e poeira |
-| `arms.js` | mãos enluvadas articuladas (15 falanges), poses de dedos (a da mão de apoio é resolvida em `grip.js`), mangas com dobras, bainha costurada, caimento e volume do antebraço, relógio |
-| `grip.js` | resolvedor de pega: SDF do guarda-mão; apoia a palma tangente, flexiona cada falange até encostar e busca a pose do polegar (grade + descida de coordenadas). Duas pegas: por cima (hip — dorso e nós dos dedos voltados para a câmera, antebraço subindo da borda inferior) e C-clamp baixo (ADS — nada entra na janela da ótica) |
+| `arms.js` | mãos enluvadas: dedos e polegar numa **malha contínua com skinning** (16 ossos; vinco palmar e franzido dorsal nas juntas), protetor de nós moldado; poses de dedos (a da mão de apoio é resolvida em `grip.js`); mangas com **2 ossos** (punho segue a mão, antebraço segue o cotovelo — o pulso dobra liso) e manguito da luva com velcro no mesmo esqueleto; dobras, bainha, volume do antebraço, relógio |
+| `grip.js` | resolvedor de pega: SDF do guarda-mão; apoia a palma tangente, flexiona cada falange até encostar e busca a pose do polegar (grade + descida de coordenadas). Duas pegas: hip (palma no flanco esquerdo-baixo, dedos para a frente abraçando por baixo, polegar no flanco — o dorso da mão fica de frente para a câmera e o antebraço desce para fora do quadro) e C-clamp baixo (ADS — nada entra na janela da ótica) |
 | `anim.js` | molas, easing, trilhas de keyframes |
 
 ## Controles
@@ -35,6 +35,8 @@ mesmo referencial do mundo. Sol ocluído por raycast (sombra de prédios) e teto
 - `&wview=yaw,pitch,dist[,x,y,z]` — gira a arma diante da câmera focando o ponto (x,y,z) da arma.
 - `&whand=yaw,pitch,pose` — só as mãos, numa pose de `POSES`.
 - `&wgrip=phi,fwd,thumbUp[,z,over,thumbX]` — testa outra pega da mão de apoio (ver `grip.js`).
+- `&whip=x,y,z[,rx,ry,rz]` — testa outro enquadramento de hip (posição do pivô no espaço da câmera).
+- `&warm=x,y,z[,follow,wrist]` — "ombro" esquerdo, quanto o antebraço segue o eixo da mão e quanto o punho dobra.
 
 No preset `combat` a arma dispara rajadas só visuais (sem dano).
 

@@ -6,7 +6,7 @@
  * Atlas de partículas (4×4 tiles):
  *   0–2  baforadas de poeira/fumaça (ruído) · 3–5 couve-flor (explosões) → RGB = normal, A = densidade
  *   6    poeira fina (fios esticados)      7  névoa de sangue (manchada)
- *   8,9  estrela frontal do clarão de boca  10,11 pétala lateral do clarão
+ *   8    clarão frontal (lóbulos irregulares)  9 cone quente do gás  10,11 pétala lateral
  *   12   brilho suave (gaussiana)          13  faísca/traçante (gaussiana alongada)
  *   14   anel (onda de choque)             15  lasca irregular (detrito minúsculo)
  *   Tiles aditivos (8–15): R = "núcleo branco-quente", A = intensidade.
@@ -20,7 +20,7 @@ import * as THREE from 'three';
 
 export const PT = {
   SMOKE: [0, 1, 2], BILLOW: [3, 4, 5], DUST: 6, BLOOD: 7, STAR: [8, 9], PETAL: [10, 11],
-  GLOW: 12, SPARK: 13, RING: 14, CHIP: 15,
+  GLOW: 12, SPARK: 13, RING: 14, CHIP: 15, BURST: 8, CONE: 9,
 };
 export const DT = {
   concrete: [0, 1], brick: [2], asphalt: [3], metal: [4, 5], wood: [6, 7], glass: [8, 9],
@@ -71,27 +71,34 @@ vec4 smoke(vec2 p, float seed) {
   d *= 1.0 - smoothstep(0.8, 1.0, length(p));
   return vec4(n * 0.5 + 0.5, d);
 }
-// Variante "couve-flor" (explosões): calotas de esferas + fbm, bordas suaves.
+// Variante "couve-flor" (explosões): união SUAVE de muitas calotas pequenas
+// num domínio deformado por ruído (a silhueta não vira arco de círculo nem
+// "disco"), mais fbm em duas escalas; bordas ralas que se desfazem em fiapos.
+float smax(float a, float b, float k) { float h = clamp(0.5 + 0.5 * (a - b) / k, 0.0, 1.0); return mix(b, a, h) + k * h * (1.0 - h); }
 float billowH(vec2 p, float seed) {
-  float h = 0.0;
-  for (int k = 0; k < 11; k++) {
+  vec2 w = vec2(fbm(vec3(p * 1.9, seed)), fbm(vec3(p * 1.9 + 5.2, seed + 3.1))) - 0.5;
+  p += w * 0.26;
+  // poucos lóbulos GRANDES (a fumaça real rola em poucas couves por baforada)
+  float h = sqrt(max(0.0, 0.3 - dot(p, p) * 0.55)) * 0.55;
+  for (int k = 0; k < 7; k++) {
     float fk = float(k);
-    vec2 c = (vec2(hash12(vec2(fk, seed)), hash12(vec2(seed, fk + 7.0))) - 0.5) * 0.95;
-    float r = 0.2 + 0.2 * hash12(vec2(fk * 3.1, seed * 1.7));
-    c *= 1.0 - r * 0.5;
-    h = max(h, sqrt(max(0.0, r * r - dot(p - c, p - c))));
+    float ang = hash12(vec2(fk, seed)) * 6.2832;
+    float rad = sqrt(hash12(vec2(seed, fk + 7.0))) * 0.42;
+    vec2 c = vec2(cos(ang), sin(ang)) * rad;
+    float r = (0.24 + 0.2 * hash12(vec2(fk * 3.1, seed * 1.7))) * (1.0 - rad * 0.4);
+    h = smax(h, sqrt(max(0.0, r * r - dot(p - c, p - c))), 0.08);
   }
-  return h + (fbm(vec3(p * 4.5, seed * 3.7)) - 0.5) * 0.2 + (fbm(vec3(p * 12.0, seed + 5.0)) - 0.5) * 0.06;
+  return h + (fbm(vec3(p * 5.0, seed * 3.7)) - 0.5) * 0.16 + (fbm(vec3(p * 13.0, seed + 5.0)) - 0.5) * 0.07;
 }
 vec4 billow(vec2 p, float seed) {
   float e = 3.0 / 512.0;
   float h = billowH(p, seed);
   float hx = billowH(p + vec2(e, 0.0), seed), hy = billowH(p + vec2(0.0, e), seed);
-  vec3 n = normalize(vec3(-(hx - h) / e * 0.5, -(hy - h) / e * 0.5, 1.0));
-  float er = fbm(vec3(p * 6.0, seed + 2.0));
-  float d = smoothstep(-0.02, 0.22, h + (er - 0.5) * 0.18);
-  d *= 0.75 + 0.25 * er;
-  d *= 1.0 - smoothstep(0.8, 1.0, length(p));
+  vec3 n = normalize(vec3(-(hx - h) / e * 0.7, -(hy - h) / e * 0.7, 1.0));
+  float er = fbm(vec3(p * 7.0, seed + 2.0));
+  float er2 = fbm(vec3(p * 17.0, seed + 8.0));
+  float d = smoothstep(-0.03, 0.17, h + (er - 0.5) * 0.2 + (er2 - 0.5) * 0.05);
+  d *= 1.0 - smoothstep(0.75, 1.0, length(p));
   return vec4(n * 0.5 + 0.5, d);
 }
 vec4 tile(int t, vec2 p) {
@@ -114,18 +121,24 @@ vec4 tile(int t, vec2 p) {
     }
     return vec4(0.5, 0.5, 1.0, max(d * 0.85, drops) * (1.0 - smoothstep(0.85, 1.0, r)));
   }
-  if (t == 8 || t == 9) { // estrela frontal: núcleo + raios irregulares + franja turbulenta
+  if (t == 8) { // clarão frontal: núcleo + lóbulos irregulares (ruído angular), SEM raios retos
     float a = atan(p.y, p.x);
-    float prongs = t == 8 ? 4.0 : 5.0;
-    float rot = t == 8 ? 0.785 : 0.3;
-    float s = pow(abs(cos((a + rot) * prongs * 0.5)), 18.0);
-    float s2 = pow(abs(cos((a + rot + 0.4) * prongs)), 10.0) * 0.45;
-    float jag = fbm(vec3(a * 3.0, r * 6.0, float(t)));
-    float rays = (s + s2) * (1.0 - smoothstep(0.0, 0.95, r / (0.55 + 0.45 * jag)));
-    float core = exp(-r * r * 22.0);
-    float halo = exp(-r * r * 5.0) * 0.35 * (0.6 + 0.8 * fbm(vec3(p * 7.0, float(t))));
-    float i = clamp(core + rays * 0.9 + halo, 0.0, 1.0);
-    return vec4(core * 1.2 + rays * 0.25, 0.0, 0.0, i);
+    float lob = fbm(vec3(cos(a) * 1.6, sin(a) * 1.6, 3.0)) * 0.9 + fbm(vec3(cos(a) * 4.0, sin(a) * 4.0, 7.0)) * 0.35;
+    float edge = 0.32 + 0.55 * lob;
+    float body = 1.0 - smoothstep(edge * 0.35, edge, r);
+    float wisp = smoothstep(0.35, 0.7, fbm(vec3(p * 6.0, 2.0))) * (1.0 - smoothstep(0.2, edge * 1.1, r));
+    float core = exp(-r * r * 26.0);
+    float i = clamp(core + body * (0.35 + 0.45 * wisp), 0.0, 1.0);
+    return vec4(core * 1.1 + body * 0.15, 0.0, 0.0, i);
+  }
+  if (t == 9) { // cone quente do gás (visto de lado): gota ao longo de +y, base em y = -1
+    float y = p.y * 0.5 + 0.5;
+    float wid = 0.06 + 0.26 * pow(clamp(y, 0.0, 1.0), 0.6) * (1.0 - smoothstep(0.55, 1.0, y));
+    float turb = fbm(vec3(p.x * 6.0, y * 5.0, 9.0));
+    float x = abs(p.x + (turb - 0.5) * 0.2 * y) / max(wid, 1e-3);
+    float body = (1.0 - smoothstep(0.3, 1.0, x)) * smoothstep(0.0, 0.04, y) * (1.0 - smoothstep(0.5, 0.95, y + (turb - 0.5) * 0.3));
+    float core = exp(-x * x * 5.0) * (1.0 - smoothstep(0.0, 0.7, y));
+    return vec4(core, 0.0, 0.0, clamp(body * 0.8 + core * 0.5, 0.0, 1.0));
   }
   if (t == 10 || t == 11) { // pétala: língua de fogo ao longo de +y, base em y = -1
     float y = p.y * 0.5 + 0.5;
@@ -199,20 +212,26 @@ vec4 decal(int t, vec2 p, out float h) {
     float al = max(max(crater * (0.75 + 0.25 * chips), cracks * 0.9), powder * 0.45);
     return vec4(col, clamp(al, 0.0, 1.0));
   }
-  if (t <= 5) { // metal: furo, borda repuxada, tinta lascada mostrando aço, fuligem
-    float holeR = t == 4 ? 0.06 : 0.035;
-    float rim = exp(-pow((r - holeR - 0.03 - 0.015 * n) * 22.0, 2.0));
-    float dent = 1.0 - smoothstep(0.0, 0.3, r);
-    float hole = 1.0 - smoothstep(holeR - 0.012, holeR + 0.004, r);
-    float chipR = (0.17 + 0.1 * vnoise(vec3(a * 2.3, 0.0, s)) + 0.06 * n2);
-    float chipped = 1.0 - smoothstep(chipR - 0.015, chipR, r);
-    float scorch = (1.0 - smoothstep(0.08, 0.7, r + (n2 - 0.5) * 0.25)) * 0.7;
-    h = -dent * 0.4 + rim * 0.3 - hole * 0.7;
-    vec3 steel = vec3(0.32, 0.32, 0.33) * (0.7 + 0.6 * n2);
-    vec3 col = mix(vec3(0.03, 0.028, 0.025), steel, chipped);
-    col = mix(col, vec3(0.55), rim * 0.7);
+  if (t <= 5) { // metal: furo com borda repuxada, amassado, aço nu e brilhante,
+    // tinta lascada em escamas irregulares em volta, fuligem/chumbo cinza
+    float holeR = t == 4 ? 0.055 : 0.035;
+    float rim = exp(-pow((r - holeR - 0.025 - 0.012 * n) * 24.0, 2.0));
+    float dent = 1.0 - smoothstep(0.0, 0.32 + 0.06 * n, r);
+    float hole = 1.0 - smoothstep(holeR - 0.01, holeR + 0.004, r);
+    float bareR = 0.1 + 0.05 * vnoise(vec3(a * 2.3, 0.0, s)) + 0.03 * n2;
+    float bare = 1.0 - smoothstep(bareR - 0.012, bareR, r);
+    float flakeR = 0.2 + 0.12 * vnoise(vec3(a * 3.1, 2.0, s)) + 0.08 * (n2 - 0.5);
+    float flake = (1.0 - smoothstep(flakeR - 0.01, flakeR, r)) * (1.0 - bare);
+    float flakeEdge = exp(-pow((r - flakeR) * 40.0, 2.0));
+    float lead = (1.0 - smoothstep(0.05, 0.45, r + (n2 - 0.5) * 0.2)) * 0.5;
+    h = -dent * 0.45 + rim * 0.35 - hole * 0.7 + flakeEdge * 0.08;
+    vec3 steel = vec3(0.55, 0.55, 0.56) * (0.75 + 0.4 * n2);
+    vec3 primer = vec3(0.2, 0.19, 0.17) * (0.8 + 0.4 * n);
+    vec3 col = mix(vec3(0.07, 0.068, 0.065), primer, flake);
+    col = mix(col, steel, bare);
+    col = mix(col, vec3(0.7), rim * 0.5 * bare);
     col = mix(col, vec3(0.005), hole);
-    float al = max(chipped, scorch);
+    float al = max(max(bare, flake * 0.9), max(lead, flakeEdge * 0.4));
     return vec4(col, clamp(al, 0.0, 1.0));
   }
   if (t <= 7) { // madeira: furo escuro + rasgo de fibras claras ao longo de y
@@ -274,11 +293,21 @@ vec4 decal(int t, vec2 p, out float h) {
     vec3 col = vec3(0.16, 0.008, 0.006) * (0.55 + 0.6 * n2) * (1.0 - 0.35 * body * (1.0 - smoothstep(0.0, 0.3, r)));
     return vec4(col, m * 0.95);
   }
-  // 14: queimado de explosão
-  float d = 1.0 - smoothstep(0.1, 0.95, r + (n - 0.5) * 0.35);
-  float streaks = pow(vnoise(vec3(a * 12.0, 0.0, 4.0)), 2.0);
-  h = -d * 0.05;
-  return vec4(vec3(0.015, 0.012, 0.01) + vec3(0.05, 0.035, 0.02) * n2, clamp(d * (0.75 + 0.35 * streaks), 0.0, 0.97));
+  // 14: queimado de explosão — fuligem depositada, não "estrela": borda
+  // irregular e difusa (ruído em duas escalas), manchas de fuligem mais
+  // densa, miolo esfarelado e mais claro (superfície pulverizada), pó cinza
+  // por fora; nenhum raio reto.
+  float warp = fbm(vec3(p * 2.2, 11.0));
+  float rr = r * (0.8 + 0.5 * warp) + (n - 0.5) * 0.25;
+  float soot = 1.0 - smoothstep(0.15, 0.9, rr);
+  float blot = smoothstep(0.35, 0.7, fbm(vec3(p * 6.0, 13.0))) * (1.0 - smoothstep(0.3, 0.95, rr));
+  float pulver = (1.0 - smoothstep(0.0, 0.22, rr + (n2 - 0.5) * 0.15));
+  float dust = (1.0 - smoothstep(0.6, 1.25, rr)) * 0.35 * (0.5 + n2);
+  vec3 col = mix(vec3(0.16, 0.15, 0.14), vec3(0.02, 0.018, 0.016) + vec3(0.03, 0.025, 0.02) * n2, soot * 0.85 + blot * 0.15);
+  col = mix(col, vec3(0.13, 0.12, 0.11) * (0.6 + 0.8 * n2), pulver * 0.7);
+  h = -soot * 0.06 - pulver * 0.12 + (n2 - 0.5) * 0.08 * soot;
+  float al = max(soot * (0.55 + 0.35 * blot) * (0.8 + 0.3 * n2), dust);
+  return vec4(col, clamp(al, 0.0, 0.93));
 }
 void main() {
   vec2 g = vUv * 4.0;

@@ -168,7 +168,7 @@ ${PERTURB}`;
       .replace(
         '#include <metalnessmap_fragment>',
         `#include <metalnessmap_fragment>
-  roughnessFactor = clamp(roughnessFactor + (wStreak - 0.5) * uStreak + (wD.r - 0.5) * uRoughVar + wD.b * uGrime * 0.12 - wMask * ${kind === 'hard' ? '0.3' : '-0.1'}, 0.05, 1.0);
+  roughnessFactor = clamp(roughnessFactor + (wStreak - 0.5) * uStreak + (wD.r - 0.5) * uRoughVar + wD.b * uGrime * 0.12 - wMask * ${kind === 'hard' ? '0.16' : '-0.1'}, 0.05, 1.0);
   // digitais/óleo: manchas grandes mais lisas (brilho irregular no anodizado)
   roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.55, uSmudge * smoothstep(0.55, 0.8, wD.b) * (1.0 - wMask));
   // AA especular geométrico (Kaplanyan/Tokuyoshi): variância da normal na
@@ -203,17 +203,17 @@ export function makeMaterials() {
     // camada de óxido tingida → responde quase como dielétrico escuro, com
     // estrias de usinagem ao longo do cano; a quina gasta mostra o alumínio
     // claro e polido por baixo
-    receiver: std({ color: 0x3e3e3d, roughness: 0.36, metalness: 0.45 }, { wear: 1.35, wearColor: 0xc4c2bc, wearBoost: 1.15, wearMetal: 1.0, scratch: 0.7, grime: 0.36, roughVar: 0.32, dust: 0.2, smudge: 0.6, streak: 0.22, edge: [60, 260] }),
+    receiver: std({ color: 0x3b3b3a, roughness: 0.46, metalness: 0.4 }, { wear: 0.95, wearColor: 0x8e8c87, wearBoost: 1.0, wearMetal: 1.0, scratch: 0.38, grime: 0.36, roughVar: 0.32, dust: 0.2, smudge: 0.6, streak: 0.22, edge: [60, 260] }),
     // guarda-mão / coronha: cerakote "tungstênio" (cerâmica fosca, um tom
     // acima do anodizado — separa as peças pelo valor e pela rugosidade)
-    tan: std({ color: 0x6a5c49, roughness: 0.66, metalness: 0.05 }, { wear: 1.25, wearColor: 0xa9a59c, wearMetal: 0.9, scratch: 0.45, grime: 0.4, dust: 0.28, roughVar: 0.2, bump: 0.5, smudge: 0.3, edge: [70, 300] }),
+    tan: std({ color: 0x625849, roughness: 0.7, metalness: 0.03 }, { wear: 0.9, wearColor: 0x84817a, wearMetal: 0.85, scratch: 0.3, grime: 0.4, dust: 0.28, roughVar: 0.2, bump: 0.5, smudge: 0.3, edge: [70, 300] }),
     // polímero com textura de pegada (punho, carregador, empunhadura)
     polymer: std({ color: 0x2d2c2a, roughness: 0.78, metalness: 0.0 }, { wear: 0.45, wearColor: 0x343331, wearMetal: 0.0, scratch: 0.25, grime: 0.3, roughVar: 0.25, bump: 1.1, smudge: 0.7, scale: 9 }),
     // trilhos Picatinny: mesmo anodizado, desgaste em ruído de alta frequência
     // (cada dente gasta diferente) e mais contido — nada de "zebra" branca
-    rail: std({ color: 0x3a3a39, roughness: 0.4, metalness: 0.45 }, { wear: 1.0, wearColor: 0x8f8d88, wearMetal: 1.0, scratch: 0.35, grime: 0.45, scale: 19, smudge: 0.3, edge: [140, 520] }),
+    rail: std({ color: 0x383837, roughness: 0.46, metalness: 0.4 }, { wear: 0.85, wearColor: 0x76746f, wearMetal: 1.0, scratch: 0.35, grime: 0.45, scale: 19, smudge: 0.3, edge: [140, 520] }),
     // aço fosfatizado (cano, pinos, parafusos)
-    steel: std({ color: 0x383837, roughness: 0.34, metalness: 0.9 }, { wear: 1.1, wearColor: 0xc2c0ba, wearMetal: 1.0, scratch: 0.7, grime: 0.35, streak: 0.18, edge: [70, 300] }),
+    steel: std({ color: 0x353534, roughness: 0.4, metalness: 0.85 }, { wear: 0.85, wearColor: 0x9a9893, wearMetal: 1.0, scratch: 0.4, grime: 0.35, streak: 0.18, edge: [70, 300] }),
     // aço escurecido em brasa (freio de boca)
     burnt: std({ color: 0x252220, roughness: 0.5, metalness: 0.85 }, { wear: 0.7, wearColor: 0x9a8f80, scratch: 0.3, grime: 0.6 }),
     // alumínio vivo / cromado (interior do ferrolho, parafusos)
@@ -229,19 +229,19 @@ export function makeMaterials() {
   };
   // luva: tecido sintético escuro + palma de couro
   M.glove = withDetail(
-    new THREE.MeshPhysicalMaterial({ color: 0x3d3b37, roughness: 0.8, metalness: 0, sheen: 0.4, sheenRoughness: 0.6, sheenColor: new THREE.Color(0x5e5a50) }),
-    { kind: 'fabric', scale: 110, wear: 0.45, wearColor: 0x7e786a, grime: 0.6, bump: 0.7 },
+    new THREE.MeshPhysicalMaterial({ color: 0x272624, roughness: 0.82, metalness: 0, sheen: 0.35, sheenRoughness: 0.6, sheenColor: new THREE.Color(0x45433d) }),
+    { kind: 'fabric', scale: 140, wear: 0.4, wearColor: 0x5f5b52, grime: 0.6, bump: 0.6 },
   );
   M.gloveLeather = withDetail(
-    new THREE.MeshPhysicalMaterial({ color: 0x302c27, roughness: 0.6, metalness: 0, sheen: 0.2, sheenRoughness: 0.6, sheenColor: new THREE.Color(0x3a3028) }),
+    new THREE.MeshPhysicalMaterial({ color: 0x23201d, roughness: 0.62, metalness: 0, sheen: 0.2, sheenRoughness: 0.6, sheenColor: new THREE.Color(0x3a3028) }),
     { kind: 'fabric', scale: 18, wear: 0.5, wearColor: 0x5e5244, grime: 0.6, bump: 0.5 },
   );
   // protetor de nós: TPU moldado cinza-escuro (contraste com o tecido coyote —
   // é o que faz a mão "ler" como mão a 1080p)
-  M.knuckle = std({ color: 0x232322, roughness: 0.55, metalness: 0.0 }, { wear: 0.5, wearColor: 0x55524c, wearMetal: 0.0, scratch: 0.4, grime: 0.3, bump: 0.7 });
+  M.knuckle = std({ color: 0x1b1b1a, roughness: 0.6, metalness: 0.0 }, { wear: 0.5, wearColor: 0x55524c, wearMetal: 0.0, scratch: 0.4, grime: 0.3, bump: 0.7 });
   M.sleeve = withDetail(
-    new THREE.MeshPhysicalMaterial({ color: 0xd8d8d0, roughness: 0.9, metalness: 0, sheen: 0.3, sheenRoughness: 0.8, sheenColor: new THREE.Color(0x4a4638) }),
-    { kind: 'camo', scale: 60, camoScale: 10, wear: 0.25, wearColor: 0x9a927c, grime: 0.55, bump: 1.6 },
+    new THREE.MeshPhysicalMaterial({ color: 0xc2c2ba, roughness: 0.9, metalness: 0, sheen: 0.3, sheenRoughness: 0.8, sheenColor: new THREE.Color(0x4a4638) }),
+    { kind: 'camo', scale: 150, camoScale: 6, wear: 0.25, wearColor: 0x8a8370, grime: 0.55, bump: 0.8 },
   );
   M.strap = withDetail(
     new THREE.MeshPhysicalMaterial({ color: 0x3a372f, roughness: 0.8, metalness: 0, sheen: 0.6, sheenColor: new THREE.Color(0x5a564a) }),

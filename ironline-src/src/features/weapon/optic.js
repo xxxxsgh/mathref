@@ -12,7 +12,7 @@
  */
 import * as THREE from 'three';
 
-export function makeLens({ w, h, color = new THREE.Color(1.0, 0.08, 0.04), intensity = 4 } = {}) {
+export function makeLens({ w, h, color = new THREE.Color(1.0, 0.035, 0.02), intensity = 4 } = {}) {
   const mat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -102,6 +102,9 @@ export function makeLens({ w, h, color = new THREE.Color(1.0, 0.08, 0.04), inten
         vec3 col = coat + uColor * uIntensity * ret * inside;
         // vidro levemente tingido (âmbar fraco escurece o fundo um pouco)
         float alpha = clamp(0.1 + bevel * 0.2 + fres * 0.22 + smudge * 0.03 + edge * 0.08, 0.0, 1.0);
+        // o traço encobre um pouco o fundo (alfa): o vermelho continua
+        // saturado mesmo contra céu claro, em vez de virar rosa/laranja
+        alpha = max(alpha, clamp(ret * inside, 0.0, 1.0) * 0.7);
         gl_FragColor = vec4(col, alpha);
       }`,
     blending: THREE.CustomBlending,
