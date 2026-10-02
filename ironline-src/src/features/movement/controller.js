@@ -94,7 +94,7 @@ export class Controller {
 
   // ─── passo fixo ───────────────────────────────────────────────────────
   update(dt, p, ctx) {
-    const inp = ctx.input;
+    const inp = this.input || ctx.input; // entrada virtual no modo shot (roteiro ?mv=)
     const bus = ctx.bus;
     const weapon = ctx.services.weapon;
     const ads = clamp(Number(weapon?.ads) || 0, 0, 1);
@@ -520,7 +520,7 @@ export class Controller {
   // ─── estado comum + lean + passos ─────────────────────────────────────
   finishState(dt, p, fy, fx) {
     const ctx = this.ctx;
-    const inp = ctx.input;
+    const inp = this.input || ctx.input; // entrada virtual no modo shot (roteiro ?mv=)
     // altura dos olhos acompanha a postura (com mergulho no mantle)
     let eyeT = T.stance[this.stance].eye;
     if (this.mantle) {

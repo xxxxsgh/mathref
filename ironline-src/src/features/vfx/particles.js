@@ -35,6 +35,7 @@ attribute vec4 aColor;  // rgb linear, alpha
 attribute vec4 aMisc;   // tile, modo, iluminação do sol (0..1), aditivo
 attribute vec4 aFx;     // emissão, expoente de decaimento do calor, fade-in, esticamento
 attribute vec4 aPlane;  // plano suave: normal.xyz, d
+attribute vec4 aExt;    // turbulência (m), erosão (0..1), suavidade de profundidade (m), semente
 
 uniform float uTime;
 uniform vec3 uWind;
@@ -51,6 +52,11 @@ varying float vSize;
 varying float vAge;
 varying float vViewDist;
 varying float vScatter;
+varying vec3 vAxX;
+varying vec3 vAxY;
+varying vec3 vAxZ;
+varying vec2 vLocal;
+varying vec4 vExt;
 
 void main() {
   float age = uTime - aTime.x;
@@ -64,6 +70,15 @@ void main() {
   vec3 wind = aMisc.w > 0.5 ? vec3(0.0) : uWind * age;
   vec3 P = mode > 2.5 && mode < 3.5 ? aPos : aPos + aVel * decay + 0.5 * g * age * age + wind;
   vec3 V = aVel * exp(-k * age) + g * age;
+  // turbulência: deslocamento suave e pseudo-rotacional que cresce com a idade
+  if (aExt.x > 0.0) {
+    float s = aExt.w * 6.2831;
+    vec3 ph = P * 0.9 + vec3(s, s * 1.7, s * 2.3);
+    vec3 tb = vec3(sin(ph.y + age * 2.1) + sin(ph.z * 1.7 + age * 3.3) * 0.5,
+                   sin(ph.z + age * 1.7) * 0.6 + 0.4,
+                   sin(ph.x + age * 2.5) + sin(ph.y * 1.3 + age * 2.9) * 0.5);
+    P += tb * aExt.x * min(age * 1.5, 1.0);
+  }
 
   float ix = 1.0 - x;
   float grow = 1.0 - ix * ix * ix;
@@ -116,6 +131,9 @@ void main() {
   }
   vec3 axZ = normalize(cross(axX, axY));
   if (dot(axZ, toCam) < 0.0) axZ = -axZ;
+  vAxX = axX; vAxY = axY; vAxZ = axZ;
+  vLocal = c;
+  vExt = aExt;
   vSunLocal = vec3(dot(uSunDir, axX), dot(uSunDir, axY), dot(uSunDir, axZ));
   vScatter = dot(uSunDir, -toCam);
 
@@ -141,6 +159,16 @@ uniform vec3 uAmbient;
 uniform vec3 uGroundAmbient;
 uniform float uNearFade;
 uniform float uFireIntensity;
+uniform sampler2D uDetail;
+uniform sampler2D uDepth;
+uniform float uSoftOn;
+uniform vec2 uRes;
+uniform vec2 uNearFar;
+uniform float uTimeF;
+#define NL 3
+uniform vec3 uLPos[NL];
+uniform vec3 uLCol[NL];
+uniform float uLRange[NL];
 
 varying vec2 vUv;
 varying vec4 vColor;
@@ -153,6 +181,16 @@ varying float vSize;
 varying float vAge;
 varying float vViewDist;
 varying float vScatter;
+varying vec3 vAxX;
+varying vec3 vAxY;
+varying vec3 vAxZ;
+varying vec2 vLocal;
+varying vec4 vExt;
+
+float linDepth(float d) {
+  float n = uNearFar.x, f = uNearFar.y;
+  return n * f / (f - d * (f - n));
+}
 
 vec3 blackbody(float t) {
   // rampa artística: brasa vermelho-escura → laranja → amarelo → branco-quente
@@ -172,11 +210,29 @@ void main() {
     float h = dot(vPlane.xyz, vWorld) - vPlane.w;
     fade *= clamp(h / max(vSize * 0.3, 0.02), 0.0, 1.0);
   }
+  // partícula "suave": desvanece contra a profundidade da cena (pré-passe próprio)
+  if (uSoftOn > 0.5 && vExt.z > 0.0) {
+    float sz = linDepth(texture2D(uDepth, gl_FragCoord.xy / uRes).r);
+    fade *= clamp((sz - vViewDist) / (vExt.z + vSize * 0.35), 0.0, 1.0);
+  }
   // perto da câmera
   fade *= clamp((vViewDist - uNearFade) / max(uNearFade * 3.0, 0.05), 0.0, 1.0);
   float heat = vFx.x * pow(max(1.0 - x, 0.0), vFx.y);
 
+  // detalhe animado ("flipbook" procedural): ruído que escoa e gira com a idade
+  float det = 1.0;
+  if (vExt.y > 0.0 || (heat > 0.0 && vMisc.w < 0.5)) {
+    float sd = vExt.w * 17.0;
+    float age = x * 1.6;
+    vec2 q = vLocal * 0.9 + vec2(sd, sd * 0.37);
+    vec2 flow = vec2(texture2D(uDetail, q * 0.7 + vec2(age * 0.11, 0.0)).g, texture2D(uDetail, q * 0.7 + vec2(0.0, age * 0.13)).b) - 0.5;
+    det = mix(texture2D(uDetail, q + flow * 0.45 + vec2(0.0, -age * 0.18)).r, texture2D(uDetail, q * 2.3 - flow * 0.3).g, 0.4);
+  }
+
   if (vMisc.w > 0.5) {
+#ifdef DEPTH_PROXY
+    discard;
+#endif
     // aditivo: R = núcleo branco-quente, A = intensidade
     vec3 col = mix(vColor.rgb, vec3(1.0, 0.92, 0.8) * 1.6, clamp(tex.r, 0.0, 1.0));
     float i = tex.a * fade * vColor.a;
@@ -185,27 +241,59 @@ void main() {
     return;
   }
 
-  float a = tex.a * vColor.a * fade;
+  float dens = tex.a;
+  // erosão: a densidade "come" de fora para dentro em vez de só ficar transparente
+  if (vExt.y > 0.0) {
+    float er = vExt.y * smoothstep(0.1, 1.0, x);
+    float d2 = dens * (0.6 + 0.8 * det);
+    dens *= smoothstep(er * 0.8, er * 0.8 + 0.4, d2);
+  }
+  float a = dens * vColor.a * fade;
+#ifdef DEPTH_PROXY
+  // só o miolo denso da fumaça grande escreve profundidade
+  if (vExt.z < 0.5 || a < 0.6) discard;
+  gl_FragColor = vec4(0.0);
+  return;
+#endif
   if (a < 0.003) discard;
   vec3 n = tex.rgb * 2.0 - 1.0;
   n.z = max(n.z, 0.05);
+  // poeira/fumaça fina (tiles 0–2): normal "achatada" — não pode parecer bola sólida
+  if (vMisc.x < 2.5) n = normalize(mix(vec3(0.0, 0.0, 1.0), n, 0.45));
+  // auto-sombreamento: a luz atravessa a densidade (Beer) pelo lado oposto ao sol
   float ndl = dot(n, vSunLocal);
-  float wrap = clamp(ndl * 0.6 + 0.4, 0.0, 1.0);
+  float selfSh = exp(-dens * 2.2 * clamp(0.6 - ndl * 0.8, 0.0, 1.2));
+  float wrap = clamp(ndl * 0.55 + 0.45, 0.0, 1.0) * mix(0.35, 1.0, selfSh);
   // espalhamento frontal (sol atrás da fumaça): HG g=0.55, mais forte nas bordas finas
   float gg = 0.55;
   float hg = (1.0 - gg * gg) / pow(1.0 + gg * gg - 2.0 * gg * vScatter, 1.5) * 0.0796;
-  float thin = (1.0 - tex.a) * tex.a * 2.0;
+  float thin = (1.0 - dens) * dens * 2.0;
   // sunlit ≥ 10: na sombra no chão, mas ao sol acima da altura (sunlit − 10)
   float sunlit = vMisc.z >= 10.0 ? smoothstep(vMisc.z - 11.5, vMisc.z - 8.5, vWorld.y) : vMisc.z;
   // céu de cima, chão por baixo, miolo denso mais escuro (auto-sombra), bordas finas mais claras
-  vec3 amb = mix(uGroundAmbient, uAmbient, n.y * 0.5 + 0.5) * (0.62 + 0.38 * n.z);
+  vec3 wn = normalize(vAxX * n.x + vAxY * n.y + vAxZ * n.z);
+  vec3 amb = mix(uGroundAmbient, uAmbient, wn.y * 0.5 + 0.5) * (0.55 + 0.45 * n.z) * (0.75 + 0.25 * det);
+  // luzes pontuais (clarões, explosão): difusa "wrap" com transmissão
+  vec3 pl = vec3(0.0);
+  for (int i = 0; i < NL; i++) {
+    vec3 L = uLPos[i] - vWorld;
+    float d2 = dot(L, L);
+    float r = uLRange[i];
+    if (r <= 0.0 || d2 > r * r) continue;
+    vec3 l = L * inversesqrt(d2);
+    float w = clamp(1.0 - pow(d2 / (r * r), 2.0), 0.0, 1.0);
+    float nl = dot(wn, l) * 0.5 + 0.5;
+    pl += uLCol[i] * (w * w / max(d2, 1.0)) * (nl * 0.8 + 0.2 + thin * 0.6);
+  }
   vec3 albedo = vColor.rgb;
-  vec3 lit = albedo * (amb + uSunColor * sunlit * (wrap * 0.3183 + hg * thin * 0.5));
-  // fogo: emissão por densidade × calor
-  // calor maior no miolo denso e virado para a câmera; bordas esfriam primeiro
-  float core = tex.a * (0.55 + 0.45 * n.z);
-  vec3 emit = heat > 0.0 ? blackbody(min(heat, 1.0) * (0.15 + 0.85 * core * core)) * uFireIntensity * min(heat, 1.5) * smoothstep(0.08, 0.35, heat) : vec3(0.0);
-  gl_FragColor = vec4((lit + emit) * a, a * (1.0 - min(heat, 1.0) * 0.35));
+  // esticadas (modo 1) quase não espalham para frente: viram "barra de luz" contra o sol
+  float hgK = vMisc.y > 0.5 && vMisc.y < 1.5 ? 0.08 : 0.5;
+  vec3 lit = albedo * (amb + uSunColor * sunlit * (wrap * 0.3183 + min(hg * thin, 0.35) * hgK) + pl * 0.06);
+  // fogo: emissão por densidade × calor; o detalhe animado cria bolsões quentes e frios
+  float core = dens * (0.55 + 0.45 * n.z);
+  float t = min(heat, 1.0) * (0.1 + 0.9 * core * core) * (0.7 + 0.6 * det);
+  vec3 emit = heat > 0.0 ? blackbody(t) * uFireIntensity * min(heat, 1.5) * smoothstep(0.05, 0.3, heat) : vec3(0.0);
+  gl_FragColor = vec4((lit + emit) * a, a * (1.0 - min(heat, 1.0) * 0.3));
 }`;
 
 const _c = new THREE.Color();
@@ -214,7 +302,7 @@ export class ParticleSystem {
   /**
    * @param {object} opts { capacity, atlas, name, nearFade }
    */
-  constructor({ capacity = 4096, atlas, name = 'vfx-particles', nearFade = 0.25, clock = null }) {
+  constructor({ capacity = 4096, atlas, detail = null, name = 'vfx-particles', nearFade = 0.25, clock = null }) {
     this.capacity = capacity;
     this.clock = clock;
     const quad = new THREE.PlaneGeometry(1, 1);
@@ -228,7 +316,7 @@ export class ParticleSystem {
       return a;
     };
     this.attr = {
-      aPos: mk(3), aVel: mk(3), aTime: mk(4), aSize: mk(4), aColor: mk(4), aMisc: mk(4), aFx: mk(4), aPlane: mk(4),
+      aPos: mk(3), aVel: mk(3), aTime: mk(4), aSize: mk(4), aColor: mk(4), aMisc: mk(4), aFx: mk(4), aPlane: mk(4), aExt: mk(4),
     };
     // nascem "mortas"
     const t = this.attr.aTime.array;
@@ -247,7 +335,16 @@ export class ParticleSystem {
       uAmbient: { value: new THREE.Color(0.35, 0.4, 0.48) },
       uGroundAmbient: { value: new THREE.Color(0.2, 0.18, 0.16) },
       uNearFade: { value: nearFade },
-      uFireIntensity: { value: 1.9 },
+      uFireIntensity: { value: 1.25 },
+      uDetail: { value: detail || null },
+      uDepth: { value: null },
+      uSoftOn: { value: 0 },
+      uRes: { value: new THREE.Vector2(1, 1) },
+      uNearFar: { value: new THREE.Vector2(0.05, 1000) },
+      uTimeF: { value: 0 },
+      uLPos: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
+      uLCol: { value: [new THREE.Color(0, 0, 0), new THREE.Color(0, 0, 0), new THREE.Color(0, 0, 0)] },
+      uLRange: { value: [0, 0, 0] },
     };
     this.material = new THREE.ShaderMaterial({
       name,
@@ -269,6 +366,28 @@ export class ParticleSystem {
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 10;
     this.mesh.userData.noSkyOcclusion = true;
+    // Proxy de profundidade: depois da cor, o miolo denso da fumaça grande
+    // escreve profundidade (sem cor). Assim a neblina/volumétrico do
+    // compositor, que é aplicado pela profundidade, trata a fumaça na
+    // distância certa em vez de "enevoá-la" como o prédio lá atrás.
+    this.depthMaterial = new THREE.ShaderMaterial({
+      name: name + '-depth',
+      vertexShader: VERT,
+      fragmentShader: FRAG,
+      uniforms: this.uniforms,
+      defines: { DEPTH_PROXY: 1 },
+      transparent: true,
+      depthWrite: true,
+      depthTest: true,
+      colorWrite: false,
+      side: THREE.DoubleSide,
+    });
+    this.depthMesh = new THREE.Mesh(geo, this.depthMaterial);
+    this.depthMesh.name = name + '-depth';
+    this.depthMesh.frustumCulled = false;
+    this.depthMesh.renderOrder = 11;
+    this.depthMesh.userData.noSkyOcclusion = true;
+    this.mesh.add(this.depthMesh);
     this.head = 0;
     this.dirtyMin = Infinity;
     this.dirtyMax = -1;
@@ -279,7 +398,8 @@ export class ParticleSystem {
   /**
    * Emite uma partícula. p: Vector3 (posição), v: Vector3|null.
    * o: { life, drag, gravity, size, size1, rot, spin, color(Color|hex), alpha,
-   *      tile, mode, sunlit, additive, emissive, heatPow, fadeIn, stretch, plane: [nx,ny,nz,d], delay }
+   *      tile, mode, sunlit, additive, emissive, heatPow, fadeIn, stretch, plane: [nx,ny,nz,d], delay,
+   *      turb (m), erode (0..1), soft (m, fade contra a profundidade), seed }
    */
   emit(p, v, o) {
     const i = this.head;
@@ -305,6 +425,8 @@ export class ParticleSystem {
     const pl = A.aPlane.array;
     if (o.plane) { pl[j] = o.plane[0]; pl[j + 1] = o.plane[1]; pl[j + 2] = o.plane[2]; pl[j + 3] = o.plane[3]; }
     else { pl[j] = 0; pl[j + 1] = 0; pl[j + 2] = 0; pl[j + 3] = 0; }
+    const ex = A.aExt.array;
+    ex[j] = o.turb ?? 0; ex[j + 1] = o.erode ?? 0; ex[j + 2] = o.soft ?? 0; ex[j + 3] = o.seed ?? Math.random();
     if (i < this.dirtyMin) this.dirtyMin = i;
     if (i > this.dirtyMax) this.dirtyMax = i;
     return i;

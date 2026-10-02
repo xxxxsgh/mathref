@@ -13,7 +13,7 @@
  */
 import * as THREE from 'three';
 import { cached, mat4 } from './geo.js';
-import { cyl, torus, decal } from './shapes.js';
+import { cyl, torus, decal, contact } from './shapes.js';
 
 const KINDS = {
   sedan: {
@@ -201,7 +201,7 @@ export function car(W, x, z, yaw, opts = {}) {
   if (dmg > 0.3) {
     const side = rng.sign();
     const p = new THREE.Vector3(rng.range(-1, 1), 0.7, side * (hw + 0.012)).applyMatrix4(CM);
-    decal(B, 'bullets', [p.x, p.y, p.z], side > 0 ? sideNormal(yaw, 1) : sideNormal(yaw, -1), [0.9, 0.5], [0.2, 0.3, 0.8, 0.7], rng.range(0, 6));
+    decal(B, 'bullets', [p.x, p.y, p.z], side > 0 ? sideNormal(yaw, 1) : sideNormal(yaw, -1), [0.9, 0.5], [0.2, 0.3, 0.8, 0.7], rng.range(0, 6), [0.32, 0.3, 0.28]);
   }
   if (burnt) {
     decal(B, 'scorch', [x, 0.022, z], 'py', [K.len + 3, 5], [0, 0, 1, 1], -yaw);
@@ -210,6 +210,8 @@ export function car(W, x, z, yaw, opts = {}) {
   } else {
     decal(B, 'stains', [x + rng.range(-0.5, 0.5), 0.022, z], 'py', [2.2, 2.2], [0, 0, 0.5, 0.5], rng.range(0, 6));
   }
+  // sombra de contato sob o carro (o vão do assoalho é escuro)
+  contact(B, x, 0, z, K.len + 0.5, K.w + 0.55, yaw, 3);
   // colisor (AABB do carro rotacionado)
   const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, (roofY + 0.2) / 2, 0), new THREE.Vector3(K.len, roofY - 0.1, K.w)).applyMatrix4(CM);
   B.collider(box.min.toArray(), box.max.toArray(), 'carpaint', { surface: 'metal' });

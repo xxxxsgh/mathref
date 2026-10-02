@@ -7,7 +7,7 @@
  */
 import * as THREE from 'three';
 import { cached, mat4 } from './geo.js';
-import { cylBetween, decal, torus } from './shapes.js';
+import { cylBetween, decal, torus, contact } from './shapes.js';
 import { graffitiRect } from './decals.js';
 
 const UNIT = () => cached('unitbox', () => new THREE.BoxGeometry(1, 1, 1));
@@ -48,6 +48,19 @@ export function jersey(W, x, z, yaw, opts = {}) {
     decal(B, 'chips', [c.x, c.y, c.z], face, [0.6, 0.35], [0.5, 0.5, 1, 1], rng.range(0, 6));
   }
   decal(B, 'stains', [x, 0.02 + rng.range(0, 0.002), z], 'py', [1.6, 3.6], [0, 0.5, 0.5, 1], -yaw, [0.9, 0.85, 0.8]);
+  contact(B, x, 0, z, 1.0, len + 0.35, yaw, 2);
+  // ponta quebrada (estilhaço/impacto): vergalhões expostos e lasca grande
+  if (opts.broken ?? rng.chance(0.4)) {
+    const end = rng.sign() * (len / 2 - 0.02);
+    for (let k = 0; k < 4; k++) {
+      const p = new THREE.Vector3(rng.range(-0.12, 0.12), rng.range(0.15, 0.7), end).applyMatrix4(M);
+      const d = new THREE.Vector3(rng.range(-0.4, 0.4), rng.range(-0.3, 0.5), Math.sign(end)).applyMatrix4(new THREE.Matrix4().extractRotation(M));
+      cylBetween(B, p.toArray(), [p.x + d.x * 0.25, p.y + d.y * 0.25, p.z + d.z * 0.25], 0.007, 'metal', { seg: 4, color: [0.42, 0.26, 0.17] });
+    }
+    // bloco arrancado da quina superior (caco de concreto caído ao lado)
+    const c = new THREE.Vector3(rng.range(-0.25, 0.25), 0.06, end * 1.12).applyMatrix4(M);
+    B.obox(c.toArray(), [0.22, 0.12, 0.3], [rng.range(-0.3, 0.3), rng.range(0, 6), rng.range(-0.4, 0.4)], 'concrete', { color: t.map((v) => v * 0.9) });
+  }
   const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, 0.4, 0), new THREE.Vector3(0.6, 0.81, len)).applyMatrix4(M);
   B.collider(box.min.toArray(), box.max.toArray(), 'concrete');
 }
@@ -100,10 +113,26 @@ export function twalls(W, x, z, yaw, count, opts = {}) {
         decal(B, 'graffiti', [c3.x, c3.y, c3.z], face, [1.4, 0.7], graffitiRect(rng.pick([2, 6, 10, 14, 4, 11])), rng.range(-0.06, 0.06));
       }
     }
+    // quina do topo arrancada por impacto: vergalhões dobrados aparecendo
+    if (rng.chance(0.35)) {
+      const zz = rng.sign() * 0.7;
+      for (let k = 0; k < 3; k++) {
+        const p = new THREE.Vector3(rng.range(-0.06, 0.06), 3.35 + k * 0.08, zz).applyMatrix4(M);
+        const d = new THREE.Vector3(rng.range(-0.3, 0.3), rng.range(0.2, 0.8), Math.sign(zz) * rng.range(0.4, 1)).applyMatrix4(M3).normalize();
+        cylBetween(B, p.toArray(), [p.x + d.x * 0.3, p.y + d.y * 0.3, p.z + d.z * 0.3], 0.008, 'metal', { seg: 4, color: [0.42, 0.26, 0.17] });
+      }
+      for (const side of [-1, 1]) {
+        const n = new THREE.Vector3(side, 0, 0).applyMatrix4(M3);
+        const face = Math.abs(n.x) > Math.abs(n.z) ? (n.x > 0 ? 'px' : 'nx') : (n.z > 0 ? 'pz' : 'nz');
+        const c = new THREE.Vector3(side * 0.075, 3.4, zz * 0.85).applyMatrix4(M);
+        decal(B, 'chips', [c.x, c.y, c.z], face, [0.5, 0.6], [0, 0, 0.5, 0.5], rng.range(0, 6));
+      }
+    }
     const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, 1.8, 0), new THREE.Vector3(0.6, 3.6, 1.5)).applyMatrix4(M);
     B.collider(box.min.toArray(), box.max.toArray(), 'concrete');
   }
   decal(B, 'stains', [x + dir[0] * count * 0.76, 0.021, z + dir[1] * count * 0.76], 'py', [2.4, count * 1.6 + 1], [0, 0.5, 0.5, 1], -yaw, [0.9, 0.85, 0.8]);
+  contact(B, x + dir[0] * (count - 1) * 0.78, 0, z + dir[1] * (count - 1) * 0.78, 1.8, count * 1.56 + 0.5, yaw, 2);
 }
 
 // ─── HESCO ─────────────────────────────────────────────────────────────
@@ -157,6 +186,7 @@ export function hesco(W, x, z, yaw, count, opts = {}) {
     B.collider(box.min.toArray(), box.max.toArray(), 'fabric', { surface: 'dirt' });
   }
   decal(B, 'stains', [x + dir[0] * count * 0.5, 0.021, z + dir[1] * count * 0.5], 'py', [2.6, count * 1.1 + 1.2], [0, 0.5, 0.5, 1], -yaw, [1.05, 0.95, 0.85]);
+  contact(B, x + dir[0] * (count - 1) * s * 0.5, 0, z + dir[1] * (count - 1) * s * 0.5, s + 0.5, count * s + 0.4, yaw, 2);
 }
 
 /** Tela soldada galvanizada (alpha) — células de 7.6 cm, para o HESCO. */
@@ -166,7 +196,7 @@ export function meshTexture() {
   const g = c.getContext('2d');
   g.clearRect(0, 0, 128, 128);
   g.strokeStyle = '#cfcfc8';
-  g.lineWidth = 5;
+  g.lineWidth = 9;
   for (let k = 0; k <= 4; k++) {
     const v = k * 32;
     g.beginPath(); g.moveTo(v, 0); g.lineTo(v, 128); g.stroke();

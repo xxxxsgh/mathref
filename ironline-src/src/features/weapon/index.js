@@ -18,7 +18,7 @@
  * debugView(), fire(), reload(), inspect(), equip().
  */
 import * as THREE from 'three';
-import { makeMaterials } from './materials.js';
+import { makeMaterials, OCC, OCC_MAX } from './materials.js';
 import { buildRifle, buildMag, buildCasing, DIM } from './rifle.js';
 import { makeLens } from './optic.js';
 import { Hand, POSES, clonePose, blendPoses, buildSleeve } from './arms.js';
@@ -26,7 +26,10 @@ import { Spring, Track, ease, clamp, lerp, smoothstep, wobble } from './anim.js'
 
 // ─── poses-base (posição do PIVÔ da arma no espaço da câmera, rot em rad) ──
 const PIVOT = new THREE.Vector3(0, -0.035, -0.14); // perto do poço do carregador
-const HIP = { pos: new THREE.Vector3(0.084, -0.112, -0.27), rot: new THREE.Euler(0.06, 0.045, -0.08) };
+// hip: arma mais longe, baixa e à direita (enquadramento de shooter moderno:
+// a boca aponta para a mira, a ótica ocupa ~7% da largura do quadro, a mão
+// de apoio entra pela parte de baixo, perto do centro)
+const HIP = { pos: new THREE.Vector3(0.11, -0.14, -0.36), rot: new THREE.Euler(0.04, 0.06, -0.06) };
 const EYE_RELIEF = 0.2; // distância olho → ponto de visada no ADS
 const ADS = { pos: new THREE.Vector3(), rot: new THREE.Euler(0, 0, 0) };
 const SPRINT = { pos: new THREE.Vector3(-0.03, -0.045, 0.03), rot: new THREE.Euler(-0.32, 0.62, 0.42) };
@@ -190,9 +193,25 @@ export default {
     this.sleeveR = buildSleeve(M, { left: false });
     this.sleeveL = buildSleeve(M, { left: true, watch: true });
     rig.add(this.sleeveR, this.sleeveL);
+
+    // ─── oclusão de contato: cápsulas presas às peças (espaço local) ──────
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    this.occ = [
+      { o: R.root, a: V(0, -0.007, -0.25), b: V(0, -0.007, -0.578), r: 0.0235 }, // guarda-mão
+      { o: R.root, a: V(0, -0.035, -0.37), b: V(0, -0.11, -0.382), r: 0.0145 }, // empunhadura vertical
+      { o: R.root, a: V(0, -0.052, -0.035), b: V(0, -0.148, -0.0), r: 0.0155 }, // punho
+      { o: R.root, a: V(0, 0.0315, -0.072), b: V(0, 0.0315, -0.148), r: 0.016 }, // base da ótica
+      { o: R.root, a: V(0, 0.05, -0.096), b: V(0, 0.05, -0.13), r: 0.02 }, // capô da ótica
+      { o: R.root, a: V(0, -0.012, -0.01), b: V(0, -0.012, -0.225), r: 0.02 }, // receptor
+      { o: R.mag, a: V(0, -0.01, 0.0), b: V(0.036, -0.17, 0.0), r: 0.016 }, // carregador
+      { o: this.handL.root, a: V(0, 0.0, -0.03), b: V(0, 0.0, -0.065), r: 0.03 }, // palma esq.
+      { o: this.handR.root, a: V(0, 0.0, -0.03), b: V(0, 0.0, -0.065), r: 0.03 }, // palma dir.
+      { o: R.root, a: V(0, -0.004, 0.0), b: V(0, -0.004, 0.2), r: 0.0148 }, // tubo da coronha
+    ].slice(0, OCC_MAX);
+    OCC.uOccN.value = this.occ.length;
     // "ombros" (âncoras dos antebraços) no espaço do rig
-    this.anchorR = new THREE.Vector3(0.24, -0.46, -0.06);
-    this.anchorL = new THREE.Vector3(-0.16, -0.6, -0.06);
+    this.anchorR = new THREE.Vector3(0.3, -0.45, -0.08);
+    this.anchorL = new THREE.Vector3(-0.32, -0.55, -0.12);
 
     // ─── luzes da viewmodel ──────────────────────────────────────────────
     const vs = vm.scene;
@@ -204,16 +223,23 @@ export default {
     this.sun.shadow.normalBias = 0.0025;
     this.sun.shadow.radius = 3;
     vs.add(this.sun, this.sun.target);
-    this.hemi = new THREE.HemisphereLight(0xbfd2ff, 0x4a3f33, 0.25);
+    this.hemi = new THREE.HemisphereLight(0xd6dbe0, 0x4a3f33, 0.25);
     vs.add(this.hemi);
     // luz de recorte artificial suave (leitura da silhueta em sombra)
-    this.rim = new THREE.DirectionalLight(0xdfe8ff, 0.35);
+    this.rim = new THREE.DirectionalLight(0xe8ecf0, 0.35);
     this.rim.position.set(-1, 0.6, 0.4);
     vm.camera.add(this.rim);
     vm.camera.add(this.rim.target);
     this.rim.target.position.set(0, 0, -1);
+    // rebatimento quente (fachadas ensolaradas, chão) vindo da direita/baixo
+    // — na sombra a arma não vira um bloco azul: a forma continua legível
+    this.bounce = new THREE.DirectionalLight(0xffdcb8, 0.4);
+    this.bounce.position.set(1, 0.15, 0.7);
+    vm.camera.add(this.bounce);
+    vm.camera.add(this.bounce.target);
+    this.bounce.target.position.set(0, 0, -1);
     // clarão de boca
-    this.flash = new THREE.PointLight(0xffa457, 0, 2.2, 2);
+    this.flash = new THREE.PointLight(0xffa457, 0, 1.2, 2);
     R.muzzle.add(this.flash);
     this.flash.position.set(0, 0.01, 0.06);
     // ambiente fallback (sem a feature rendering)
@@ -261,6 +287,7 @@ export default {
       reload: makeReload(false), reloadEmpty: makeReload(true), inspect: makeInspect(), equip: makeEquip(),
     };
     this.debug = null;
+    this.tuneK = { env: 1, hemi: 1, rim: 1, bounce: 1, sun: 1 };
     this.trackOut = new Array(6).fill(0);
 
     if (!input.bindings.inspect) input.bindings.inspect = ['KeyI'];
@@ -300,13 +327,19 @@ export default {
       // a ejeção de cápsulas (arco visível + quique no chão) fica com a vfx,
       // que já tem latão com física; a arma só informa a janela de ejeção
       ejectPort: R.ejectPort,
-      brassByVfx: true,
+      // a cápsula visível no quadro é da arma (malha de latão de verdade,
+      // iluminada pela viewmodel); a vfx só cria a herdeira no mundo
+      brassByVfx: false,
       fire: () => self.fire(ctx),
       reload: () => self.tryReload(ctx),
       inspect: () => self.startAction('inspect'),
       equip: () => self.startAction('equip'),
       debugPose: (n, t) => self.debugPose(n, t),
       debugView: (y, p, d) => self.debugView(y, p, d),
+      get debugLight() { return { sunVis: st.sunVis, indoor: st.indoor }; },
+      /** Multiplicadores de luz da viewmodel (QA/ajuste): { env, hemi, rim, bounce, sun }. */
+      tune: (o) => Object.assign(self.tuneK, o),
+      materials: M,
     });
   },
 
@@ -383,7 +416,7 @@ export default {
       if (!ctx.shot?.preset?.combat) hit.collider.data?.damage?.(dmg, info);
       bus.emit('weapon:hit', info);
     }
-    if (!ctx.service('vfx')) this.eject(ctx); // sem vfx: cápsula própria
+    this.eject(ctx); // cápsula modelada na viewmodel (a vfx cuida da "herdeira" no chão)
   },
 
   eject(ctx) {
@@ -392,8 +425,10 @@ export default {
     this.pivot.updateMatrixWorld(true);
     this.R.ejectPort.getWorldPosition(_v);
     ctx.vm.camera.worldToLocal(c.position.copy(_v));
+    // sai paralela ao cano (como a cápsula real deixa a câmara), já
+    // girando: o eixo fica perpendicular ao voo e ela lê como cilindro
     c.quaternion.copy(this.pivot.quaternion);
-    c.rotateY(Math.PI / 2);
+    c.rotateY(0.35 + rng.next() * 0.3);
     const d = c.userData;
     d.v.set(1.6 + rng.next() * 0.6, 1.0 + rng.next() * 0.5, 0.35 + rng.next() * 0.3);
     d.w.set(rng.range(-25, 25), rng.range(-35, -15), rng.range(-10, 10));
@@ -658,6 +693,25 @@ export default {
 
     // ─ luzes ─
     this.updateLights(dt, ctx);
+
+    // ─ oclusão de contato (cápsulas → espaço de visão da viewmodel) ─
+    this.updateOcclusion(ctx);
+  },
+
+  updateOcclusion(ctx) {
+    const cam = ctx.vm.camera;
+    cam.updateMatrixWorld(true);
+    this.rig.updateMatrixWorld(true);
+    const A = OCC.uOccA.value, B = OCC.uOccB.value;
+    for (let i = 0; i < this.occ.length; i++) {
+      const c = this.occ[i];
+      const mw = c.o.matrixWorld;
+      _v.copy(c.a).applyMatrix4(mw).applyMatrix4(cam.matrixWorldInverse);
+      A[i].set(_v.x, _v.y, _v.z, c.r);
+      B[i].copy(c.b).applyMatrix4(mw).applyMatrix4(cam.matrixWorldInverse);
+    }
+    // ocluidores das mãos só valem quando a mão está visível (depuração)
+    OCC.uOccN.value = this.whand ? 0 : this.occ.length;
   },
 
   placeLeftHand(w, mag) {
@@ -807,29 +861,34 @@ export default {
     L.target.position.copy(center);
     L.target.updateMatrixWorld();
     if (sun) L.color.copy(sun.color);
-    L.intensity = (sun ? sun.intensity : 3) * st.sunVis;
+    L.intensity = (sun ? sun.intensity : 3) * st.sunVis * this.tuneK.sun;
     L.castShadow = !!ctx.quality.shadows && st.sunVis > 0.02;
     // ambiente: mesma intensidade de IBL do mundo, menos no interior
     if (!this.ownEnv) {
       const base = rend?.environmentIntensity ?? 0.55;
-      vmScene.environmentIntensity = base * 0.95 * lerp(1, 0.32, st.indoor);
+      // a arma é preta: sem um pouco mais de ambiente ela vira silhueta
+      // chapada (shooters AAA "trapaceiam" igual na viewmodel)
+      const shadeK = lerp(1.3, 1.9, 1 - st.sunVis);
+      vmScene.environmentIntensity = base * 0.85 * shadeK * lerp(1, 0.4, st.indoor) * this.tuneK.env;
     }
     // na sombra a arma perde o sol: preenchimento suave mantém a forma legível
     const shade = 1 - st.sunVis;
-    this.hemi.intensity = lerp(0.22 + 0.18 * shade, 0.1, st.indoor);
-    this.rim.intensity = lerp(0.3 + 0.45 * shade, 0.22, st.indoor);
+    const T = this.tuneK;
+    this.hemi.intensity = lerp(0.3 + 0.35 * shade, 0.16, st.indoor) * T.hemi;
+    this.rim.intensity = lerp(0.3 + 0.45 * shade, 0.22, st.indoor) * T.rim;
+    this.bounce.intensity = lerp(0.5 + 1.7 * shade, 0.6, st.indoor) * T.bounce;
     // clarão de boca
     st.flashT = Math.max(0, st.flashT - dt);
     const f = st.flashT > 0 ? st.flashT / 0.055 : 0;
     // clarão curto e quente que ilumina luvas e receptor (pico forte, cauda curta)
-    this.flash.intensity = f > 0 ? (0.35 + 0.65 * f) * 3.6 : 0;
+    this.flash.intensity = f > 0 ? (0.3 + 0.7 * f) * 1.5 : 0;
     this.flash.color.setRGB(1, 0.55 + 0.25 * f, 0.26 + 0.1 * f);
     // retículo: um pouco mais brilhante de dia
-    this.lens.material.uniforms.uIntensity.value = lerp(2.4, 4.0, st.sunVis * (1 - st.indoor));
+    this.lens.material.uniforms.uIntensity.value = lerp(1.5, 2.3, st.sunVis * (1 - st.indoor));
   },
 
   dispose(ctx) {
-    ctx.vm.camera.remove(this.rig, this.rim, this.rim.target, ...this.casings);
+    ctx.vm.camera.remove(this.rig, this.rim, this.rim.target, this.bounce, this.bounce.target, ...this.casings);
     ctx.vm.scene.remove(this.sun, this.sun.target, this.hemi);
   },
 };

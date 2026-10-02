@@ -107,3 +107,62 @@ export class ShadowFitter {
     return changed;
   }
 }
+
+/**
+ * Cópia "crua" (depth sem comparação) do shadow map do sol, renderizada com
+ * a MESMA câmera de sombra do three. O mapa do three é sampler2DShadow
+ * (comparação em hardware) e não deixa ler a profundidade do bloqueador —
+ * que é o que o PCSS precisa. Este mapa (menor) serve só à busca de
+ * bloqueadores; a filtragem final continua no mapa do three (resolução
+ * cheia, comparação em hardware) → penumbra que endurece no contato.
+ */
+export class RawShadow {
+  constructor(size = 2048) {
+    this.size = size;
+    const dt = new THREE.DepthTexture(size, size, THREE.FloatType);
+    dt.format = THREE.DepthFormat;
+    dt.minFilter = dt.magFilter = THREE.NearestFilter;
+    this.rt = new THREE.WebGLRenderTarget(size, size, { type: THREE.UnsignedByteType, depthBuffer: true, depthTexture: dt, generateMipmaps: false });
+    this.override = new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide });
+    this.valid = false;
+    this.hidden = [];
+  }
+
+  /** Renderiza a profundidade vista pela câmera de sombra atual do sol. */
+  render(renderer, scene, sun, hide = []) {
+    const shadow = sun.shadow;
+    shadow.updateMatrices(sun); // mesma matriz que o passe de sombra do three usará
+    const prevOverride = scene.overrideMaterial;
+    const prevBg = scene.background;
+    const prevAuto = renderer.shadowMap.autoUpdate;
+    const prevNeeds = renderer.shadowMap.needsUpdate;
+    scene.overrideMaterial = this.override;
+    scene.background = null;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = false;
+    const hidden = this.hidden;
+    hidden.length = 0;
+    for (const o of hide) if (o && o.visible) (o.visible = false), hidden.push(o);
+    scene.traverseVisible((o) => {
+      if (o.isPoints || o.isSprite || o.isLine || o.userData?.noSunView || (o.isMesh && !o.castShadow) || (o.material && o.material.transparent && !o.material.alphaTest)) {
+        if (o.isMesh || o.isPoints || o.isSprite || o.isLine) hidden.push(o), (o.visible = false);
+      }
+    });
+    renderer.setRenderTarget(this.rt);
+    renderer.clear(false, true, false);
+    renderer.render(scene, shadow.camera);
+    for (const o of hidden) o.visible = true;
+    hidden.length = 0;
+    scene.overrideMaterial = prevOverride;
+    scene.background = prevBg;
+    renderer.shadowMap.autoUpdate = prevAuto;
+    renderer.shadowMap.needsUpdate = prevNeeds;
+    this.valid = true;
+  }
+
+  dispose() {
+    this.rt.depthTexture.dispose();
+    this.rt.dispose();
+    this.override.dispose();
+  }
+}

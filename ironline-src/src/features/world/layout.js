@@ -66,7 +66,12 @@ export function buildLayout(W) {
   R(-140, -104, { floors: 4, tint: TINTS.white, shop: true, cond: 0.3 });
 
   // fundo das ruas: prédio que fecha a avenida ao sul e ao norte
-  building(W, { x0: -26, x1: 26, z0: -168, z1: Z_S + 10, floors: 6, faces: ['pz'], tint: TINTS.cream, shop: true, cond: 0.3, pitch: 3.2 });
+  // (três prédios de alturas/estilos diferentes: silhueta recortada no fim da rua)
+  building(W, { x0: -26, x1: -7, z0: -168, z1: Z_S + 10, floors: 7, style: 'concrete', tint: [0.8, 0.79, 0.76], faces: ['pz'], balconies: 0.55, cond: 0.4, pitch: 3.0 });
+  building(W, { x0: -7, x1: 9, z0: -166, z1: Z_S + 10, floors: 3, style: 'brick', tint: [1, 1, 1], faces: ['pz'], shop: true, cond: 0.9, brokenTop: true });
+  building(W, { x0: 9, x1: 26, z0: -168, z1: Z_S + 10, floors: 5, tint: TINTS.pink, faces: ['pz'], shop: true, cond: 0.5, unfinished: true });
+  // torre alta danificada atrás (marco visual no fim da avenida)
+  building(W, { x0: -6, x1: 12, z0: -196, z1: -176, floors: 12, style: 'concrete', tint: [0.74, 0.74, 0.72], faces: ['pz'], balconies: 0.3, cond: 0.6, pitch: 3.2, roofProps: false, brokenTop: true, });
   building(W, { x0: -26, x1: 26, z0: Z_N, z1: Z_N + 14, floors: 5, faces: ['nz'], tint: TINTS.ochre, shop: true, cond: 0.4 });
   // rua transversal: fachadas visíveis do cruzamento
   for (const s of [-1, 1]) {
@@ -197,19 +202,21 @@ function skyline(W) {
     }
   };
   const add = (x0, z0, w, d, h, opts = {}) => {
-    const t = rng.pick(tints);
+    const t = rng.pick(tints).map((c) => c * rng.range(0.82, 1.04));
+    // grade de janelas diferente por bloco (escala e fase da textura)
+    const fo = { uvRand: true, uvScale: rng.range(0.8, 1.25) };
     const broken = opts.broken ?? rng.chance(0.22);
     if (!broken) {
-      B.box(x0, -0.1, z0, x0 + w, h, z0 + d, 'far', { color: t, collide: false, faces: { ny: null } });
+      B.box(x0, -0.1, z0, x0 + w, h, z0 + d, 'far', { ...fo, color: t, collide: false, faces: { ny: null } });
       B.box(x0 - 0.2, h, z0 - 0.2, x0 + w + 0.2, h + 0.7, z0 + d + 0.2, 'concrete', { color: [0.7, 0.68, 0.64], collide: false, faces: { ny: null } });
       roofJunk(x0, z0, w, d, h + 0.7);
     } else {
       // topo desmoronado: colunas de alturas decrescentes (silhueta serrilhada)
       const n = Math.max(3, Math.round(w / 2.5));
-      B.box(x0, -0.1, z0, x0 + w, h * 0.55, z0 + d, 'far', { color: t, collide: false, faces: { ny: null } });
+      B.box(x0, -0.1, z0, x0 + w, h * 0.55, z0 + d, 'far', { ...fo, color: t, collide: false, faces: { ny: null } });
       for (let i = 0; i < n; i++) {
         const hh = h * 0.55 + (h * 0.45) * Math.max(0, Math.sin((i / n) * Math.PI * rng.range(0.6, 1.1)) + rng.range(-0.25, 0.15));
-        B.box(x0 + (i / n) * w, h * 0.55 - 0.2, z0, x0 + ((i + 1) / n) * w, hh, z0 + d * rng.range(0.4, 1), 'far', { color: t.map((c) => c * 0.92), collide: false, faces: { ny: null } });
+        B.box(x0 + (i / n) * w, h * 0.55 - 0.2, z0, x0 + ((i + 1) / n) * w, hh, z0 + d * rng.range(0.4, 1), 'far', { ...fo, color: t.map((c) => c * 0.92), collide: false, faces: { ny: null } });
       }
     }
   };
@@ -289,16 +296,16 @@ function dressStreet(W) {
   P.barrel(W, 2.3, 20.5, { fallen: true, tint: [0.25, 0.32, 0.22] });
 
   // carros estacionados / abandonados / queimados
-  P.car(W, 4.6, 36, Math.PI / 2 + 0.03, { kind: 'sedan', tint: [0.85, 0.85, 0.82] });
+  P.car(W, 4.6, 36, Math.PI / 2 + 0.03, { kind: 'sedan', tint: [0.74, 0.74, 0.71] });
   P.car(W, 4.7, 28.5, Math.PI / 2 - 0.05, { kind: 'hatch', tint: [0.55, 0.15, 0.12] });
   P.car(W, -4.2, 44, Math.PI / 2 + 0.5, { burnt: true, kind: 'sedan' });
-  P.car(W, 4.75, 6, Math.PI / 2, { kind: 'van', tint: [0.86, 0.85, 0.8], damage: 0.6 });
+  P.car(W, 4.75, 6, Math.PI / 2, { kind: 'van', tint: [0.74, 0.73, 0.68], damage: 0.8 });
   P.car(W, -2.8, -12, Math.PI / 2 + 0.75, { burnt: true, kind: 'sedan' });
   P.car(W, -4.7, -32, -Math.PI / 2 + 0.06, { kind: 'sedan', tint: [0.75, 0.68, 0.55] });
   P.car(W, 4.5, -20.5, Math.PI / 2 + 0.06, { kind: 'hatch', tint: [0.35, 0.42, 0.3] });
   P.car(W, 3.2, -78, Math.PI / 2 - 0.4, { burnt: true, kind: 'hatch' });
   P.car(W, -4.6, -92, Math.PI / 2, { kind: 'sedan', tint: [0.18, 0.24, 0.36] });
-  P.car(W, 4.6, -112, Math.PI / 2 + 0.04, { kind: 'van', tint: [0.85, 0.85, 0.82] });
+  P.car(W, 4.6, -112, Math.PI / 2 + 0.04, { kind: 'van', tint: [0.72, 0.72, 0.69] });
   P.car(W, -1.5, -128, 0.4, { burnt: true, kind: 'sedan' });
 
   // barreiras jersey em chicane (atrás do ponto do inimigo do preset combat)
@@ -399,7 +406,10 @@ function dressStreet(W) {
   P.dumpster(W, 8.4, 19, 0.05);
   P.dumpster(W, -8.3, -36.2, Math.PI + 0.1);
   P.dumpster(W, -16.5, -40.5, 0.3);
-  for (const [x, z] of [[-5.2, 23], [6.6, 2], [-6.3, -44], [5.5, -60], [-4.8, -104], [2.8, -136]]) P.tire(W, x, z);
+  for (const [x, z] of [[-5.2, 23], [-6.3, -44], [5.5, -60], [-4.8, -104], [2.8, -136]]) P.tire(W, x, z);
+  // pilha de pneus queimando na calçada (fogo + fumaça preta em index.js)
+  for (let k = 0; k < 3; k++) P.tire(W, 6.6 + rng.range(-0.08, 0.08), 2.0 + rng.range(-0.08, 0.08), { flat: true, y: 0.15 + k * 0.2, tilt: rng.range(-0.08, 0.08) });
+  decal(B, 'scorch', [6.9, 0.164, 2.0], 'py', [2.6, 2.6], [0, 0, 1, 1], 0.7);
   P.pallet(W, 8.7, 16.8, 0.2, 0.15);
   P.pallet(W, -16, -39, 1.1, 0.02);
 
@@ -431,6 +441,16 @@ function dressStreet(W) {
     }
   }
   P.grassTufts(W, -16, -40, 2.5, 40, { y: 0.02 });
+  // massa verde: arbustos/sebes crescendo sem poda junto às fachadas e na ruela
+  for (const [x, z, r, h, dry] of [
+    [8.75, 9.2, 0.9, 1.3, 0], [-8.8, -13.5, 1.1, 1.6, 1], [8.7, -47.5, 0.8, 1.1, 0], [-8.8, -74, 1.0, 1.4, 0],
+    [8.8, -88, 0.9, 1.2, 1], [-8.9, 38, 0.8, 1.1, 0], [8.8, 45, 1.0, 1.5, 0],
+  ]) {
+    VG.bush(W, x, z, r, h, { y: 0.15, sx: 0.7, dry });
+    P.grassTufts(W, x, z, r * 1.2, 10, { y: 0.15 });
+  }
+  for (const [x, z, r, h] of [[-14.5, -41, 1.3, 1.8], [-18.5, -39.2, 1.0, 1.4], [-21.5, -40.8, 1.4, 2.2]]) VG.bush(W, x, z, r, h, { y: 0.02 });
+
 
   // antenas parabólicas registradas pelos prédios
   for (const d of W.dishes) P.dish(W, d.p, d.n);

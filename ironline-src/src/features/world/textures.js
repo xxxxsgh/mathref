@@ -340,11 +340,12 @@ export function genCorrugated(N, seed = 71) {
   }
   const normal = heightToNormal(h, N, 1.6 * (N / 1024) * 4);
   const { albedo, orm } = pack(N, (i, c, m) => {
-    const rr = clamp01(smooth(0.45, 0.7, rustN[i]) + smooth(0.55, 0.8, streak[i]) * 0.5);
+    // ferrugem nas bordas de baixo/escorrida, não em manchas pretas grandes
+    const rr = clamp01(smooth(0.6, 0.8, rustN[i]) * 0.85 + smooth(0.6, 0.85, streak[i]) * 0.35);
     const groove = 0.85 + h[i] * 0.15;
-    const pv = 0.7 * groove;
-    const rv = (0.55 + fine[i] * 0.6) * groove;
-    c[0] = lerp(pv, 0.38 * rv, rr); c[1] = lerp(pv, 0.2 * rv, rr); c[2] = lerp(pv, 0.11 * rv, rr);
+    const pv = (0.66 + (fine[i] - 0.5) * 0.12 + (streak[i] - 0.5) * 0.1) * groove;
+    const rv = (0.6 + fine[i] * 0.5) * groove;
+    c[0] = lerp(pv, 0.5 * rv, rr); c[1] = lerp(pv, 0.28 * rv, rr); c[2] = lerp(pv, 0.15 * rv, rr);
     m[0] = 0.75 + groove * 0.25; m[1] = lerp(0.5, 0.88, rr); m[2] = lerp(0.4, 0.1, rr);
   });
   return { albedo, normal, orm, world: 2.4 };
@@ -437,12 +438,14 @@ export function genTiles(N, seed = 91) {
     }
   }
   const normal = heightToNormal(blur(h, N, 1), N, 2.4);
+  // desenho desbotado por décadas de uso: contraste baixo entre as cores
+  const base = [0.5, 0.47, 0.42];
   const cols = [
-    [0.66, 0.62, 0.54], // creme
-    [0.52, 0.3, 0.22], // terracota
-    [0.3, 0.34, 0.36], // grafite
-    [0.46, 0.42, 0.3], // ocre
-  ];
+    [0.52, 0.49, 0.43], // creme
+    [0.47, 0.38, 0.32], // terracota gasta
+    [0.4, 0.4, 0.38], // grafite gasto
+    [0.49, 0.44, 0.36], // ocre
+  ].map((c) => c.map((v, k) => lerp(v, base[k], 0.25)));
   const { albedo, orm } = pack(N, (i, c, m) => {
     const col = cols[pat[i]];
     const t = tv[tid[i] * 3];
@@ -581,6 +584,24 @@ export function genBurnt(N, seed = 161) {
     m[0] = 1; m[1] = lerp(0.82, 0.96, Math.max(rust, ash)); m[2] = lerp(0.15, 0.0, Math.max(rust, ash));
   });
   return { albedo, normal, orm, world: 1.8 };
+}
+
+// ─── barro cozido (tijolo solto, triplanar): poros, grãos, lascas claras ─
+export function genClay(N, seed = 171) {
+  const a = fbm(N, seed, { period: 6, octaves: 5 });
+  const b = fbm(N, seed + 1, { period: 2, octaves: 3 });
+  const wn = white(N, seed + 2);
+  const h = new Float32Array(N * N);
+  for (let i = 0; i < N * N; i++) h[i] = a[i] * 0.5 + (wn[i] > 0.97 ? -0.4 : 0) + (wn[i] - 0.5) * 0.08;
+  const normal = heightToNormal(blur(h, N, 1), N, 2);
+  const { albedo, orm } = pack(N, (i, c, m) => {
+    const v = 0.82 + (a[i] - 0.5) * 0.35 + (wn[i] - 0.5) * 0.12;
+    const soot = smooth(0.62, 0.85, b[i]) * 0.45;
+    const pore = wn[i] > 0.97 ? 0.55 : 1;
+    c[0] = v * pore * (1 - soot); c[1] = v * 0.98 * pore * (1 - soot); c[2] = v * 0.95 * pore * (1 - soot);
+    m[0] = pore; m[1] = 0.9; m[2] = 0;
+  });
+  return { albedo, normal, orm, world: 0.5 };
 }
 
 // ─── casca de árvore (sulcos verticais + líquen) ────────────────────────

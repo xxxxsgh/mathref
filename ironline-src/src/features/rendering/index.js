@@ -6,8 +6,11 @@
  *    via sky-view LUT, nuvens fbm iluminadas, disco solar; o mesmo céu vira
  *    ambiente PMREM (IBL) em scene.environment e na viewmodel.
  *  - Sombra do sol: cascata curta e densa ajustada à câmera (Shadows.js,
- *    4096² em high, re-renderizada sob demanda) + cascata larga própria
- *    (SunView.js) aplicada em pós + sombras de contato em espaço de tela.
+ *    4096² em high, re-renderizada sob demanda) refiltrada em PCSS
+ *    (penumbra que endurece no contato; busca de bloqueadores num mapa cru
+ *    da mesma vista) + cascata larga própria (SunView.js) aplicada em pós +
+ *    sombras de contato em espaço de tela.
+ *  - Anti-aliasing especular (rugosidade pela variância da normal em tela).
  *  - GI de um rebatimento do sol via RSM (SunView.js + GI_FRAG): o chão
  *    ensolarado aquece teto e paredes; luz fake de rebatimento só sem GI.
  *  - Sonda de reflexo local da viewmodel (LocalProbe.js).
@@ -32,16 +35,16 @@
  * uma textura, ela é respeitada. `scene.fog` do world é substituída pela
  * névoa de altura do compositor (os parâmetros dela viram dica de densidade).
  *
- * ORÇAMENTO (GPU intermediária, 1080p, preset high — alvo ≤ 4,5 ms de pós):
+ * ORÇAMENTO (GPU intermediária, 1080p, preset high — alvo ≤ 5 ms de pós):
  *   AO ½ res 14 amostras + 2 blurs ≈ 0,6 ms · GI ¼ res 16 VPLs ≈ 0,4 ms
- *   volumétrico ½ res 20 passos ≈ 0,7 ms · combine ≈ 0,8 ms · TAA ≈ 0,4 ms
+ *   volumétrico ½ res 20 passos ≈ 0,7 ms · combine+PCSS ≈ 1,2 ms · TAA ≈ 0,4 ms
  *   bloom 6 níveis ≈ 0,5 ms · tonemap+final ≈ 0,5 ms
  *   sob demanda: RSM 256² (6 quadros/1,4 m), cascata larga (15 m), sonda
  *   local 6×128² (1,5 m/3 s), LUT do céu e PMREM (quando o sol muda).
  */
 import * as THREE from 'three';
 import { Atmosphere } from './Atmosphere.js';
-import { ShadowFitter } from './Shadows.js';
+import { ShadowFitter, RawShadow } from './Shadows.js';
 import { Dust } from './Dust.js';
 import { SkyOcclusion } from './SkyOcclusion.js';
 import { SunView } from './SunView.js';
@@ -55,32 +58,35 @@ import {
 
 /** Configuração por nível de qualidade (o que cada preset liga e quanto custa). */
 const TIERS = {
-  low: { msaa: 0, ao: false, aoSamples: 6, vol: false, volSteps: 12, bloomLevels: 5, motion: false, dust: 0, fxaa: true, sharpen: 0.0, dirt: false, gi: 0, taa: false, contact: false, far: 1024 },
-  medium: { msaa: 4, ao: true, aoSamples: 10, vol: false, volSteps: 14, bloomLevels: 6, motion: false, dust: 0, fxaa: false, sharpen: 0.3, dirt: true, gi: 12, taa: false, contact: true, far: 1024 },
+  low: { msaa: 0, ao: false, aoSamples: 6, vol: false, volSteps: 12, bloomLevels: 5, motion: false, dust: 0, fxaa: true, sharpen: 0.0, dirt: false, gi: 0, taa: false, contact: false, far: 1024, pcss: 0 },
+  medium: { msaa: 4, ao: true, aoSamples: 10, vol: false, volSteps: 14, bloomLevels: 6, motion: false, dust: 0, fxaa: false, sharpen: 0.3, dirt: true, gi: 12, taa: false, contact: true, far: 1024, pcss: 1024 },
   // high/ultra: TAA substitui o MSAA (high) — resolve fios finos, brilho especular e o ruído de AO/GI/volumétrico
-  high: { msaa: 0, ao: true, aoSamples: 14, vol: true, volSteps: 20, bloomLevels: 6, motion: true, dust: 700, fxaa: false, sharpen: 0.5, dirt: true, gi: 16, taa: true, contact: true, far: 2048 },
-  ultra: { msaa: 4, ao: true, aoSamples: 18, vol: true, volSteps: 28, bloomLevels: 7, motion: true, dust: 1100, fxaa: false, sharpen: 0.45, dirt: true, gi: 24, taa: true, contact: true, far: 2048 },
+  high: { msaa: 0, ao: true, aoSamples: 14, vol: true, volSteps: 20, bloomLevels: 6, motion: true, dust: 700, fxaa: false, sharpen: 0.5, dirt: true, gi: 20, taa: true, contact: true, far: 2048, pcss: 2048 },
+  ultra: { msaa: 4, ao: true, aoSamples: 18, vol: true, volSteps: 28, bloomLevels: 7, motion: true, dust: 1100, fxaa: false, sharpen: 0.45, dirt: true, gi: 24, taa: true, contact: true, far: 2048, pcss: 4096 },
 };
 
 /** Parâmetros artísticos padrão (todos ajustáveis pelo serviço). */
 function defaultParams() {
   return {
     exposure: 1.0,          // compensação manual (multiplicador)
-    autoExposure: { enabled: true, key: 0.14, strength: 0.55, minEV: -2.0, maxEV: 2.2, biasEV: 0.0, speedUp: 2.5, speedDown: 1.4 },
+    autoExposure: { enabled: true, key: 0.16, strength: 0.6, minEV: -2.0, maxEV: 2.2, biasEV: 0.0, speedUp: 2.5, speedDown: 1.4 },
     environmentIntensity: 0.55,
-    indoorAmbient: 0.62,    // fração extra do ambiente sob teto (o world já escurece o interior dele)
+    indoorAmbient: 0.42,    // fração extra do ambiente sob teto (o world já escurece o interior dele)
     coveredAmbient: 0.4,    // quanto do ambiente a CENA já tem sob teto (estimativa p/ albedo)
     bounce: 0.1,            // luz de rebatimento fake (só sem GI)
     indoorTint: new THREE.Color(1.08, 1.0, 0.88), // tom da luz indireta sob teto
     // GI de 1 rebatimento do sol (RSM). strength > 1 compensa os rebatimentos
     // múltiplos (1/(1−ρ)) e a luz que entra pelas janelas
-    gi: { strength: 3.2, radius: 8 },
+    gi: { strength: 3.6, radius: 8 },
     contact: 0.85,          // sombras de contato em espaço de tela
-    ao: { radius: 1.8, intensity: 4.2, bias: 0.6, strength: 1.0 },
-    fog: { density: 0.0014, falloff: 0.045, base: 0.0, start: 18, max: 0.92, tint: new THREE.Color(1, 1, 1), sun: 0.12 },
+    // PCSS: tan do semi-ângulo efetivo do sol (0,0047 = disco real; mais
+    // largo simula o espalhamento do céu perto do sol e suaviza o serrilhado)
+    shadow: { lightSize: 0.02 },
+    ao: { radius: 0.75, intensity: 3.2, bias: 0.6, strength: 1.0 },
+    fog: { density: 0.0014, falloff: 0.045, base: 0.0, start: 18, max: 0.92, tint: new THREE.Color(1, 1, 1), sun: 0.07 },
     taa: { alpha: 0.1, gamma: 1.0 },
-    vol: { density: 0.0025, falloff: 0.09, base: 0.0, maxDist: 70, strength: 0.45, phaseG: 0.72, indoorDust: 22 },
-    bloom: { strength: 0.05, radius: 1.0, dirt: 0.5 },
+    vol: { density: 0.0025, falloff: 0.09, base: 0.0, maxDist: 70, strength: 0.4, phaseG: 0.6, indoorDust: 22 },
+    bloom: { strength: 0.065, radius: 1.0, dirt: 0.8 },
     grade: {
       whiteBalance: new THREE.Color(1.02, 1.0, 0.965),
       contrast: 1.3,
@@ -111,6 +117,11 @@ const rendering = {
     this.debugView = null;
     this.frameIndex = 0;
     this.stats = { ms: 0, passes: 0 };
+
+    // Anti-aliasing especular (Kaplanyan/Tokuyoshi): a variação da normal
+    // FINAL (com normal map) entre pixels vira rugosidade extra — faixas,
+    // tampas de bueiro e trilhos param de cintilar.
+    installSpecularAA(scene);
 
     // Base do renderer. PCFSoft foi depreciado no three r18x — PCF com
     // raio (amostragem Vogel) é o caminho suave.
@@ -218,6 +229,8 @@ const rendering = {
       setGI(p) { Object.assign(P.gi, p); },
       /** Sombras de contato (0..1). */
       setContact(v) { P.contact = v; },
+      /** Sombra do sol: { lightSize } — penumbra do PCSS (tan do semi-ângulo). */
+      setShadow(p) { Object.assign(P.shadow, p); },
       /** TAA: { alpha, gamma }. */
       setTAA(p) { Object.assign(P.taa, p); },
       /** Radiância ambiente estimada (E/π do céu + hemisfério) — usada pelo GI. */
@@ -280,6 +293,7 @@ const rendering = {
         uVolStrength: U(0), uPhaseG: U(0.6), uMotion: U(0), uVmBlur: U(0), uVmOn: U(1), uRes: U(new THREE.Vector2()), uFrame: U(0),
         tSkyOcc: U(null), uSkyOccMatrix: U(new THREE.Matrix4()), uSkyOccOn: U(0), uIndoor: U(0.4), uIndoorTint: U(new THREE.Color(1, 1, 1)), uDebug: U(0),
         tShadow: U(null), uShadowMatrix: U(new THREE.Matrix4()),
+        tShadowRaw: U(null), uPcssOn: U(0), uShadowTexel: U(new THREE.Vector2(1 / 4096, 1 / 4096)), uShadowWorld: U(76), uShadowRange: U(259), uLightSize: U(0.02),
         tFar: U(null), uFarMatrix: U(new THREE.Matrix4()), uFarOn: U(0), uFarTexel: U(new THREE.Vector2()),
       }),
       gi: postMaterial('gi', GI_FRAG, {
@@ -351,6 +365,13 @@ const rendering = {
     }
     if (tier.far && !this.farView) this.farView = new SunView({ size: tier.far, radius: 190, color: false, forward: 0.55, depthRange: 700 });
     this.taaFrames = 0;
+    // cópia crua do shadow map para o PCSS
+    const pcssSize = q.shadows === false ? 0 : tier.pcss;
+    if (this.rawShadow && this.rawShadow.size !== pcssSize) {
+      this.rawShadow.dispose();
+      this.rawShadow = null;
+    }
+    if (pcssSize && !this.rawShadow) this.rawShadow = new RawShadow(pcssSize);
 
     // poeira (só high/ultra)
     const scene = this.ctx.scene;
@@ -557,15 +578,19 @@ const rendering = {
     const hideInSunView = [this.atmo.dome, this.dust?.points, this.worldSky].filter(Boolean);
     // 0) vistas do sol: RSM (GI) e cascata larga — só quando a câmera anda
     const giOn = !!(tier.gi && P.gi.strength > 0 && sun);
-    if (giOn) {
+    // Vistas auxiliares usam os materiais reais, que amostram o shadow map
+    // (sampler2DShadow). Antes do 1º passe de sombra ele não existe e o three
+    // ligaria uma textura vazia → GL_INVALID_OPERATION. Espera o 1º quadro.
+    const auxOk = !shadowsOn || !!sun.shadow.map;
+    if (giOn && auxOk) {
       // a cada 6 quadros ou ao andar ~1,4 m (o custo é uma cena 256²)
       if (this.rsm.update(renderer, scene, camera, this.sunDir, { moveFrac: 0.06, maxAge: 6, hide: hideInSunView })) passes++;
     }
     const farOn = !!(this.farView && shadowsOn);
-    if (farOn && this.farView.update(renderer, scene, camera, this.sunDir, { moveFrac: 0.08, maxAge: 240, hide: hideInSunView })) passes++;
+    if (farOn && auxOk && this.farView.update(renderer, scene, camera, this.sunDir, { moveFrac: 0.08, maxAge: 240, hide: hideInSunView })) passes++;
 
     // sonda local → reflexos/IBL da viewmodel (só se a arma está à vista)
-    if (this.probe && vm.visible) {
+    if (this.probe && vm.visible && auxOk) {
       const prevProbe = this.probe.texture;
       if (this.probe.update(scene, camera, { hide: [this.dust?.points] })) {
         passes += 6;
@@ -594,6 +619,13 @@ const rendering = {
     const every = ctx.shot ? 3 : 2;
     renderer.shadowMap.needsUpdate = !!this.shadowDirty || this.frameIndex % every === 0 || !sun?.shadow?.map;
     this.shadowDirty = false;
+    // PCSS: mapa cru com a mesma câmera, no mesmo ritmo do shadow map
+    if (this.rawShadow && shadowsOn && (renderer.shadowMap.needsUpdate || !this.rawShadow.valid)) {
+      const needs = renderer.shadowMap.needsUpdate;
+      this.rawShadow.render(renderer, scene, sun, hideInSunView);
+      renderer.shadowMap.needsUpdate = needs;
+      passes++;
+    }
 
     // 1) cena do mundo
     renderer.setClearColor(0x000000, 1);
@@ -773,6 +805,14 @@ const rendering = {
       if (shadowTex) {
         u.tShadow.value = shadowTex;
         u.uShadowMatrix.value.copy(sun.shadow.matrix);
+        const sc = sun.shadow.camera;
+        u.uShadowTexel.value.set(1 / sun.shadow.mapSize.x, 1 / sun.shadow.mapSize.y);
+        u.uShadowWorld.value = sc.right - sc.left;
+        u.uShadowRange.value = sc.far - sc.near;
+        u.uLightSize.value = P.shadow.lightSize;
+        const rawOn = !!(this.rawShadow?.valid);
+        u.uPcssOn.value = rawOn ? 1 : 0;
+        u.tShadowRaw.value = rawOn ? this.rawShadow.rt.depthTexture : null;
       }
       draw(M.combine, rt.combine);
     }
@@ -929,10 +969,36 @@ const rendering = {
     this.rsm?.dispose();
     this.probe?.dispose();
     this.farView?.dispose();
+    this.rawShadow?.dispose();
     this.bounceLight?.removeFromParent();
     this.dirtTex?.dispose();
   },
 };
+
+/**
+ * Remenda o chunk de iluminação física do three (uma vez, global): soma à
+ * rugosidade (no espaço α²) a variância da normal perturbada na tela.
+ * Materiais já compilados são marcados para recompilar.
+ */
+function installSpecularAA(scene) {
+  const key = 'material.roughness += geometryRoughness;';
+  const chunk = THREE.ShaderChunk.lights_physical_fragment;
+  if (!chunk.includes('IRONLINE_SAA') && chunk.includes(key)) {
+    THREE.ShaderChunk.lights_physical_fragment = chunk.replace(key, `${key}
+// IRONLINE_SAA: filtro de rugosidade pela variância da normal em tela
+{
+  vec3 ndx = dFdx( normal ), ndy = dFdy( normal );
+  float kVar = 0.25 * ( dot( ndx, ndx ) + dot( ndy, ndy ) );
+  float kern = min( 2.0 * kVar, 0.18 );
+  float a = material.roughness * material.roughness;
+  material.roughness = sqrt( sqrt( clamp( a * a + kern, 0.0, 1.0 ) ) );
+}`);
+    scene?.traverse((o) => {
+      const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+      for (const m of ms) if (m.isMeshStandardMaterial) m.needsUpdate = true;
+    });
+  }
+}
 
 const _vp = new THREE.Matrix4();
 const _pvp = new THREE.Matrix4();

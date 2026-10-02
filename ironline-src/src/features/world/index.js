@@ -30,6 +30,7 @@ import { WindowBatch } from './windows.js';
 import { meshTexture } from './barriers.js';
 import { ironTextures } from './road.js';
 import { createSmoke } from './smoke.js';
+import { createFires } from './fire.js';
 import { vegetationMaterials, FOLIAGE_U } from './vegetation.js';
 import { makeRng } from './noise.js';
 import { buildLayout } from './layout.js';
@@ -79,17 +80,22 @@ export default {
       graffiti: decalMat(DT.graffitiTexture(), { roughness: 0.75 }),
       paint: decalMat(DT.roadPaintTexture(), { roughness: 0.9 }),
       stains: decalMat(DT.stainsTexture(), { roughness: 0.6 }),
-      trash: decalMat(DT.trashTexture(), { alphaTest: 0.35, transparent: false, depthWrite: true, roughness: 0.85 }),
+      trash: (() => {
+        const t = DT.trashTexture();
+        return decalMat(t.map, { normalMap: t.normalMap, normalScale: new THREE.Vector2(1.2, 1.2), alphaTest: 0.35, transparent: false, depthWrite: true, roughness: 0.88 });
+      })(),
+      // sombra de contato sob objetos (AO de chão assada)
+      contact: decalMat(DT.contactTexture(), { roughness: 1, depthWrite: false, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }),
       signs: new THREE.MeshStandardMaterial({ map: DT.signsTexture(), roughness: 0.55, metalness: 0.1, vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }),
       ...vegetationMaterials(),
     });
-    mats.mesh = new THREE.MeshStandardMaterial({ map: meshTexture(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.45, metalness: 0.8, vertexColors: true });
+    mats.mesh = new THREE.MeshStandardMaterial({ map: meshTexture(), alphaTest: 0.35, side: THREE.DoubleSide, roughness: 0.45, metalness: 0.8, vertexColors: true });
     mats.fabricDS = mats.fabric.clone();
     mats.fabricDS.side = THREE.DoubleSide;
     {
       const it = ironTextures();
-      mats.iron = new THREE.MeshStandardMaterial({ map: it.map, normalMap: it.normalMap, normalScale: new THREE.Vector2(1.5, 1.5), roughness: 0.78, metalness: 0.3, vertexColors: true });
-      weather(mats.iron, { macro: 0.3, ground: 0, streaks: 0, dust: 0.35 });
+      mats.iron = new THREE.MeshStandardMaterial({ map: it.map, color: 0x7c7a76, normalMap: it.normalMap, normalScale: new THREE.Vector2(1.8, 1.8), roughness: 0.82, metalness: 0.35, envMapIntensity: 0.6, vertexColors: true });
+      weather(mats.iron, { macro: 0.5, ground: 0, streaks: 0, dust: 0.15 });
     }
     mats.chromeDS = mats.chrome.clone();
     mats.chromeDS.side = THREE.DoubleSide;
@@ -100,7 +106,7 @@ export default {
       mats.crate.needsUpdate = true;
     }
     // decalques e folhagem também recebem a oclusão de interiores
-    for (const k of ['streaks', 'soot', 'cracks', 'bullets', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs']) {
+    for (const k of ['streaks', 'soot', 'cracks', 'bullets', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs', 'contact']) {
       weather(mats[k], { macro: 0, ground: 0, streaks: 0, dust: 0 });
     }
     setOcclusionVolumes([{ min: [ROOM.x0, -0.2, ROOM.z0], max: [ROOM.x1, ROOM.h + 0.25, ROOM.z1], k: 0.36 }]);
@@ -146,7 +152,7 @@ export default {
     W.B.realShadows = quality.level === 'high' || quality.level === 'ultra';
     buildLayout(W);
     const tris = W.B.tris;
-    const decals = new Set(['streaks', 'soot', 'cracks', 'bullets', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs']);
+    const decals = new Set(['streaks', 'soot', 'cracks', 'bullets', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs', 'contact']);
     const meshes = W.B.build(root, mats, { noShadow: new Set([...decals, 'room']) });
     const inst = W.I.build(root, mats);
     this.windows = W.win.build(root, { grime: this.sets.grime, quality });
@@ -160,6 +166,20 @@ export default {
         { x: -80, z: -40, h: 60, w: 15, seed: 0.33 },
       ], ATMOS);
       scene.add(this.smoke);
+    }
+    // ── focos de incêndio: luz local quente (contraste) ──
+    {
+      const fr = makeRng(777);
+      const fires = [
+        { x: -2.8, y: 0.42, z: -12, w: 1.7, d: 1.2, h: 1.6, light: 45, range: 10, tongues: 7, embers: 40, smoke: 26, smokeH: 16 },
+        { x: -3.5, y: 0.75, z: -12.9, w: 0.7, h: 0.7, tongues: 3, embers: 8 },
+        { x: 6.6, y: 0.18, z: 2.0, w: 0.9, h: 1.1, light: quality.level === 'low' ? 0 : 30, range: 9, tongues: 5, embers: 24, smoke: 14, smokeH: 10 },
+        { x: 6.6, y: 0.88, z: -29.5, w: 0.5, h: 0.75, tongues: 4, embers: 14 },
+        { x: -8.3, y: 0.9, z: -96, w: 1.2, h: 1.2, tongues: 5, embers: 16 },
+        { x: 3.2, y: 0.5, z: -78, w: 1.3, h: 1.3, tongues: 5, embers: 16 },
+      ];
+      this.fire = createFires(fires, fr);
+      root.add(this.fire);
     }
 
     // ── IBL ──
@@ -247,6 +267,7 @@ export default {
       this.smoke.material.uniforms.uCam.value.copy(cam.position);
       this.smoke.material.uniforms.uTime.value = tnow;
     }
+    this.fire?.userData.update(tnow, cam);
     // céu e montanhas centrados na câmera
     this.sky.position.copy(cam.position);
     this.mountains.position.set(cam.position.x, 0, cam.position.z);

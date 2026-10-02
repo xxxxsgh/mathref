@@ -318,7 +318,52 @@ export default {
     }
 
     this.enemyFootsteps(ctx);
+    this.bodyLoops(dt, ctx, ads);
     this.amb.update(dt);
+  },
+
+  /**
+   * Vento nos ouvidos (segue a velocidade: sprint tático, slide, queda) e
+   * respiração ofegante pelo esforço acumulado — some ao mirar (o operador
+   * segura o fôlego).
+   */
+  bodyLoops(dt, ctx, ads) {
+    const p = ctx.player;
+    const mv = ctx.services.movement;
+    const v = p.velocity;
+    const fall = Math.max(0, -v.y - 3);
+    const s = Math.hypot(v.x, v.z) + fall * 0.8;
+    let k = clamp((s - 5.2) / 4.5, 0, 1);
+    k = Math.pow(k, 1.4) * (1 - 0.6 * ads) * (p.alive ? 1 : 0);
+    const now = this.eng.ac.currentTime;
+    if (k > 0.01 && !this.rushV) {
+      this.rushV = this.play('rush', { bus: 'foley', loop: true, volume: 0, jitter: 0, reverb: 0, cap: 1 });
+      this.rushIdle = 0;
+    }
+    if (this.rushV) {
+      this.rushV.gain.setTargetAtTime(k * 0.3, now, k > (this.rushK || 0) ? 0.12 : 0.3);
+      this.rushV.source.playbackRate.setTargetAtTime(0.8 + 0.45 * k, now, 0.2);
+      this.rushK = k;
+      this.rushIdle = k < 0.005 ? (this.rushIdle || 0) + dt : 0;
+      if (this.rushIdle > 2) {
+        this.rushV.stop(0.2);
+        this.rushV = null;
+      }
+    }
+
+    // esforço: sobe no sprint (bem mais no tático), desce parado
+    const tac = !!mv?.tactical, spr = !!mv?.sprinting;
+    const rate = tac ? 0.3 : spr ? 0.07 : -0.16;
+    this.exert = clamp((this.exert || 0) + rate * dt, 0, 1);
+    this.breathT = (this.breathT ?? 0) - dt;
+    if (this.exert > 0.18 && this.breathT <= 0 && ads < 0.5 && p.alive) {
+      const e = this.exert;
+      this.breathIn = !this.breathIn;
+      const vol = (0.08 + 0.28 * e) * (this.breathIn ? 0.8 : 1);
+      this.play(this.breathIn ? 'breath_in' : 'breath_out', { bus: 'foley', volume: vol, reverb: 0.02, jitter: 0.05, cap: 2, rate: 1 + 0.08 * e });
+      const period = 1.5 - 0.8 * e;
+      this.breathT = this.breathIn ? period * 0.42 : period * 0.58;
+    }
   },
 
   probeEnv(ctx) {

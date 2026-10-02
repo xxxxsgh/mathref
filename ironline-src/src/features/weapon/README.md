@@ -9,7 +9,7 @@ Viewmodel em primeira pessoa e lógica de tiro do IRONLINE. Tudo procedural.
 | `index.js` | feature: estado, tiro hitscan, recuo, poses (hip/ADS/corrida), trilhas de recarga/inspeção/saque, luzes da viewmodel, serviço |
 | `rifle.js` | fuzil KR-9 (design original): receptores, guarda-mão M-LOK vazado, empunhadura vertical, trilhos, miras de ferro rebatidas, coronha, punho, freio de boca, lanterna, holográfica de capô curto (botões, tampa de bateria serrilhada, emissor), carregador curvo, peças móveis |
 | `geo.js` | primitivas hard-surface (perfil lateral/seção extrudados com chanfro, caixas arredondadas) e `Kit` (funde por material, normais vincadas) |
-| `materials.js` | PBR com detalhe injetado: triplanar, desgaste de quina por curvatura em tela, arranhões, sujeira, poeira, manchas de dedo (rugosidade), AA especular geométrico; tecido com trama e sheen. Anodizado preto quase neutro (dielétrico), cerakote grafite, luvas coyote |
+| `materials.js` | PBR com detalhe injetado: triplanar, desgaste de quina por curvatura em tela, arranhões, sujeira, poeira, manchas de dedo (rugosidade), estrias de usinagem (brilho pseudo-anisotrópico ao longo do cano), AA especular geométrico; tecido com trama e sheen. **Oclusão de contato analítica** (cápsulas: palmas, guarda-mão, empunhaduras, ótica, carregador) e IBL dessaturado (a arma não fica azul com o céu). Paleta separada por valor/rugosidade: anodizado acetinado, trilho, cerakote tungstênio, polímero fosco, aço fosfatizado |
 | `textures.js` | geradores CPU: grime, cordura, camuflagem original, gravação a laser |
 | `optic.js` | lente da holográfica: retículo no infinito (sem paralaxe), traço nítido com cobertura analítica, revestimento AR de filme fino (âmbar/verde) com Fresnel, manchas e poeira |
 | `arms.js` | mãos enluvadas articuladas (15 falanges), poses de dedos (a da empunhadura vertical foi resolvida por otimização contra a geometria: sem interpenetração), mangas com dobras e punho franzido, relógio |
@@ -36,5 +36,9 @@ mesmo referencial do mundo. Sol ocluído por raycast (sombra de prédios) e teto
 
 No preset `combat` a arma dispara rajadas só visuais (sem dano).
 
-Cápsulas: o serviço publica `ejectPort` + `brassByVfx: true` — a vfx faz a ejeção (latão com física);
-sem a vfx a arma usa as próprias cápsulas.
+Cápsulas: a cápsula visível no quadro é da arma (latão 5,56 modelado — aro, canal de extração,
+ombro, boca queimada — saindo paralela ao cano e girando). O serviço publica `ejectPort` +
+`brassByVfx: false`, então a vfx só cria a "herdeira" no mundo (cai, quica e fica no chão).
+
+Ajuste fino de luz (QA): `services.weapon.tune({ env, hemi, rim, bounce, sun })` multiplica as
+luzes da viewmodel; `services.weapon.debugLight` → `{ sunVis, indoor }`; `services.weapon.materials`.

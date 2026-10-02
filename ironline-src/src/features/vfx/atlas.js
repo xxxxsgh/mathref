@@ -346,3 +346,53 @@ export function bakeAtlases(renderer, { particleSize = 2048, decalSize = 1024, a
     targets: [particles, decalAlbedo, decalNormal],
   };
 }
+
+/**
+ * Textura de detalhe tileável (256², RGB = três fbm periódicos independentes).
+ * As partículas a amostram com UV animado (erosão, bolsões de calor) — faz
+ * o papel de um flipbook sem baixar nada. Gerada na CPU (~10 ms).
+ */
+export function detailTexture(size = 256) {
+  const data = new Uint8Array(size * size * 4);
+  const lat = (p, seed) => {
+    const t = new Float32Array(p * p);
+    let h = seed * 2654435761 >>> 0;
+    for (let i = 0; i < t.length; i++) {
+      h ^= h << 13; h ^= h >>> 17; h ^= h << 5; h >>>= 0;
+      t[i] = h / 4294967296;
+    }
+    return t;
+  };
+  const octs = [4, 8, 16, 32, 64];
+  const chans = [0, 1, 2].map((c) => octs.map((p, k) => ({ p, t: lat(p, 97 + c * 31 + k * 7), a: Math.pow(0.55, k) })));
+  const sm = (f) => f * f * (3 - 2 * f);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const o = (y * size + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        let s = 0, wsum = 0;
+        for (const { p, t, a } of chans[c]) {
+          const fx = (x / size) * p, fy = (y / size) * p;
+          const ix = Math.floor(fx), iy = Math.floor(fy);
+          const ux = sm(fx - ix), uy = sm(fy - iy);
+          const x0 = ix % p, x1 = (ix + 1) % p, y0 = iy % p, y1 = (iy + 1) % p;
+          const v = (t[y0 * p + x0] * (1 - ux) + t[y0 * p + x1] * ux) * (1 - uy) + (t[y1 * p + x0] * (1 - ux) + t[y1 * p + x1] * ux) * uy;
+          s += v * a;
+          wsum += a;
+        }
+        // realça o contraste (bolsões nítidos)
+        const v = Math.min(1, Math.max(0, (s / wsum - 0.5) * 1.9 + 0.5));
+        data[o + c] = Math.round(v * 255);
+      }
+      data[o + 3] = 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.UnsignedByteType);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}

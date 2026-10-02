@@ -20,7 +20,7 @@
 import * as THREE from 'three';
 import { cached, mat4 } from './geo.js';
 import { mulberry } from './noise.js';
-import { rebar, decal, cylBetween } from './shapes.js';
+import { rebar, decal, cylBetween, contact } from './shapes.js';
 
 // ─── ruído de valor 2D simples (para a altura do monte) ────────────────
 function vnoise(x, z, seed) {
@@ -77,9 +77,17 @@ export const slabGeo = (v) =>
       const q = 0.5 * (0.55 + r() * 0.6) * (k % 3 === 0 ? 0.75 : 1);
       pts.push(new THREE.Vector2(Math.cos(a) * q * 1.3, Math.sin(a) * q));
     }
-    const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: 0.13, bevelEnabled: false, curveSegments: 1 });
-    g.translate(0, 0, -0.065);
+    const th = 0.15 + r() * 0.08;
+    const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: th, steps: 2, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.02, bevelSegments: 1, curveSegments: 1 });
+    g.translate(0, 0, -th / 2);
     g.rotateX(-Math.PI / 2);
+    // face superior empenada + borda esmagada (não uma chapa perfeita)
+    const P = g.attributes.position;
+    for (let i = 0; i < P.count; i++) {
+      const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
+      const w = Math.sin(x * 3.1 + v) * 0.025 + Math.cos(z * 2.7 + v * 2) * 0.02;
+      P.setXYZ(i, x + (r() - 0.5) * 0.015, y + w + (r() - 0.5) * 0.012, z + (r() - 0.5) * 0.015);
+    }
     const ng = g.toNonIndexed();
     ng.computeVertexNormals();
     return ng;
@@ -142,6 +150,27 @@ export const sheetGeo = (v) =>
     return ng;
   });
 
+/** Solda vértices coincidentes (posição quantizada a 1 mm) → geometria indexada. */
+function mergeVerts(g) {
+  const P = g.attributes.position;
+  const map = new Map(), verts = [], idx = [];
+  for (let i = 0; i < P.count; i++) {
+    const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
+    const k = Math.round(x * 1000) + ',' + Math.round(y * 1000) + ',' + Math.round(z * 1000);
+    let j = map.get(k);
+    if (j === undefined) {
+      j = verts.length / 3;
+      map.set(k, j);
+      verts.push(x, y, z);
+    }
+    idx.push(j);
+  }
+  const o = new THREE.BufferGeometry();
+  o.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  o.setIndex(idx);
+  return o;
+}
+
 function merge(geos) {
   const pos = [], nor = [], uv = [];
   for (const g0 of geos) {
@@ -158,8 +187,8 @@ function merge(geos) {
   return g;
 }
 
-const BRICK_T = [[0.5, 0.3, 0.24], [0.42, 0.26, 0.2], [0.58, 0.4, 0.3], [0.46, 0.4, 0.36], [0.55, 0.33, 0.25]];
-const CONC_T = [[0.9, 0.88, 0.84], [0.82, 0.8, 0.76], [0.96, 0.92, 0.86], [0.74, 0.72, 0.69]];
+const BRICK_T = [[0.62, 0.34, 0.25], [0.5, 0.29, 0.22], [0.7, 0.46, 0.33], [0.55, 0.47, 0.4], [0.66, 0.38, 0.27], [0.36, 0.24, 0.2]];
+const CONC_T = [[0.72, 0.7, 0.66], [0.64, 0.62, 0.59], [0.78, 0.74, 0.68], [0.56, 0.55, 0.52], [0.68, 0.64, 0.58]];
 
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
@@ -227,19 +256,24 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
         else pos.push(...a, ...b, ...c, ...a, ...c, ...d);
       }
     }
-    const g = new THREE.BufferGeometry();
+    let g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.computeVertexNormals(); // não indexada → normais por face (facetas de cascalho)
+    // normais suaves (solda vértices coincidentes): monte de pó contínuo; o
+    // detalhe de cascalho vem dos pedaços instanciados por cima
+    g = mergeVerts(g);
+    g.computeVertexNormals();
+    g = g.toNonIndexed();
     const uv = new Float32Array((pos.length / 3) * 2);
     g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     // AO/cor: base mais escura (contato), topo mais claro (pó assentado)
     const col = (p) => {
-      const k = 0.72 + 0.28 * Math.min(1, Math.max(0, (p.y - y0) / Math.max(0.2, h)));
-      return [tint[0] * 0.25 + 0.7 * k, tint[1] * 0.25 + 0.68 * k, tint[2] * 0.25 + 0.64 * k];
+      const k = 0.62 + 0.38 * Math.min(1, Math.max(0, (p.y - y0) / Math.max(0.2, h)));
+      return [tint[0] * 0.18 + 0.5 * k, tint[1] * 0.18 + 0.48 * k, tint[2] * 0.18 + 0.45 * k];
     };
     B.add(g, 'rubbleD', null, { color: col, at: [x, z] });
   }
   // ── halo de poeira no chão ──
+  if (opts.mound !== false && h > 0.08) contact(B, x, y0, z, r * 2.5, r * 2.5, rot, 2);
   if (opts.dust !== false) decal(B, 'stains', [x, y0 + 0.012 + rng.range(0, 0.002), z], 'py', [r * 3.2, r * 3.0], [0, 0.5, 0.5, 1], rng.range(0, 6), [1.25, 1.15, 1.0]);
 
   const place = (lx, lz, lift = 0) => {
@@ -267,17 +301,17 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
     }
   }
   // ── pedaços médios ──
-  const nMed = Math.round(r * r * 11 * (opts.density ?? 1) * (r > 2 ? 1.5 : 1)) + 4;
+  const nMed = Math.round(r * r * 16 * (opts.density ?? 1) * (r > 2 ? 1.5 : 1)) + 6;
   for (let i = 0; i < nMed; i++) {
     const [lx, lz] = randIn(0.95);
     const n = normalAt(lx, lz);
     const kind = rng.next();
     if (kind < brickK * 0.55) {
       const v = rng.int(0, 3);
-      I.add('rbrick' + v, brickGeo(v), 'rubbleC', onSlope(place(lx, lz, 0.02), n, rng.range(0, 6.28), [rng.range(-0.5, 0.5), rng.range(-0.9, 0.9)], 1), rng.pick(BRICK_T), { shadow: true });
+      I.add('rbrick' + v, brickGeo(v), 'rubbleB', onSlope(place(lx, lz, 0.02), n, rng.range(0, 6.28), [rng.range(-0.5, 0.5), rng.range(-0.9, 0.9)], 1), rng.pick(BRICK_T), { shadow: true });
     } else if (kind < brickK * 0.8) {
       const v = rng.int(0, 2);
-      I.add('rclus' + v, clusterGeo(v), 'rubbleC', onSlope(place(lx, lz, 0.0), n, rng.range(0, 6.28), [rng.range(-0.6, 0.6), rng.range(-0.6, 0.6)], rng.range(0.85, 1.15)), rng.pick(BRICK_T));
+      I.add('rclus' + v, clusterGeo(v), 'rubbleB', onSlope(place(lx, lz, 0.0), n, rng.range(0, 6.28), [rng.range(-0.6, 0.6), rng.range(-0.6, 0.6)], rng.range(0.85, 1.15)), rng.pick(BRICK_T));
     } else if (kind < 0.93) {
       const s = rng.range(0.1, 0.3);
       const v = rng.int(0, 7);
@@ -343,7 +377,8 @@ export function scatterDebris(W, x, z, r, n, opts = {}) {
     if (k < (opts.brick ?? 0.4)) {
       const v = rng.int(0, 3);
       const onEdge = rng.chance(0.15);
-      I.add('rbrick' + v, brickGeo(v), 'rubbleC', mat4([px, y + (onEdge ? 0.055 : 0.03), pz], [onEdge ? Math.PI / 2 : rng.range(-0.15, 0.15), rng.range(0, 6.28), rng.range(-0.15, 0.15)]), rng.pick(BRICK_T), { shadow: false });
+      const bs = rng.range(0.7, 1.15);
+      I.add('rbrick' + v, brickGeo(v), 'rubbleB', mat4([px, y + (onEdge ? 0.055 : 0.03) * bs, pz], [onEdge ? Math.PI / 2 : rng.range(-0.15, 0.15), rng.range(0, 6.28), rng.range(-0.15, 0.15)], bs), rng.pick(BRICK_T), { shadow: true });
     } else if (k < 0.85) {
       const s = rng.range(0.03, 0.13);
       const v = rng.int(0, 7);

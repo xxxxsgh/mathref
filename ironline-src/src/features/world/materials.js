@@ -206,7 +206,7 @@ const ROAD_FRAG = /* glsl */ `
     wWet = max(wWet, smoothstep(0.35, 0.05, dist) * 0.95);
   }
   // manchas úmidas / poças rasas em depressões
-  float damp = smoothstep(0.74, 0.8, nA.r) * smoothstep(0.55, 0.75, nB.g);
+  float damp = smoothstep(0.79, 0.85, nA.r) * smoothstep(0.6, 0.8, nB.g);
   wWet = max(wWet, max(damp * 0.8, gwet * 0.6));
   wBump += vec3(H);
 }
@@ -248,8 +248,18 @@ const FLOOR_FRAG = /* glsl */ `
   float t = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
   float path = 1.0 - smoothstep(0.5, 1.6, length(pa - ba * t) + (nA.a - 0.5) * 0.8);
   float dust = clamp(wallDust * 0.95 + 0.25 + smoothstep(0.4, 0.8, nA.g * 0.6 + nB.b * 0.6) * 0.5 - path * 0.7, 0.0, 1.0);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.52, 0.47, 0.4) * (0.85 + 0.3 * nB.r), dust * 0.8);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.45, 0.38) * (0.85 + 0.3 * nB.r), dust * 0.85);
   wRough += dust * 0.5 - path * 0.15;
+  // encardido escuro em manchas (água parada, óleo, fuligem pisada) e marcas de bota
+  vec4 nC = texture2D(uWeather, p * 0.045 + 0.71);
+  float grime = smoothstep(0.5, 0.78, nC.r) * (0.55 + 0.45 * nB.a);
+  diffuseColor.rgb *= 1.0 - 0.5 * grime;
+  wRough -= 0.12 * grime * smoothstep(0.7, 0.85, nC.g);
+  float scuff = smoothstep(0.62, 0.9, texture2D(uWeather, p * vec2(0.6, 1.7) + 0.13).g) * path;
+  diffuseColor.rgb *= 1.0 - 0.25 * scuff;
+  // juntas sujas: rejunte preenchido de pó escuro
+  float joint = 1.0 - smoothstep(0.0, 0.012, e);
+  diffuseColor.rgb *= 1.0 - 0.35 * joint * (1.0 - miss);
 }
 `;
 
@@ -478,6 +488,7 @@ export function createMaterials(q, renderer) {
     fabric: T.makeSet(T.genFabric, Ns, an),
     bark: T.makeSet(T.genBark, Ns, an),
     burnt: T.makeSet(T.genBurnt, Ns, an),
+    clay: T.makeSet(T.genClay, 256, an),
     grime: T.makeSet(T.genGrime, 256, an),
     far: T.makeSet(T.genFarFacade, Ns, an),
   };
@@ -525,7 +536,7 @@ export function createMaterials(q, renderer) {
     asphalt: std(sets.asphalt, {}, { ground: 0, streaks: 0, dust: 0.1, macro: 0.7, tb: true, road: true }, true),
     pavers: std(sets.pavers, {}, { ground: 0, streaks: 0, dust: 0.25, macro: 0.8, tb: true }, true),
     metal: std(sets.metal, {}, { ground: 0.5, streaks: 0.4, dust: 0.3, protectRust: 1 }),
-    carpaint: std(sets.car, { roughness: 0.55 }, { ground: 0.7, streaks: 0.2, dust: 0.6, protectRust: 1 }),
+    carpaint: std(sets.car, { roughness: 0.55, envMapIntensity: 0.8 }, { ground: 0.9, streaks: 0.45, dust: 0.7, macro: 0.8, protectRust: 1 }),
     corrugated: std(sets.corrugated, {}, { ground: 0.5, streaks: 0.3, dust: 0.2, protectRust: 1 }),
     wood: std(sets.wood, {}, { ground: 0.5, streaks: 0.3, dust: 0.3 }, true),
     tiles: std(sets.tiles, {}, { ground: 0, streaks: 0, dust: 0.2, macro: 0.5, floor: true }, true),
@@ -533,12 +544,14 @@ export function createMaterials(q, renderer) {
     fabric: std(sets.fabric, {}, { ground: 0.6, streaks: 0, dust: 0.35 }, true),
     far: std(sets.far, {}, { ground: 0.3, streaks: 0.5, dust: 0, macro: 0.5 }, true),
     bark: std(sets.bark, { normalMap: null, roughnessMap: null, metalnessMap: null, aoMap: null, roughness: 0.92, metalness: 0 }, { tri: 1 / 1.2, ground: 0.4, streaks: 0, dust: 0.3, macro: 0.3 }, true),
-    burnt: std(sets.burnt, {}, { ground: 0.3, streaks: 0.2, dust: 0.5, macro: 0.4 }),
+    burnt: std(sets.burnt, { envMapIntensity: 0.5 }, { ground: 0.3, streaks: 0.25, dust: 0.12, macro: 0.5 }),
     bag: std(null, { color: 0xffffff, roughness: 0.5, envMapIntensity: 0.6 }, { ground: 0.2, streaks: 0, dust: 0.6, macro: 0.2 }),
     // caixas de munição (textura de face com estêncil, montada no index)
     crate: std(null, { roughness: 0.85 }, { ground: 0.3, streaks: 0, dust: 0.45, macro: 0.3 }, true),
     // entulho: triplanar (sem UV), relevo por bump do próprio albedo
     rubbleC: std(sets.concrete, { normalMap: null, roughnessMap: null, metalnessMap: null, aoMap: null, roughness: 0.9, metalness: 0 }, { tri: 1 / 1.4, ground: 0.25, streaks: 0, dust: 0.55, macro: 0.3 }, true),
+    // tijolos soltos: barro cozido triplanar (lascas, poros, fuligem)
+    rubbleB: std(sets.clay, { normalMap: null, roughnessMap: null, metalnessMap: null, aoMap: null, roughness: 0.92, metalness: 0 }, { tri: 1 / 0.5, ground: 0, streaks: 0, dust: 0.3, macro: 0.4 }, true),
     rubbleD: std(sets.dirt, { normalMap: null, roughnessMap: null, metalnessMap: null, aoMap: null, roughness: 0.97, metalness: 0 }, { tri: 1 / 2.2, ground: 0, streaks: 0, dust: 0.2, macro: 0.6 }, true),
     // vidro: escuro e liso, reflexo do ambiente; sujeira por rugosidade
     glass: std(sets.grime, { metalness: 0, roughness: 1, envMapIntensity: 1.4, aoMap: null }, false),
@@ -561,5 +574,5 @@ export const SURFACE = {
   pavers: 'concrete', metal: 'metal', carpaint: 'metal', corrugated: 'metal', wood: 'wood', tiles: 'concrete',
   dirt: 'dirt', fabric: 'dirt', far: 'concrete', glass: 'glass', room: 'concrete', rubber: 'rubber',
   plastic: 'plastic', black: 'metal', cable: 'metal', chrome: 'metal', light: 'glass',
-  window: 'glass', bag: 'plastic', burnt: 'metal', iron: 'metal', crate: 'wood', bark: 'wood', leaves: 'wood', palm: 'wood', grass: 'dirt', ivy: 'wood', rubble: 'concrete', rubbleC: 'concrete', rubbleD: 'dirt', mesh: 'metal', manhole: 'metal', ceiling: 'concrete',
+  window: 'glass', bag: 'plastic', burnt: 'metal', iron: 'metal', crate: 'wood', bark: 'wood', leaves: 'wood', palm: 'wood', grass: 'dirt', ivy: 'wood', rubble: 'concrete', rubbleC: 'concrete', rubbleB: 'brick', rubbleD: 'dirt', contact: 'concrete', mesh: 'metal', manhole: 'metal', ceiling: 'concrete',
 };

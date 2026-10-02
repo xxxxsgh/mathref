@@ -37,6 +37,7 @@ const _s = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
 const _lu = new THREE.Vector3(), _ls = new THREE.Vector3(), _lf = new THREE.Vector3();
 const _la = new THREE.Vector3(), _lm = new THREE.Vector3(), _lo = new THREE.Vector3();
+const _k0 = new THREE.Vector3(), _k1 = new THREE.Vector3();
 
 /** posições das partículas a partir de uma pose (Qm/Pm, espaço do modelo) */
 function particlesFromPose(anim, out) {
@@ -78,8 +79,10 @@ const cluster = (names, k) => {
 };
 cluster(['pelvis', 'hipL', 'hipR', 'spine'], 1);
 cluster(['chest', 'shL', 'shR', 'neck'], 1);
-cluster(['spine', 'chest', 'shL', 'shR'], 0.35);
-link('pelvis', 'chest', 0.25);
+// coluna firme o bastante para o tronco (com placas e colete) não dobrar
+// como sanfona — o corpo deita inteiro no chão em vez de virar um monte
+cluster(['spine', 'chest', 'shL', 'shR'], 0.6);
+link('pelvis', 'chest', 0.5);
 link('hipL', 'chest', 0.15);
 link('hipR', 'chest', 0.15);
 link('neck', 'head', 1);
@@ -110,6 +113,9 @@ link('hipR', 'knL', 0.3, 1, 0.16);
 link('knL', 'knR', 0.4, 1, 0.12);
 link('anL', 'anR', 0.4, 1, 0.1);
 cluster(['gun', 'muzzle', 'gunTop'], 1);
+// bandoleira: o fuzil cai mas continua preso ao corpo
+link('chest', 'gun', 0.5, 2, 0.62);
+link('chest', 'muzzle', 0.3, 2, 1.05);
 for (const c of C) if (c[4] == null) c[4] = restPos[c[0]].distanceTo(restPos[c[1]]) * (c[5] ?? 1);
 
 export class Ragdoll {
@@ -141,6 +147,37 @@ export class Ragdoll {
     this.asleep = false;
     this.filter = (c) => !c.data?.enemy && c.tag !== 'player' && c.tag !== 'enemy';
     this._updateGround(true);
+    this._relax();
+  }
+
+  /**
+   * A pose animada não respeita exatamente as restrições (IK do pé com o
+   * calcanhar levantado, mão no fuzil...). Em Verlet, corrigir a posição
+   * vira VELOCIDADE — 8 cm num passo = 5 m/s, e o corpo "pula". Então as
+   * restrições são satisfeitas antes, levando junto a posição anterior
+   * (a velocidade de cada partícula fica intacta).
+   */
+  _relax() {
+    const x = this.x, px = this.px;
+    const vel = x.map((p, i) => p.clone().sub(px[i]));
+    for (let it = 0; it < 24; it++) {
+      for (const [a, b, k, mode, len] of C) {
+        _d.subVectors(x[b], x[a]);
+        const d = _d.length();
+        if (d < 1e-6) continue;
+        if (mode === 1 && d >= len) continue;
+        if (mode === 2 && d <= len) continue;
+        const diff = ((d - len) / d) * 0.5 * k;
+        x[a].addScaledVector(_d, diff);
+        x[b].addScaledVector(_d, -diff);
+      }
+      this._jointLimits();
+      for (let i = 0; i < NP; i++) {
+        const gy = this.ground[i] + RADIUS[i] * 0.85;
+        if (x[i].y < gy) x[i].y = gy;
+      }
+    }
+    for (let i = 0; i < NP; i++) px[i].copy(x[i]).sub(vel[i]);
   }
 
   /** Impulso (m/s) numa posição do mundo, com decaimento por distância. */
@@ -244,7 +281,11 @@ export class Ragdoll {
    * demais nem vai muito para trás, cotovelo não hiperestende.
    */
   _jointLimits() {
-    const x = this.x;
+    // as correções dos limites são CINEMÁTICAS: movem também a posição
+    // anterior, então não injetam velocidade (senão o joelho empurrado
+    // "para frente" de um corpo deitado vira um foguete)
+    const x = this.x, px = this.px;
+    const kn0 = _k0.copy(x[P.knL]), kn1 = _k1.copy(x[P.knR]);
     const up = _lu.subVectors(x[P.spine], x[P.pelvis]).normalize();
     const side = _ls.subVectors(x[P.hipL], x[P.hipR]);
     side.addScaledVector(up, -side.dot(up)).normalize();
@@ -271,6 +312,8 @@ export class Ragdoll {
       const ext = th.dot(fwd);
       if (ext < -tl * 0.35) k.addScaledVector(fwd, (-tl * 0.35 - ext) * 0.8);
     }
+    px[P.knL].add(_k0.subVectors(x[P.knL], kn0));
+    px[P.knR].add(_k1.subVectors(x[P.knR], kn1));
   }
 
   /** Escreve a pose dos ossos a partir das partículas. */
@@ -323,7 +366,7 @@ export class Ragdoll {
     a.weaponP.copy(L[P.gun]);
     // FK das posições (para hitboxes)
     for (let i = 1; i < NB; i++) {
-      if (i === B.hips || i === B.weapon) continue;
+      if (i === B.hips || i >= B.weapon) continue;
       const par = PARENT[i];
       Pm[i].copy(REST[i]).sub(REST[par]).applyQuaternion(Qm[par]).add(Pm[par]);
     }

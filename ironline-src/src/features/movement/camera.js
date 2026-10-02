@@ -63,7 +63,6 @@ export class CameraMotion {
     this.fov = 1;
     this.trauma = 0; // tremor (explosões)
     this.t = 0;
-    this.demo = null; // pose sintética para screenshots (?mv=)
     const bus = ctx.bus;
     bus.on('player:land', (e) => {
       const s = clamp(e?.speed || 0, 0, 16);
@@ -115,9 +114,7 @@ export class CameraMotion {
     dt = Math.min(dt, 0.1);
     const p = ctx.player;
     const c = this.ctrl;
-    const demo = this.demo;
-    // pose sintética (screenshots): tempo congelado → câmera estática (TAA/sombras estáveis)
-    if (!demo) this.t += dt;
+    this.t += dt;
     const ads = clamp(Number(ctx.services.weapon?.ads) || 0, 0, 1);
 
     // ─ estado de entrada (real ou sintético) ─
@@ -127,16 +124,6 @@ export class CameraMotion {
     let phase = c.prevStepPhase + (c.stepPhase - c.prevStepPhase) * (ctx.time.alpha ?? 1);
     // velocidade lateral no referencial do olhar (para o roll de strafe)
     let side = vx * Math.cos(p.yaw) - vz * Math.sin(p.yaw);
-    if (demo) {
-      hs = demo.speed ?? 0;
-      stance = demo.stance ?? stance;
-      sprint = demo.sprint ?? 0;
-      sliding = !!demo.slide;
-      grounded = true;
-      lean = demo.lean ?? 0;
-      phase = demo.phase ?? this.t * 2.6;
-      side = demo.side ?? 0;
-    }
 
     // ─ bob sincronizado com o passo ─
     let A = 0, B = 0, R = 0, P = 0;
@@ -189,11 +176,12 @@ export class CameraMotion {
     }
     this.slideTilt = damp(this.slideTilt, sliding ? 1 : 0, sliding ? 10 : 6, dt);
     if (this.slideTilt > 1e-3) {
-      // vibração do chão no slide + leve olhar para cima
+      // vibração do chão no slide + cabeça inclinada para frente/baixo (as
+      // pernas estendidas entram no quadro, como no slide de verdade)
       const vib = this.slideTilt * clamp(hs / 8, 0.3, 1);
       oy += wob(this.t * 38, 1.3) * 0.0035 * vib;
       roll += wob(this.t * 31, 2.1) * 0.003 * vib;
-      pitch += 0.018 * this.slideTilt;
+      pitch -= 0.045 * this.slideTilt;
     }
     roll += -lean * T.leanRoll;
     ox += lean * T.leanDist;

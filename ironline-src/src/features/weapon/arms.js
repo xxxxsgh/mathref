@@ -119,10 +119,17 @@ export class Hand {
         const r0 = f.r * (1 - s * 0.07), r1 = f.r * (1 - (s + 1) * 0.07) * (s === 2 ? 0.92 : 1);
         const seg = mesh(crease(taperCapsule(r0, r1, f.L[s] - r1 * 0.3), 1.2), 'glove');
         j.add(seg);
-        // reforço no dorso do segmento proximal
-        if (s === 0) {
-          const pad = rbox(r0 * 1.3, 0.0032, f.L[0] * 0.5, 0.0015, 0, r0 * 0.8, -f.L[0] * 0.5, 2);
+        // reforços de TPU no dorso de cada falange (proximal e média) e
+        // sanfona de flexão escura na junta: separam visualmente os segmentos
+        if (s < 2) {
+          const pl = f.L[s] * (s === 0 ? 0.52 : 0.46);
+          const pad = rbox(r0 * (s === 0 ? 1.4 : 1.25), 0.0046, pl, 0.002, 0, r0 * 0.8, -f.L[s] * 0.52, 2);
           j.add(mesh(pad, 'knuckle'));
+        }
+        if (s > 0) {
+          const ring = new THREE.TorusGeometry(r0 * 0.98, 0.0016, 6, 18);
+          ring.scale(1.04, 0.85, 1);
+          j.add(mesh(ring, 'strap'));
         }
         joints.push(j);
         parent = j;
@@ -135,16 +142,28 @@ export class Hand {
       const cmc = new THREE.Group();
       cmc.position.set(THUMB.x, THUMB.y, THUMB.z);
       this.mirror.add(cmc);
-      const meta = mesh(crease(taperCapsule(0.0165, 0.0125, THUMB.L[0], 0.8), 1.2), 'glove');
+      const meta = mesh(crease(taperCapsule(0.0145, 0.0118, THUMB.L[0], 0.8), 1.2), 'glove');
       cmc.add(meta);
       const mcp = new THREE.Group();
       mcp.position.set(0, 0, -THUMB.L[0]);
       cmc.add(mcp);
-      mcp.add(mesh(crease(taperCapsule(0.0122, 0.0112, THUMB.L[1], 0.85), 1.2), 'glove'));
+      mcp.add(mesh(crease(taperCapsule(0.0112, 0.0104, THUMB.L[1], 0.85), 1.2), 'glove'));
+      // reforço de TPU e sanfona da junta do polegar
+      mcp.add(mesh(rbox(0.0135, 0.0042, THUMB.L[1] * 0.5, 0.0018, 0, 0.0088, -THUMB.L[1] * 0.5, 2), 'knuckle'));
+      {
+        const ring = new THREE.TorusGeometry(0.0108, 0.0017, 6, 18);
+        ring.scale(1.04, 0.85, 1);
+        mcp.add(mesh(ring, 'strap'));
+      }
       const ip = new THREE.Group();
       ip.position.set(0, 0, -THUMB.L[1]);
       mcp.add(ip);
-      ip.add(mesh(crease(taperCapsule(0.0112, 0.0098, THUMB.L[2] - 0.004, 0.85), 1.2), 'glove'));
+      ip.add(mesh(crease(taperCapsule(0.0104, 0.0092, THUMB.L[2] - 0.004, 0.85), 1.2), 'glove'));
+      {
+        const ring = new THREE.TorusGeometry(0.0102, 0.0016, 6, 18);
+        ring.scale(1.04, 0.85, 1);
+        ip.add(mesh(ring, 'strap'));
+      }
       this.thumb = [cmc, mcp, ip];
     }
     this.pose = clonePose(POSES.relaxed);
@@ -177,13 +196,13 @@ export const POSES = {
   grip: {
     f: [[0.25, 0.35, 0.15], [1.35, 1.45, 0.85], [1.4, 1.5, 0.85], [1.45, 1.5, 0.8]],
     spread: [0.0, 0.0, -0.04, -0.1],
-    t: [1.05, 0.62, 0.9, 0.35, 0.3],
+    t: [1.0, 1.0, 0.9, 0.45, 0.35],
   },
   // indicador no gatilho
   trigger: {
     f: [[0.75, 1.05, 0.55], [1.35, 1.45, 0.85], [1.4, 1.5, 0.85], [1.45, 1.5, 0.8]],
     spread: [0.0, 0.0, -0.04, -0.1],
-    t: [1.05, 0.62, 0.9, 0.35, 0.3],
+    t: [1.0, 1.0, 0.9, 0.45, 0.35],
   },
   // mão esquerda na empunhadura vertical (dedos pela frente, polegar ao lado)
   guard: {
@@ -251,7 +270,7 @@ export function buildSleeve(M, { left = false, watch = false } = {}) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
     const th = Math.atan2(y, x);
     // raio: punho → antebraço → cotovelo
-    let r = 0.0285 + 0.0135 * Math.pow(z, 0.8);
+    let r = 0.031 + 0.019 * Math.pow(z, 0.75);
     // punho franzido: o tecido sobra e embola sobre a luva (anéis apertados)
     const near = Math.exp(-z / 0.12);
     r += 0.0055 * Math.exp(-(((z - 0.028) / 0.022) ** 2));
@@ -265,7 +284,7 @@ export function buildSleeve(M, { left = false, watch = false } = {}) {
     fold += 0.025 * Math.sin(th * 3 + z * 9) * Math.sin(z * 14);
     // vincos longos do tecido puxado (ao longo do antebraço)
     fold += 0.018 * Math.sin(th * 5 + Math.sin(z * 6) * 1.5) * (1 - near);
-    r *= 1 + fold * 0.42;
+    r *= 1 + fold * 0.75;
     // seção elíptica (antebraço é mais largo que alto)
     p.setXYZ(i, Math.cos(th) * r * 1.1, Math.sin(th) * r * 0.86, z);
   }

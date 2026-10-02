@@ -143,7 +143,7 @@ function grassTexture(seed = 33) {
       for (let i = 0; i < 110; i++) {
         const x = ox + 40 + r() * 176, h = 70 + r() * 175, bend = (r() - 0.5) * 80;
         const dry = k === 0 ? 0.6 + r() * 0.4 : r() * 0.4;
-        g.strokeStyle = `hsl(${42 + (1 - dry) * 50},${22 + r() * 25}%,${20 + dry * 30}%)`;
+        g.strokeStyle = `hsl(${40 + (1 - dry) * 48},${12 + r() * 18}%,${18 + dry * 24}%)`;
         g.lineWidth = 1.2 + r() * 2.2;
         g.beginPath(); g.moveTo(x, oy + 256); g.quadraticCurveTo(x + bend * 0.3, oy + 256 - h * 0.5, x + bend, oy + 256 - h); g.stroke();
         if (k === 0 && r() < 0.15) { g.fillStyle = 'hsl(40,30%,55%)'; g.beginPath(); g.ellipse(x + bend, oy + 256 - h, 3, 10, bend * 0.01, 0, 7); g.fill(); }
@@ -410,7 +410,7 @@ export function grassTufts(W, x, z, r, n, opts = {}) {
     const px = x + (opts.dx !== undefined ? rng.range(-opts.dx, opts.dx) : Math.cos(a) * d);
     const pz = z + (opts.dz !== undefined ? rng.range(-opts.dz, opts.dz) : Math.sin(a) * d);
     const k = rng.pick(kinds);
-    const s = rng.range(0.22, 0.55) * (k === 2 ? 0.7 : 1);
+    const s = rng.range(0.22, 0.55) * (k === 2 ? 0.7 : 1) * (opts.scale || 1);
     I.add('grassv' + k, grassVariant(k), 'grass', mat4([px, opts.y || 0, pz], [0, rng.range(0, 6), 0], [s * 1.3, s, s * 1.3]), [rng.range(0.85, 1.1), rng.range(0.85, 1.05), rng.range(0.8, 0.95)], { shadow: false });
   }
 }
@@ -449,4 +449,60 @@ export function weedLine(W, a, b, y, dens = 1) {
 /** Mancha de musgo/terra úmida para a base das plantas (decalque). */
 export function plantBase(W, x, z, y, r) {
   decal(W.B, 'stains', [x, y + 0.013, z], 'py', [r * 2, r * 2], [0, 0.5, 0.5, 1], W.rng.range(0, 6), [0.8, 0.85, 0.7]);
+}
+
+/**
+ * Arbusto/sebe: massa de cartões de folha em volta de um elipsoide, com
+ * normais esféricas (luz de volume) e AO de baixo para cima; galhos secos
+ * aparecendo. (x, z) centro, r raio horizontal, h altura, y cota do chão.
+ */
+export function bush(W, x, z, r, h, opts = {}) {
+  const { B, rng } = W;
+  const y = opts.y || 0;
+  const q = W.quality.foliage ?? 1;
+  const n = Math.max(6, Math.round(r * r * 26 * q * (opts.dens ?? 1)));
+  const pos = [], nor = [], uv = [], col = [];
+  const quad = new THREE.PlaneGeometry(1, 1).toNonIndexed();
+  const P = quad.attributes.position, U = quad.attributes.uv;
+  const cell = opts.cell ?? rng.pick([0, 2, 3]);
+  const u0 = (cell % 2) * 0.5, v0 = 0.5 - Math.floor(cell / 2) * 0.5;
+  const v3 = new THREE.Vector3();
+  const cy = y + h * 0.45;
+  const sx = opts.sx || 1;
+  for (let i = 0; i < n; i++) {
+    // ponto no volume (mais na casca)
+    const a = rng.range(0, Math.PI * 2), e = Math.acos(rng.range(-0.35, 1));
+    const rr = Math.pow(rng.next(), 0.35);
+    const px = x + Math.cos(a) * Math.sin(e) * r * rr * sx, pz = z + Math.sin(a) * Math.sin(e) * r * rr;
+    const py = y + h * (0.12 + 0.88 * (Math.cos(e) * 0.5 + 0.5) * rr);
+    const s = rng.range(0.45, 0.8) * Math.min(1.2, 0.6 + r * 0.4);
+    const M = mat4([px, py, pz], [rng.range(-1.2, 1.2), rng.range(0, 6.28), rng.range(-1.2, 1.2)], [s, s, s]);
+    const tone = rng.range(0.75, 1.1) * (opts.dry ? 0.9 : 1);
+    for (let k = 0; k < P.count; k++) {
+      v3.fromBufferAttribute(P, k).applyMatrix4(M);
+      pos.push(v3.x, v3.y, v3.z);
+      const nx = (v3.x - x) / sx, ny = (v3.y - cy) * 1.4, nz = v3.z - z;
+      const l = Math.hypot(nx, ny, nz) || 1;
+      nor.push(nx / l, ny / l, nz / l);
+      uv.push(u0 + U.getX(k) * 0.5, v0 + U.getY(k) * 0.5);
+      const ao = 0.45 + 0.55 * Math.min(1, Math.max(0, (v3.y - y) / h));
+      const dry = opts.dry ? [1.12, 0.98, 0.7] : [1, 1, 0.92];
+      col.push(tone * ao * dry[0], tone * ao * dry[1], tone * ao * dry[2]);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const c = B.cast;
+  B.cast = true;
+  B.add(g, 'leaves', null, { worldUV: false, vcolor: true });
+  B.cast = c;
+  // galhos secos espetando
+  for (let i = 0; i < Math.round(r * 3); i++) {
+    const a = rng.range(0, 6.28);
+    cylBetween(B, [x + Math.cos(a) * r * 0.2, y, z + Math.sin(a) * r * 0.2], [x + Math.cos(a) * r * 1.05 * sx, y + h * rng.range(0.6, 1.1), z + Math.sin(a) * r * 1.05], 0.012, 'bark', { seg: 4, color: [0.5, 0.45, 0.38] });
+  }
+  decal(B, 'contact', [x, y + 0.026, z], 'py', [r * 2.4 * sx, r * 2.4], [0, 0, 1, 1], 0, [1, 1, 1]);
 }

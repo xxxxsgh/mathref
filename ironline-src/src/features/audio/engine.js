@@ -107,7 +107,7 @@ export class AudioEngine {
 
     this.ready = true;
     // gera os buffers mais usados em fatias (sem engasgar o frame)
-    this.warm(['shot_player', 'tail_out', 'tail_in', 'shot_enemy', 'crack', 'whiz', 'hitmarker', 'step_concrete', 'step_asphalt', 'run_concrete', 'run_asphalt', 'gear', 'cloth', 'imp_concrete', 'imp_flesh', 'imp_metal', 'brass', 'shot_far', 'shot_player_in', 'mag_out', 'mag_in', 'bolt', 'land_asphalt', 'land_concrete', 'wind', 'roomtone']);
+    this.warm(['shot_player', 'tail_out', 'tail_in', 'shot_enemy', 'crack', 'whiz', 'hitmarker', 'step_concrete', 'step_asphalt', 'run_concrete', 'run_asphalt', 'gear', 'cloth', 'imp_concrete', 'imp_flesh', 'imp_metal', 'brass', 'shot_far', 'shot_player_in', 'mag_out', 'mag_in', 'bolt', 'land_asphalt', 'land_concrete', 'wind', 'roomtone', 'rush', 'breath_in', 'breath_out']);
     return ac;
   }
 

@@ -16,7 +16,8 @@
  * grenade:explode. Serviço publicado: ctx.services.vfx (ver README.md).
  */
 import * as THREE from 'three';
-import { bakeAtlases } from './atlas.js';
+import { bakeAtlases, detailTexture } from './atlas.js';
+import { DepthPrepass } from './depth.js';
 import { ParticleSystem } from './particles.js';
 import { Decals } from './decals.js';
 import { RigidPool, brassGeometry, chunkGeometry } from './rigid.js';
@@ -56,12 +57,15 @@ export default {
       anisotropy: Math.min(quality.anisotropy || 4, renderer.capabilities.getMaxAnisotropy?.() || 4),
     });
     this.tex = tex;
+    const detail = detailTexture();
+    tex.detail = detail;
     const clock = () => ctx.time.now;
 
-    const particles = new ParticleSystem({ capacity: Math.max(1024, Math.round(6144 * budget)), atlas: tex.particles, clock, nearFade: 0.3 });
+    const particles = new ParticleSystem({ capacity: Math.max(1024, Math.round(8192 * budget)), atlas: tex.particles, detail, clock, nearFade: 0.3 });
     scene.add(particles.mesh);
-    const vmParticles = new ParticleSystem({ capacity: 256, atlas: tex.particles, clock, nearFade: 0.0, name: 'vfx-vm-particles' });
+    const vmParticles = new ParticleSystem({ capacity: 384, atlas: tex.particles, detail, clock, nearFade: 0.0, name: 'vfx-vm-particles' });
     vmParticles.uniforms.uWind.value.set(0, 0, 0);
+    vmParticles.mesh.remove(vmParticles.depthMesh);
     vm.scene.add(vmParticles.mesh);
 
     // índice das superfícies visíveis (marcas assentam na fachada real)
@@ -95,24 +99,55 @@ export default {
       onBounce: (b, impact) => audio()?.play?.('brass', { position: b.pos, volume: Math.min(1, impact * 0.2) }),
     });
     scene.add(brass.mesh);
-    const debrisMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0, flatShading: true });
+    const debrisMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0, flatShading: true, map: detail });
     debrisMat.name = 'vfx-debris';
-    const debris = new RigidPool(chunkGeometry(), debrisMat, { capacity: Math.round(96 * Math.max(0.5, budget)), collision, restitution: 0.25, friction: 0.5, lieDown: false, name: 'vfx-debris', useColor: true });
+    // textura de fratura: ruído triplanar no espaço do objeto (poros, agregado),
+    // face recém-quebrada mais clara, arestas/cavidades escurecidas (AO de forma)
+    debrisMat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vObjP;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjP = position;');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vObjP;')
+        .replace('#include <map_fragment>', `
+          vec3 op = vObjP * 2.3;
+          float nA = texture2D(map, op.xy).r, nB = texture2D(map, op.yz + 0.37).g, nC = texture2D(map, op.zx + 0.71).b;
+          float nF = texture2D(map, vObjP.xy * 9.0 + vObjP.z * 3.0).r;
+          float tri = (nA + nB + nC) / 3.0;
+          float cav = smoothstep(0.22, 0.48, length(vObjP));
+          diffuseColor.rgb *= (0.55 + 0.75 * tri) * (0.75 + 0.5 * nF) * mix(0.55, 1.05, cav);
+        `)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(0.8 + 0.25 * nF, 0.0, 1.0);');
+    };
+    debrisMat.customProgramCacheKey = () => 'vfx-debris-2';
+    const debris = new RigidPool(chunkGeometry(), debrisMat, {
+      capacity: Math.round(128 * Math.max(0.5, budget)), collision, restitution: 0.25, friction: 0.5, lieDown: false, name: 'vfx-debris', useColor: true,
+      onFly: (b) => this.fx?.debrisTrail(b),
+    });
     scene.add(debris.mesh);
 
     // luzes de clarão: pool FIXO (adicionar luzes depois recompila shaders)
     const lights = [];
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 3; i++) {
       const light = new THREE.PointLight(0xffa060, 0, 10, 2);
       light.name = `vfx-flash-${i}`;
       light.castShadow = false;
       scene.add(light);
-      lights.push({ light, t0: -1e6, life: 1, peak: 0, hold: false });
+      lights.push({ light, t0: -1e6, life: 1, peak: 0, hold: false, flicker: 0.3, curve: 2 });
     }
-    const vmL = new THREE.PointLight(0xffa060, 0, 0.9, 2);
+    const vmL = new THREE.PointLight(0xffa060, 0, 1.6, 2);
     vmL.name = 'vfx-vm-flash';
     vm.scene.add(vmL);
     const vmLight = { light: vmL, t0: -1e6, life: 1, peak: 0 };
+
+    // pré-passe de profundidade (partículas suaves) — só com efeitos vivos
+    const own = new Set([particles.mesh, decals.mesh, brass.mesh, debris.mesh, ...lights.map((l) => l.light)]);
+    this.prepass = quality.level === 'low' ? null : new DepthPrepass(renderer, scene, ctx.camera, {
+      scale: quality.level === 'ultra' ? 0.75 : 0.5,
+      isOwn: (o) => own.has(o) || (o.name && o.name.startsWith('vfx')),
+    });
+    this.lensBase = null;
+    this.lensKick = 0;
 
     const fx = new Effects(ctx, { particles, vmParticles, decals, brass, debris, lights, vmLight });
     this.fx = fx;
@@ -283,6 +318,8 @@ export default {
       decal: (point, normal, kind, size, dir) => fx.decals.add(point, normal, kind, size, dir),
       eject: (pos, vel) => fx.eject(pos, vel, ctx.camera.quaternion),
       shake: (amount, duration) => fx.addShake(amount, duration),
+      /** Partículas suaves ativas (pré-passe de profundidade). */
+      get softActive() { return fx.softUntil > ctx.time.now; },
       ballistics,
       materials: Object.keys(MATERIALS),
       vmToWorld,
@@ -342,16 +379,39 @@ export default {
     particles.flush(now);
     vmParticles.flush(now);
     decals.update(1 / 60);
-    for (const l of lights) {
+    const u = particles.uniforms;
+    for (let i = 0; i < lights.length; i++) {
+      const l = lights[i];
       const x = (now - l.t0) / l.life;
-      l.light.intensity = l.hold ? l.peak : x >= 0 && x < 1 ? l.peak * (1 - x) * (1 - x) * (0.85 + 0.3 * Math.random()) : 0;
+      const fl = 1 - l.flicker * 0.5 + l.flicker * (0.5 * Math.sin(now * 61 + i * 2) * 0.5 + 0.5 * Math.random());
+      l.light.intensity = l.hold ? l.peak : x >= 0 && x < 1 ? l.peak * Math.pow(1 - x, l.curve) * fl : 0;
+      // as mesmas luzes acendem as partículas (fumaça iluminada pelo fogo/clarão)
+      u.uLPos.value[i].copy(l.light.position);
+      u.uLCol.value[i].copy(l.light.color).multiplyScalar(l.light.intensity);
+      u.uLRange.value[i] = l.light.intensity > 0 ? l.light.distance : 0;
     }
     {
       const x = (now - vmLight.t0) / vmLight.life;
       vmLight.light.intensity = x >= 0 && x < 1 ? vmLight.peak * (1 - x) : 0;
     }
-    // tremor de câmera (aditivo; o núcleo reaplica a pose no próximo frame)
+    // aberração cromática transitória (explosão perto), via serviço rendering
+    const rendering = ctx.services.rendering;
+    if (rendering?.setLens && rendering.params?.lens) {
+      const fxk = this.fx.lensKick;
+      if (fxk > 0.001) {
+        if (this.lensBase === null) this.lensBase = rendering.params.lens.ca ?? 0;
+        rendering.setLens({ ca: this.lensBase + fxk * 0.02 });
+        this.fx.lensKick *= Math.exp(-dt * 2.5);
+      } else if (this.lensBase !== null) {
+        rendering.setLens({ ca: this.lensBase });
+        this.lensBase = null;
+        this.fx.lensKick = 0;
+      }
+    }
+    // tremor de câmera (aditivo; o núcleo reaplica a pose no próximo frame).
+    // Com a feature movement presente, ela já trata 'vfx:explosion' (trauma).
     const sh = this.fx.shake;
+    if (sh.amp > 0 && ctx.services.movement && !this.fx.forceShake) sh.amp = 0;
     if (sh.amp > 0) {
       sh.t += dt;
       const k = Math.max(0, 1 - sh.t / sh.dur);
@@ -366,6 +426,21 @@ export default {
         cam.updateMatrixWorld();
       }
     }
+    // pré-passe de profundidade para as partículas suaves (depois do tremor)
+    const pp = this.prepass;
+    if (pp && this.fx.softUntil > now) {
+      try {
+        pp.render(dt);
+        u.uDepth.value = pp.rt.depthTexture;
+        u.uSoftOn.value = 1;
+        ctx.renderer.getDrawingBufferSize(u.uRes.value);
+        u.uNearFar.value.set(ctx.camera.near, ctx.camera.far);
+      } catch (err) {
+        console.warn('[vfx] pré-passe de profundidade falhou', err);
+        this.prepass = null;
+        u.uSoftOn.value = 0;
+      }
+    } else u.uSoftOn.value = 0;
   },
 
   /** Sol/céu atuais → uniforms das partículas (lidos de world/rendering). */

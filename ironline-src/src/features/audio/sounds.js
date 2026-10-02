@@ -668,6 +668,67 @@ function rubble(sr, rng) {
 
 // ─── registro ────────────────────────────────────────────────────────────
 const MATS = ['concrete', 'asphalt', 'brick', 'metal', 'wood', 'dirt', 'glass', 'rubber'];
+
+// ─── corpo em velocidade: vento nos ouvidos e respiração ─────────────────
+/**
+ * "Rush" de vento nos ouvidos (loop estéreo, 6 s com crossfade): ruído rosa
+ * em banda larga com rajadas lentas e turbulência rápida, L/R
+ * descorrelacionados. O volume e o pitch seguem a velocidade em tempo real.
+ */
+function rush(sr, rng) {
+  const dur = 6, xf = 1;
+  const mk = (k) => {
+    const r = rngOf(Math.floor(rng.next() * 1e9) + k * 31);
+    const n = Math.ceil(sr * (dur + xf));
+    const x = pink(n, r);
+    biquad(x, sr, 'hp', 140, 0.7);
+    biquadSweep(x, sr, 'lp', (t) => 1800 + 900 * Math.sin(t * 1.9 + k) * Math.sin(t * 0.7), 0.7);
+    // turbulência: AM com ruído lento (orelha cortando o ar)
+    const am = white(n, r);
+    onepole(am, sr, 9);
+    onepole(am, sr, 9);
+    let mx = 0;
+    for (let i = 0; i < n; i++) mx = Math.max(mx, Math.abs(am[i]));
+    for (let i = 0; i < n; i++) x[i] *= 0.55 + 0.8 * Math.abs(am[i]) / (mx || 1);
+    const out = new Float32Array(Math.ceil(sr * dur));
+    const nx = Math.ceil(sr * xf);
+    for (let i = 0; i < out.length; i++) out[i] = x[i];
+    for (let i = 0; i < nx; i++) {
+      const a = i / nx;
+      out[i] = x[i] * a + x[out.length + i] * (1 - a);
+    }
+    return normalize(out, 0.5);
+  };
+  return [mk(0), mk(1)];
+}
+
+/**
+ * Respiração ofegante (pós sprint tático): ruído com formantes de vogal
+ * aberta/sopro, envelope assimétrico. inhale = mais agudo e curto.
+ */
+function breath(sr, rng, inhale) {
+  const len = inhale ? R(rng, 0.32, 0.42) : R(rng, 0.42, 0.55);
+  const n = Math.ceil(sr * (len + 0.05));
+  const x = new Float32Array(n);
+  const forms = inhale ? [[620, 4, 1], [1250, 5, 0.7], [2600, 6, 0.35], [4200, 3, 0.25]] : [[520, 4, 1], [1050, 5, 0.65], [2300, 6, 0.3], [3600, 3, 0.15]];
+  for (const [f, q, g] of forms) {
+    const b = white(n, rng);
+    biquad(b, sr, 'bp', f * R(rng, 0.92, 1.08), q);
+    mix(x, b, sr, 0, g);
+  }
+  // fricção (sopro nos dentes/lábios)
+  const h = white(n, rng);
+  biquad(h, sr, 'hp', inhale ? 3500 : 2500, 0.7);
+  mix(x, h, sr, 0, 0.18);
+  shape(x, sr, (t) => {
+    const u = Math.min(1, t / len);
+    const env = inhale ? Math.pow(Math.sin(Math.PI * Math.pow(u, 0.7)), 1.3) : Math.pow(Math.sin(Math.PI * Math.pow(u, 0.55)), 1.6);
+    return env * (1 + 0.15 * Math.sin(t * 90));
+  });
+  fade(x, sr, 0.01, 0.04);
+  return normalize(x, 0.6);
+}
+
 export const SOUNDS = {
   shot_player: { variants: 5, make: (sr, rng) => gunshot(sr, rng, { cal: 1, mech: 1 }) },
   shot_player_in: { variants: 3, make: (sr, rng) => gunshot(sr, rng, { cal: 1, mech: 1, indoor: true }) },
@@ -697,6 +758,9 @@ export const SOUNDS = {
   cloth_long: { variants: 3, make: (sr, rng) => cloth(sr, rng, 0.55) },
   body_drop: { variants: 3, make: bodyDrop },
   wind: { variants: 1, make: wind, loop: true },
+  rush: { variants: 1, make: rush, loop: true },
+  breath_in: { variants: 4, make: (sr, rng) => breath(sr, rng, true) },
+  breath_out: { variants: 4, make: (sr, rng) => breath(sr, rng, false) },
   roomtone: { variants: 1, make: roomtone, loop: true },
   jet: { variants: 2, make: jetFlyby },
   heli: { variants: 1, make: heliFar },

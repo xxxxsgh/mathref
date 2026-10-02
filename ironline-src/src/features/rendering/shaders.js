@@ -229,6 +229,12 @@ uniform vec2 uFarTexel;
 #ifdef HAS_SHADOW
 uniform sampler2DShadow tShadow;
 uniform mat4 uShadowMatrix;
+uniform sampler2D tShadowRaw;  // mesma vista, depth cru (busca de bloqueadores do PCSS)
+uniform float uPcssOn;
+uniform vec2 uShadowTexel;     // texel do mapa do three (uv)
+uniform float uShadowWorld;    // largura do mapa em metros
+uniform float uShadowRange;    // far − near da câmera de sombra (m)
+uniform float uLightSize;      // tan do semi-ângulo efetivo do sol (penumbra/m de distância)
 #endif
 
 float hg(float mu, float g) {
@@ -251,6 +257,39 @@ float farShadow(vec3 wp, vec3 n) {
   float s11 = step(z, texture(tFar, b + uFarTexel).r);
   return mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);
 }
+
+#ifdef HAS_SHADOW
+vec2 vogel(int i, int n, float phi) {
+  float r = sqrt((float(i) + 0.5) / float(n));
+  float a = float(i) * 2.39996323 + phi;
+  return vec2(cos(a), sin(a)) * r;
+}
+// PCSS: penumbra proporcional à distância receptor–bloqueador (endurece no
+// contato, amolece longe). Busca no mapa cru, filtra no mapa do three.
+float pcss(vec3 s3, float rawOk) {
+  float z = s3.z;
+  float phi = ign(gl_FragCoord.xy + uFrame * 3.7) * 6.2831853;
+  float pen = 0.0;
+  if (rawOk > 0.5) {
+    float searchUv = 0.55 / uShadowWorld;
+    float bsum = 0.0, bn = 0.0;
+    float zb = z - 0.08 / uShadowRange;
+    for (int i = 0; i < 12; i++) {
+      float bd = texture(tShadowRaw, s3.xy + vogel(i, 12, phi) * searchUv).r;
+      if (bd < zb) { bsum += bd; bn += 1.0; }
+    }
+    if (bn < 0.5) return 1.0;           // nenhum bloqueador: totalmente ao sol
+    float dz = max(z - bsum / bn, 0.0) * uShadowRange;
+    pen = dz * uLightSize;               // largura da penumbra (m)
+  } else pen = 0.04;
+  float rUv = clamp(pen, 0.012, 0.45) / uShadowWorld;
+  rUv = max(rUv, uShadowTexel.x * 1.25);
+  float vis = 0.0;
+  float phi2 = phi + 1.3;
+  for (int i = 0; i < 16; i++) vis += texture(tShadow, vec3(s3.xy + vogel(i, 16, phi2) * rUv, z - 0.0004));
+  return vis / 16.0;
+}
+#endif
 
 // sombra de contato em espaço de tela: marcha curta rumo ao sol no depth
 float contactShadow(vec3 vp, vec3 nv) {
@@ -320,7 +359,7 @@ void main() {
     float ndl = max(dot(n, uSunDir), 0.0);
 
     // ── visibilidade do sol: a que o three aplicou × a "verdadeira" ──
-    float inNear = 0.0, shNear = 1.0;
+    float inNear = 0.0, shNear = 1.0, visSceneNear = 1.0;
     #ifdef HAS_SHADOW
     {
       vec4 sc = uShadowMatrix * vec4(wp + n * 0.06, 1.0);
@@ -328,11 +367,17 @@ void main() {
       if (s3.x > 0.0 && s3.x < 1.0 && s3.y > 0.0 && s3.y < 1.0 && s3.z < 1.0) {
         vec2 e = min(s3.xy, 1.0 - s3.xy);
         inNear = smoothstep(0.0, 0.06, min(e.x, e.y));
-        shNear = texture(tShadow, vec3(s3.xy, s3.z - 0.0006));
+        // o que o three aplicou (PCF curto) ≈ 5 taps em cruz
+        vec2 t = uShadowTexel * 1.2;
+        float zs = s3.z - 0.0006;
+        visSceneNear = (texture(tShadow, vec3(s3.xy, zs)) * 2.0
+          + texture(tShadow, vec3(s3.xy + vec2(t.x, 0.0), zs)) + texture(tShadow, vec3(s3.xy - vec2(t.x, 0.0), zs))
+          + texture(tShadow, vec3(s3.xy + vec2(0.0, t.y), zs)) + texture(tShadow, vec3(s3.xy - vec2(0.0, t.y), zs))) / 6.0;
+        shNear = (uPcssOn > 0.0 && ndl > 0.0) ? pcss(vec3(s3.xy, s3.z - 0.0002), uPcssOn) : visSceneNear;
       }
     }
     #endif
-    float visScene = mix(1.0, shNear, inNear);
+    float visScene = mix(1.0, visSceneNear, inNear);
     float shFar = (uFarOn > 0.5 && ndl > 0.0) ? farShadow(wp, n) : 1.0;
     float visTrue = mix(shFar, shNear, inNear);
     float contact = (uContact > 0.0 && ndl > 0.02 && visTrue > 0.02) ? contactShadow(vp, nv) * uContact : 0.0;
@@ -369,8 +414,6 @@ void main() {
     vec3 ambNew = ambScene * mix(vec3(1.0), uIndoor * uIndoorTint, occ) * aoAmb;
     vec3 gi = texture(tGi, vUv).rgb * (uGiStrength / PI) * mix(1.0, ao, 0.6 * uAoStrength);
     vec3 delta = (ambNew - ambScene) + sunE * (visTrue - visScene) + gi;
-    // um toque de AO também no sol (contato visual), bem leve
-    delta -= sunE * visTrue * (1.0 - ao) * 0.25 * uAoStrength;
     col = max(col + albedo * delta, col * 0.04);
 
     if (uDebug > 0.5) {
@@ -391,7 +434,9 @@ void main() {
     vec3 fdir = normalize(vec3(rd.x, max(rd.y, 0.035), rd.z));
     vec3 fogCol = texture(tLut, skyLutUv(fdir, uSunDir)).rgb * uSkyScale * uFogTint;
     float mu0 = dot(rd, uSunDir);
-    fogCol += uSunRadiance * uFogSun * (hg(mu0, 0.72) * 0.8 + 0.08);
+    // pico de Mie mais largo e baixo (g 0,6): contra o sol a névoa brilha sem
+  // estourar um disco branco chapado em volta dele
+  fogCol += uSunRadiance * uFogSun * (min(hg(mu0, 0.6), 0.6) * 0.8 + 0.08);
     col = mix(col, fogCol, fogAmt);
   }
 
@@ -399,7 +444,7 @@ void main() {
   vec2 vol = texture(tVol, vUv).rg;
   float mu = dot(rd, uSunDir);
   float phase = mix(hg(mu, uPhaseG), hg(mu, -0.2), 0.25);
-  col += uSunRadiance * phase * vol.r * uVolStrength;
+  col += uSunRadiance * min(phase, 0.55) * vol.r * uVolStrength;
 
   // ── viewmodel (pré-multiplicada) com DOF de ADS na periferia ──
   if (uVmOn > 0.5) {
@@ -755,7 +800,10 @@ void main() {
   float L = luma(col);
   col = mix(vec3(L), col, uSaturation);
   col = max(col, 0.0);
-  col = 0.18 * pow(col / 0.18 + 1e-6, vec3(uContrast));
+  // contraste em log em torno do cinza médio; nas altas o expoente cai para
+  // ~1 (o ombro do ACES já comprime) — evita nuvens/fachadas "chapadas"
+  vec3 kC = mix(vec3(uContrast), vec3(1.04), smoothstep(0.18, 2.0, col));
+  col = 0.18 * pow(col / 0.18 + 1e-6, kC);
 
   // ACES (o three também divide por 0.6)
   col = aces(col / 0.6);

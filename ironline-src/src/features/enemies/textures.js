@@ -53,31 +53,33 @@ function toTexture(data, size, { srgb = false } = {}) {
   tex.generateMipmaps = true;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
-  tex.anisotropy = 1;
+  tex.anisotropy = 8; // triplanar em superfícies oblíquas (mangas, pernas)
   tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   tex.needsUpdate = true;
   return tex;
 }
 
 export function camoTexture(size = 256) {
-  // padrão multi-terreno: manchas grandes suaves, manchas médias e
-  // "galhos"/pontos pequenos de alto contraste; bordas levemente serrilhadas
+  // padrão multi-terreno: pinceladas alongadas na VERTICAL (v = altura no
+  // corpo), manchas médias sobrepostas, "galhos" finos escuros e pontos;
+  // bordas levemente serrilhadas pelo domínio deformado
   const d = new Uint8Array(size * size * 4);
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const u = x / size, v = y / size;
-      const wu = u + 0.06 * (fbm(u, v, 5, 5, 3, 91) - 0.5);
-      const wv = v + 0.06 * (fbm(u, v, 5, 5, 3, 57) - 0.5);
-      const grain = (hash(x, y, 3) - 0.5) * 0.05;
-      const n1 = fbm(wu, wv, 3, 3, 4, 11) + grain;
-      const n2 = fbm(wu + 0.31, wv, 6, 6, 3, 23) + grain;
-      // galhos: ruído "ridged" fino
-      const rr = 1 - Math.abs(fbm(wu, wv, 5, 7, 3, 37) * 2 - 1);
-      const n4 = fbm(wu, wv, 12, 12, 2, 47) + grain;
+      const wu = u + 0.05 * (fbm(u, v, 6, 6, 3, 91) - 0.5);
+      const wv = v + 0.08 * (fbm(u, v, 4, 4, 3, 57) - 0.5);
+      const grain = (hash(x, y, 3) - 0.5) * 0.04;
+      // pinceladas: frequência maior em u que em v → alongadas na vertical
+      const n1 = fbm(wu, wv, 7, 3, 4, 11) + grain;
+      const n2 = fbm(wu + 0.31, wv, 10, 6, 3, 23) + grain;
+      // galhos: ruído "ridged" fino e alongado
+      const rr = 1 - Math.abs(fbm(wu, wv, 8, 4, 3, 37) * 2 - 1);
+      const n4 = fbm(wu, wv, 20, 14, 2, 47) + grain;
       const i = (y * size + x) * 4;
-      const big = smooth(0.5, 0.53, n1);
-      const mid = smooth(0.58, 0.61, n2) * (1 - big * 0.6);
-      const small = Math.max(smooth(0.9, 0.93, rr) * 0.9, smooth(0.66, 0.69, n4));
+      const big = smooth(0.52, 0.55, n1);
+      const mid = smooth(0.6, 0.625, n2) * (1 - big * 0.5);
+      const small = Math.max(smooth(0.9, 0.925, rr) * 0.9 * (1 - mid * 0.5), smooth(0.7, 0.72, n4) * 0.85);
       d[i] = 255 * big;
       d[i + 1] = 255 * mid;
       d[i + 2] = 255 * small;
@@ -94,8 +96,10 @@ export function detailTexture(size = 256) {
       // trama: fios alternados + grade ripstop a cada 16 px
       const wx = Math.sin((x / size) * Math.PI * 2 * 64), wy = Math.sin((y / size) * Math.PI * 2 * 64);
       let weave = 0.5 + 0.25 * (wx > 0 === wy > 0 ? wx * wy : -wx * wy);
-      const gx = x % 16, gy = y % 16;
-      if (gx < 2 || gy < 2) weave = 0.85;
+      // grade ripstop (fio mais grosso) a cada size/16 px
+      const gp = size / 16;
+      const gx = x % gp, gy = y % gp;
+      if (gx < gp / 10 || gy < gp / 10) weave = 0.88;
       // rugas: ruído alongado em u (dobras horizontais nas mangas e pernas)
       const wr = fbm(u + 0.05 * fbm(u, v, 2, 6, 2, 5), v, 2, 9, 4, 13);
       const wrinkle = Math.pow(Math.abs(Math.sin(wr * Math.PI * 3.0)), 0.6);

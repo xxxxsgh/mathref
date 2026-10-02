@@ -113,7 +113,7 @@ export class Brain {
   // ─── percepção ──────────────────────────────────────────────────────────
   eye(out = new THREE.Vector3()) {
     const g = this.e.group.position;
-    return out.set(g.x, g.y + (this.e.anim.p.crouch > 0.5 ? 1.05 : 1.58), g.z);
+    return out.set(g.x, g.y + 1.6 - this.e.anim.p.crouch * 0.55, g.z);
   }
 
   targetPoint(out = new THREE.Vector3()) {
@@ -292,7 +292,7 @@ export class Brain {
       if (arrived) this.setMode(this.cover ? 'hide' : 'open');
     } else if (m === 'hide') {
       this.steerTo(this.cover?.pos, 1.6);
-      this.desiredCrouch = this.cover?.low ? 1 : 0.15;
+      this.desiredCrouch = this.cover?.low ? 1 : 0.3;
       this.desiredAim = 0.45;
       this.leanTarget = 0;
       this.faceTowards(threat, dt, 4);
@@ -303,7 +303,9 @@ export class Brain {
       this.steerTo(this.cover?.peekPos || this.cover?.pos, 1.6);
       this.desiredAim = 1;
       if (this.cover?.low) {
-        this.desiredCrouch = 0;
+        // atira POR CIMA da cobertura baixa meio agachado (só ombros e
+        // cabeça expostos), não de pé ao lado dela
+        this.desiredCrouch = this.cover.peekCrouch ?? 0.38;
         this.leanTarget = 0;
       } else {
         this.desiredCrouch = 0.2;
@@ -320,8 +322,9 @@ export class Brain {
       if (this.strafeT <= 0) {
         this.strafeT = 0.8 + this.r(0, 1.4);
         this.strafeDir = this.ctx.rng.next() < 0.5 ? -1 : 1;
-        this.desiredCrouch = this.ctx.rng.next() < 0.35 ? 1 : 0;
-        if (this.desiredCrouch) this.strafeDir = 0;
+        // sem cobertura: prefere ficar baixo (alvo menor)
+        this.desiredCrouch = this.ctx.rng.next() < 0.6 ? 1 : 0.25;
+        if (this.desiredCrouch > 0.5) this.strafeDir = 0;
       }
       this.strafe(dt, threat);
       this.aimAndFire(dt, dist, 0.85);
@@ -389,7 +392,7 @@ export class Brain {
   coverExposed(cover, threat) {
     const c = this.ctx.collision;
     const filt = { filter: (x) => x.tag !== 'enemy' && x.tag !== 'player' && !x.data?.enemy };
-    const head = _v.copy(cover.pos).setY(cover.pos.y + (cover.low ? 0.95 : 1.55));
+    const head = _v.copy(cover.pos).setY(cover.pos.y + (cover.low ? 0.75 : 1.55));
     const t = _w.copy(threat).setY(threat.y + 1.5);
     return c.lineOfSight(head, t, filt) && !cover.lean;
   }
@@ -428,10 +431,20 @@ export class Brain {
     const target = _w.copy(threat).setY(threat.y + 1.5);
     for (let k = 0; k < Math.min(8, cands.length); k++) {
       const cv = cands[k];
-      const low = _v.copy(cv.pos).setY(cv.pos.y + 0.95);
-      if (c.lineOfSight(low, target, filt)) continue; // não protege agachado
+      // protege o tronco agachado? (barreira jersey tem ~0.8 m)
+      const low = _v.copy(cv.pos).setY(cv.pos.y + 0.75);
+      if (c.lineOfSight(low, target, filt)) continue;
       const high = _o.copy(cv.pos).setY(cv.pos.y + 1.6);
       const peekable = c.lineOfSight(high, target, filt);
+      // menor exposição que ainda enxerga por cima (cabeça ≈ 1.62 − 0.55·agachar)
+      let peekCrouch = 0;
+      if (peekable)
+        for (const hh of [1.3, 1.42]) {
+          if (c.lineOfSight(_d.copy(cv.pos).setY(cv.pos.y + hh), target, filt)) {
+            peekCrouch = (1.62 - hh) / 0.55;
+            break;
+          }
+        }
       let leanSide = 0;
       if (!peekable) {
         // cobertura alta: testa inclinação lateral (0.55 m) para os dois lados
@@ -450,7 +463,7 @@ export class Brain {
       if (!path) continue;
       this.releaseCover();
       const peekPos = leanSide ? cv.pos.clone().add(_d.set((-(target.z - cv.pos.z) / Math.hypot(target.x - cv.pos.x, target.z - cv.pos.z)) * 0.6 * leanSide, 0, ((target.x - cv.pos.x) / Math.hypot(target.x - cv.pos.x, target.z - cv.pos.z)) * 0.6 * leanSide)) : null;
-      this.cover = { i: cv.i, pos: cv.pos.clone(), low: peekable, lean: !peekable, leanSide, peekPos };
+      this.cover = { i: cv.i, pos: cv.pos.clone(), low: peekable, lean: !peekable, leanSide, peekPos, peekCrouch };
       this.squad.claims.set(cv.i, e);
       this.path = path;
       this.pathI = 0;
@@ -577,6 +590,15 @@ export class Brain {
     const pl = ctx.player;
     const origin = e.muzzleWorld(new THREE.Vector3());
     const tgt = this.targetPoint(new THREE.Vector3());
+    if (ctx.shot) {
+      // screenshot: rajadas de supressão passando AO LADO do jogador (um
+      // traçante que atravessa a lente vira uma faixa pela tela inteira)
+      const sdx = tgt.x - origin.x, sdz = tgt.z - origin.z, l = Math.hypot(sdx, sdz) || 1;
+      const k = (e.id % 2 ? 1 : -1) * (1.6 + ctx.rng.next() * 1.2);
+      tgt.x += (-sdz / l) * k;
+      tgt.z += (sdx / l) * k;
+      tgt.y += 0.3 + ctx.rng.next() * 0.6;
+    }
     const dir = tgt.clone().sub(origin).normalize();
     const moving = e.speed > 0.5 ? 0.025 : 0;
     const plMoving = (pl.state?.speed || 0) > 1 ? 0.012 : 0;

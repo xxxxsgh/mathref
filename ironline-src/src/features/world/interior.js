@@ -16,7 +16,7 @@
  * Ponto de vista do preset `interior`: (17.2, 0.17, -4.3) olhando para -X.
  */
 import * as THREE from 'three';
-import { cylinder, cylBetween, cable, rebar, decal } from './shapes.js';
+import { cylinder, cylBetween, cable, rebar, decal, contact } from './shapes.js';
 import { rubblePile, scatterBricks, crate, ammoCan, radiator, sandbagWall, trash, barrel } from './props.js';
 import { mat4, cached } from './geo.js';
 import { graffitiRect } from './decals.js';
@@ -100,6 +100,24 @@ export function buildInterior(W, tint) {
         if (rng.chance(0.7)) rebar(B, [xx, tip[0], tip[1]], [rng.range(-0.3, 0.3), -Math.sin(th) + rng.range(-0.2, 0.4), -Math.cos(th) + rng.range(-0.3, 0.3)], rng.range(0.15, 0.5), rng);
       }
       rubblePile(W, cx + 0.2, tip[1] - 0.2, 1.5, 0.65, { y: F - 0.03, tint: [0.95, 0.94, 0.92], brick: 0.2, big: 0.8, density: 1.0 });
+    }
+  }
+  // nervuras da laje (vigas secundárias de concreto aparente, perpendiculares
+  // à viga central): relevo real no teto, AO nas junções, quebra a planura
+  for (const rx of [12.1, 14.75, 19.9, 22.15]) {
+    const segs = rx > hole.x0 - 0.2 && rx < hole.x1 + 0.2 ? [[iz0, hole.z0 - 0.05], [hole.z1 + 0.05, iz1]] : [[iz0, iz1]];
+    for (const [za, zb] of segs) {
+      if (zb - za < 0.3) continue;
+      B.box(rx - 0.16, CEIL - 0.3, za, rx + 0.16, CEIL - 0.001, zb, 'plasterIn', { collide: false, color: (p) => {
+        const k = 0.72 + 0.28 * Math.min(1, (CEIL - p.y) / 0.3);
+        return [0.8 * k, 0.8 * k, 0.79 * k];
+      }, faces: { py: null } });
+      // reboco caído na aresta: concreto e estribo aparentes num trecho
+      if (zb - za > 3) {
+        const zc = za + (zb - za) * (0.3 + 0.4 * rng.next());
+        B.box(rx - 0.165, CEIL - 0.305, zc - 0.35, rx + 0.165, CEIL - 0.27, zc + 0.35, 'concrete', { collide: false, color: [0.55, 0.53, 0.5] });
+        for (const s of [-1, 1]) cylBetween(B, [rx + s * 0.1, CEIL - 0.31, zc - 0.33], [rx + s * 0.1, CEIL - 0.31, zc + 0.33], 0.007, 'metal', { seg: 4, color: [0.4, 0.26, 0.18] });
+      }
     }
   }
   // infiltração e fuligem no teto
@@ -245,6 +263,7 @@ export function buildInterior(W, tint) {
 
   // pilar de concreto e viga (com lascas nas arestas)
   B.box(17.2, F, -6.6, 17.6, CEIL, -6.2, 'concrete', { color: [0.8, 0.78, 0.74], ao: [F, F + 0.6, 0.6] });
+  contact(B, 17.4, F, -6.4, 1.1, 1.1, 0, 1);
   B.box(ix0, CEIL - 0.35, -6.6, ix1, CEIL, -6.2, 'concrete', { color: [0.8, 0.78, 0.74], collide: false });
   decal(B, 'chips', [17.4, 1.2, -6.6 - 0.011], 'nz', [0.5, 0.7], [0, 0.5, 0.5, 1], 0.3);
   decal(B, 'bullets', [17.4, 1.5, -6.2 + 0.011], 'pz', [0.45, 0.9], [0.2, 0.2, 0.5, 0.8], 0);
@@ -270,6 +289,7 @@ export function buildInterior(W, tint) {
     B.add(UNIT, 'wood', M.clone().multiply(mat4([0, 0, 0], [0, 0, 0], [1.6, 0.05, 0.9])), { color: [0.55, 0.4, 0.28] });
     for (const a of [-0.7, 0.7]) for (const b of [-0.38, 0.38]) B.add(UNIT, 'wood', M.clone().multiply(mat4([a, 0.38, b], [0, 0, 0], [0.06, 0.72, 0.06])), { color: [0.45, 0.32, 0.22] });
     B.collider([17.8, F, -10.0], [19.4, F + 0.9, -8.8], 'wood');
+    contact(B, 18.6, F, -9.4, 1.9, 1.0, 0.6, 2);
   }
   // cadeiras
   for (const [cx, cz, yaw, fallen] of [[20.5, -7.5, 0.4, false], [15.2, -11.5, 2.2, true], [21.5, -11.8, -0.8, false]]) {
@@ -277,6 +297,7 @@ export function buildInterior(W, tint) {
     B.add(UNIT, 'wood', M.clone().multiply(mat4([0, 0.45, 0], [0, 0, 0], [0.45, 0.04, 0.45])), { color: [0.5, 0.36, 0.25] });
     B.add(UNIT, 'wood', M.clone().multiply(mat4([0, 0.75, -0.21], [0, 0, 0], [0.45, 0.6, 0.04])), { color: [0.5, 0.36, 0.25] });
     for (const a of [-0.2, 0.2]) for (const b of [-0.2, 0.2]) B.add(UNIT, 'wood', M.clone().multiply(mat4([a, 0.22, b], [0, 0, 0], [0.04, 0.45, 0.04])), { color: [0.42, 0.3, 0.2] });
+    contact(B, cx, F, cz, 0.75, 0.75, yaw, 1);
   }
   // sofá contra o fundo (assento afundado, braços arredondados)
   {
@@ -286,13 +307,17 @@ export function buildInterior(W, tint) {
     for (const zz of [-2.2, 0.05]) B.box(ix1 - 0.9, F + 0.42, zz, ix1 - 0.05, F + 0.66, zz + 0.25, 'fabric', { color: t.map((c) => c * 0.92), collide: false });
     B.obox([ix1 - 0.6, F + 0.47, -1.35], [0.6, 0.1, 1.0], [0.05, 0, 0.08], 'fabric', { color: t.map((c) => c * 1.08) });
     B.obox([ix1 - 1.6, F + 0.08, -0.9], [0.55, 0.14, 0.5], [0.1, 0.5, 0], 'fabric', { color: [0.5, 0.34, 0.3] });
+    contact(B, ix1 - 0.48, F, -0.95, 1.25, 2.9, 0, 2);
   }
   // armário no canto e estante tombada
   B.box(ix1 - 0.6, F, iz0 + 0.1, ix1 - 0.05, F + 2.1, iz0 + 1.3, 'wood', { color: [0.42, 0.3, 0.2], ao: [F, F + 0.5, 0.6] });
   B.box(ix1 - 0.61, F + 0.15, iz0 + 0.69, ix1 - 0.6, F + 1.95, iz0 + 0.71, 'black', { collide: false });
   B.obox([20.3, F + 0.3, iz1 - 0.6], [1.9, 0.6, 0.4], [0, 0.15, 0], 'wood', { color: [0.5, 0.36, 0.24], collide: true });
+  contact(B, ix1 - 0.33, F, iz0 + 0.7, 0.9, 1.6, 0, 2);
+  contact(B, 20.3, F, iz1 - 0.6, 2.3, 0.8, 0.15, 2);
   // colchão no chão + tapete
   B.box(13.2, F, -13.5, 15.2, F + 0.18, -12.0, 'fabric', { color: [0.82, 0.78, 0.66] });
+  contact(B, 14.2, F, -12.75, 2.3, 1.8, 0, 1);
   B.obox([14.6, F + 0.006, -9.6], [2.6, 0.012, 1.8], 0.38, 'fabric', { color: [0.72, 0.3, 0.22] });
   B.obox([14.6, F + 0.013, -9.6], [2.2, 0.004, 1.4], 0.38, 'fabric', { color: [0.5, 0.2, 0.16] });
   decal(B, 'stains', [14.4, F + 0.016, -9.2], 'py', [2.0, 2.0], [0.5, 0, 1, 0.5], 0.3);
@@ -303,12 +328,13 @@ export function buildInterior(W, tint) {
   // armário de arquivo tombado perto da porta
   {
     const M = mat4([13.4, F + 0.24, -6.6], [0, 0.35, Math.PI / 2 - 0.04]);
-    B.add(UNIT, 'metal', M.clone().multiply(mat4([0, 0, 0], [0, 0, 0], [0.48, 1.3, 0.6])), { color: [0.55, 0.6, 0.55], uvRand: true });
+    B.add(UNIT, 'metal', M.clone().multiply(mat4([0, 0, 0], [0, 0, 0], [0.48, 1.3, 0.6])), { color: [0.33, 0.37, 0.33], uvRand: true });
     for (let k = 0; k < 4; k++) {
-      B.add(UNIT, 'metal', M.clone().multiply(mat4([0, -0.48 + k * 0.32, 0.31], [0, 0, 0], [0.44, 0.28, 0.02])), { color: [0.6, 0.64, 0.58], uvRand: true });
+      B.add(UNIT, 'metal', M.clone().multiply(mat4([0, -0.48 + k * 0.32, 0.31], [0, 0, 0], [0.44, 0.28, 0.02])), { color: [0.38, 0.42, 0.37], uvRand: true });
       B.add(UNIT, 'chrome', M.clone().multiply(mat4([0, -0.42 + k * 0.32, 0.33], [0, 0, 0], [0.14, 0.03, 0.03])), { color: [0.5, 0.5, 0.5] });
     }
     B.collider([12.6, F, -7.4], [14.2, F + 0.5, -5.8], 'metal');
+    contact(B, 13.4, F, -6.6, 1.6, 0.85, 0.35, 2);
   }
   // placas de forro caídas, entulho
   B.obox([15.6, F + 0.12, -8.6], [1.2, 0.03, 1.2], [0.22, 0.6, 0.1], 'plasterIn', { color: [0.9, 0.88, 0.84] });
@@ -317,7 +343,7 @@ export function buildInterior(W, tint) {
   for (let i = 0; i < 3; i++) rebar(B, [rng.range(14, 21), CEIL - 0.02, rng.range(-12, 0)], [rng.range(-0.3, 0.3), -1, rng.range(-0.3, 0.3)], rng.range(0.3, 0.8), rng, 'cable');
 
   // posição de tiro: sacos de areia sob a janela norte, caixas e latas de munição
-  sandbagWall(W, [[fx1 + 0.45, -1.4], [fx1 + 0.45, 1.25]], 5);
+  sandbagWall(W, [[fx1 + 0.45, -1.4], [fx1 + 0.45, 1.25]], 5, { y: F });
   crate(W, 12.3, -2.25, 0.3, 0.95, { y: F });
   crate(W, 12.1, -2.0, 1.25, 0.8, { y: F + 0.475 });
   crate(W, 21.8, -12.6, 0.1, 1.0, { y: F });
@@ -325,7 +351,7 @@ export function buildInterior(W, tint) {
   ammoCan(W, 11.7, F, -3.0, 0.4);
   ammoCan(W, 11.95, F, -3.3, 1.2);
   ammoCan(W, 12.4, F + 0.95, -2.3, 0.1);
-  barrel(W, 22.6, 0.9, { tint: [0.3, 0.35, 0.25] });
+  barrel(W, 22.6, 0.9, { tint: [0.3, 0.35, 0.25], y: F });
   // cartuchos deflagrados junto da posição de tiro (instanciados)
   for (let i = 0; i < 60; i++) {
     const a = rng.range(0, Math.PI * 2), d = Math.sqrt(rng.next()) * 1.1;

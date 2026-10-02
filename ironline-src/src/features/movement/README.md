@@ -22,4 +22,15 @@ Câmera (`camera.js`) escreve por inteiro `viewOffset`, `viewKick` e o fator
 de FOV `move`. O bob segue a fase de passo do controlador — a cabeça desce no
 mesmo instante em que o som do passo toca.
 
-Screenshots: `?shot=<preset>&mv=sprint|tactical|slide|crouch|prone|leanL|leanR`.
+Corpo (`body.js`): quadril, pernas (calça camuflada com dobras, joelheira,
+bolso cargo) e botas na cena do mundo, com IK de 2 ossos. Marcha presa à
+fase de passo; pose de slide com a perna esquerda estendida à frente (é o
+que aparece no quadro); tronco/cabeça/braços/arma existem só no mapa de
+sombra (o jogador projeta a silhueta inteira). `dust.js`: poeira do slide,
+da aterrissagem e do sprint em terra (1 InstancedMesh, luz do mundo).
+`speedfx.js`: borrão + vinheta de borda em sprint tático/slide/dive.
+
+Screenshots: `?shot=<preset>&mv=sprint|tactical|slide|crouch|prone|leanL|leanR|jump&sim=1.6`
+roda o controlador DE VERDADE com entrada roteirizada a partir da pose do
+preset e congela no instante da captura (`&mvpitch=`/`&mvyaw=` ajustam o
+olhar). O serviço expõe `scripted` para a arma poder honrar o sprint.

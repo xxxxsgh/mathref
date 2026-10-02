@@ -802,22 +802,151 @@ export function shardsTexture(seed = 47) {
   return tex(c);
 }
 
-/** Atlas de lixo miúdo: papéis, papelão, sacos — 4×4. */
+/**
+ * Atlas de lixo miúdo 4×4: folhas amassadas, jornal, papelão rasgado,
+ * embalagens, latas amassadas, bitucas, panos — tudo sujo de poeira e
+ * pisado (nada de recortes brancos limpos). Retorna { map, normalMap }:
+ * o relevo de "amassado" pega a luz rasante do sol.
+ */
 export function trashTexture(seed = 37) {
   const r = mulberry(seed);
-  const [c, g] = canvas(512, 512);
+  const S = 512, C = 128;
+  const [c, g] = canvas(S, S);
+  const [hc, hg] = canvas(S, S);
+  hg.fillStyle = 'rgb(128,128,128)';
+  hg.fillRect(0, 0, S, S);
+  const dirt = (x0, y0, w, h, a) => {
+    for (let k = 0; k < 40; k++) {
+      const x = x0 + r() * w, y = y0 + r() * h, rad = 3 + r() * 14;
+      const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+      gr.addColorStop(0, `rgba(${60 + r() * 30},${52 + r() * 25},${40 + r() * 20},${a * r()})`);
+      gr.addColorStop(1, 'rgba(60,52,40,0)');
+      g.fillStyle = gr;
+      g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+  };
+  // amassado: facetas poligonais claras/escuras na altura
+  const crumple = (pts, k = 1) => {
+    const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length, cy = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const m = [cx + (r() - 0.5) * 20, cy + (r() - 0.5) * 20];
+      const v = 128 + (r() - 0.5) * 90 * k;
+      hg.fillStyle = `rgb(${v},${v},${v})`;
+      hg.beginPath(); hg.moveTo(a[0], a[1]); hg.lineTo(b[0], b[1]); hg.lineTo(m[0], m[1]); hg.fill();
+      const sh = (v - 128) / 128;
+      g.fillStyle = sh > 0 ? `rgba(255,250,240,${sh * 0.12})` : `rgba(0,0,0,${-sh * 0.22})`;
+      g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.lineTo(m[0], m[1]); g.fill();
+    }
+  };
+  const poly = (cx, cy, rad, n, jag) => {
+    const pts = [];
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * Math.PI * 2 + r() * 0.3;
+      const q = rad * (1 - jag + r() * jag);
+      pts.push([cx + Math.cos(a) * q, cy + Math.sin(a) * q * (0.6 + r() * 0.5)]);
+    }
+    return pts;
+  };
+  const fillPoly = (pts, style) => {
+    g.fillStyle = style;
+    g.beginPath();
+    pts.forEach((p, k) => (k ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])));
+    g.fill();
+  };
   for (let i = 0; i < 16; i++) {
-    const ox = (i % 4) * 128 + 64, oy = Math.floor(i / 4) * 128 + 64;
+    const ox = (i % 4) * C, oy = Math.floor(i / 4) * C;
+    const cx = ox + C / 2, cy = oy + C / 2;
+    const kind = i % 8;
     g.save();
-    g.translate(ox, oy);
-    g.rotate(r() * Math.PI);
-    const kind = i % 4;
-    if (kind === 0) { g.fillStyle = `hsl(40,${10 + r() * 15}%,${70 + r() * 15}%)`; g.fillRect(-30, -40, 60, 80); g.fillStyle = 'rgba(40,40,40,0.5)'; for (let l = 0; l < 6; l++) g.fillRect(-22, -30 + l * 10, 40 * r() + 4, 2); }
-    if (kind === 1) { g.fillStyle = `hsl(30,${35 + r() * 10}%,${38 + r() * 12}%)`; g.fillRect(-50, -40, 100, 80); g.strokeStyle = 'rgba(0,0,0,0.3)'; g.strokeRect(-50, -40, 100, 80); }
-    if (kind === 2) { g.fillStyle = r() < 0.5 ? '#a8a294' : '#d6d4c8'; g.beginPath(); g.ellipse(0, 0, 40 + r() * 15, 25 + r() * 15, 0, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,0.12)'; g.beginPath(); g.ellipse(-10, -8, 15, 6, 0.5, 0, 7); g.fill(); }
-    if (kind === 3) { g.fillStyle = `hsl(${r() * 360},22%,42%)`; g.fillRect(-12, -30, 24, 60); g.fillStyle = 'rgba(255,255,255,0.4)'; g.fillRect(-12, -10, 24, 14); }
+    hg.save();
+    if (kind === 0 || kind === 4) {
+      // folha amassada (papel sujo, amarelado)
+      const pts = poly(cx, cy, 40 + r() * 10, 9, 0.45);
+      fillPoly(pts, `hsl(${38 + r() * 12},${12 + r() * 12}%,${46 + r() * 10}%)`);
+      crumple(pts, 1.2);
+      g.fillStyle = 'rgba(30,30,30,0.35)';
+      for (let l = 0; l < 7; l++) g.fillRect(cx - 24 + r() * 6, cy - 26 + l * 8, 30 + r() * 14, 1.5);
+      dirt(cx - 40, cy - 40, 80, 80, 0.5);
+    } else if (kind === 1 || kind === 5) {
+      // papelão rasgado e pisado
+      const pts = poly(cx, cy, 50 + r() * 8, 7, 0.3);
+      fillPoly(pts, `hsl(${28 + r() * 6},${30 + r() * 10}%,${30 + r() * 8}%)`);
+      g.strokeStyle = 'rgba(0,0,0,0.25)';
+      g.lineWidth = 1;
+      for (let l = 0; l < 12; l++) { g.beginPath(); g.moveTo(cx - 45, cy - 30 + l * 5); g.lineTo(cx + 45, cy - 30 + l * 5 + (r() - 0.5) * 4); g.stroke(); }
+      crumple(pts, 0.6);
+      hg.fillStyle = 'rgb(90,90,90)';
+      hg.fillRect(cx - 2, cy - 40, 4, 80); // dobra
+      dirt(cx - 50, cy - 50, 100, 100, 0.7);
+    } else if (kind === 2) {
+      // lata amassada (vista de cima, cilindro achatado)
+      const hue = r() * 360;
+      g.translate(cx, cy); hg.translate(cx, cy);
+      const ang = r() * 3;
+      g.rotate(ang); hg.rotate(ang);
+      const grd = g.createLinearGradient(0, -14, 0, 14);
+      grd.addColorStop(0, `hsl(${hue},40%,22%)`); grd.addColorStop(0.45, `hsl(${hue},45%,48%)`); grd.addColorStop(1, `hsl(${hue},40%,18%)`);
+      g.fillStyle = grd; g.fillRect(-28, -13, 56, 26);
+      g.fillStyle = 'rgba(190,190,185,0.8)'; g.fillRect(-32, -12, 5, 24); g.fillRect(27, -12, 5, 24);
+      hg.fillStyle = 'rgb(200,200,200)'; hg.fillRect(-30, -12, 60, 24);
+      hg.fillStyle = 'rgb(150,150,150)'; hg.fillRect(-6, -13, 8, 26);
+      g.setTransform(1, 0, 0, 1, 0, 0); hg.setTransform(1, 0, 0, 1, 0, 0);
+      dirt(cx - 30, cy - 20, 60, 40, 0.5);
+    } else if (kind === 3) {
+      // saco plástico rasgado, amarfanhado (escuro/azulado)
+      const pts = poly(cx, cy, 44, 11, 0.55);
+      fillPoly(pts, r() < 0.5 ? 'rgb(34,36,40)' : `hsl(${200 + r() * 30},18%,${26 + r() * 10}%)`);
+      crumple(pts, 1.8);
+      g.fillStyle = 'rgba(255,255,255,0.06)';
+      for (let l = 0; l < 6; l++) g.fillRect(cx - 30 + r() * 40, cy - 30 + r() * 50, 14, 2);
+    } else if (kind === 6) {
+      // jornal (texto em colunas), úmido e manchado
+      const pts = poly(cx, cy, 52, 6, 0.2);
+      fillPoly(pts, `hsl(45,8%,${50 + r() * 8}%)`);
+      g.fillStyle = 'rgba(25,25,25,0.4)';
+      for (let col = 0; col < 3; col++) for (let l = 0; l < 10; l++) g.fillRect(cx - 38 + col * 26, cy - 34 + l * 7, 22, 2);
+      g.fillStyle = 'rgba(25,25,25,0.55)'; g.fillRect(cx - 38, cy - 44, 70, 6);
+      crumple(pts, 0.7);
+      dirt(cx - 50, cy - 50, 100, 100, 0.8);
+    } else {
+      // pano/trapo + bitucas e lascas em volta
+      const pts = poly(cx, cy, 36, 10, 0.5);
+      fillPoly(pts, `hsl(${r() * 360},${15 + r() * 15}%,${22 + r() * 12}%)`);
+      crumple(pts, 1.4);
+      for (let k = 0; k < 6; k++) {
+        const x = ox + 10 + r() * 108, y = oy + 10 + r() * 108;
+        g.fillStyle = r() < 0.5 ? 'rgba(200,180,140,0.9)' : 'rgba(150,140,125,0.9)';
+        g.fillRect(x, y, 7, 2.5);
+      }
+      dirt(cx - 40, cy - 40, 80, 80, 0.6);
+    }
     g.restore();
+    hg.restore();
   }
+  const map = tex(c);
+  return { map, normalMap: canvasNormal(hc, 2.5) };
+}
+
+/**
+ * Sombra de contato (AO de chão sob objetos): mancha radial suave e
+ * escura, retangular-arredondada — escurece onde o objeto toca o chão.
+ */
+export function contactTexture() {
+  const [c, g] = canvas(128, 128);
+  const img = g.createImageData(128, 128);
+  for (let y = 0; y < 128; y++) {
+    for (let x = 0; x < 128; x++) {
+      const u = (x + 0.5) / 64 - 1, v = (y + 0.5) / 64 - 1;
+      // superelipse (cantos arredondados) para caber em caixas e carros
+      const d = Math.pow(Math.pow(Math.abs(u), 4) + Math.pow(Math.abs(v), 4), 0.25);
+      const a = Math.pow(Math.max(0, 1 - d), 1.6);
+      const i = (y * 128 + x) * 4;
+      img.data[i] = 8; img.data[i + 1] = 7; img.data[i + 2] = 6;
+      img.data[i + 3] = Math.min(255, a * 255 * 1.15);
+    }
+  }
+  g.putImageData(img, 0, 0);
   return tex(c);
 }
 

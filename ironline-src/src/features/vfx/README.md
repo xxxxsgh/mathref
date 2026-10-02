@@ -7,18 +7,20 @@ Tudo procedural (shaders e geometria gerados no código). Nenhum asset baixado.
 | Arquivo | O que faz |
 |---|---|
 | `index.js` | feature: pools, eventos do bus, serviço `vfx`, luzes de clarão, tremor de câmera, balística |
-| `atlas.js` | atlas gerados NA GPU uma vez: partículas (poeira/fumaça com normais, couve-flor de explosão, estrela e pétalas de clarão, faísca, anel, lasca) e marcas de tiro PBR (albedo + normal) por material |
-| `particles.js` | partículas instanciadas com trajetória analítica no vertex shader (1 draw call por cena); luz do sol/céu com espalhamento frontal; fogo de corpo negro; "soft" por plano |
+| `atlas.js` | atlas gerados NA GPU uma vez: partículas (poeira/fumaça com normais, couve-flor de explosão, estrela e pétalas de clarão, faísca, anel, lasca) e marcas de tiro PBR (albedo + normal) por material; textura de detalhe tileável (CPU) para erosão/bolsões de calor e textura dos detritos |
+| `particles.js` | partículas instanciadas com trajetória analítica no vertex shader (1 draw call por cena); turbulência; luz do sol/céu com espalhamento frontal e auto-sombra (Beer); luzes pontuais da vfx (clarões/fogo) acendem a fumaça; fogo de corpo negro com bolsões animados; erosão por ruído ("flipbook" procedural); suaves por profundidade e por plano |
 | `decals.js` | marcas de tiro/sangue/queimado (InstancedMesh `MeshStandardMaterial`, ring buffer) |
 | `surface.js` | índice de triângulos das malhas estáticas → a marca assenta na fachada VISÍVEL (o colisor AABB pode estar a centímetros dela) |
+| `depth.js` | pré-passe de profundidade em ½ resolução (só enquanto há partículas suaves vivas) → partículas "soft" de verdade contra fachadas, barreiras e chão |
 | `rigid.js` | cápsulas e detritos com física simples (gravidade, quique, atrito, deitar) |
 | `effects.js` | receitas: impactos por material, sangue, clarão 1ª/3ª pessoa, traçantes, cápsulas, explosões |
 
 ## Custo
 
+- Pré-passe de profundidade: 1 passe extra só de profundidade (½ res, opacos) apenas enquanto há poeira/fumaça viva; desligado em `q=low`.
 - Partículas: 1 draw call no mundo + 1 na viewmodel; a CPU só escreve o
   estado inicial (faixa suja do ring buffer sobe com `addUpdateRange`).
-- Marcas: 1 draw call; cápsulas: 1; detritos: 1. Pool fixo de 2 `PointLight`
+- Marcas: 1 draw call; cápsulas: 1; detritos: 1. Pool fixo de 3 `PointLight`
   no mundo e 1 na viewmodel (criadas no init — nunca recompila shaders).
 - Por impacto: ~2 raios na colisão (sol/céu) + 1 consulta curta no índice de
   superfícies (dezenas de triângulos). Índice: ~80 ms uma vez, no `ready`.

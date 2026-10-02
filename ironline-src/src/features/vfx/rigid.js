@@ -18,7 +18,8 @@ export class RigidPool {
    * geometry/material: malha base (eixo longo = +Y para "deitar").
    * opts: { capacity, collision, restitution, friction, lieDown, onBounce }
    */
-  constructor(geometry, material, { capacity = 64, collision, restitution = 0.35, friction = 0.55, lieDown = true, onBounce = null, name = 'vfx-rigid', castShadow = true, useColor = false }) {
+  constructor(geometry, material, { capacity = 64, collision, restitution = 0.35, friction = 0.55, lieDown = true, onBounce = null, onFly = null, name = 'vfx-rigid', castShadow = true, useColor = false }) {
+    this.onFly = onFly;
     this.capacity = capacity;
     this.collision = collision;
     this.restitution = restitution;
@@ -38,13 +39,13 @@ export class RigidPool {
     this.bodies = Array.from({ length: capacity }, () => ({
       alive: false, pos: new THREE.Vector3(), vel: new THREE.Vector3(), quat: new THREE.Quaternion(),
       spin: new THREE.Vector3(), scale: new THREE.Vector3(1, 1, 1), life: 0, age: 0, ground: -1e9,
-      groundTimer: 0, bounces: 0, resting: false, halfH: 0.01, drag: 0.05, lieAxis: new THREE.Vector3(),
+      groundTimer: 0, bounces: 0, resting: false, halfH: 0.01, drag: 0.05, lieAxis: new THREE.Vector3(), trail: 0, trailT: 0, color: new THREE.Color(),
     }));
     this.head = 0;
     this.active = 0;
   }
 
-  spawn(pos, vel, { spin = null, scale = 1, life = 5, color = null, drag = 0.05, halfH = 0.01, quat = null }) {
+  spawn(pos, vel, { spin = null, scale = 1, life = 5, color = null, drag = 0.05, halfH = 0.01, quat = null, trail = 0 }) {
     const i = this.head;
     this.head = (this.head + 1) % this.capacity;
     const b = this.bodies[i];
@@ -62,12 +63,15 @@ export class RigidPool {
     b.drag = drag;
     b.halfH = halfH;
     b.bounces = 0;
+    b.trail = trail;
+    b.trailT = 0;
     b.resting = false;
     b.groundTimer = 0;
     b.ground = this.groundAt(pos);
     b.lieAxis.set(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
     if (color) {
-      this.mesh.setColorAt(i, color.isColor ? color : _c.set(color));
+      b.color.copy(color.isColor ? color : _c.set(color));
+      this.mesh.setColorAt(i, b.color);
       this.mesh.instanceColor.needsUpdate = true;
     }
     this.mesh.count = Math.max(this.mesh.count, i + 1);
@@ -100,6 +104,10 @@ export class RigidPool {
         if (w > 1e-4) {
           _q.setFromAxisAngle(_v.copy(b.spin).divideScalar(w), w * dt);
           b.quat.premultiply(_q);
+        }
+        if (b.trail > 0 && this.onFly && (b.trailT -= dt) <= 0) {
+          b.trailT = 0.035;
+          this.onFly(b);
         }
         if ((b.groundTimer -= dt) <= 0) {
           b.groundTimer = 0.1;
@@ -136,27 +144,40 @@ export class RigidPool {
   }
 }
 
-/** Cápsula deflagrada (5.56 garrafinha) por torno; eixo +Y, origem no centro. */
+/**
+ * Cápsula deflagrada 5.56×45 por torno; eixo +Y, origem no centro.
+ * Perfil real (mm): aro Ø9,6 com chanfro, canal de extração, corpo levemente
+ * cônico, ombro de 23°, gargalo Ø6,3 e boca aberta (parede fina). 24 lados
+ * e normais suaves: o latão metálico mostra reflexo contínuo, sem facetas.
+ */
 export function brassGeometry() {
   const pts = [
-    [0.0, -0.0225], [0.0047, -0.0225], [0.0048, -0.0215], [0.0042, -0.0205], [0.0047, -0.0195],
-    [0.0047, 0.009], [0.0043, 0.0125], [0.0033, 0.0145], [0.0032, 0.0225], [0.0027, 0.0225], [0.0027, 0.015],
+    [0.0, -0.0224], [0.0038, -0.0224], [0.0047, -0.0221], [0.0048, -0.0214], [0.0047, -0.0208], // aro
+    [0.0040, -0.0204], [0.0040, -0.0196], [0.0046, -0.0190], // canal de extração
+    [0.0047, -0.0185], [0.00455, 0.0105], // corpo
+    [0.0043, 0.0118], [0.0034, 0.0137], [0.0032, 0.0142], // ombro
+    [0.00318, 0.0222], [0.00305, 0.0224], [0.0027, 0.0224], [0.0027, 0.0150], // gargalo + boca
   ].map(([x, y]) => new THREE.Vector2(x, y));
-  const g = new THREE.LatheGeometry(pts, 12);
+  const g = new THREE.LatheGeometry(pts, 24);
   g.computeVertexNormals();
   return g;
 }
 
 /** Pedra/lasca irregular de faces planas (raio ~0.5). */
 export function chunkGeometry() {
-  const g = new THREE.IcosahedronGeometry(0.5, 0).toNonIndexed();
+  const g = new THREE.IcosahedronGeometry(0.5, 1).toNonIndexed();
   const p = g.getAttribute('position');
   // desloca vértices coincidentes do mesmo jeito (hash da posição) → sólido fechado
+  // dois níveis: lascas grandes (faces de fratura) + irregularidade fina
+  const hash = (x, y, z, k) => {
+    const h = Math.sin(x * 12.9898 * k + y * 78.233 + z * 37.719 * k) * 43758.5453;
+    return h - Math.floor(h);
+  };
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const h = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
-    const f = 0.7 + 0.45 * (h - Math.floor(h));
-    p.setXYZ(i, x * f, y * f * 0.75, z * f);
+    const big = Math.round(x * 2) * 0.31 + Math.round(y * 2) * 0.57 + Math.round(z * 2) * 0.83;
+    const f = 0.62 + 0.38 * hash(big, big * 0.7, big * 1.3, 1) + 0.12 * hash(x, y, z, 2.1);
+    p.setXYZ(i, x * f, y * f * 0.7, z * f);
   }
   g.computeVertexNormals();
   return g;

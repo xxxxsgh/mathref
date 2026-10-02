@@ -10,7 +10,7 @@
  */
 import * as THREE from 'three';
 import { mat4, jitterGeometry, cached } from './geo.js';
-import { cyl, cylBetween, cylinder, cable, rebar, decal, sphere, torus } from './shapes.js';
+import { cyl, cylBetween, cylinder, cable, rebar, decal, sphere, torus, contact } from './shapes.js';
 import * as RB from './rubble.js';
 
 // ─── instanciamento ────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ export function sandbagWall(W, pts, rows = 4, opts = {}) {
         const t = (i + 0.5 + off * (i < n - 1 ? 1 : 0)) / n;
         if (t > 1) continue;
         const x = ax + (bx - ax) * t + rng.range(-0.02, 0.02), z = az + (bz - az) * t + rng.range(-0.02, 0.02);
-        const y = r * bagH + 0.075;
+        const y = r * bagH + 0.075 + (opts.y || 0);
         // duas fileiras lado a lado (largura do muro ~0.7 m)
         for (const side of [-0.17, 0.17]) {
           if (r === rows - 1 && side > 0 && opts.single) continue;
@@ -174,7 +174,8 @@ export function sandbagWall(W, pts, rows = 4, opts = {}) {
       }
     }
     const h = rows * bagH + 0.05;
-    const c = new THREE.Vector3((ax + bx) / 2, h / 2, (az + bz) / 2);
+    contact(B, (ax + bx) / 2, opts.y || 0, (az + bz) / 2, 1.25, len + 0.7, yaw, 2);
+    const c = new THREE.Vector3((ax + bx) / 2, h / 2 + (opts.y || 0), (az + bz) / 2);
     const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(0.7, h, len + 0.3)).applyMatrix4(mat4(c.toArray(), [0, yaw, 0]));
     B.collider(box.min.toArray(), box.max.toArray(), 'fabric', { surface: 'dirt' });
   }
@@ -217,6 +218,7 @@ export function crate(W, x, z, yaw, s = 1, opts = {}) {
   for (const k of [-1, 1]) B.add(torus(0.18, 10), 'fabric', L([k * (w / 2 + 0.03), h * 0.15, 0], [0.06 * s, 0.06 * s, 0.06 * s], [0, Math.PI / 2, 0]), { color: [0.6, 0.55, 0.42] });
   const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(w, h, d)).applyMatrix4(M);
   if (opts.collide !== false) B.collider(box.min.toArray(), box.max.toArray(), 'wood');
+  if (!opts.stacked && y < 0.3) contact(B, x, y, z, w + 0.35, d + 0.35, yaw, 2);
 }
 
 /** Lata de munição metálica (verde-oliva, alça e tampa com nervura). */
@@ -256,21 +258,25 @@ export function barrel(W, x, z, opts = {}) {
   const tint = opts.tint || rng.pick([[0.2, 0.3, 0.55], [0.6, 0.15, 0.1], [0.3, 0.4, 0.25], [0.15, 0.15, 0.15]]);
   const dark = tint.map((c) => c * 0.75);
   // tambor de 200 L: corpo + 2 aros de rolagem + bordas (frisos) nas tampas
-  const M = opts.fallen ? mat4([x, 0.29, z], [Math.PI / 2, rng.range(0, 6), 0]) : mat4([x, 0.44, z], [0, rng.range(0, 6), 0]);
+  const y0 = opts.y || 0;
+  const M = opts.fallen ? mat4([x, y0 + 0.29, z], [Math.PI / 2, rng.range(0, 6), 0]) : mat4([x, y0 + 0.44, z], [0, rng.range(0, 6), 0]);
+  contact(B, x, y0, z, opts.fallen ? 1.2 : 0.95, opts.fallen ? 1.2 : 0.95, 0, 2);
   B.add(cyl(20), 'metal', M.clone().multiply(mat4([0, 0, 0], [0, 0, 0], [0.285, 0.86, 0.285])), { color: tint, uvRand: true, ao: opts.fallen ? null : [0, 0.3, 0.6] });
   for (const y of [-0.14, 0.14]) B.add(torus(0.05, 20), 'metal', M.clone().multiply(mat4([0, y, 0], [Math.PI / 2, 0, 0], [0.29, 0.29, 0.29])), { color: dark });
   for (const y of [-0.43, 0.43]) B.add(torus(0.06, 20), 'metal', M.clone().multiply(mat4([0, y, 0], [Math.PI / 2, 0, 0], [0.283, 0.283, 0.283])), { color: dark });
   // tampão
   B.add(cyl(8), 'metal', M.clone().multiply(mat4([0.13, 0.435, 0.05], [0, 0, 0], [0.03, 0.02, 0.03])), { color: [0.3, 0.3, 0.3] });
-  if (opts.fallen) B.collider([x - 0.45, 0, z - 0.45], [x + 0.45, 0.58, z + 0.45], 'metal');
-  else B.collider([x - 0.3, 0, z - 0.3], [x + 0.3, 0.88, z + 0.3], 'metal');
+  if (opts.fallen) B.collider([x - 0.45, y0, z - 0.45], [x + 0.45, y0 + 0.58, z + 0.45], 'metal');
+  else B.collider([x - 0.3, y0, z - 0.3], [x + 0.3, y0 + 0.88, z + 0.3], 'metal');
 }
 
 export function tire(W, x, z, opts = {}) {
   const { B, rng } = W;
   const flat = opts.flat ?? rng.chance(0.6);
-  const M = flat ? mat4([x, 0.11, z], [Math.PI / 2, 0, 0], [0.3, 0.3, 0.4]) : mat4([x, 0.33, z], [rng.range(-0.2, 0.2), rng.range(0, 6), 0], [0.3, 0.3, 0.45]);
+  const y0 = opts.y || 0;
+  const M = flat ? mat4([x, y0 + 0.11, z], [Math.PI / 2 + (opts.tilt || 0), 0, 0], [0.3, 0.3, 0.4]) : mat4([x, y0 + 0.33, z], [rng.range(-0.2, 0.2), rng.range(0, 6), 0], [0.3, 0.3, 0.45]);
   B.add(torus(0.42, 16), 'rubber', M, { color: [1, 1, 1] });
+  if (flat) contact(B, x, opts.y || 0, z, 0.95, 0.95, 0, 1);
 }
 
 export function dumpster(W, x, z, yaw) {
@@ -283,6 +289,7 @@ export function dumpster(W, x, z, yaw) {
   for (const s of [-0.8, 0.8]) for (const t of [-0.45, 0.45]) B.add(cyl(8), 'rubber', L([s, 0.1, t], [0.1, 0.06, 0.1], [Math.PI / 2, 0, 0]), { color: [1, 1, 1] });
   const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, 0.7, 0), new THREE.Vector3(1.9, 1.4, 1.1)).applyMatrix4(M);
   B.collider(box.min.toArray(), box.max.toArray(), 'metal');
+  contact(B, x, 0, z, 2.6, 1.8, yaw, 2);
   // lixo transbordando em volta
   W.trashSpots.push([x, z, 1.8]);
 }

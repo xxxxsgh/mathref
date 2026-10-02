@@ -115,7 +115,7 @@ export function manhole(W, x, z, opts = {}) {
     return g;
   });
   B.add(disc, 'iron', mat4([x, y + 0.006, z], [0, rng.range(0, 6.28), 0]), { worldUV: false, color: [1, 1, 1] });
-  B.add(ring, 'concrete', mat4([x, y + 0.004, z]), { color: [0.42, 0.4, 0.37] });
+  B.add(ring, 'asphalt', mat4([x, y + 0.004, z]), { color: [0.5, 0.48, 0.45] });
   decal(B, 'stains', [x, y + 0.003, z], 'py', [1.4, 1.4], [0, 0, 0.5, 0.5], rng.range(0, 6), [0.8, 0.8, 0.8]);
 }
 

@@ -33,7 +33,17 @@ export const BONE_DEFS = [
   ['shin.R', 15, [-0.1, 0.515, 0.012]],
   ['foot.R', 16, [-0.104, 0.095, -0.012]],
   ['weapon', 0, [0, 0, 0]],
+  // bandoleira (2 pontos): ossos "livres" posicionados por sling.js a cada
+  // frame no espaço do modelo — cada um estica um segmento de fita de
+  // comprimento unitário (escala Y), então a fita acompanha arma e corpo
+  ['sling0', 0, [0, 0, 0]],
+  ['sling1', 0, [0, 0, 0]],
+  ['sling2', 0, [0, 0, 0]],
+  ['sling3', 0, [0, 0, 0]],
+  ['sling4', 0, [0, 0, 0]],
 ];
+/** ossos da bandoleira (índices em BONE_DEFS) */
+export const SLING_BONES = [19, 20, 21, 22, 23];
 
 export const B = Object.fromEntries(BONE_DEFS.map((d, i) => [d[0], i]));
 export const NB = BONE_DEFS.length;

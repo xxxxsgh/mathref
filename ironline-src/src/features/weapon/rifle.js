@@ -67,8 +67,24 @@ export function buildRifle(M, opts = {}) {
   // capa da janela de ejeção (lado direito) e assistente de ferrolho
   K.add('steel', rbox(0.002, 0.016, 0.06, 0.0007, 0.0145, 0.0, -0.105));
   K.add('receiver', cylZ(0.0062, -0.03, -0.065, { x: 0.017, y: 0.004, seg: 16 }));
+  // janela de ejeção: frestas escuras em volta da capa, nervuras da capa,
+  // defletor de cápsulas (cunha atrás da janela) e mola da capa
+  for (const sy of [-1, 1]) K.add('cavity', rbox(0.0008, 0.0009, 0.061, 0.0002, 0.0141, sy * 0.0084, -0.105, 1));
+  K.add('cavity', rbox(0.0008, 0.017, 0.0009, 0.0002, 0.0141, 0, -0.0745, 1));
+  K.add('cavity', rbox(0.0008, 0.017, 0.0009, 0.0002, 0.0141, 0, -0.1355, 1));
+  for (const v of [-0.004, 0.0, 0.004]) K.add('steel', rbox(0.0009, 0.0011, 0.05, 0.0004, 0.0156, v, -0.106, 1));
+  K.add('steel', cylZ(0.0011, -0.073, -0.137, { x: 0.0152, y: -0.0088, seg: 8 })); // eixo da capa
+  {
+    const m = new THREE.Matrix4().makeRotationY(-0.35).setPosition(0.0165, 0.0035, -0.069);
+    K.add('receiver', rbox(0.006, 0.014, 0.014, 0.0018), m);
+  }
+  // botão de retém do carregador (lado direito) com cerca de proteção
+  K.add('steel', cylX(0.0046, 0.0035, 0.0148, -0.043, -0.137, 20));
+  K.add('cavity', cylX(0.0049, 0.0012, 0.0136, -0.043, -0.137, 20));
+  for (let i = 0; i < 5; i++) K.add('cavity', rbox(0.0004, 0.0006, 0.007, 0.0001, 0.0167, -0.0455 + i * 0.0013, -0.137, 1));
+  K.add('receiver', torus(0.0062, 0.0012, 0.014, -0.043, -0.137, 0, Math.PI / 2, 0, Math.PI));
   // trilho superior contínuo (receptor)
-  rail(K, 'receiver', 0.006, 0.234, D.upperTop);
+  rail(K, 'rail', 0.006, 0.234, D.upperTop);
 
   // ─── receptor inferior ─────────────────────────────────────────────────
   const lower = new THREE.Shape();
@@ -141,6 +157,17 @@ export function buildRifle(M, opts = {}) {
   engrMesh.position.set(-0.0148, -0.068, -0.17);
   engrMesh.rotation.y = -Math.PI / 2;
   root.add(engrMesh);
+  // lado direito do poço: marcação de calibre e pictogramas de cadência
+  const engrR = engravingTexture([
+    { text: '5.56 NATO', font: 'bold 46px monospace' },
+    { text: 'MULTI-CAL  KR9-A2', font: 'bold 30px monospace', alpha: 0.85 },
+    { text: 'IRONLINE ARMS  SEMI-AUTO', font: '26px monospace', alpha: 0.8 },
+  ]);
+  const engrRMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.052, 0.014), engrMat.clone());
+  engrRMesh.material.alphaMap = engrR;
+  engrRMesh.position.set(0.0148, -0.07, -0.172);
+  engrRMesh.rotation.y = Math.PI / 2;
+  root.add(engrRMesh);
   // marcações do seletor
   const selTex = engravingTexture([{ text: 'SAFE', font: 'bold 70px monospace', x: 10 }, { text: 'AUTO', font: 'bold 70px monospace', x: 10 }], { w: 256, h: 256 });
   const selMark = new THREE.Mesh(new THREE.PlaneGeometry(0.014, 0.014), engrMat.clone());
@@ -181,7 +208,7 @@ export function buildRifle(M, opts = {}) {
   K.add('steel', cylZ(0.0175, 0.0, 0.012, { y: -0.004, seg: 12 }));
   // placa de bandoleira traseira
   K.add('steel', rbox(0.031, 0.026, 0.003, 0.001, 0, -0.006, 0.004));
-  // corpo da coronha (perfil esqueletizado)
+  // corpo da coronha (perfil esqueletizado, polímero fosco)
   const stock = new THREE.Shape();
   stock.moveTo(-0.075, 0.018);
   stock.lineTo(-0.252, 0.026);
@@ -200,9 +227,9 @@ export function buildRifle(M, opts = {}) {
   stockHole.lineTo(-0.246, -0.074);
   stockHole.bezierCurveTo(-0.23, -0.06, -0.21, -0.04, -0.2, -0.032);
   stockHole.quadraticCurveTo(-0.198, -0.02, -0.215, -0.02);
-  K.add('tan', side(stock, 0.036, { b: 0.004, seg: 3, holes: [stockHole] }));
+  K.add('polymer', side(stock, 0.036, { b: 0.004, seg: 3, holes: [stockHole] }));
   // descanso de bochecha
-  K.add('tan', rbox(0.038, 0.012, 0.11, 0.005, 0, 0.022, 0.17));
+  K.add('polymer', rbox(0.038, 0.012, 0.11, 0.005, 0, 0.022, 0.17));
   // soleira de borracha
   K.add('rubber', side([[-0.258, 0.03], [-0.274, 0.03], [-0.276, -0.108], [-0.258, -0.11]], 0.04, { b: 0.004, seg: 3 }));
   // trava de ajuste (alavanca)
@@ -229,7 +256,7 @@ export function buildRifle(M, opts = {}) {
   K.add('tan', top([[hg0, -0.0115], [hg1, -0.0115], [hg1, 0.0115], [hg0, 0.0115]], 0.0045, { b: 0.0012, cy: -0.0295, holes: botSlots }));
   // topo do guarda-mão + trilho
   K.add('tan', top([[hg0, -0.0205], [hg1, -0.0205], [hg1, 0.0205], [hg0, 0.0205]], 0.006, { b: 0.0014, cy: 0.0135 }));
-  rail(K, 'receiver', hg0 + 0.002, hg1 - 0.003, D.upperTop);
+  rail(K, 'rail', hg0 + 0.002, hg1 - 0.003, D.upperTop);
   // anel frontal chanfrado
   K.add('tan', section(roundRect(-0.021, -0.031, 0.021, 0.0165, 0.006), -hg1 + 0.004, 0.006, { b: 0.0016, holes: [roundRect(-0.012, -0.012, 0.012, 0.012, 0.011, 6)] }));
   // interior escuro (dá profundidade às ranhuras)
@@ -336,8 +363,12 @@ export function buildRifle(M, opts = {}) {
   // lábio traseiro e frontal: chanfro largo voltado para fora (moldura fina)
   const rim = () => roundRect(-HX - 0.0006, oy + 0.006, HX + 0.0006, HT + 0.0006, 0.008, 6);
   const rimHole = () => roundRect(-WX + 0.0004, WB + 0.0004, WX - 0.0004, WT - 0.0004, 0.0044, 6);
-  K.add('receiver', section(rim(), -(hz0 - 0.001), 0.003, { b: 0.0006, holes: [rimHole()] }));
-  K.add('receiver', section(rim(), -(hz0 + hoodLen - 0.0022), 0.003, { b: 0.0006, holes: [rimHole()] }));
+  // molduras da janela em borracha fosca: no ADS a borda vista de frente
+  // fica escura e fina (sem o chanfro claro refletindo o céu)
+  K.add('rubber', section(rim(), -(hz0 - 0.001), 0.003, { b: 0.0004, holes: [rimHole()] }));
+  // moldura da frente: a face dela que olha para o atirador aparece como um
+  // anel em perspectiva dentro da janela no ADS — fosca quase preta
+  K.add('cavity', section(rim(), -(hz0 + hoodLen - 0.0022), 0.003, { b: 0.0004, holes: [rimHole()] }));
   // nervura superior do capô + parafusos de fixação no topo
   K.add('receiver', rbox(0.009, 0.0022, hoodLen - 0.016, 0.0009, 0, HT + 0.0006, -(hz0 + hoodLen / 2)));
   for (const u of [hz0 + 0.009, hz0 + hoodLen - 0.009]) {
@@ -347,7 +378,8 @@ export function buildRifle(M, opts = {}) {
   // forro interno do capô (fosco escuro): sem ele as paredes da janela
   // refletem o céu e o "túnel" fica claro demais no ADS
   {
-    const zc = -(hz0 + hoodLen / 2), L = hoodLen - 0.004, e = 0.0004;
+    // cobre o túnel inteiro (inclusive as faces internas das molduras)
+    const zc = -(hz0 + hoodLen / 2), L = hoodLen + 0.0016, e = 0.0006;
     K.add('cavity', rbox(WX * 2, 0.0006, L, 0.0002, 0, WB + e, zc, 1));
     K.add('cavity', rbox(WX * 2, 0.0006, L, 0.0002, 0, WT - e, zc, 1));
     K.add('cavity', rbox(0.0006, WT - WB, L, 0.0002, -WX + e, (WB + WT) / 2, zc, 1));
@@ -492,11 +524,23 @@ export function buildMag(M) {
   return g;
 }
 
-/** Cápsula deflagrada (para o ejetor). */
+/**
+ * Cápsula deflagrada 5,56 (para o ejetor): base com aro e canal de extração,
+ * espoleta percutida, corpo levemente cônico, ombro, gargalo e boca aberta
+ * escurecida pela queima. Latão com fuligem perto da boca (material próprio).
+ */
 export function buildCasing(M) {
   const k = new Kit();
-  k.add('brass', cylZ(0.0048, 0.022, -0.012, { seg: 12 }));
-  k.add('brass', cylZ(0.0048, -0.012, -0.018, { seg: 12, r1: 0.0031 }));
-  k.add('cavity', cylZ(0.003, -0.018, -0.0185, { seg: 10 }));
-  return k.build(M, 'casing', { shadows: false });
+  const S = 20;
+  // coordenadas: base em +Z, boca em −Z (comprimento total ≈ 45 mm)
+  k.add('brass', cylZ(0.0048, 0.0225, 0.0212, { seg: S })); // aro
+  k.add('brass', cylZ(0.0041, 0.0212, 0.0192, { seg: S, r1: 0.0046 })); // canal de extração (chanfro)
+  k.add('brass', cylZ(0.0047, 0.0192, -0.0105, { seg: S, r1: 0.00455 })); // corpo cônico
+  k.add('brass', cylZ(0.00455, -0.0105, -0.0135, { seg: S, r1: 0.0031 })); // ombro
+  k.add('brass', cylZ(0.0031, -0.0135, -0.0215, { seg: S })); // gargalo
+  k.add('cavity', cylZ(0.0026, -0.0213, -0.0217, { seg: 14 })); // boca (interior queimado)
+  k.add('steel', cylZ(0.0018, 0.0226, 0.0224, { seg: 12 })); // espoleta
+  const g = k.build(M, 'casing', { shadows: false });
+  // base + gargalo levemente mais escuros: latão "queimado" separado
+  return g;
 }

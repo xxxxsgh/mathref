@@ -101,11 +101,11 @@ const headW = (p) => {
 // ─── paletas de equipamento ──────────────────────────────────────────────
 export const VARIANTS = [
   // fuzileiro: camuflagem verde escura, colete ranger green, mochila
-  { name: 'rifleman', camo: 'woodland', gear: '#3f4232', gear2: '#33362a', helmetCamo: 1, belt: '#2f3027', glove: '#242422', boot: '#3e3428', bala: '#2a2b27', shirt: '#4b4d41', ruck: true },
+  { name: 'rifleman', camo: 'woodland', gear: '#434635', gear2: '#36392c', helmetCamo: 1, belt: '#2f3027', glove: '#2a2a27', boot: '#3a3026', bala: '#4a4b40', shirt: '#4b4d41', ruck: true, face: 'bala', nvg: true, lens: '#8593a0' },
   // metralhador: uniforme cinza-urbano, equipamento preto
-  { name: 'gunner', camo: 'urban', gear: '#262725', gear2: '#1e1f1d', helmetCamo: 0, helmet: '#2b2c2a', belt: '#1f201e', glove: '#1b1b1a', boot: '#2c2722', bala: '#1f201e', shirt: '#3b3d39', ruck: false },
+  { name: 'gunner', camo: 'urban', gear: '#2c2d2a', gear2: '#232421', helmetCamo: 0, helmet: '#3a3c37', belt: '#252623', glove: '#22221f', boot: '#2a241e', bala: '#44453e', shirt: '#3b3d39', ruck: false, face: 'bala', nvg: true, elbow: true, lens: '#9a8a66' },
   // líder: colete coyote, camuflagem árida
-  { name: 'lead', camo: 'arid', gear: '#6a5c46', gear2: '#55493a', helmetCamo: 1, belt: '#4f4436', glove: '#4e4234', boot: '#4a3c2c', bala: '#2f2d28', shirt: '#57524a', ruck: true },
+  { name: 'lead', camo: 'arid', gear: '#6c5d45', gear2: '#5a4c3a', helmetCamo: 1, belt: '#4a4034', glove: '#3d3429', boot: '#4d3c2b', bala: '#5e5444', shirt: '#57524a', ruck: true, face: 'bala', scarf: true, nvg: false, lens: '#6d7378' },
 ];
 
 export function buildSoldierGeometry(variant = VARIANTS[0]) {
@@ -114,17 +114,24 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
   const M = {
     uniform: { color: '#e9e6dc', rough: 0.9, camo: 1, fabric: 1 },
     shirt: { color: V.shirt, rough: 0.92, fabric: 1 },
-    gear: { color: V.gear, rough: 0.74, fabric: 1 },
-    gear2: { color: V.gear2, rough: 0.76, fabric: 1 },
-    webbing: { color: V.gear2, rough: 0.8, fabric: 0.9 },
-    belt: { color: V.belt, rough: 0.78, fabric: 0.9 },
-    bala: { color: V.bala, rough: 0.97, fabric: 1 },
-    skin: { color: '#8e6a58', rough: 0.55, fabric: 0.35 },
+    gear: { color: V.gear, rough: 0.7, fabric: 0.8 },
+    gearPlain: { color: V.gear, rough: 0.7, fabric: 0.7 },
+    gear2: { color: V.gear2, rough: 0.72, fabric: 0.7 },
+    webbing: { color: V.gear2, rough: 0.74, fabric: 0.75 },
+    belt: { color: V.belt, rough: 0.74, fabric: 0.75 },
+    bala: { color: V.bala, rough: 0.96, fabric: 1 },
+    skin: { color: '#9a705a', rough: 0.5, fabric: 0.5 },
+    eye: { color: '#1a1512', rough: 0.15, fabric: 0.1 },
+    brow: { color: '#2a1f18', rough: 0.9, fabric: 1 },
+    buckle: { color: '#141413', rough: 0.45, fabric: 0.1 },
+    flash: { color: '#4a4c45', rough: 0.4, metal: 0.55, fabric: 0.1 },
+    frag: { color: '#3b4231', rough: 0.55, fabric: 0.1 },
+    sling: { color: '#2a2a25', rough: 0.78, fabric: 0.75 },
     glove: { color: V.glove, rough: 0.72, fabric: 0.55 },
     knuckle: { color: '#1a1a19', rough: 0.45, fabric: 0.1 },
     boot: { color: V.boot, rough: 0.85, fabric: 0.5 },
     sole: { color: '#1e1c1a', rough: 0.92, fabric: 0.5 },
-    lace: { color: '#2a2722', rough: 0.9, fabric: 1 },
+    lace: { color: '#2a2722', rough: 0.9, fabric: 0.75 },
     helmet: V.helmetCamo ? { color: '#e4e0d4', rough: 0.85, camo: 1, fabric: 1 } : { color: V.helmet || '#55553f', rough: 0.55, fabric: 0.45 },
     poly: { color: '#1f201f', rough: 0.55, fabric: 0.05 },
     gunPoly: { color: '#232423', rough: 0.58, fabric: -1 },
@@ -138,12 +145,13 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
     rubber: { color: '#151515', rough: 0.85, fabric: 0.5 },
     metal: { color: '#26272a', rough: 0.36, metal: 0.7, fabric: 0 },
     metalWorn: { color: '#3c3d40', rough: 0.3, metal: 0.85, fabric: 0 },
-    lens: { color: '#191512', rough: 0.06, metal: 0.85, fabric: 0 },
+    // lente espelhada/fumê por variante: reflete o céu (o rosto não vira um buraco preto)
+    lens: { color: V.lens || '#7d8a94', rough: 0.07, metal: 1, fabric: 0 },
     lensRed: { color: '#30100c', rough: 0.05, metal: 0.9, fabric: 0 },
-    patch: { color: '#45463a', rough: 0.95, fabric: 1 },
+    patch: { color: '#45463a', rough: 0.95, fabric: 0.75 },
     mag: { color: '#2c2c29', rough: 0.5, fabric: 0.1 },
     radio: { color: '#30322b', rough: 0.5, metal: 0.15, fabric: 0.1 },
-    tq: { color: '#1b1b1a', rough: 0.8, fabric: 0.9 },
+    tq: { color: '#1b1b1a', rough: 0.8, fabric: 0.75 },
     tqTab: { color: '#5a2620', rough: 0.7, fabric: 0.3 },
     cup: { color: '#3d3f37', rough: 0.55, fabric: 0.15 },
     kneepad: { color: '#272826', rough: 0.6, fabric: 0.3 },
@@ -201,31 +209,88 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
   b.ellipsoid([0.066, 0.05, 0.066], { p: [0, 1.632, 0.038] }, M.bala, headW, core, 16, 10);
   // nariz sob o tecido
   b.ellipsoid([0.015, 0.026, 0.02], { p: [0, 1.684, 0.1], r: [0.25, 0, 0] }, M.bala, headW, core, 8, 6);
-  // faixa de pele nos olhos
-  b.ellipsoid([0.062, 0.02, 0.03], { p: [0, 1.708, 0.082] }, M.skin, headW, core, 16, 8);
-  // óculos balísticos: lente curva + armação
-  b.loft(
-    [
-      { c: [0, 1.69, 0.012], ru: 0.09, rv: 0.11, n: 2 },
-      { c: [0, 1.728, 0.012], ru: 0.09, rv: 0.11, n: 2 },
-    ],
-    M.lens,
-    headW,
-    core,
-    { seg: 16, caps: [false, false], arc: [0.12 * Math.PI, 0.88 * Math.PI] },
-  );
-  b.loft(
-    [
-      { c: [0, 1.728, 0.012], ru: 0.092, rv: 0.112, n: 2 },
-      { c: [0, 1.735, 0.012], ru: 0.092, rv: 0.112, n: 2 },
-    ],
-    M.poly,
-    headW,
-    core,
-    { seg: 16, caps: [false, false], arc: [0.1 * Math.PI, 0.9 * Math.PI] },
-  );
-  // hastes dos óculos
-  for (const sx of [1, -1]) b.box([0.006, 0.008, 0.09], { p: [sx * 0.088, 1.72, -0.02] }, M.poly, B.head, core, 0.002);
+  // ── rosto: fenda dos olhos (pele, olhos, sobrancelhas) ──
+  const shemagh = V.face === 'shemagh';
+  {
+    // pele em volta dos olhos — bem mais aberta no shemagh
+    const sk = shemagh ? [0.068, 0.028, 0.034] : [0.062, 0.022, 0.031];
+    b.ellipsoid(sk, { p: [0, shemagh ? 1.716 : 1.708, 0.08] }, M.skin, headW, core, 18, 10);
+    if (shemagh) {
+      // ponte do nariz sob os óculos
+      b.ellipsoid([0.014, 0.03, 0.022], { p: [0, 1.69, 0.103], r: [0.3, 0, 0] }, M.skin, headW, core, 10, 8);
+    }
+    const ez = shemagh ? 0.005 : 0;
+    for (const sx of [1, -1]) {
+      // globo ocular (escuro, brilho especular) + pálpebra/sobrancelha
+      b.ellipsoid([0.013, 0.0085, 0.008], { p: [sx * 0.031, 1.71 + ez, 0.108 + ez] }, M.eye, B.head, core, 10, 8);
+      b.box([0.03, 0.007, 0.012], { p: [sx * 0.032, 1.726 + ez * 1.5, 0.106 + ez], r: [0.25, 0, sx * -0.12] }, M.brow, B.head, core, 0.003);
+    }
+  }
+  if (V.scarf) {
+    // lenço (shemagh) enrolado no pescoço, por cima da gola: volume e uma
+    // ponta solta caindo no peito (quebra a silhueta)
+    const sc = { color: '#4b4838', rough: 0.95, fabric: 1 };
+    b.tube(
+      [
+        { p: [0, 1.515, -0.012], ru: 0.09, rv: 0.086 },
+        { p: [0, 1.548, -0.008], ru: 0.098, rv: 0.096 },
+        { p: [0, 1.585, -0.004], ru: 0.088, rv: 0.088 },
+      ],
+      sc,
+      headW,
+      core,
+      { seg: 22, caps: [false, false] },
+    );
+    b.tube(
+      [
+        { p: [0, 1.535, -0.01], ru: 0.101, rv: 0.099 },
+        { p: [0, 1.556, -0.006], ru: 0.103, rv: 0.101 },
+      ],
+      { color: '#3c3a2e', rough: 0.95, fabric: 1 },
+      headW,
+      core,
+      { seg: 22, caps: [false, false] },
+    );
+    b.box([0.07, 0.12, 0.012], { p: [0.035, 1.46, 0.14], r: [-0.25, 0, 0.15] }, sc, B.chest, core, 0.006);
+  }
+  {
+    // óculos balísticos: lente curva espelhada (reflete o céu) + armação
+    b.loft(
+      [
+        { c: [0, 1.69, 0.012], ru: 0.09, rv: 0.11, n: 2 },
+        { c: [0, 1.728, 0.012], ru: 0.09, rv: 0.11, n: 2 },
+      ],
+      M.lens,
+      headW,
+      core,
+      { seg: 16, caps: [false, false], arc: [0.12 * Math.PI, 0.88 * Math.PI] },
+    );
+    b.loft(
+      [
+        { c: [0, 1.728, 0.012], ru: 0.092, rv: 0.112, n: 2 },
+        { c: [0, 1.735, 0.012], ru: 0.092, rv: 0.112, n: 2 },
+      ],
+      M.poly,
+      headW,
+      core,
+      { seg: 16, caps: [false, false], arc: [0.1 * Math.PI, 0.9 * Math.PI] },
+    );
+    // hastes dos óculos
+    for (const sx of [1, -1]) b.box([0.006, 0.008, 0.09], { p: [sx * 0.088, 1.72, -0.02] }, M.poly, B.head, core, 0.002);
+  }
+  if (!shemagh) {
+    // costura da balaclava em volta da fenda dos olhos
+    b.loft(
+      [
+        { c: [0, 1.684, 0.006], ru: 0.083, rv: 0.1, n: 2 },
+        { c: [0, 1.69, 0.006], ru: 0.084, rv: 0.101, n: 2 },
+      ],
+      M.bala,
+      headW,
+      core,
+      { seg: 16, caps: [false, false], arc: [0.15 * Math.PI, 0.85 * Math.PI] },
+    );
+  }
 
   // ── fones (abafadores) com headband e microfone ──
   for (const sx of [1, -1]) {
@@ -390,9 +455,7 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
     const t = sstep(1.24, 1.14, p.y) * 0.7;
     return [[B.chest, 1 - t], [B.spine, t]];
   };
-  // fileiras MOLLE (tiras horizontais) nas placas
-  for (let k = 0; k < 4; k++) b.box([0.27, 0.012, 0.006], { p: [0, 1.255 + k * 0.026, 0.158 - k * 0.0016], r: [-0.06, 0, 0] }, M.webbing, chestW, core, 0.002, 1);
-  for (let k = 0; k < 6; k++) b.box([0.28, 0.012, 0.006], { p: [0, 1.2 + k * 0.03, -0.157 - k * 0.0012], r: [0.04, 0, 0] }, M.webbing, chestW, core, 0.002, 1);
+  // (fileiras MOLLE das placas/cummerbund: no shader — classe 0.8)
   // placa frontal e traseira
   b.box([0.3, 0.33, 0.055], { p: [0, 1.31, 0.128], r: [-0.06, 0, 0] }, M.gear, chestW, core, 0.02, 3);
   b.box([0.31, 0.35, 0.05], { p: [0, 1.32, -0.13], r: [0.04, 0, 0] }, M.gear, chestW, core, 0.02, 3);
@@ -408,18 +471,6 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
     core,
     { seg: 28, caps: [false, false] },
   );
-  // fileiras MOLLE no cummerbund (tiras)
-  for (const yy of [1.135, 1.175, 1.215])
-    b.loft(
-      [
-        { c: [0, yy - 0.006, 0.0], ru: 0.191, rv: 0.14, n: 3 },
-        { c: [0, yy + 0.006, 0.0], ru: 0.191, rv: 0.14, n: 3 },
-      ],
-      M.webbing,
-      torsoW,
-      core,
-      { seg: 28, caps: [false, false] },
-    );
   // alças de ombro
   for (const sx of [1, -1]) {
     b.tube(
@@ -430,7 +481,7 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
         { p: [sx * 0.118, 1.5, -0.07], ru: 0.042, rv: 0.012 },
         { p: [sx * 0.115, 1.45, -0.13], ru: 0.04, rv: 0.012 },
       ],
-      M.gear,
+      M.gearPlain,
       chestW,
       core,
       { seg: 8, side: [1, 0, 0] },
@@ -442,7 +493,9 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
   b.box([0.3, 0.12, 0.05], { p: [0, 1.2, 0.165], r: [-0.04, 0, 0] }, M.gear, chestW, core, 0.012);
   for (const mx of [-0.088, 0, 0.088]) {
     // bolsa
-    b.box([0.078, 0.105, 0.048], { p: [mx, 1.212, 0.205], r: [-0.04, 0, 0] }, M.gear, chestW, core, 0.01);
+    b.box([0.078, 0.105, 0.048], { p: [mx, 1.212, 0.205], r: [-0.04, 0, 0] }, M.gearPlain, chestW, core, 0.01);
+    // aba elástica lateral + costura de reforço
+    b.box([0.082, 0.016, 0.05], { p: [mx, 1.16, 0.207], r: [-0.04, 0, 0] }, M.webbing, chestW, core, 0.004);
     // carregador saindo da bolsa (preso por bungee)
     b.box([0.026, 0.07, 0.058], { p: [mx, 1.27, 0.204], r: [-0.12, 0, 0] }, M.mag, chestW, core, 0.005);
     b.box([0.03, 0.012, 0.062], { p: [mx, 1.305, 0.2], r: [-0.12, 0, 0] }, M.poly, chestW, core, 0.004);
@@ -458,7 +511,7 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
   // rádio nas costas (esquerda) + antena
   b.box([0.07, 0.15, 0.05], { p: [0.115, 1.32, -0.185] }, M.gear2, chestW, core, 0.01);
   b.box([0.06, 0.13, 0.04], { p: [0.115, 1.33, -0.19] }, M.radio, chestW, core, 0.008);
-  b.cyl([0.13, 1.4, -0.19], [0.17, 1.72, -0.24], 0.005, 0.003, M.rubber, B.chest, core, 6);
+  if (V.ruck) b.cyl([0.13, 1.4, -0.19], [0.17, 1.76, -0.25], 0.0055, 0.003, M.rubber, B.chest, core, 6);
   b.cyl([0.13, 1.4, -0.19], [0.13, 1.42, -0.19], 0.012, 0.01, M.poly, B.chest, core, 8);
   // cabo do PTT
   b.tube(
@@ -522,6 +575,9 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
     b.box([0.045, 0.06, 0.035], { p: [-0.185, 0.87, -0.04], r: [0.15, 0, 0.05] }, M.poly, tw, core, 0.008);
     for (const yy of [0.82, 0.74]) b.box([0.02, 0.025, 0.1], { p: [-0.17, yy, 0.0] }, M.webbing, tw, core, 0.004);
   }
+
+  // ═══ DETALHES SECUNDÁRIOS (silhueta) ══════════════════════════════════
+  addExtras(b, M, V, chestW);
 
   // ═══ FUZIL ════════════════════════════════════════════════════════════
   addRifle(b, M);
@@ -636,6 +692,18 @@ function addBoot(b, side, M, grp) {
   }
   // reforço do calcanhar
   b.box([0.09, 0.05, 0.03], { p: [X, 0.06, Z - 0.075] }, M.sole, fb, grp, 0.012);
+  // ilhoses/ganchos metálicos dos dois lados do cadarço
+  for (let k = 0; k < 6; k++) {
+    const t = k / 5;
+    const y = 0.095 + t * 0.1, z = Z + 0.142 - t * 0.08;
+    for (const s of [1, -1]) b.box([0.007, 0.007, 0.007], { p: [X + s * 0.027, y, z - 0.004] }, M.metalWorn, k > 2 ? legw : fb, grp, 0.002);
+  }
+  // laço do cadarço no alto + língua da bota
+  b.box([0.04, 0.012, 0.012], { p: [X, 0.205, Z + 0.068], r: [-0.3, 0, 0.4] }, M.lace, legw, grp, 0.003);
+  b.box([0.045, 0.05, 0.012], { p: [X, 0.2, Z + 0.06], r: [-0.25, 0, 0] }, M.boot, legw, grp, 0.005);
+  // cravos da sola (aparecem no corpo caído) e faixa lateral texturizada
+  for (let k = 0; k < 7; k++) b.box([0.09, 0.008, 0.022], { p: [X, -0.002, Z - 0.06 + k * 0.038] }, M.sole, fb, grp, 0.002);
+  for (const s of [1, -1]) for (let k = 0; k < 9; k++) b.box([0.004, 0.014, 0.012], { p: [X + s * 0.053, 0.016, Z - 0.06 + k * 0.03] }, M.rubber, fb, grp, 0.001, 1);
 }
 
 /** Pontos notáveis do fuzil (espaço do osso `weapon`). */
@@ -701,4 +769,173 @@ function addRifle(b, M) {
   // lanterna lateral
   b.cyl([-0.032, BORE + 0.005, 0.38], [-0.032, BORE + 0.005, 0.47], 0.0125, 0.0135, M.gunMetal, w, g, 12);
   b.cyl([-0.032, BORE + 0.005, 0.47], [-0.032, BORE + 0.005, 0.472], 0.012, 0.012, M.gunLens, w, g, 12);
+}
+
+/**
+ * Detalhes que quebram a silhueta e dão "densidade" de equipamento:
+ * NVG rebatido, lanterna e strobe no capacete, elástico da capa, granadas
+ * de luz e de fragmentação, dangler, pontas de fita soltas, fivelas,
+ * mangueira de hidratação, alça da bandoleira pelas costas, abas dos
+ * bolsos, antena de chicote, cantil lateral, joelheira/cotoveleira e a
+ * fita da bandoleira (ossos sling0..4, ver sling.js).
+ */
+function addExtras(b, M, V, chestW) {
+  const core = GROUPS.core;
+  // ── capacete ──
+  if (V.nvg) {
+    // suporte + braço articulado + binóculo rebatido para cima
+    b.box([0.034, 0.03, 0.03], { p: [0, 1.8, 0.148], r: [-0.55, 0, 0] }, M.poly, B.head, core, 0.006);
+    b.box([0.022, 0.06, 0.02], { p: [0, 1.83, 0.168], r: [-0.25, 0, 0] }, M.metal, B.head, core, 0.004);
+    b.box([0.07, 0.022, 0.03], { p: [0, 1.852, 0.17], r: [-0.25, 0, 0] }, M.poly, B.head, core, 0.006);
+    for (const sx of [1, -1]) {
+      b.cyl([sx * 0.032, 1.845, 0.18], [sx * 0.034, 1.94, 0.158], 0.018, 0.016, M.poly, B.head, core, 14);
+      b.cyl([sx * 0.034, 1.94, 0.158], [sx * 0.034, 1.946, 0.157], 0.0145, 0.0145, M.lens, B.head, core, 14);
+      // anel de foco (relevo)
+      b.cyl([sx * 0.0325, 1.87, 0.175], [sx * 0.033, 1.885, 0.172], 0.0195, 0.0195, M.rubber, B.head, core, 14);
+    }
+    // cabo da bateria (contrapeso → NVG) por cima da capa
+    b.tube(
+      [
+        { p: [0.02, 1.775, -0.13], ru: 0.004 },
+        { p: [0.035, 1.835, -0.05], ru: 0.004 },
+        { p: [0.03, 1.84, 0.05], ru: 0.004 },
+        { p: [0.012, 1.81, 0.135], ru: 0.004 },
+      ],
+      M.rubber,
+      B.head,
+      core,
+      { seg: 6 },
+    );
+  }
+  // lanterna no trilho direito + strobe IR no topo traseiro
+  b.cyl([-0.13, 1.738, 0.02], [-0.132, 1.738, 0.105], 0.0125, 0.014, M.poly, B.head, core, 12);
+  b.cyl([-0.132, 1.738, 0.105], [-0.132, 1.738, 0.107], 0.012, 0.012, M.lens, B.head, core, 12);
+  b.box([0.03, 0.018, 0.04], { p: [0, 1.826, -0.07], r: [0.4, 0, 0] }, M.poly, B.head, core, 0.006);
+  // elástico (bungee) em volta da capa
+  b.loft(
+    [
+      { c: [0, 1.757, -0.006], ru: 0.106, rv: 0.122, n: 2 },
+      { c: [0, 1.764, -0.006], ru: 0.106, rv: 0.122, n: 2 },
+    ],
+    M.rubber,
+    B.head,
+    core,
+    { seg: 36, caps: [false, false] },
+  );
+
+  // ── granadas no cummerbund ──
+  // duas de luz (lado esquerdo), uma de fragmentação ou fumígena (direito)
+  for (const [x, z] of [
+    [0.152, 0.124],
+    [0.205, 0.064],
+  ]) {
+    b.cyl([x, 1.12, z], [x, 1.215, z], 0.021, 0.021, M.flash, torsoW, core, 12);
+    b.cyl([x, 1.215, z], [x, 1.235, z], 0.014, 0.012, M.metal, torsoW, core, 10);
+    b.box([0.008, 0.08, 0.006], { p: [x, 1.18, z + 0.022] }, M.metalWorn, torsoW, core, 0.002);
+    b.box([0.046, 0.016, 0.046], { p: [x, 1.15, z] }, M.webbing, torsoW, core, 0.004);
+  }
+  if (V.name === 'lead') {
+    b.cyl([-0.16, 1.12, 0.122], [-0.16, 1.235, 0.122], 0.026, 0.026, { color: '#3e4636', rough: 0.6, fabric: 0.1 }, torsoW, core, 12);
+    b.cyl([-0.16, 1.235, 0.122], [-0.16, 1.25, 0.122], 0.016, 0.012, M.metal, torsoW, core, 10);
+  } else {
+    b.ellipsoid([0.03, 0.036, 0.03], { p: [-0.16, 1.16, 0.13] }, M.frag, torsoW, core, 12, 10);
+    b.box([0.018, 0.026, 0.016], { p: [-0.16, 1.205, 0.13] }, M.metal, torsoW, core, 0.003);
+    b.box([0.006, 0.05, 0.005], { p: [-0.145, 1.185, 0.155], r: [0, 0, 0.2] }, M.metalWorn, torsoW, core, 0.002);
+  }
+  b.box([0.05, 0.014, 0.05], { p: [-0.16, 1.135, 0.13] }, M.webbing, torsoW, core, 0.004);
+
+  // ── dangler sob o painel frontal + pontas de fita soltas ──
+  b.box([0.21, 0.085, 0.045], { p: [0, 1.098, 0.172], r: [-0.12, 0, 0] }, M.gearPlain, chestW, core, 0.014);
+  b.box([0.214, 0.03, 0.049], { p: [0, 1.128, 0.174], r: [-0.12, 0, 0] }, M.gear2, chestW, core, 0.008);
+  b.box([0.03, 0.02, 0.01], { p: [0, 1.11, 0.198], r: [-0.12, 0, 0] }, M.buckle, chestW, core, 0.003);
+  for (const [x, y, z, rz, l] of [
+    [0.118, 1.07, 0.15, 0.08, 0.1],
+    [-0.12, 1.065, 0.148, -0.12, 0.12],
+    [0.192, 1.07, 0.06, 0.05, 0.13],
+    [-0.19, 1.075, 0.07, -0.06, 0.11],
+  ])
+    b.box([0.022, l, 0.0035], { p: [x, y, z], r: [-0.08, Math.atan2(x, z) * 0.6, rz] }, M.webbing, chestW, core, 0.0012, 1);
+  // fivelas (fastex) do cummerbund
+  for (const sx of [1, -1]) {
+    b.box([0.03, 0.036, 0.012], { p: [sx * 0.172, 1.175, 0.098], r: [0, sx * 0.75, 0] }, M.buckle, torsoW, core, 0.003);
+    b.box([0.012, 0.04, 0.014], { p: [sx * 0.165, 1.175, 0.106], r: [0, sx * 0.75, 0] }, M.buckle, torsoW, core, 0.002);
+  }
+  // abas dos bolsos laterais do cummerbund
+  for (const sx of [1, -1]) {
+    b.box([0.046, 0.012, 0.086], { p: [sx * 0.2, 1.219, -0.02] }, M.gear2, torsoW, core, 0.004);
+    b.box([0.006, 0.045, 0.086], { p: [sx * 0.222, 1.2, -0.02] }, M.gear2, torsoW, core, 0.002);
+    b.box([0.004, 0.018, 0.02], { p: [sx * 0.226, 1.19, -0.02] }, M.buckle, torsoW, core, 0.0015);
+  }
+  // aba do IFAK + puxador vermelho
+  b.box([0.146, 0.012, 0.066], { p: [0, 1.018, -0.145] }, M.gear, B.hips, core, 0.004);
+  b.box([0.146, 0.045, 0.006], { p: [0, 0.996, -0.178] }, M.gear, B.hips, core, 0.002);
+  b.box([0.03, 0.03, 0.006], { p: [0.05, 0.99, -0.182] }, M.tqTab, B.hips, core, 0.002);
+  // bastão de luz química preso na alça direita
+  b.cyl([-0.125, 1.455, 0.145], [-0.122, 1.39, 0.16], 0.008, 0.008, { color: '#3d5232', rough: 0.45, fabric: 0.1 }, B.chest, core, 8);
+
+  // ── mangueira de hidratação (mochila → ombro esquerdo → peito) ──
+  if (V.ruck) {
+    b.tube(
+      [
+        { p: [0.07, 1.43, -0.215], ru: 0.0065 },
+        { p: [0.1, 1.52, -0.12], ru: 0.0065 },
+        { p: [0.142, 1.548, -0.01], ru: 0.0065 },
+        { p: [0.15, 1.505, 0.1], ru: 0.0065 },
+        { p: [0.145, 1.43, 0.155], ru: 0.0065 },
+      ],
+      { color: '#2e3029', rough: 0.6, fabric: 0.5 },
+      B.chest,
+      core,
+      { seg: 7 },
+    );
+    b.cyl([0.145, 1.43, 0.155], [0.143, 1.4, 0.165], 0.009, 0.008, M.rubber, B.chest, core, 8);
+    // tampa da mochila, alça de mão, cantil lateral e antena de chicote
+    b.box([0.255, 0.04, 0.085], { p: [-0.01, 1.43, -0.19], r: [0.1, 0, 0] }, M.gear2, chestW, core, 0.015);
+    b.tube(
+      [
+        { p: [-0.05, 1.45, -0.19], ru: 0.009, rv: 0.004 },
+        { p: [-0.01, 1.475, -0.2], ru: 0.009, rv: 0.004 },
+        { p: [0.03, 1.45, -0.19], ru: 0.009, rv: 0.004 },
+      ],
+      M.webbing,
+      chestW,
+      core,
+      { seg: 5, side: [0, 0, 1] },
+    );
+    b.cyl([-0.15, 1.18, -0.2], [-0.15, 1.33, -0.205], 0.034, 0.034, M.gear2, chestW, core, 12);
+    b.cyl([-0.15, 1.33, -0.205], [-0.15, 1.35, -0.205], 0.018, 0.018, M.poly, chestW, core, 10);
+    for (const yy of [1.22, 1.3]) b.box([0.27, 0.014, 0.006], { p: [-0.01, yy, -0.229] }, M.webbing, chestW, core, 0.002, 1);
+    if (V.name === 'rifleman') b.cyl([0.09, 1.44, -0.22], [0.12, 1.98, -0.32], 0.0045, 0.0025, M.rubber, B.chest, core, 6);
+  } else {
+    // antena do rádio mais alta (gunner)
+    b.cyl([0.13, 1.42, -0.19], [0.15, 1.85, -0.27], 0.0045, 0.0025, M.rubber, B.chest, core, 6);
+  }
+
+  // ── alça da bandoleira pelo ombro esquerdo e costas até a axila direita ──
+  b.tube(
+    [
+      { p: [0.115, 1.48, 0.142], ru: 0.017, rv: 0.003 },
+      { p: [0.13, 1.548, 0.045], ru: 0.017, rv: 0.003 },
+      { p: [0.128, 1.545, -0.06], ru: 0.017, rv: 0.003 },
+      { p: [0.105, 1.47, -0.168], ru: 0.017, rv: 0.003 },
+      { p: [-0.04, 1.37, -0.176], ru: 0.017, rv: 0.003 },
+      { p: [-0.158, 1.29, -0.14], ru: 0.017, rv: 0.003 },
+      { p: [-0.178, 1.28, -0.07], ru: 0.017, rv: 0.003 },
+    ],
+    M.sling,
+    B.chest,
+    core,
+    { seg: 6, side: [1, 0, 0] },
+  );
+  // fita da bandoleira (segmentos esticados pelos ossos sling0..4)
+  for (let k = 0; k < 5; k++) b.box([0.032, 1, 0.0032], { p: [0, 0.5, 0] }, M.sling, B['sling' + k], GROUPS.sling, 0.0012, 1);
+
+  // ── cotoveleiras (metralhador) ──
+  if (V.elbow)
+    for (const side of ['L', 'R']) {
+      const sx = side === 'L' ? 1 : -1;
+      const grp = side === 'L' ? GROUPS.armL : GROUPS.armR;
+      b.ellipsoid([0.05, 0.062, 0.03], { p: [sx * 0.2, 1.155, -0.07] }, M.kneepad, armW(side), grp, 12, 10);
+      b.box([0.11, 0.012, 0.012], { p: [sx * 0.2, 1.12, -0.05], r: [0.3, 0, 0] }, M.webbing, armW(side), grp, 0.003);
+    }
 }

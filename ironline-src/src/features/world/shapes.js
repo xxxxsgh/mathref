@@ -106,3 +106,15 @@ export function decal(B, mat, center, normal, size, rect = [0, 0, 1, 1], roll = 
   }
   B.add(g, mat, M, { worldUV: false, color });
 }
+
+/**
+ * Sombra de contato no chão (AO assada): mancha escura suave sob objetos
+ * apoiados — o que dá "peso" a caixas, carros, barreiras e sacos.
+ * (sx, sz) = tamanho da mancha no eixo local x/z do objeto; yaw = rotação.
+ */
+export function contact(B, x, y, z, sx, sz, yaw = 0, layers = 1) {
+  for (let i = 0; i < layers; i++) {
+    const k = 1 - i * 0.28;
+    decal(B, 'contact', [x, y + 0.026 + i * 0.0006, z], 'py', [sx * k, sz * k], [0, 0, 1, 1], yaw, [1, 1, 1]);
+  }
+}

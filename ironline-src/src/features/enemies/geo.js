@@ -16,7 +16,7 @@ const _e = new THREE.Euler();
 const _v = new THREE.Vector3();
 const _n = new THREE.Vector3();
 
-export const GROUPS = { core: 0, armL: 1, armR: 2, gun: 3 };
+export const GROUPS = { core: 0, armL: 1, armR: 2, gun: 3, sling: 4 };
 
 export class SkinBuilder {
   constructor() {
@@ -73,7 +73,7 @@ export class SkinBuilder {
 
   box(size, t, mat, wfn, group, radius = 0.006, seg = null) {
     const r = Math.min(radius, Math.min(...size) * 0.49);
-    if (seg == null) seg = Math.max(...size) < 0.05 || r < 0.004 ? 1 : 2;
+    if (seg == null) seg = Math.max(...size) < 0.1 || r < 0.006 ? 1 : 2;
     const g = r > 0.0005 ? new RoundedBoxGeometry(size[0], size[1], size[2], seg, r) : new THREE.BoxGeometry(...size);
     this.prim(g, t, mat, wfn, group);
   }
@@ -281,6 +281,8 @@ export class SkinBuilder {
       }
       ao[i] = Math.max(0.12, 1 - (occ / wsum) * aoStrength);
     }
+    // bandoleira: segmentos sobrepostos no repouso — AO constante
+    for (let i = 0; i < n; i++) if (G[i] === GROUPS.sling) ao[i] = 0.88;
     // suaviza AO por vértices coincidentes/vizinhos via índice (1 passe)
     const acc = new Float32Array(n), cnt = new Float32Array(n);
     for (let t = 0; t < I.length; t += 3)

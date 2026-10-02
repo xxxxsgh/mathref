@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 import { B, NB, PARENT, OFFSET, REST, LEN, frameQuat, twoBoneIK, perp } from './rig.js';
 import { GRIP, RIFLE } from './soldier.js';
+import { solveSling } from './sling.js';
 
 const TAU = Math.PI * 2;
 const lerp = THREE.MathUtils.lerp;
@@ -150,22 +151,33 @@ export class Animator {
     // atirador, o fuzil continua apontado exatamente para a mira
     const blade = aim * (1 - run) * BLADE;
     const bob = gait * (run > 0.5 ? 0.045 * Math.abs(Math.sin(ph * TAU)) : 0.022 * (0.5 + 0.5 * Math.cos(ph * 2 * TAU)));
-    const hipsY = 0.952 - crouch * 0.36 - bob - run * 0.04 - Math.abs(lh) * 0.05 - aim * 0.015;
-    Pm[B.hips].set(p.lean * 0.04 + Math.sin(ph * TAU) * 0.018 * gait, hipsY, crouch * -0.04 + run * 0.02);
+    // postura atlética ao mirar: joelhos flexionados, peso sobre a perna de
+    // trás; parado sem mirar, o peso troca devagar de uma perna para a outra
+    const still = 1 - gait;
+    const athletic = aim * still * (1 - crouch);
+    const shift = still * (1 - aim) * Math.sin(this.t * 0.37 + this.seed * 5) * 0.034 - athletic * 0.03;
+    const hipsY = 0.952 - crouch * 0.36 - bob - run * 0.04 - Math.abs(lh) * 0.05 - athletic * 0.05 - Math.abs(shift) * 0.25;
+    this._shift = shift;
+    Pm[B.hips].set(p.lean * 0.04 + Math.sin(ph * TAU) * 0.018 * gait + shift, hipsY, crouch * -0.04 + run * 0.02 - athletic * 0.02);
     const hipYaw = Math.sin(ph * TAU) * 0.12 * gait + p.aimYaw * 0.25 - blade * 1.35;
-    const hipPitch = crouch * 0.42 + run * 0.12 + gait * 0.03;
-    const hipRoll = Math.cos(ph * TAU) * 0.035 * gait;
+    const hipPitch = crouch * 0.42 + run * 0.12 + gait * 0.03 + athletic * 0.08;
+    // quadril cai do lado da perna sem peso
+    const hipRoll = Math.cos(ph * TAU) * 0.035 * gait - shift * 1.6;
     qEuler(hipPitch, hipYaw, hipRoll, Qm[B.hips]);
     Qm[B.root].identity();
 
     // ── coluna ── (distribui mira em pitch/yaw, compensa a pelve)
     const chestYawT = p.aimYaw - blade; // guinada final desejada do peito
     const yawRest = chestYawT - hipYaw;
-    const leanForward = 0.06 + aim * 0.1 + run * 0.14 - crouch * 0.32;
+    // ombros "para dentro" da arma ao mirar; o recuo empurra o peito para trás
+    // meio agachado mirando (por cima de cobertura baixa): tronco projetado
+    // para frente, apoiado na mira
+    const leanForward = 0.06 + aim * 0.16 + run * 0.14 - crouch * 0.32 - rec * 0.22 + aim * crouch * (1 - crouch) * 0.7;
     const pitchUp = p.aimPitch;
-    qEuler(leanForward * 0.5 - pitchUp * 0.25 + hp * 0.5 + breath * 0.01, yawRest * 0.45 + hy * 0.5, p.lean * 0.12 + hr * 0.5, _q);
+    const comp = shift * 1.2; // coluna compensa a inclinação do quadril
+    qEuler(leanForward * 0.5 - pitchUp * 0.25 + hp * 0.5 + breath * 0.01 + athletic * -0.04, yawRest * 0.45 + hy * 0.5 + rec * 0.04, p.lean * 0.12 + hr * 0.5 + comp, _q);
     Qm[B.spine].multiplyQuaternions(Qm[B.hips], _q);
-    qEuler(leanForward * 0.5 - pitchUp * 0.35 + hp * 0.5 + breath * 0.015, yawRest * 0.55 + hy * 0.5, p.lean * 0.18 + hr * 0.5, _q);
+    qEuler(leanForward * 0.5 - pitchUp * 0.35 + hp * 0.5 + breath * 0.015, yawRest * 0.55 + hy * 0.5 + rec * 0.06, p.lean * 0.18 + hr * 0.5 + comp * 0.6 - rec * 0.05, _q);
     Qm[B.chest].multiplyQuaternions(Qm[B.spine], _q);
 
     // FK das posições até o peito
@@ -287,8 +299,14 @@ export class Animator {
       const sx = side === 'L' ? 1 : -1;
       const th = B['thigh.' + side], sh = B['shin.' + side], ft = B['foot.' + side];
       // posição de descanso do pé (postura)
-      const stanceZ = (side === 'L' ? 0.1 : -0.1) * aim * (1 - gait) + (side === 'L' ? 0.18 : -0.2) * crouch;
-      const stanceX = sx * (0.12 + 0.05 * aim * (1 - gait) + 0.05 * crouch);
+      // base de tiro: pé esquerdo à frente, direito atrás e aberto, girados
+      // com a "lâmina" do quadril (senão as pernas torcem)
+      const st = aim * (1 - gait);
+      let stanceZ = (side === 'L' ? 0.17 : -0.15) * st + (side === 'L' ? 0.18 : -0.2) * crouch;
+      let stanceX = sx * (0.12 + 0.06 * st + 0.05 * crouch);
+      const by = -BLADE * aim * (1 - gait) * 0.85;
+      const cb = Math.cos(by), sb = Math.sin(by);
+      [stanceX, stanceZ] = [stanceX * cb + stanceZ * sb, -stanceX * sb + stanceZ * cb];
       let fx = stanceX, fz = stanceZ, fy = 0.095;
       let pitch = 0;
       // ciclo de marcha
@@ -346,6 +364,7 @@ export class Animator {
     const bones = this.bones, Qm = this.Qm;
     for (let i = 0; i < NB; i++) {
       const bone = bones[i];
+      if (i > B.weapon) continue; // bandoleira: sling.js
       if (i === B.weapon) {
         bone.position.copy(this.weaponP);
         bone.quaternion.copy(this.weaponQ);
@@ -356,6 +375,7 @@ export class Animator {
       else bone.quaternion.copy(_q.copy(Qm[par]).invert().multiply(Qm[i]));
       if (i === B.hips) bone.position.copy(this.Pm[B.hips]);
     }
+    solveSling(this);
   }
 
   /** Posição de um ponto do fuzil no espaço do modelo. */

@@ -19,6 +19,9 @@ Tudo sintetizado: nenhuma amostra gravada. `dsp.js` + `sounds.js` são JS puro
 - **Corpo**: passos por superfície (calcanhar + ponta + arrasto; andando ×
   correndo), equipamento chacoalhando no sprint, pulo, aterrissagem pela
   velocidade, slide contínuo, mantle (mãos na borda), troca de postura, ADS.
+- **Velocidade/esforço**: vento nos ouvidos em loop estéreo, volume e pitch
+  seguindo a velocidade (sprint tático, slide, queda); respiração ofegante
+  pelo esforço acumulado no sprint (some ao mirar — segura o fôlego).
 - **Recarga**: linha do tempo estimada pela duração (`weapon:reload`) ou
   exata, se a arma emitir `weapon:foley { name }`.
 - **Ambiente**: vento e ronco em loop, tiroteios/artilharia/jato/helicóptero/

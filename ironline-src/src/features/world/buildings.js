@@ -12,9 +12,12 @@
  *   d < -D          núcleo maciço do prédio
  */
 import * as THREE from 'three';
-import { cylinder, cylBetween, cable, rebar, decal } from './shapes.js';
+import { cylinder, cylBetween, cable, rebar, decal, cyl, torus } from './shapes.js';
+import { mat4, cached } from './geo.js';
 import { SIGN_COUNT, GRAFFITI_N, graffitiRect } from './decals.js';
 import { awning } from './infra.js';
+
+const UNITB = () => cached('unitbox', () => new THREE.BoxGeometry(1, 1, 1));
 
 const D = 1.6; // profundidade do vazio dos cômodos
 /** Altura do piso do andar f (mesma regra de building()). */
@@ -128,12 +131,31 @@ export function building(W, spec) {
       [s.x0, s.z0, s.x1, s.z0 + pt], [s.x0, s.z1 - pt, s.x1, s.z1],
       [s.x0, s.z0, s.x0 + pt, s.z1], [s.x1 - pt, s.z0, s.x1, s.z1],
     ];
+    // platibanda em trechos: alturas diferentes (mureta + grade/tela em
+    // alguns), pedaços arrancados por estilhaço, rufo quebrado — silhueta
+    // do topo deixa de ser uma régua
+    const tallP = rng.chance(0.35) ? rng.range(0.3, 0.9) : 0;
     for (const [a, b, c, d] of sides) {
-      B.box(a, H, b, c, H + ph, d, wallMat, { collide: false, color: tint });
-      B.box(a - 0.05, H + ph, b - 0.05, c + 0.05, H + ph + 0.08, d + 0.05, 'concrete', { collide: false, color: [0.75, 0.73, 0.7] });
+      const alongX = c - a > d - b;
+      const L0 = alongX ? a : b, L1 = alongX ? c : d;
+      let t = L0;
+      while (t < L1 - 0.01) {
+        const t1 = Math.min(L1, t + rng.range(1.6, 3.6));
+        const bite = rng.chance(0.12 + s.cond * 0.35);
+        const hh = bite ? rng.range(0.05, 0.6) : ph + (rng.chance(0.25) ? tallP : 0);
+        const [xa, xb, za, zb] = alongX ? [t, t1, b, d] : [a, c, t, t1];
+        if (hh > 0.04) B.box(xa, H, za, xb, H + hh, zb, wallMat, { collide: false, color: tint });
+        if (!bite) B.box(xa - 0.05, H + hh, za - 0.05, xb + 0.05, H + hh + 0.08, zb + 0.05, 'concrete', { collide: false, color: [0.75, 0.73, 0.7] });
+        else if (rng.chance(0.6)) rebar(B, [(xa + xb) / 2, H + hh, (za + zb) / 2], [rng.range(-0.4, 0.4), 1, rng.range(-0.4, 0.4)], rng.range(0.25, 0.7), rng);
+        t = t1;
+      }
     }
     B.cast = true;
     if (s.roofProps) roofProps(W, s, H);
+    // "andar inacabado": pilares com vergalhões espetados para o próximo
+    // andar, vigas e um trecho de parede de bloco — típico da região e
+    // a melhor quebra de silhueta no céu
+    if (s.unfinished ?? rng.chance(0.38)) unfinishedTop(W, s, H);
   } else {
     B.cast = true;
     brokenTop(W, s, H);
@@ -246,7 +268,7 @@ function facade(W, s, F, k) {
     cylinder(B, p[0], 0.1, p[2], 0.055, H - 0.1, 'metal', { seg: 8, color: [0.55, 0.55, 0.52] });
   }
   // hera descendo do beiral (poucas fachadas)
-  if (rng.chance(0.18) && !s.brokenTop) {
+  if (rng.chance(0.34) && !s.brokenTop) {
     W.ivySpots ??= [];
     const uu = rng.range(1, F.W - 3);
     W.ivySpots.push({ p: P3(F, uu, H - 0.2, 0.0), u: [F.u[0], 0, F.u[1]], n: [F.n[0], 0, F.n[1]], w: rng.range(1.5, 3.5), h: rng.range(3, Math.min(9, H - 1)) });
@@ -265,7 +287,7 @@ function facade(W, s, F, k) {
     const sc = rng.range(0.6, 1.5);
     const uu = rng.range(1.2 * sc, F.W - 1.2 * sc);
     const p = P3(F, uu, rng.range(0.9, 1.9) + (sc - 1) * 0.4, 0.012 + i * 0.0007);
-    decal(B, 'graffiti', p, F.front, [2.4 * sc, 1.2 * sc], graffitiRect(nextGraffiti(W)), rng.range(-0.12, 0.12));
+    decal(B, 'graffiti', p, F.front, [2.4 * sc, 1.2 * sc], graffitiRect(nextGraffiti(W)), rng.range(-0.12, 0.12), sprayTint(rng));
   }
   if (rng.chance(0.7)) {
     const n = rng.int(1, 4);
@@ -273,7 +295,8 @@ function facade(W, s, F, k) {
     for (let i = 0; i < n; i++) {
       const q = rng.int(0, 7);
       const p = P3(F, uu + i * 0.62 + rng.range(-0.05, 0.05), 1.55 + rng.range(-0.1, 0.1), 0.014 + i * 0.001);
-      decal(B, 'posters', p, F.front, [0.6, 0.6], [(q % 4) / 4, 1 - (Math.floor(q / 4) + 1) / 2, (q % 4 + 1) / 4, 1 - Math.floor(q / 4) / 2], rng.range(-0.06, 0.06));
+      const age = rng.range(0.68, 1.0), ps = rng.range(0.5, 0.75);
+      decal(B, 'posters', p, F.front, [ps, ps * rng.range(0.95, 1.3)], [(q % 4) / 4, 1 - (Math.floor(q / 4) + 1) / 2, (q % 4 + 1) / 4, 1 - Math.floor(q / 4) / 2], rng.range(-0.06, 0.06), [age, age * 0.96, age * rng.range(0.78, 0.92)]);
     }
   }
   // marcas de tiro (bairro em guerra): rajadas com relevo, mais no térreo
@@ -304,6 +327,13 @@ function facade(W, s, F, k) {
     const sz = rng.range(3, 6);
     decal(B, 'scorch', p, F.front, [sz, sz], [0, 0, 1, 1], rng.range(0, 6.28));
   }
+}
+
+/** Tinta de spray desbotada/variada por instância (a mesma arte não sai igual). */
+function sprayTint(rng) {
+  const k = rng.range(0.7, 1.0);
+  const t = rng.pick([[1, 1, 1], [1, 0.82, 0.78], [0.8, 0.88, 1], [0.86, 1, 0.84], [1, 0.95, 0.75]]);
+  return t.map((v) => v * k);
 }
 
 /** Próxima pichação do baralho embaralhado (sem repetir vizinhas). */
@@ -472,8 +502,17 @@ function opening(W, s, F, o, f, k) {
     const uu = side < 0 ? o.u0 - 0.55 : o.u1 + 0.55;
     if (uu > 0.5 && uu < F.W - 0.5) {
       B.cast = true;
-      fbox(B, F, uu - 0.4, uu + 0.4, o.y0 - 0.2, o.y0 + 0.36, 0, 0.3, 'metal', { color: [0.86, 0.85, 0.8] });
-      fbox(B, F, uu - 0.32, uu + 0.32, o.y0 - 0.14, o.y0 + 0.3, 0.3, 0.31, 'black', {});
+      const acT = rng.pick([[0.82, 0.81, 0.76], [0.74, 0.72, 0.66], [0.66, 0.66, 0.63]]);
+      fbox(B, F, uu - 0.4, uu + 0.4, o.y0 - 0.2, o.y0 + 0.36, 0, 0.3, 'metal', { color: acT, uvRand: true });
+      // frente: grelha do ventilador (anel + cruzeta + hélice escura) e aletas
+      const fc = P3(F, uu - 0.1, o.y0 + 0.08, 0.305);
+      const yawF = Math.atan2(F.n[0], F.n[1]);
+      B.add(torus(0.08, 18), 'metal', mat4(fc, [0, yawF, 0], [0.21, 0.21, 0.21]), { color: acT.map((v) => v * 0.8) });
+      B.add(cyl(18), 'black', mat4(P3(F, uu - 0.1, o.y0 + 0.08, 0.29), [Math.PI / 2, yawF, 0], [0.2, 0.02, 0.2]), { color: [1, 1, 1] });
+      for (const a of [0, Math.PI / 2]) B.add(UNITB(), 'metal', mat4(fc, [0, yawF, a], [0.4, 0.012, 0.012]), { color: acT.map((v) => v * 0.7) });
+      for (let k = 0; k < 5; k++) fbox(B, F, uu + 0.15, uu + 0.36, o.y0 - 0.12 + k * 0.09, o.y0 - 0.1 + k * 0.09, 0.3, 0.315, 'metal', { color: acT.map((v) => v * 0.6) });
+      // cano de cobre e mangueira de dreno
+      cylBetween(B, P3(F, uu - 0.36, o.y0 - 0.1, 0.05), P3(F, uu - 0.36, o.y0 - 1.2, 0.05), 0.012, 'cable', { seg: 4 });
       fbox(B, F, uu - 0.38, uu - 0.34, o.y0 - 0.32, o.y0 - 0.2, 0, 0.32, 'metal', { color: [0.3, 0.3, 0.3] });
       fbox(B, F, uu + 0.34, uu + 0.38, o.y0 - 0.32, o.y0 - 0.2, 0, 0.32, 'metal', { color: [0.3, 0.3, 0.3] });
       B.cast = false;
@@ -511,9 +550,13 @@ function balcony(W, s, F, o, k) {
     }
   } else if (kind < 0.8) {
     // parapeito maciço de alvenaria
-    fbox(B, F, u0, u1, y, y + 1.0, depth - 0.12, depth, s.style === 'brick' ? 'brick' : 'plaster', { color: k.trimTint ?? [1, 1, 1] });
-    fbox(B, F, u0, u0 + 0.12, y, y + 1.0, 0, depth, 'plaster', { color: k.trimTint });
-    fbox(B, F, u1 - 0.12, u1, y, y + 1.0, 0, depth, 'plaster', { color: k.trimTint });
+    const bm = s.style === 'brick' ? 'brick' : s.style === 'concrete' ? 'concrete' : 'plaster';
+    const bc = s.style === 'brick' ? [1, 1, 1] : s.style === 'concrete' ? [0.72, 0.7, 0.67] : s.tint;
+    fbox(B, F, u0, u1, y, y + 1.0, depth - 0.12, depth, bm, { color: bc });
+    fbox(B, F, u0, u0 + 0.12, y, y + 1.0, 0, depth, bm, { color: bc });
+    fbox(B, F, u1 - 0.12, u1, y, y + 1.0, 0, depth, bm, { color: bc });
+    // rufo de concreto no topo do parapeito
+    fbox(B, F, u0 - 0.02, u1 + 0.02, y + 1.0, y + 1.06, -0.02, depth + 0.03, 'concrete', { color: [0.66, 0.64, 0.6] });
     decal(B, 'streaks', P3(F, (u0 + u1) / 2, y - 1.0, depth + 0.01), F.front, [u1 - u0, 2.0]);
   } else {
     // sacada fechada com chapa ondulada e vidro (puxadinho)
@@ -552,7 +595,7 @@ function shopfront(W, s, F, o, y) {
     if (open > 0) winQuad(W, F, o.u0, o.u1, o.y0, o.y0 + open, -0.2, { depth: rng.range(3.5, 6), sill: 0.0, margin: 0.2, top: 2.6 - open, kind: 4 });
     if (rng.chance(0.28)) {
       const sc = rng.range(0.55, 0.95);
-      decal(B, 'graffiti', P3(F, c + rng.range(-0.3, 0.3) * w * (1 - sc), o.y0 + rng.range(0.9, 1.6), -0.17), F.front, [w * sc, w * sc * 0.5], graffitiRect(nextGraffiti(W)), rng.range(-0.1, 0.1));
+      decal(B, 'graffiti', P3(F, c + rng.range(-0.3, 0.3) * w * (1 - sc), o.y0 + rng.range(0.9, 1.6), -0.17), F.front, [w * sc, w * sc * 0.5], graffitiRect(nextGraffiti(W)), rng.range(-0.1, 0.1), sprayTint(rng));
     }
   } else if (kind < 0.8) {
     // vitrine (vidro + caixilho de alumínio), às vezes estilhaçada
@@ -639,6 +682,51 @@ function roofProps(W, s, H) {
     }
   }
   if (rng.chance(0.5)) W.dishes.push({ p: [rng.range(ix0, ix1), H + 1.2, rng.range(iz0, iz1)], n: [rng.range(-1, 1), 0.5] });
+}
+
+/** Pilares do próximo andar (nunca terminado) com vergalhões no topo. */
+function unfinishedTop(W, s, H) {
+  const { B, rng } = W;
+  const fh = rng.range(2.6, 3.1);
+  const inset = 0.55;
+  const xs = [], zs = [];
+  const nx = Math.max(2, Math.round((s.x1 - s.x0 - 2 * inset) / 3.4)), nz = Math.max(2, Math.round((s.z1 - s.z0 - 2 * inset) / 3.4));
+  for (let i = 0; i <= nx; i++) xs.push(s.x0 + inset + (i / nx) * (s.x1 - s.x0 - 2 * inset));
+  for (let i = 0; i <= nz; i++) zs.push(s.z0 + inset + (i / nz) * (s.z1 - s.z0 - 2 * inset));
+  const full = rng.chance(0.45);
+  const tops = new Map();
+  for (let i = 0; i < xs.length; i++) {
+    for (let j = 0; j < zs.length; j++) {
+      const edge = i === 0 || j === 0 || i === xs.length - 1 || j === zs.length - 1;
+      if (!edge && rng.chance(0.5)) continue;
+      if (rng.chance(0.15)) continue;
+      const h = full ? fh : rng.chance(0.55) ? fh : rng.range(0.6, fh);
+      const x = xs[i], z = zs[j];
+      B.box(x - 0.15, H, z - 0.15, x + 0.15, H + h, z + 0.15, 'concrete', { collide: false, color: [0.7, 0.68, 0.64], uvRand: true });
+      tops.set(i + ',' + j, h);
+      // vergalhões espetados (4 barras, tortas, enferrujadas)
+      for (const [dx, dz] of [[-0.09, -0.09], [0.09, -0.09], [-0.09, 0.09], [0.09, 0.09]]) {
+        if (rng.chance(0.2)) continue;
+        rebar(B, [x + dx, H + h - 0.02, z + dz], [rng.range(-0.18, 0.18), 1, rng.range(-0.18, 0.18)], rng.range(0.4, 1.1), rng);
+      }
+    }
+  }
+  // vigas entre pilares completos (algumas), parede de blocos em um trecho
+  if (full) {
+    for (let i = 0; i < xs.length - 1; i++) {
+      for (const j of [0, zs.length - 1]) {
+        if (tops.get(i + ',' + j) === fh && tops.get(i + 1 + ',' + j) === fh && rng.chance(0.6)) {
+          B.box(xs[i], H + fh - 0.35, zs[j] - 0.14, xs[i + 1], H + fh, zs[j] + 0.14, 'concrete', { collide: false, color: [0.68, 0.66, 0.62] });
+        }
+      }
+    }
+  }
+  const j = rng.chance(0.5) ? 0 : zs.length - 1;
+  const i = rng.int(0, xs.length - 2);
+  const bh = rng.range(0.6, 1.8);
+  B.box(xs[i] + 0.15, H, zs[j] - 0.1, xs[i + 1] - 0.15, H + bh, zs[j] + 0.1, 'concrete', { collide: false, color: [0.62, 0.62, 0.6], uvRand: true });
+  // monte de blocos e saco de cimento esquecidos
+  W.rubbleSpots.push({ p: [(xs[i] + xs[i + 1]) / 2, H, zs[j] + (j ? -0.8 : 0.8)], r: 0.7, n: 8, small: true });
 }
 
 /** Topo desmoronado: lajes partidas, pilares tocos, vergalhões e entulho. */
