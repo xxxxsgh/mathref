@@ -22,7 +22,7 @@ export const FINGERS = [
   { x: 0.0098, z: -0.085, y: 0.001, L: [0.047, 0.03, 0.024], r: 0.0098 },
   { x: 0.0275, z: -0.077, y: -0.002, L: [0.037, 0.022, 0.021], r: 0.0088 },
 ];
-export const THUMB = { x: -0.03, y: -0.008, z: -0.022, L: [0.044, 0.034, 0.03], r: 0.0118 };
+export const THUMB = { x: -0.03, y: -0.008, z: -0.022, L: [0.035, 0.031, 0.027], r: 0.0118 };
 
 /** Cápsula afilada ao longo de −Z, base na origem. */
 function taperCapsule(r0, r1, len, flat = 0.85) {
@@ -46,6 +46,8 @@ function taperCapsule(r0, r1, len, flat = 0.85) {
   g.computeVertexNormals();
   return g;
 }
+
+const smoothstep01 = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 /** Palma: caixa arredondada deformada (mais larga nos nós, arco palmar). */
 function palmGeo() {
@@ -284,7 +286,13 @@ export function buildSleeve(M, { left = false, watch = false } = {}) {
     fold += 0.025 * Math.sin(th * 3 + z * 9) * Math.sin(z * 14);
     // vincos longos do tecido puxado (ao longo do antebraço)
     fold += 0.018 * Math.sin(th * 5 + Math.sin(z * 6) * 1.5) * (1 - near);
-    r *= 1 + fold * 0.75;
+    r *= 1 + fold * 1.35;
+    // bainha do punho: degrau costurado (barra dobrada) e vinco da costura
+    r += 0.0034 * (1 - smoothstep01((z - 0.034) / 0.007));
+    r -= 0.0011 * Math.exp(-(((z - 0.029) / 0.0022) ** 2));
+    // tecido cede embaixo (gravidade) e o antebraço engrossa (músculo)
+    r += 0.0055 * z * Math.max(0, -Math.sin(th));
+    r += 0.0055 * Math.exp(-(((z - 0.62) / 0.22) ** 2)) * (0.55 + 0.45 * Math.cos(th - 1.0));
     // seção elíptica (antebraço é mais largo que alto)
     p.setXYZ(i, Math.cos(th) * r * 1.1, Math.sin(th) * r * 0.86, z);
   }

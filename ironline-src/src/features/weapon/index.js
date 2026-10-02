@@ -56,15 +56,14 @@ function basisFD(F, D, pos) {
   return { pos: new THREE.Vector3(...pos), quat: new THREE.Quaternion().setFromRotationMatrix(m) };
 }
 const HAND_R = basis([0.06, -1, -0.18], [1, 0.05, 0.12], [0.034, -0.088, 0.052]);
-// parâmetros da pega C-clamp (ver grip.js)
-const GRIP_L = { phi: 4.05, z: -0.37, fwd: 0.35, thumbUp: 0.012 };
-const HAND_L = {
-  // mão esquerda na empunhadura vertical: palma no lado esquerdo dela,
-  // médio/anelar/mínimo fechados pela frente, indicador estendido ao longo
-  // do guarda-mão (pega de "apontar") e polegar por trás. Pose resolvida por otimização contra a
-  // geometria real (sem interpenetração, dedos encostando).
-  guard: basisFD([0.128, -0.11, -0.986], [-0.992, -0.009, -0.127], [-0.039, -0.059, -0.323]),
-};
+// mão de apoio (resolvida em grip.js no init, contra a geometria real):
+// hip — pega por cima: palma no flanco esquerdo, dedos passam por cima do
+// guarda-mão, dorso e nós voltados para a câmera, antebraço sobe da borda
+// inferior; ADS — C-clamp baixo: dedos por baixo, polegar no flanco
+// (nada entra na janela da ótica)
+const GRIP_L = { phi: 3.35, z: -0.37, fwd: 0.3, thumbUp: -0.03, thumbX: -0.012, over: true };
+const GRIP_ADS = { phi: 4.1, z: -0.32, fwd: 0.35, thumbUp: -0.014 };
+const HAND_L = { guard: null, guardAds: null };
 
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -192,9 +191,18 @@ export default {
     this.handR.root.position.copy(HAND_R.pos);
     this.handR.root.quaternion.copy(HAND_R.quat);
     // mão de apoio: pega C-clamp resolvida contra a geometria do guarda-mão
+    // ?wgrip=phi,fwd,thumbUp,z — testa outras pegas (QA visual)
+    const wg = ctx.params.get('wgrip');
+    if (wg) {
+      const [phi, fwd, thumbUp, z, over, thumbX, roll] = wg.split(',').map(Number);
+      Object.assign(GRIP_L, { phi, fwd, thumbUp, over: !!over }, Number.isFinite(z) ? { z } : {}, Number.isFinite(thumbX) ? { thumbX } : {}, Number.isFinite(roll) ? { roll } : {});
+    }
     const clamp0 = solveClamp(this.handL, R.root, GRIP_L);
     HAND_L.guard = { pos: clamp0.pos, quat: clamp0.quat };
     POSES.guard = clamp0.pose;
+    const clampA = solveClamp(this.handL, R.root, GRIP_ADS);
+    HAND_L.guardAds = { pos: clampA.pos, quat: clampA.quat };
+    POSES.guardAds = clampA.pose;
     this.poseR = clonePose(POSES.grip);
     this.poseL = clonePose(POSES.guard);
     this.sleeveR = buildSleeve(M, { left: false });
@@ -219,7 +227,7 @@ export default {
     OCC.uOccN.value = this.occ.length;
     // "ombros" (âncoras dos antebraços) no espaço do rig
     this.anchorR = new THREE.Vector3(0.3, -0.45, -0.08);
-    this.anchorL = new THREE.Vector3(-0.1, -0.6, -0.1);
+    this.anchorL = new THREE.Vector3(-0.13, -0.75, -0.05);
 
     // ─── luzes da viewmodel ──────────────────────────────────────────────
     const vs = vm.scene;
@@ -247,9 +255,9 @@ export default {
     vm.camera.add(this.bounce.target);
     this.bounce.target.position.set(0, 0, -1);
     // clarão de boca
-    this.flash = new THREE.PointLight(0xffa457, 0, 1.2, 2);
+    this.flash = new THREE.PointLight(0xffa457, 0, 2.0, 2);
     R.muzzle.add(this.flash);
-    this.flash.position.set(0, 0.01, 0.06);
+    this.flash.position.set(-0.01, 0.035, 0.03);
     // ambiente fallback (sem a feature rendering)
     if (!ctx.service('rendering')?.environment && !vs.environment) {
       import('three/addons/environments/RoomEnvironment.js').then(({ RoomEnvironment }) => {
@@ -295,7 +303,7 @@ export default {
       reload: makeReload(false), reloadEmpty: makeReload(true), inspect: makeInspect(), equip: makeEquip(),
     };
     this.debug = null;
-    this.tuneK = { env: 1, hemi: 1, rim: 1, bounce: 1, sun: 1 };
+    this.tuneK = { env: 1.2, hemi: 1, rim: 1.3, bounce: 1, sun: 1 };
     this.trackOut = new Array(6).fill(0);
 
     if (!input.bindings.inspect) input.bindings.inspect = ['KeyI'];
@@ -658,7 +666,7 @@ export default {
     const relax = act && act.name !== 'equip' ? 1 : 0; // dedo fora do gatilho em recarga/inspeção
     blendPoses(this.poseR, [[POSES.grip, relax], [POSES.trigger, 1 - relax]]);
     this.handR.apply(this.poseR);
-    blendPoses(this.poseL, [[POSES.guard, handW[0]], [POSES.mag, handW[1]], [POSES.flat, handW[2] + handW[3]]]);
+    blendPoses(this.poseL, [[POSES.guard, handW[0] * (1 - st.ads)], [POSES.guardAds, handW[0] * st.ads], [POSES.mag, handW[1]], [POSES.flat, handW[2] + handW[3]]]);
     this.handL.apply(this.poseL);
 
     // depuração: só as mãos, orientação identidade (?whand=yaw,pitch,pose)
@@ -688,7 +696,7 @@ export default {
       aL = this.anchorL.clone().applyMatrix4(_m2);
     }
     this.placeSleeve(this.sleeveR, this.handR.root, aR, 0.3);
-    this.placeSleeve(this.sleeveL, this.handL.root, aL, 0.05);
+    this.placeSleeve(this.sleeveL, this.handL.root, aL, 0.3);
 
     // ─ chute de câmera (canal aditivo, sem sobrescrever outros donos) ─
     const kp = this.climb.p + S.kickP.x * 0.02;
@@ -740,7 +748,11 @@ export default {
         _q.set(_q.x + _q2.x * (wt / tot), _q.y + _q2.y * (wt / tot), _q.z + _q2.z * (wt / tot), _q.w + _q2.w * (wt / tot));
       }
     };
-    const G = HAND_L.guard;
+    // pega por cima (hip) ↔ C-clamp baixo (ADS: os dedos não entram na janela da ótica)
+    const ga = this.st.ads;
+    const G = this._gBlend || (this._gBlend = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() });
+    G.pos.lerpVectors(HAND_L.guard.pos, HAND_L.guardAds.pos, ga);
+    G.quat.slerpQuaternions(HAND_L.guard.quat, HAND_L.guardAds.quat, ga);
     if (first && w[0] > 1e-4) {
       _q.set(G.quat.x * (w[0] / tot), G.quat.y * (w[0] / tot), G.quat.z * (w[0] / tot), G.quat.w * (w[0] / tot));
       _v2.addScaledVector(G.pos, w[0] / tot);
@@ -782,7 +794,8 @@ export default {
     _m.lookAt(elbow, _v, up);
     sleeve.quaternion.setFromRotationMatrix(_m);
     // a manga começa no fim do punho da luva (no eixo da mão) e segue p/ o cotovelo
-    sleeve.position.copy(_v).addScaledVector(_v2.set(0, 0, 1).applyQuaternion(_q), 0.02 * Math.min(1, follow / 0.3)).addScaledVector(dir, 0.006);
+    // a manga começa atrás do punho da luva (o manguito e o velcro ficam à mostra)
+    sleeve.position.copy(_v).addScaledVector(_v2.set(0, 0, 1).applyQuaternion(_q), 0.012 * Math.min(1, follow / 0.3)).addScaledVector(dir, 0.006);
     sleeve.userData.sleeve.scale.z = L;
     const w = sleeve.userData.watch;
     if (w) w.position.set(0.0, 0.03, 0.06);
@@ -889,7 +902,7 @@ export default {
     st.flashT = Math.max(0, st.flashT - dt);
     const f = st.flashT > 0 ? st.flashT / 0.055 : 0;
     // clarão curto e quente que ilumina luvas e receptor (pico forte, cauda curta)
-    this.flash.intensity = f > 0 ? (0.3 + 0.7 * f) * 1.5 : 0;
+    this.flash.intensity = f > 0 ? (0.35 + 0.65 * f) * 2.6 : 0;
     this.flash.color.setRGB(1, 0.55 + 0.25 * f, 0.26 + 0.1 * f);
     // retículo: um pouco mais brilhante de dia
     this.lens.material.uniforms.uIntensity.value = lerp(1.5, 2.3, st.sunVis * (1 - st.indoor));

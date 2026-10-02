@@ -56,12 +56,22 @@ function toGun(obj, local, inv, out) {
  *   fwd   inclinação dos dedos para a frente (rad)
  *   gap   folga de contato (m)
  */
-export function solveClamp(hand, gunRoot, { phi = 3.75, z = -0.43, fwd = 0.38, lift = 0.0, gap = 0.0007, thumbUp = 0.0115 } = {}) {
+export function solveClamp(hand, gunRoot, { phi = 3.75, z = -0.43, fwd = 0.38, lift = 0.0, gap = 0.0007, thumbUp = 0.0115, over = false, thumbX = -0.026, roll = 0 } = {}) {
   const n = new THREE.Vector3(Math.cos(phi), Math.sin(phi), 0);
   const t = new THREE.Vector3(-Math.sin(phi), Math.cos(phi), 0);
+  // over: dedos sobem e passam por cima (dorso para fora/câmera, punho embaixo)
+  if (over) t.negate();
   const F = t.clone().multiplyScalar(Math.cos(fwd)).add(new THREE.Vector3(0, 0, -Math.sin(fwd))).normalize();
   const D = n.clone();
   D.addScaledVector(F, -D.dot(F)).normalize();
+  // roll: gira o dorso em volta do eixo dos dedos, virando-o para trás
+  // (para a câmera) — a mão deixa de ser vista "de quina"
+  if (roll) {
+    const q = new THREE.Quaternion().setFromAxisAngle(F, roll);
+    const D1 = D.clone().applyQuaternion(q);
+    const D2 = D.clone().applyQuaternion(q.invert());
+    D.copy(D1.z > D2.z ? D1 : D2);
+  }
   // ponto da superfície na direção n (marcha a partir do centro)
   const c = new THREE.Vector3(0, -0.0078, z);
   const s = new THREE.Vector3();
@@ -142,9 +152,9 @@ export function solveClamp(hand, gunRoot, { phi = 3.75, z = -0.43, fwd = 0.38, l
     }
     // ponta: sobre o flanco esquerdo-alto, à frente da palma
     toGun(th[2], pt.set(0, 0, -TL[2]), _inv, _p);
-    target.set(-0.025, thumbUp, z - 0.06);
+    target.set(thumbX, thumbUp, z - 0.05);
     c2 += _p.distanceToSquared(target) * 20;
-    if (_p.y > 0.018) c2 += (_p.y - 0.018) ** 2 * 400;
+    if (!over && _p.y > 0.018) c2 += (_p.y - 0.018) ** 2 * 400;
     return c2;
   };
   const lim = [[-0.8, 1.6], [-1.0, 1.4], [-1.2, 1.4], [-0.1, 0.9], [-0.1, 0.9]];

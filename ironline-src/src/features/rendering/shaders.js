@@ -418,7 +418,7 @@ void main() {
     vec3 gi = texture(tGi, vUv).rgb * (uGiStrength / PI) * mix(1.0, ao, 0.6 * uAoStrength);
     // o RSM vê só o chão ensolarado (sol quente × asfalto quente) → laranja
     // demais; a luz real que entra é misturada com céu/fachadas: dessatura
-    gi = mix(vec3(luma(gi)), gi, 0.55);
+    gi = mix(vec3(luma(gi)), gi, 0.4);
     // rebatimento em espaço de tela: a radiância que a câmera vê em volta
     // (porta/janela estourada, chão ensolarado lá fora, parede acesa) vira luz
     // indireta nas superfícies cobertas próximas — o vão da porta "derrama"
@@ -452,7 +452,8 @@ void main() {
     float mu0 = dot(rd, uSunDir);
     // pico de Mie mais largo e baixo (g 0,6): contra o sol a névoa brilha sem
   // estourar um disco branco chapado em volta dele
-  fogCol += uSunRadiance * uFogSun * (min(hg(mu0, 0.6), 0.6) * 0.8 + 0.08);
+  // dois lobos: halo largo (g 0,55) + aura estreita (g 0,85) em direção ao sol
+  fogCol += uSunRadiance * uFogSun * (min(hg(mu0, 0.55), 0.5) * 0.7 + min(hg(mu0, 0.85), 2.5) * 0.12 + 0.06);
     col = mix(col, fogCol, fogAmt);
   }
 
@@ -470,7 +471,7 @@ void main() {
       float rPx = uVmBlur * smoothstep(0.1, 0.55, length(c)) * 14.0;
       if (rPx > 0.5) {
         vec4 acc = vm;
-        float a0 = ign(gl_FragCoord.xy) * 6.2831;
+        float a0 = ign(gl_FragCoord.xy + uFrame * 5.3) * 6.2831;
         for (int i = 0; i < 12; i++) {
           float f = (float(i) + 0.5) / 12.0;
           float ang = float(i) * 2.39996 + a0;
@@ -511,6 +512,7 @@ uniform float uFrame;
 uniform sampler2D tSkyOcc;
 uniform mat4 uSkyOccMatrix;
 uniform float uSkyOccOn;
+uniform mat4 uProj;
 
 vec3 rsmPos(vec2 uv) {
   float d = texture(tRsmDepth, uv).r;
@@ -566,6 +568,24 @@ void main() {
     if (cq * cp <= 0.0) continue;
     float w = cq * cp / max(d2, 0.4) / max(dot(nq, uSunDir), 0.3);
     if (pCov > 0.5) w *= coveredAt(Q + nq * 0.25 + vec3(0.0, 0.05, 0.0));
+    // visibilidade curta em espaço de tela: o VPL do outro lado de uma
+    // parede/laje não ilumina (mata as faixas de vazamento nas emendas
+    // teto–parede). 3 passos ao longo de P→Q no depth.
+    if (w > 0.0) {
+      vec3 vdir = transpose(mat3(uViewInv)) * -dir;
+      float segL = sqrt(d2);
+      for (int k = 0; k < 3; k++) {
+        float t = min(0.12 * float(k * k + k + 1), segL * 0.85);
+        vec3 sp = P + vdir * t;
+        vec4 cc = uProj * vec4(sp, 1.0);
+        vec2 suv = cc.xy / cc.w * 0.5 + 0.5;
+        if (suv.x < 0.0 || suv.y < 0.0 || suv.x > 1.0 || suv.y > 1.0) break;
+        float sz = linearZ(texture(tDepth, suv).r);
+        float behind = -sp.z - sz;
+        if (behind > 0.03 && behind < 0.9) { w = 0.0; break; }
+      }
+    }
+    if (w <= 0.0) continue;
     vec3 L = min(textureLod(tRsmColor, quv, 0.0).rgb, vec3(24.0));
     E += L * w;
   }
@@ -590,6 +610,7 @@ uniform vec2 uTexel;
 uniform float uAlpha;
 uniform float uHistValid;
 uniform float uGamma;
+uniform float uTol;   // folga absoluta do recorte (modo shot, câmera parada): fios finos acumulam
 
 vec3 toY(vec3 c) { return vec3(dot(c, vec3(0.25, 0.5, 0.25)), dot(c, vec3(0.5, 0.0, -0.5)), dot(c, vec3(-0.25, 0.5, -0.25))); }
 vec3 fromY(vec3 y) { return vec3(y.x + y.y - y.z, y.x + y.z, y.x - y.y - y.z); }
@@ -658,7 +679,8 @@ void main() {
   if (uHistValid < 0.5 || prevUv.x < 0.0 || prevUv.y < 0.0 || prevUv.x > 1.0 || prevUv.y > 1.0) a = 1.0;
   vec3 c = toY(tm(cur));
   vec3 h = toY(tm(max(histCR(prevUv), 0.0)));
-  h = clipAabb(m1 - sig * uGamma, m1 + sig * uGamma, c, h);
+  vec3 ext = sig * uGamma + vec3(uTol * (0.5 + m1.x), uTol * 0.5, uTol * 0.5);
+  h = clipAabb(m1 - ext, m1 + ext, c, h);
   // movimento rápido → confia mais no quadro atual
   float vel = length((prevUv - vUv) / uTexel);
   a = max(a, clamp(vel * 0.02, 0.0, 0.25));
@@ -672,7 +694,16 @@ ${COMMON}
 uniform sampler2D tSrc;
 uniform vec2 uTexel;
 uniform float uKaris;
-vec3 s(vec2 o) { return min(texture(tSrc, vUv + o * uTexel).rgb, vec3(64.0)); }
+// compressão suave só no 1º nível (entrada HDR): até ~uKnee passa intacto,
+// acima tende a 2×uKnee — clarão de boca/sol não "inunda" a tela inteira
+vec3 s(vec2 o) {
+  vec3 c = min(texture(tSrc, vUv + o * uTexel).rgb, vec3(256.0));
+  if (uKaris > 0.5) {
+    float l = luma(c), k = 14.0;
+    if (l > k) c *= (k + (l - k) / (1.0 + (l - k) / k)) / l;
+  }
+  return c;
+}
 float kw(vec3 c) { return 1.0 / (1.0 + luma(c)); }
 void main() {
   vec3 a = s(vec2(-2, 2)), b = s(vec2(0, 2)), c = s(vec2(2, 2));

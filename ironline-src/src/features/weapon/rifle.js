@@ -14,7 +14,7 @@
  */
 import * as THREE from 'three';
 import { Kit, side, section, top, rbox, cylZ, cylX, cylY, torus, roundRect, crease } from './geo.js';
-import { engravingTexture } from './textures.js';
+import { engravingTexture, buttonGlyphTexture } from './textures.js';
 
 // ─── dimensões principais ────────────────────────────────────────────────
 export const DIM = {
@@ -383,10 +383,22 @@ export function buildRifle(M, opts = {}) {
   // corpo inferior (bateria/eletrônica) atrás do capô: rampa com painel de botões
   K.add('receiver', side([[o0 - 0.004, oy + 0.006], [hz0 + 0.004, oy + 0.006], [hz0 + 0.004, WB - 0.0005], [o0 + 0.002, WB - 0.0045], [o0 - 0.004, oy + 0.0105]], 0.04, { b: 0.0016, seg: 3 }));
   // botões de brilho (− / NV / +) na rampa traseira, borracha com relevo
-  for (const x of [-0.011, 0, 0.011]) {
+  const glyphMat = new THREE.MeshStandardMaterial({
+    color: 0xd8d2c4, emissive: 0x4a463e, roughness: 0.6, metalness: 0, alphaMap: buttonGlyphTexture(), transparent: true,
+    depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2,
+  });
+  [-0.011, 0, 0.011].forEach((x, i) => {
     const m = new THREE.Matrix4().makeRotationX(-0.75).setPosition(x, oy + 0.0118, -(o0 + 0.0035));
     K.add('rubber', rbox(0.0085, 0.0028, 0.0075, 0.0012), m);
-  }
+    // ícone pintado no topo do botão (− / NV / +)
+    const pg = new THREE.PlaneGeometry(0.0066, 0.0058);
+    const uv = pg.attributes.uv;
+    for (let k = 0; k < uv.count; k++) uv.setX(k, (i + uv.getX(k)) / 3);
+    pg.rotateX(-Math.PI / 2);
+    pg.translate(0, 0.00145, 0);
+    pg.applyMatrix4(m);
+    root.add(new THREE.Mesh(pg, glyphMat));
+  });
   // emissor do laser (janelinha escura na base, frente da janela)
   K.add('cavity', rbox(0.01, 0.0015, 0.008, 0.0006, 0, WB + 0.0006, -(hz0 + hoodLen - 0.009)));
   // tampa de bateria (lado direito, serrilhada) e alavanca QD
@@ -395,6 +407,9 @@ export function buildRifle(M, opts = {}) {
     const a = (i / 16) * Math.PI * 2;
     K.add('receiver', rbox(0.0045, 0.0012, 0.0012, 0.0004, 0.022, oy + 0.0095 + Math.sin(a) * 0.0062, -(o1 - 0.012) + Math.cos(a) * 0.0062));
   }
+  // fenda de moeda na tampa da bateria + anel de vedação
+  K.add('cavity', rbox(0.0008, 0.0009, 0.0072, 0.0002, 0.0246, oy + 0.0095, -(o1 - 0.012), 1));
+  K.add('rubber', cylX(0.0066, 0.0012, 0.0193, oy + 0.0095, -(o1 - 0.012), 24));
   // parafusos laterais do capô
   for (const u of [hz0 + 0.01, hz0 + hoodLen - 0.01]) {
     for (const sx of [-1, 1]) {

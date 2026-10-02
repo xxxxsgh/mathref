@@ -181,11 +181,11 @@ export function camoTexture() {
   const e = fbm(N, 1111, 5, 5, 0.55);
   const grain = fbm(N, 1212, 128, 2, 0.5);
   const pal = [
-    [0.2, 0.175, 0.128], // areia queimada
-    [0.105, 0.11, 0.07], // oliva
-    [0.13, 0.09, 0.06], // marrom
-    [0.045, 0.042, 0.035], // galho escuro
-    [0.27, 0.25, 0.19], // realce claro
+    [0.12, 0.12, 0.082], // cáqui-oliva
+    [0.07, 0.082, 0.05], // oliva
+    [0.092, 0.072, 0.05], // marrom
+    [0.035, 0.037, 0.03], // galho escuro
+    [0.165, 0.16, 0.122], // realce claro
   ];
   const d = new Uint8Array(N * N * 4);
   for (let i = 0; i < N * N; i++) {
@@ -219,6 +219,44 @@ export function engravingTexture(lines, { w = 512, h = 128, font = 'bold 34px mo
     g.globalAlpha = ln.alpha ?? 1;
     g.fillText(ln.text, ln.x ?? 8, step * (i + 0.75));
   });
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.NoColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
+/**
+ * Ícones dos botões da holográfica (− / NV / +) lado a lado numa faixa
+ * 384×128 (α): cada botão usa um terço da textura.
+ */
+export function buttonGlyphTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = 384;
+  cv.height = 128;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#fff';
+  g.strokeStyle = '#fff';
+  g.lineCap = 'round';
+  // −
+  g.fillRect(64 - 30, 64 - 7, 60, 14);
+  // sol riscado em lua (modo visão noturna): círculo + raios curtos
+  g.lineWidth = 9;
+  g.beginPath();
+  g.arc(192, 64, 20, 0, Math.PI * 2);
+  g.stroke();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    g.beginPath();
+    g.moveTo(192 + Math.cos(a) * 32, 64 + Math.sin(a) * 32);
+    g.lineTo(192 + Math.cos(a) * 44, 64 + Math.sin(a) * 44);
+    g.stroke();
+  }
+  g.beginPath();
+  g.arc(200, 58, 14, 0, Math.PI * 2);
+  g.fill();
+  // +
+  g.fillRect(320 - 30, 64 - 7, 60, 14);
+  g.fillRect(320 - 7, 64 - 30, 14, 60);
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.NoColorSpace;
   t.anisotropy = 8;

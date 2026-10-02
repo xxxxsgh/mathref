@@ -72,7 +72,10 @@ export function makeLens({ w, h, color = new THREE.Color(1.0, 0.08, 0.04), inten
         core += tickL * tickW;
         core = clamp(core, 0.0, 1.0);
         // halo mínimo (o holograma "sangra" só um tiquinho)
-        float glow = exp(-max(dd, 0.0) / (1.2 * MOA)) * 0.12 + exp(-max(rr, 0.0) / (0.9 * MOA)) * 0.06;
+        // halo em duas escalas: sangria curta do holograma + espalhamento
+        // largo no vidro (o retículo "acende" como emissivo, com falloff)
+        float glow = exp(-max(dd, 0.0) / (1.6 * MOA)) * 0.4 + exp(-max(rr, 0.0) / (1.4 * MOA)) * 0.22
+                   + exp(-length(a) / (16.0 * MOA)) * 0.05 + exp(-max(rr, 0.0) / (6.0 * MOA)) * 0.05;
         // granulação de laser (speckle) leve
         float sp = h21(floor(a / (0.35 * MOA)));
         float ret = (core * (0.88 + 0.24 * sp) + glow) * uOn;
@@ -92,10 +95,13 @@ export function makeLens({ w, h, color = new THREE.Color(1.0, 0.08, 0.04), inten
         vec2 off = vec2(h21(cell + 3.1), h21(cell + 7.7)) * 0.6 + 0.2;
         float dust = step(0.975, h21(cell)) * (1.0 - smoothstep(0.05, 0.12, length(fract(gc) - off))) * 0.5;
         float edge = smoothstep(0.75, 1.0, max(e.x, e.y));
-        vec3 coat = film * (0.03 + 0.22 * fres) * (0.6 + 0.4 * vUv.y) + uEnvColor * (smudge * 0.035 + dust * 0.05 + edge * 0.04);
+        // filete de refração na borda do vidro (bisel do vidro pega luz)
+        float bevel = smoothstep(0.93, 0.975, max(e.x, e.y)) * (1.0 - smoothstep(0.975, 0.995, max(e.x, e.y)));
+        vec3 coat = film * (0.03 + 0.22 * fres) * (0.6 + 0.4 * vUv.y) + uEnvColor * (smudge * 0.035 + dust * 0.05 + edge * 0.04 + bevel * 0.35)
+                  + vec3(0.02, 0.05, 0.06) * 0.25; // tinta azul-esverdeada do vidro
         vec3 col = coat + uColor * uIntensity * ret * inside;
         // vidro levemente tingido (âmbar fraco escurece o fundo um pouco)
-        float alpha = clamp(0.06 + fres * 0.22 + smudge * 0.03 + edge * 0.08, 0.0, 1.0);
+        float alpha = clamp(0.1 + bevel * 0.2 + fres * 0.22 + smudge * 0.03 + edge * 0.08, 0.0, 1.0);
         gl_FragColor = vec4(col, alpha);
       }`,
     blending: THREE.CustomBlending,
