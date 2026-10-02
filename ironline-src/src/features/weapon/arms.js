@@ -15,14 +15,14 @@ import { crease, rbox, Kit } from './geo.js';
 import { mulberry } from './textures.js';
 
 // dimensões de mão grande enluvada (m)
-const FINGERS = [
+export const FINGERS = [
   // x da base, z da base, y da base, comprimentos [prox, médio, dist], raio
   { x: -0.029, z: -0.084, y: 0.001, L: [0.046, 0.028, 0.024], r: 0.0099 },
   { x: -0.0095, z: -0.088, y: 0.002, L: [0.05, 0.031, 0.025], r: 0.0102 },
   { x: 0.0098, z: -0.085, y: 0.001, L: [0.047, 0.03, 0.024], r: 0.0098 },
   { x: 0.0275, z: -0.077, y: -0.002, L: [0.037, 0.022, 0.021], r: 0.0088 },
 ];
-const THUMB = { x: -0.03, y: -0.008, z: -0.022, L: [0.044, 0.034, 0.03], r: 0.0118 };
+export const THUMB = { x: -0.03, y: -0.008, z: -0.022, L: [0.044, 0.034, 0.03], r: 0.0118 };
 
 /** Cápsula afilada ao longo de −Z, base na origem. */
 function taperCapsule(r0, r1, len, flat = 0.85) {

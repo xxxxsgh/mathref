@@ -881,10 +881,13 @@ vec3 fxaa(vec2 uv) {
   return (lB < lMin || lB > lMax) ? A : B;
 }
 
-float hash13(vec3 p3) {
-  p3 = fract(p3 * 0.1031);
-  p3 += dot(p3, p3.zyx + 31.32);
-  return fract((p3.x + p3.y) * p3.z);
+// PCG 3D (Jarzynski & Olano 2020): ruído branco sem estrutura visível
+float pcg3(uvec3 v) {
+  v = v * 1664525u + 1013904223u;
+  v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+  v ^= v >> 16u;
+  v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+  return float(v.x & 0xffffffu) / 16777215.0;
 }
 
 void main() {
@@ -903,12 +906,16 @@ void main() {
     vec3 wgt = -amp * uSharpen * 0.2;
     col = clamp((col + (n + s + e + w) * wgt) / (1.0 + 4.0 * wgt), 0.0, 1.0);
   }
-  // grão de filme: mais forte nos meios-tons, animado
+  // grão de filme: só luminância (sem confete colorido), hash inteiro por
+  // pixel (PCG — sem a estrutura diagonal do hash fracionário), animado, mais
+  // forte nos meios-tons e quase nulo nos pretos/brancos — fino, como o
+  // grão de câmera de um jogo atual, não um padrão fixo de tela
   float L = luma(col);
-  float g = hash13(vec3(gl_FragCoord.xy, mod(uTime * 60.0, 997.0))) - 0.5;
-  float g2 = hash13(vec3(gl_FragCoord.xy * 0.5 + 17.0, mod(uTime * 60.0, 991.0))) - 0.5;
-  col += (g * 0.7 + g2 * 0.3) * uGrain * (0.35 + 0.65 * (1.0 - abs(L * 2.0 - 1.0)));
-  // dithering contra banding (8 bits)
-  col += (ign(gl_FragCoord.xy + 3.0) - 0.5) / 255.0;
+  uvec3 gp = uvec3(uvec2(gl_FragCoord.xy), uint(mod(uTime * 60.0, 4093.0)));
+  float g = pcg3(gp) - 0.5;
+  float gw = smoothstep(0.0, 0.18, L) * (1.0 - smoothstep(0.55, 1.0, L));
+  col += g * uGrain * (0.25 + 0.75 * gw);
+  // dithering contra banding (8 bits), também animado (some no TAA/olho)
+  col += (pcg3(gp + uvec3(17u, 31u, 7u)) - 0.5) / 255.0;
   outColor = vec4(col, 1.0);
 }`;

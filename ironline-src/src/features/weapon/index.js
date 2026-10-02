@@ -22,6 +22,7 @@ import { makeMaterials, OCC, OCC_MAX } from './materials.js';
 import { buildRifle, buildMag, buildCasing, DIM } from './rifle.js';
 import { makeLens } from './optic.js';
 import { Hand, POSES, clonePose, blendPoses, buildSleeve } from './arms.js';
+import { solveClamp } from './grip.js';
 import { Spring, Track, ease, clamp, lerp, smoothstep, wobble } from './anim.js';
 
 // ─── poses-base (posição do PIVÔ da arma no espaço da câmera, rot em rad) ──
@@ -29,11 +30,11 @@ const PIVOT = new THREE.Vector3(0, -0.035, -0.14); // perto do poço do carregad
 // hip: arma mais longe, baixa e à direita (enquadramento de shooter moderno:
 // a boca aponta para a mira, a ótica ocupa ~7% da largura do quadro, a mão
 // de apoio entra pela parte de baixo, perto do centro)
-const HIP = { pos: new THREE.Vector3(0.11, -0.14, -0.36), rot: new THREE.Euler(0.04, 0.06, -0.06) };
+const HIP = { pos: new THREE.Vector3(0.085, -0.11, -0.31), rot: new THREE.Euler(0.03, 0.1, 0.0) };
 const EYE_RELIEF = 0.2; // distância olho → ponto de visada no ADS
 const ADS = { pos: new THREE.Vector3(), rot: new THREE.Euler(0, 0, 0) };
 const SPRINT = { pos: new THREE.Vector3(-0.03, -0.045, 0.03), rot: new THREE.Euler(-0.32, 0.62, 0.42) };
-const VM_FOV = { hip: 58, ads: 19 };
+const VM_FOV = { hip: 50, ads: 19 };
 const ADS_FOV = 0.8; // fator do FOV do mundo no ADS (1x holográfica)
 
 // ─── mãos: transformações-base no espaço da arma ─────────────────────────
@@ -55,6 +56,8 @@ function basisFD(F, D, pos) {
   return { pos: new THREE.Vector3(...pos), quat: new THREE.Quaternion().setFromRotationMatrix(m) };
 }
 const HAND_R = basis([0.06, -1, -0.18], [1, 0.05, 0.12], [0.034, -0.088, 0.052]);
+// parâmetros da pega C-clamp (ver grip.js)
+const GRIP_L = { phi: 4.05, z: -0.37, fwd: 0.35, thumbUp: 0.012 };
 const HAND_L = {
   // mão esquerda na empunhadura vertical: palma no lado esquerdo dela,
   // médio/anelar/mínimo fechados pela frente, indicador estendido ao longo
@@ -188,6 +191,10 @@ export default {
     R.root.add(this.handR.root, this.handL.root);
     this.handR.root.position.copy(HAND_R.pos);
     this.handR.root.quaternion.copy(HAND_R.quat);
+    // mão de apoio: pega C-clamp resolvida contra a geometria do guarda-mão
+    const clamp0 = solveClamp(this.handL, R.root, GRIP_L);
+    HAND_L.guard = { pos: clamp0.pos, quat: clamp0.quat };
+    POSES.guard = clamp0.pose;
     this.poseR = clonePose(POSES.grip);
     this.poseL = clonePose(POSES.guard);
     this.sleeveR = buildSleeve(M, { left: false });
@@ -198,7 +205,8 @@ export default {
     const V = (x, y, z) => new THREE.Vector3(x, y, z);
     this.occ = [
       { o: R.root, a: V(0, -0.007, -0.25), b: V(0, -0.007, -0.578), r: 0.0235 }, // guarda-mão
-      { o: R.root, a: V(0, -0.035, -0.37), b: V(0, -0.11, -0.382), r: 0.0145 }, // empunhadura vertical
+      { o: this.handL.thumb[1], a: V(0, 0, 0.004), b: V(0, 0, -0.03), r: 0.011 }, // polegar esq. sobre o guarda-mão
+      { o: R.root, a: V(0, -0.045, -0.53), b: V(0, -0.045, -0.555), r: 0.011 }, // batente
       { o: R.root, a: V(0, -0.052, -0.035), b: V(0, -0.148, -0.0), r: 0.0155 }, // punho
       { o: R.root, a: V(0, 0.0315, -0.072), b: V(0, 0.0315, -0.148), r: 0.016 }, // base da ótica
       { o: R.root, a: V(0, 0.05, -0.096), b: V(0, 0.05, -0.13), r: 0.02 }, // capô da ótica
@@ -211,7 +219,7 @@ export default {
     OCC.uOccN.value = this.occ.length;
     // "ombros" (âncoras dos antebraços) no espaço do rig
     this.anchorR = new THREE.Vector3(0.3, -0.45, -0.08);
-    this.anchorL = new THREE.Vector3(-0.32, -0.55, -0.12);
+    this.anchorL = new THREE.Vector3(-0.1, -0.6, -0.1);
 
     // ─── luzes da viewmodel ──────────────────────────────────────────────
     const vs = vm.scene;

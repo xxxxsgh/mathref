@@ -268,28 +268,23 @@ export function buildRifle(M, opts = {}) {
       K.add('cavity', cylX(0.0013, 0.0014, sx * 0.0226, 0.002, -u, 6));
     }
   }
-  // empunhadura vertical (polímero) num trilho M-LOK curto sob o guarda-mão:
-  // seção elíptica, leve inclinação para a frente, anéis de pegada e base alargada
+  // batente de mão (handstop) angulado sob o guarda-mão, à frente da mão
+  // de apoio: a pega é "C-clamp" no próprio guarda-mão (polegar por cima)
   {
-    const zc = -0.37, y0 = -0.03, y1 = -0.115, rake = 0.012;
-    const g = new THREE.CylinderGeometry(1, 1, 1, 28, 24, false);
-    const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-      const t = 0.5 - y; // 0 topo → 1 base
-      // anéis de pegada (sulcos rasos) e alargamento na base
-      const groove = 1 - 0.06 * Math.max(0, Math.sin(t * Math.PI * 9)) * (t > 0.12 && t < 0.86 ? 1 : 0);
-      const flare = 1 + 0.18 * Math.max(0, (t - 0.88) / 0.12) ** 2;
-      const k = groove * flare * (y > 0.499 || y < -0.499 ? 0.94 : 1);
-      p.setXYZ(i, x * 0.0135 * k, y0 + (y1 - y0) * t, zc - t * rake + z * 0.0145 * k);
-    }
-    g.computeVertexNormals();
-    K.add('polymer', crease(g, 0.9));
-    // base (tampa) arredondada
-    K.add('polymer', rbox(0.031, 0.006, 0.034, 0.0028, 0, y1 - 0.001, zc - rake));
-    // garra no trilho inferior
-    K.add('receiver', rbox(0.02, 0.006, 0.036, 0.0018, 0, y0 - 0.0005, zc + 0.001));
-    for (const sx of [-1, 1]) K.add('steel', cylX(0.0019, 0.0012, sx * 0.0103, y0 - 0.0005, zc + 0.008, 10));
+    const zc = -0.548;
+    const hs = new THREE.Shape();
+    hs.moveTo(0.024, 0);
+    hs.lineTo(-0.012, 0);
+    hs.quadraticCurveTo(-0.016, -0.004, -0.012, -0.009);
+    hs.bezierCurveTo(-0.002, -0.014, 0.012, -0.024, 0.02, -0.031);
+    hs.quadraticCurveTo(0.026, -0.034, 0.028, -0.028);
+    hs.lineTo(0.03, -0.004);
+    hs.quadraticCurveTo(0.03, 0, 0.024, 0);
+    const m = new THREE.Matrix4().makeTranslation(0, -0.0315, 0);
+    m.multiply(new THREE.Matrix4().makeTranslation(0, 0, zc + 0.012));
+    const g = side(hs, 0.016, { b: 0.0026, seg: 3 });
+    K.add('polymer', g, m);
+    for (const dz of [-0.008, 0.008]) K.add('steel', cylY(0.0021, 0.0012, 0, -0.0324, zc + dz, 10));
   }
   // QD de bandoleira no guarda-mão (esquerda) com olhal
   K.add('steel', cylX(0.0058, 0.005, -0.0235, -0.017, -(hg0 + 0.02), 16));
