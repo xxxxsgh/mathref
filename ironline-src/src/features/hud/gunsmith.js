@@ -131,7 +131,34 @@ export function gunSilhouette(THREE, gun, { h = 160 } = {}) {
     r.render(scene, cam);
     const url = r.domElement.toDataURL('image/png');
     scene.overrideMaterial.dispose();
-    return { url, aspect };
+    // versão "sombreada" para o painel de munição: tons de cinza por normal
+    // (luz de estúdio de cima/frente) — trilhos, guarda-mão, ferrolho e mira
+    // ganham leitura de volume em vez de um recorte chapado
+    scene.overrideMaterial = new THREE.ShaderMaterial({
+      side: THREE.DoubleSide,
+      vertexShader: 'varying vec3 vN; void main(){ vN = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      fragmentShader: 'varying vec3 vN; void main(){ vec3 n = normalize(vN) * (gl_FrontFacing ? 1.0 : -1.0); float l = 0.5 + 0.5 * max(dot(n, normalize(vec3(-0.25, 0.85, 0.6))), 0.0) + 0.12 * max(n.y, 0.0); float rim = pow(1.0 - abs(n.z), 3.0) * 0.18; gl_FragColor = vec4(vec3(min(1.0, l + rim)), 1.0); }',
+    });
+    r.render(scene, cam);
+    const sh = document.createElement('canvas');
+    sh.width = W + 4; sh.height = H + 4;
+    const g2 = sh.getContext('2d');
+    // contorno escuro de 1 px (legível sobre céu claro), depois o sombreado
+    g2.filter = 'brightness(0)';
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [1, -1], [-1, 1]]) g2.drawImage(r.domElement, 2 + dx * 1.5, 2 + dy * 1.5);
+    g2.filter = 'none';
+    g2.globalAlpha = 1;
+    const tmp = document.createElement('canvas');
+    tmp.width = W; tmp.height = H;
+    const g3 = tmp.getContext('2d');
+    g3.drawImage(r.domElement, 0, 0);
+    g2.globalCompositeOperation = 'destination-out';
+    g2.drawImage(tmp, 2, 2);
+    g2.globalCompositeOperation = 'source-over';
+    g2.drawImage(tmp, 2, 2);
+    const shaded = sh.toDataURL('image/png');
+    scene.overrideMaterial.dispose();
+    return { url, shaded, aspect: (W + 4) / (H + 4) };
   } catch (err) {
     console.warn('[hud] silhueta da arma indisponível', err);
     return null;

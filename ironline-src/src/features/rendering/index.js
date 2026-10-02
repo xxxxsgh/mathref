@@ -61,8 +61,8 @@ const TIERS = {
   low: { msaa: 0, ao: false, aoSamples: 6, vol: false, volSteps: 12, bloomLevels: 5, motion: false, dust: 0, fxaa: true, sharpen: 0.0, dirt: false, gi: 0, taa: false, contact: false, far: 1024, pcss: 0 },
   medium: { msaa: 4, ao: true, aoSamples: 10, vol: false, volSteps: 14, bloomLevels: 6, motion: false, dust: 0, fxaa: false, sharpen: 0.3, dirt: true, gi: 12, taa: false, contact: true, far: 1024, pcss: 1024 },
   // high/ultra: TAA substitui o MSAA (high) — resolve fios finos, brilho especular e o ruído de AO/GI/volumétrico
-  high: { msaa: 0, ao: true, aoSamples: 14, vol: true, volSteps: 20, bloomLevels: 6, motion: true, dust: 700, fxaa: false, sharpen: 0.5, dirt: true, gi: 20, taa: true, contact: true, far: 2048, pcss: 2048 },
-  ultra: { msaa: 4, ao: true, aoSamples: 18, vol: true, volSteps: 28, bloomLevels: 7, motion: true, dust: 1100, fxaa: false, sharpen: 0.45, dirt: true, gi: 24, taa: true, contact: true, far: 2048, pcss: 4096 },
+  high: { msaa: 0, ao: true, aoSamples: 14, vol: true, volSteps: 20, bloomLevels: 6, motion: true, dust: 700, fxaa: false, sharpen: 0.75, dirt: true, gi: 20, taa: true, contact: true, far: 2048, pcss: 2048 },
+  ultra: { msaa: 4, ao: true, aoSamples: 18, vol: true, volSteps: 28, bloomLevels: 7, motion: true, dust: 1100, fxaa: false, sharpen: 0.65, dirt: true, gi: 24, taa: true, contact: true, far: 2048, pcss: 4096 },
 };
 
 /** Parâmetros artísticos padrão (todos ajustáveis pelo serviço). */
@@ -74,19 +74,22 @@ function defaultParams() {
     indoorAmbient: 0.42,    // fração extra do ambiente sob teto (o world já escurece o interior dele)
     coveredAmbient: 0.4,    // quanto do ambiente a CENA já tem sob teto (estimativa p/ albedo)
     bounce: 0.1,            // luz de rebatimento fake (só sem GI)
-    indoorTint: new THREE.Color(1.08, 1.0, 0.88), // tom da luz indireta sob teto
+    indoorTint: new THREE.Color(1.03, 1.0, 0.95), // tom da luz indireta sob teto
     // GI de 1 rebatimento do sol (RSM). strength > 1 compensa os rebatimentos
     // múltiplos (1/(1−ρ)) e a luz que entra pelas janelas
     gi: { strength: 3.6, radius: 8 },
-    contact: 0.85,          // sombras de contato em espaço de tela
+    contact: 1.0,           // sombras de contato em espaço de tela
+    bleed: 0.9,             // rebatimento em espaço de tela sob teto (porta/janela → piso/paredes)
     // PCSS: tan do semi-ângulo efetivo do sol (0,0047 = disco real; mais
     // largo simula o espalhamento do céu perto do sol e suaviza o serrilhado)
     shadow: { lightSize: 0.02 },
     ao: { radius: 0.75, intensity: 3.2, bias: 0.6, strength: 1.0 },
-    fog: { density: 0.0014, falloff: 0.045, base: 0.0, start: 18, max: 0.92, tint: new THREE.Color(1, 1, 1), sun: 0.07 },
+    // tinta levemente quente/acinzentada: a perspectiva aérea pura do LUT
+    // puxa para ciano perto do horizonte e "lava" o fundo da rua
+    fog: { density: 0.0011, falloff: 0.045, base: 0.0, start: 22, max: 0.8, tint: new THREE.Color(0.93, 0.92, 0.88), sun: 0.06 },
     taa: { alpha: 0.1, gamma: 1.0 },
     vol: { density: 0.0025, falloff: 0.09, base: 0.0, maxDist: 70, strength: 0.4, phaseG: 0.6, indoorDust: 22 },
-    bloom: { strength: 0.065, radius: 1.0, dirt: 0.8 },
+    bloom: { strength: 0.09, radius: 1.0, dirt: 0.8 },
     grade: {
       whiteBalance: new THREE.Color(1.02, 1.0, 0.965),
       contrast: 1.3,
@@ -96,8 +99,9 @@ function defaultParams() {
       highlightTint: new THREE.Color(1.06, 1.0, 0.92),
       lift: new THREE.Color(0.004, 0.006, 0.009),
       gain: new THREE.Color(1.0, 1.0, 1.0),
+      black: 0.0035,        // ponto de preto (flare) — pretos profundos
     },
-    clarity: 0.22,          // contraste local (micro-contraste estilo 'clarity')
+    clarity: 0.08,          // contraste local (micro-contraste estilo 'clarity')
     lens: { ca: 0.006, vignette: 0.3, grain: 0.032, sharpen: null },
     menuBlur: 0,
     motionBlur: 0.5,
@@ -229,6 +233,8 @@ const rendering = {
       setGI(p) { Object.assign(P.gi, p); },
       /** Sombras de contato (0..1). */
       setContact(v) { P.contact = v; },
+      /** Rebatimento em espaço de tela sob teto (0 desliga; ~0,9 padrão). */
+      setBleed(v) { P.bleed = v; },
       /** Sombra do sol: { lightSize } — penumbra do PCSS (tan do semi-ângulo). */
       setShadow(p) { Object.assign(P.shadow, p); },
       /** TAA: { alpha, gamma }. */
@@ -295,6 +301,7 @@ const rendering = {
         tShadow: U(null), uShadowMatrix: U(new THREE.Matrix4()),
         tShadowRaw: U(null), uPcssOn: U(0), uShadowTexel: U(new THREE.Vector2(1 / 4096, 1 / 4096)), uShadowWorld: U(76), uShadowRange: U(259), uLightSize: U(0.02),
         tFar: U(null), uFarMatrix: U(new THREE.Matrix4()), uFarOn: U(0), uFarTexel: U(new THREE.Vector2()),
+        tBleed: U(null), tBleed2: U(null), uBleed: U(0),
       }),
       gi: postMaterial('gi', GI_FRAG, {
         ...common(), tDepth: U(null), tRsmColor: U(null), tRsmDepth: U(null), uViewInv: U(new THREE.Matrix4()),
@@ -319,6 +326,7 @@ const rendering = {
         uWhiteBalance: U(new THREE.Color()), uContrast: U(1), uSaturation: U(1),
         uShadowTint: U(new THREE.Color()), uHighlightTint: U(new THREE.Color()), uLift: U(new THREE.Color()), uGain: U(new THREE.Color()),
         uVignette: U(0.3), uFlash: U(0), uClarity: U(0), uRes: U(new THREE.Vector2()),
+        uBloomNorm: U(1), uBlack: U(0), uFrame: U(0),
       }),
       final: postMaterial('final', FINAL_FRAG, {
         ...common(), tLdr: U(null), uTexel: U(new THREE.Vector2()), uGrain: U(0.03), uSharpen: U(0), uFxaa: U(0), uTime: U(0),
@@ -461,6 +469,7 @@ const rendering = {
     this.taaFrames = 0;
     this.expPrimed = false;
     this.needsClears = true;
+    this.bleedPrimed = false;
   },
 
   // ─── por frame: sol, céu, sombra, poeira ─────────────────────────────
@@ -793,6 +802,14 @@ const rendering = {
         u.uSkyOccMatrix.value.copy(this.skyOcc.matrix);
       }
       u.uSkyOccOn.value = occOn ? 1 : 0;
+      // rebatimento em tela: mips do bloom do quadro ANTERIOR (cadeia soma níveis → normaliza)
+      {
+        const L = rt.bloomUp.length, i1 = Math.min(2, L - 2), i2 = Math.min(3, L - 2);
+        const ok = this.bleedPrimed && occOn && P.bleed > 0 && i1 >= 0;
+        u.uBleed.value = ok ? P.bleed / Math.max(1, L - i1) : 0;
+        u.tBleed.value = ok ? rt.bloomUp[i1].texture : rt.zero.texture;
+        u.tBleed2.value = ok ? rt.bloomUp[i2].texture : rt.zero.texture;
+      }
       u.uIndoor.value = P.indoorAmbient;
       u.uIndoorTint.value.copy(P.indoorTint);
       u.uDebug.value = { occ: 1, gi: 2, albedo: 3 }[this.debugView] || 0;
@@ -834,7 +851,7 @@ const rendering = {
       u.uHistValid.value = this.taaFrames > 0 ? 1 : 0;
       // modo shot (câmera parada): média progressiva → supersample limpo
       u.uAlpha.value = ctx.shot ? Math.max(1 / (this.taaFrames + 1), 0.06) : P.taa.alpha;
-      u.uGamma.value = ctx.shot ? Math.max(P.taa.gamma, 1.25) : P.taa.gamma;
+      u.uGamma.value = ctx.shot ? Math.max(P.taa.gamma, 1.75) : P.taa.gamma;
       draw(M.taa, next);
       this.histIndex = 1 - this.histIndex;
       this.taaFrames++;
@@ -864,6 +881,7 @@ const rendering = {
       low = rt.bloomUp[i];
     }
     const bloomTex = rt.bloomUp[0].texture;
+    this.bleedPrimed = true;
 
     // 7) exposição automática (média log ponderada ao centro, adaptação)
     const AE = P.autoExposure;
@@ -909,6 +927,9 @@ const rendering = {
       u.uFlash.value = this.flashAmt;
       u.uClarity.value = tier.bloom ? P.clarity : 0;
       u.uRes.value.set(w, h);
+      u.uBloomNorm.value = 1 / Math.max(1, L);
+      u.uBlack.value = G.black ?? 0;
+      u.uFrame.value = frame;
       draw(M.tonemap, rt.ldr);
     }
 

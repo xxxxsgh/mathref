@@ -20,9 +20,9 @@ const _Z = new THREE.Vector3(0, 0, 1);
 
 /** Cor da poeira por material do chão (linear). */
 const TINT = {
-  asphalt: [0.42, 0.4, 0.37],
-  concrete: [0.55, 0.53, 0.5],
-  dirt: [0.5, 0.42, 0.31],
+  asphalt: [0.66, 0.62, 0.56],
+  concrete: [0.7, 0.67, 0.62],
+  dirt: [0.62, 0.52, 0.38],
   grass: [0.42, 0.4, 0.3],
   brick: [0.55, 0.42, 0.34],
   wood: [0.45, 0.4, 0.33],
@@ -138,8 +138,8 @@ export class Dust {
       // o pé "empurra" a poeira: sai quase com a velocidade do jogador e
       // abre para os lados; o arrasto a faz ficar para trás em ~0.5 s
       const side = (rng.next() - 0.5) * 2.4;
-      _s.set(dir.x * speed * 0.8 - dir.z * side, 0.3 + rng.next() * 0.5, dir.z * speed * 0.8 + dir.x * side);
-      this.spawn(_p, _s, { life: 0.9 + k * 0.6, size: 0.3, grow: 1.2 + k * 0.8, alpha: 0.3 + k * 0.22, material });
+      _s.set(dir.x * speed * 1.05 - dir.z * side, 0.3 + rng.next() * 0.5, dir.z * speed * 1.05 + dir.x * side);
+      this.spawn(_p, _s, { life: 0.9 + k * 0.6, size: 0.3, grow: 1.2 + k * 0.8, alpha: 0.4 + k * 0.25, material });
     }
   }
 

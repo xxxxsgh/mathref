@@ -60,18 +60,84 @@ export function rankSVG(level, cls = '', s = 34) {
   return `<svg class="${cls}" width="${s}" height="${s}" viewBox="0 0 34 34"><path d="M17,1.5 L31,7 V18 C31,25 25,30.5 17,32.5 C9,30.5 3,25 3,18 V7 Z" fill="currentColor"/><path d="M17,4 L28.6,8.6 V18 C28.6,23.8 23.8,28.4 17,30.2 C10.2,28.4 5.4,23.8 5.4,18 V8.6 Z" fill="none" stroke="#0b0d0e55" stroke-width="1"/>${ch}</svg>`;
 }
 
-// Medalha hexagonal com símbolo interno
-export function medalSVG(kind, s = 64) {
-  const inner = {
-    kill: '<path d="M32,18 L36,28 H47 L38,34.5 L41.5,45 L32,38.6 L22.5,45 L26,34.5 L17,28 H28 Z" fill="#0d0f10"/>',
-    head: '<circle cx="32" cy="32" r="9" fill="none" stroke="#0d0f10" stroke-width="3.2"/><path d="M32,17 V25 M32,39 V47 M17,32 H25 M39,32 H47" stroke="#0d0f10" stroke-width="3.2"/>',
-    double: '<path d="M20,40 L32,28 L44,40 M20,31 L32,19 L44,31" fill="none" stroke="#0d0f10" stroke-width="4"/>',
-    triple: '<path d="M20,44 L32,34 L44,44 M20,36 L32,26 L44,36 M20,28 L32,18 L44,28" fill="none" stroke="#0d0f10" stroke-width="3.4"/>',
-    long: '<path d="M16,32 H48 M40,24 L48,32 L40,40" fill="none" stroke="#0d0f10" stroke-width="3.6"/><circle cx="20" cy="32" r="3.4" fill="#0d0f10"/>',
-    streak: '<path d="M26,16 L38,16 L33,29 H42 L24,49 L29,34 H21 Z" fill="#0d0f10"/>',
-    payback: '<path d="M22,26 H38 C43,26 46,29.5 46,34 C46,38.5 43,42 38,42 H28 M28,19 L20,26 L28,33" fill="none" stroke="#0d0f10" stroke-width="3.6"/>',
+// Fuzil hostil de perfil (estilo carregador curvo, coronha fixa) 0..122 × 0..36
+export const HOSTILE_RIFLE_PATH =
+  'M0,12.5 L5,10.5 L27,12.6 L29,10 L68,10 L70,8.6 L74,8.6 L74,10 L94,10 L95.5,6.2 L97.5,6.2 L98,10 L106,10 L106,11.4 L122,11.4 ' +
+  'L122,13.6 L106,13.6 L106,15.4 L68,15.4 L66,17 L61,17 L64,24 L69,32.5 L61,35.5 L56.5,26 L53.5,17 L45,17 L42,27 L35.5,26 ' +
+  'L38,17 L30,17.5 L7,22.5 L0,22.5 Z M75,12 H92 V13.4 H75 Z M32,12 H50 V13.2 H32 Z';
+export function hostileRifleSVG(cls = '', w = 122) {
+  return `<svg class="${cls}" width="${w}" height="${((w * 36) / 122).toFixed(1)}" viewBox="0 0 122 36"><path d="${HOSTILE_RIFLE_PATH}" fill="currentColor" fill-rule="evenodd"/></svg>`;
+}
+
+/** Ícone de arma do feed por tipo ('rifle' = fuzil do jogador, 'hostile', 'pistol', 'knife', 'frag'). */
+export function weaponIcon(kind, h = 16, playerImg = null) {
+  if (kind === 'rifle' && playerImg) return playerImg(h);
+  if (kind === 'pistol') return pistolSVG('', h * 1.5);
+  if (kind === 'knife') return knifeSVG('', h * 2.8);
+  if (kind === 'frag') return fragSVG('', h * 1.3);
+  if (kind === 'rifle') return rifleSVG('', h * 3.6);
+  return hostileRifleSVG('', h * 3.4);
+}
+
+// ─── medalhas: arte em camadas com metal (bronze / prata / ouro) ─────────
+const TIER = {
+  kill: 'bronze', payback: 'bronze', head: 'silver', long: 'silver', double: 'silver', triple: 'gold', streak: 'gold',
+};
+const METAL = {
+  bronze: ['#ffd6a8', '#c77b3f', '#6d3a17', '#e8a56c', '#3a1c0b'],
+  silver: ['#ffffff', '#b9c3cb', '#5c6670', '#dfe6ea', '#20262b'],
+  gold: ['#fff4c2', '#f2b632', '#8a5208', '#ffd766', '#3d2504'],
+};
+const ENAMEL = { bronze: ['#3a2418', '#170d08'], silver: ['#1f3442', '#0b1419'], gold: ['#5a1410', '#1e0605'] };
+let _mid = 0;
+export const medalTier = (kind) => TIER[kind] || 'bronze';
+
+export function medalSVG(kind, s = 64, tierOverride) {
+  const tier = tierOverride || medalTier(kind);
+  const [hi, mid, lo, rim, dk] = METAL[tier];
+  const [en1, en2] = ENAMEL[tier];
+  const id = 'md' + _mid++;
+  // símbolo interno (desenhado na cor do metal sobre o esmalte)
+  const glyph = {
+    kill: '<path d="M32,20 L35.2,28.4 H44 L36.9,33.6 L39.6,42 L32,36.9 L24.4,42 L27.1,33.6 L20,28.4 H28.8 Z"/>',
+    head: '<g fill="none" stroke-width="3"><circle cx="32" cy="32" r="8"/><path d="M32,18 V25 M32,39 V46 M18,32 H25 M39,32 H46"/></g><circle cx="32" cy="32" r="2.4"/>',
+    double: '<path d="M21,40 L32,30 L43,40 V45 L32,35 L21,45 Z M21,30 L32,20 L43,30 V35 L32,25 L21,35 Z"/>',
+    triple: '<path d="M21,44 L32,36 L43,44 V48 L32,40 L21,48 Z M21,36 L32,28 L43,36 V40 L32,32 L21,40 Z M21,28 L32,20 L43,28 V32 L32,24 L21,32 Z"/>',
+    long: '<path d="M18,30.5 H40 V26 L48,32 L40,38 V33.5 H18 Z"/><circle cx="20" cy="32" r="4.4"/>',
+    streak: '<path d="M27,17 H39 L34.5,28.5 H43 L25,48 L29.5,34 H21.5 Z"/>',
+    payback: '<path d="M23,24 L16,31 L23,38 V33.6 H38 C41,33.6 43,35.6 43,38.4 C43,41.2 41,43.2 38,43.2 H31 V47 H38 C43.4,47 47,43.4 47,38.4 C47,33.4 43.4,29.8 38,29.8 H23 Z"/>',
   }[kind] || '';
-  return `<svg width="${s}" height="${s}" viewBox="0 0 64 64"><path d="M32,2 L58,17 V47 L32,62 L6,47 V17 Z" fill="currentColor"/><path d="M32,7.5 L53.2,19.8 V44.2 L32,56.5 L10.8,44.2 V19.8 Z" fill="none" stroke="#0d0f1066" stroke-width="1.4"/>${inner}</svg>`;
+  const grad = `<defs>
+    <linearGradient id="${id}m" x1="0" y1="0" x2=".35" y2="1"><stop offset="0" stop-color="${hi}"/><stop offset=".28" stop-color="${mid}"/><stop offset=".55" stop-color="${lo}"/><stop offset=".78" stop-color="${rim}"/><stop offset="1" stop-color="${lo}"/></linearGradient>
+    <linearGradient id="${id}r" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${hi}"/><stop offset=".5" stop-color="${lo}"/><stop offset="1" stop-color="${rim}"/></linearGradient>
+    <radialGradient id="${id}e" cx=".5" cy=".3" r=".8"><stop offset="0" stop-color="${en1}"/><stop offset="1" stop-color="${en2}"/></radialGradient>
+    <linearGradient id="${id}s" x1="0" y1="0" x2="1" y2="1"><stop offset=".25" stop-color="#fff" stop-opacity=".0"/><stop offset=".42" stop-color="#fff" stop-opacity=".35"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  </defs>`;
+  // moldura por raridade
+  let back = '';
+  let body;
+  if (tier === 'gold') {
+    // estrela de 12 pontas atrás + louros
+    let star = '';
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2 - Math.PI / 2, r = i % 2 ? 24 : 31;
+      star += (i ? 'L' : 'M') + (32 + Math.cos(a) * r).toFixed(1) + ',' + (32 + Math.sin(a) * r).toFixed(1);
+    }
+    back = `<path d="${star}Z" fill="url(#${id}m)" stroke="${dk}" stroke-width=".8"/>`;
+    body = 'M32,9 L52,20.5 V43.5 L32,55 L12,43.5 V20.5 Z';
+  } else if (tier === 'silver') {
+    // asas laterais
+    back = `<path d="M12,22 L1,18 L5,27 L0,30 L7,35 L4,40 L13,40 Z M52,22 L63,18 L59,27 L64,30 L57,35 L60,40 L51,40 Z" fill="url(#${id}m)" stroke="${dk}" stroke-width=".8"/>`;
+    body = 'M32,6 L54,18.5 V45.5 L32,58 L10,45.5 V18.5 Z';
+  } else {
+    body = 'M32,4 L54,12 V32 C54,45 44,54 32,60 C20,54 10,45 10,32 V12 Z';
+  }
+  return `<svg width="${s}" height="${s}" viewBox="0 0 64 64" class="medal-${tier}">${grad}${back}
+    <path d="${body}" fill="url(#${id}m)" stroke="${dk}" stroke-width="1"/>
+    <path d="${body}" fill="url(#${id}e)" transform="translate(32 32) scale(.78) translate(-32 -32)" stroke="url(#${id}r)" stroke-width="1.6"/>
+    <g fill="url(#${id}m)" stroke="url(#${id}m)" transform="translate(32 33) scale(.82) translate(-32 -32)">${glyph}</g>
+    <path d="${body}" fill="url(#${id}s)"/>
+  </svg>`;
 }
 
 // Seta do jogador no minimapa / indicador

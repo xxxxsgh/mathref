@@ -226,6 +226,9 @@ uniform sampler2D tFar;
 uniform mat4 uFarMatrix;
 uniform float uFarOn;
 uniform vec2 uFarTexel;
+uniform sampler2D tBleed;   // radiância borrada do quadro anterior (mip do bloom)
+uniform sampler2D tBleed2;  // mip mais largo
+uniform float uBleed;       // força do rebatimento em espaço de tela (interiores)
 #ifdef HAS_SHADOW
 uniform sampler2DShadow tShadow;
 uniform mat4 uShadowMatrix;
@@ -413,7 +416,20 @@ void main() {
     // sob teto, a luz indireta vem do chão/fachadas lá fora (mais quente que o céu)
     vec3 ambNew = ambScene * mix(vec3(1.0), uIndoor * uIndoorTint, occ) * aoAmb;
     vec3 gi = texture(tGi, vUv).rgb * (uGiStrength / PI) * mix(1.0, ao, 0.6 * uAoStrength);
-    vec3 delta = (ambNew - ambScene) + sunE * (visTrue - visScene) + gi;
+    // o RSM vê só o chão ensolarado (sol quente × asfalto quente) → laranja
+    // demais; a luz real que entra é misturada com céu/fachadas: dessatura
+    gi = mix(vec3(luma(gi)), gi, 0.55);
+    // rebatimento em espaço de tela: a radiância que a câmera vê em volta
+    // (porta/janela estourada, chão ensolarado lá fora, parede acesa) vira luz
+    // indireta nas superfícies cobertas próximas — o vão da porta "derrama"
+    // luz no piso e nas paredes. Usa mips largos do quadro anterior (logo,
+    // também multi-rebatimento), só sob teto, atenuado pela AO.
+    vec3 bleed = vec3(0.0);
+    if (uBleed > 0.0 && occ > 0.01) {
+      vec3 b1 = texture(tBleed, vUv).rgb, b2 = texture(tBleed2, vUv).rgb;
+      bleed = (b1 * 0.55 + b2 * 0.45) * uBleed * occ * mix(1.0, ao, 0.8 * uAoStrength);
+    }
+    vec3 delta = (ambNew - ambScene) + sunE * (visTrue - visScene) + gi + bleed;
     col = max(col + albedo * delta, col * 0.04);
 
     if (uDebug > 0.5) {
@@ -747,6 +763,9 @@ uniform float uVignette;
 uniform float uFlash;
 uniform float uClarity;
 uniform vec2 uRes;
+uniform float uBloomNorm;   // 1/nº de níveis: a cadeia de upsample SOMA os níveis
+uniform float uBlack;       // ponto de preto (compensação de flare, em exibição linear)
+uniform float uFrame;
 
 const mat3 ACESIn = mat3(vec3(0.59719, 0.07600, 0.02840), vec3(0.35458, 0.90834, 0.13383), vec3(0.04823, 0.01566, 0.83777));
 const mat3 ACESOut = mat3(vec3(1.60475, -0.10208, -0.00327), vec3(-0.53108, 1.10813, -0.07276), vec3(-0.07367, -0.00605, 1.07602));
@@ -777,7 +796,9 @@ void main() {
     col.b = texture(tHdr, vUv + off).b;
   } else col = texture(tHdr, vUv).rgb;
 
-  vec3 bloom = texture(tBloom, vUv).rgb;
+  // a cadeia de upsample soma todos os níveis → normaliza para "imagem
+  // borrada" de mesma energia (sem isso o bloom vira um véu que levanta os pretos)
+  vec3 bloom = texture(tBloom, vUv).rgb * uBloomNorm;
   // micro-contraste: luminância local vs. média larga (cadeia do bloom)
   if (uClarity > 0.0) {
     float Lc = luma(col), Lb = luma(bloom);
@@ -788,7 +809,7 @@ void main() {
   // (limiar: só fontes realmente fortes acendem a sujeira)
   vec3 dirt = texture(tDirt, vUv).rgb;
   float expo0 = texture(tExposure, vec2(0.5)).r * uExposure;
-  vec3 hot = max(bloom * expo0 - 4.0, 0.0) / max(expo0, 1e-3);
+  vec3 hot = max(bloom * expo0 - 0.9, 0.0) / max(expo0, 1e-3);
   col += hot * dirt * uDirt;
 
   float exposure = texture(tExposure, vec2(0.5)).r * uExposure;
@@ -812,12 +833,22 @@ void main() {
   float Ld = luma(col);
   col *= mix(uShadowTint, uHighlightTint, smoothstep(0.02, 0.6, Ld));
   col = col * uGain + uLift * (1.0 - col);
+  // ponto de preto: tira o "flare" residual (bloom/névoa) e reabre a faixa —
+  // sombras profundas mas com detalhe (toe suave, não corte)
+  col = max(col - uBlack, 0.0) * (1.0 / (1.0 - uBlack));
+  col = col * col / (col + uBlack * 0.5 + 1e-6) * (1.0 + uBlack * 0.5);
 
   // vinheta (natural, cos^4-ish)
   float vig = 1.0 - uVignette * smoothstep(0.15, 0.85, r2 * 2.2);
   col *= vig;
 
-  outColor = vec4(toSRGB(clamp(col, 0.0, 1.0)), 1.0);
+  // dithering ANTES da quantização para 8 bits (o alvo LDR é RGBA8): ruído
+  // triangular de ±1 LSB em sRGB — céu, névoa e fumaça sem degraus
+  vec3 o = toSRGB(clamp(col, 0.0, 1.0));
+  float n1 = ign(gl_FragCoord.xy + mod(uFrame, 64.0) * 7.31);
+  float n2 = ign(gl_FragCoord.yx * 1.37 + 11.0 + mod(uFrame, 64.0) * 3.17);
+  o += (n1 + n2 - 1.0) / 255.0;
+  outColor = vec4(o, 1.0);
 }`;
 
 export const FINAL_FRAG = /* glsl */ `

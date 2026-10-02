@@ -22,6 +22,7 @@ import { Screens } from './menus.js';
 import { Match, MODE } from './match.js';
 import * as Settings from './settings.js';
 import { Gunsmith, gunSilhouette } from './gunsmith.js';
+import { Hero } from './hero.js';
 
 export default {
   name: 'hud',
@@ -143,6 +144,22 @@ export default {
   onScreen(name, el) {
     this.gs?.dispose();
     this.gs = null;
+    // menu principal: mundo desfocado/graduado ao fundo + operador nítido
+    const canvas = this.ctx.canvas;
+    if (canvas) canvas.style.filter = name === 'main' ? 'blur(5px) brightness(.62) saturate(.72) contrast(1.06)' : '';
+    if (name !== 'main' && this.hero) { this.hero.dispose(); this.hero = null; }
+    if (name === 'main') {
+      const host = el.querySelector('.hero-host');
+      if (host && !this.hero) {
+        try {
+          this.hero = new Hero(this.ctx, host, { w: 900, h: 1080, k: this.k * Math.min(2, devicePixelRatio || 1) });
+          this.hero.render(1 / 60);
+        } catch (err) {
+          console.warn('[hud] operador do menu indisponível', err);
+          this.hero = null;
+        }
+      } else if (host && this.hero) host.appendChild(this.hero.renderer.domElement);
+    }
     if (name !== 'loadout') return;
     const gun = this.ctx.services.weapon?.gun;
     const host = el.querySelector('.gs-host');
@@ -298,15 +315,28 @@ export default {
     names.forEach((n, i) => m.hostile.set(n, { name: n, kills: st[i][0], deaths: st[i][1], score: st[i][0] * 100 + st[i][1] * 10, alive: !!st[i][2] }));
     m.nameIdx = 5;
     m.win = true;
+    if (this.ctx.params.get('ui') === 'end') {
+      // relatório de fim: partida concluída (alvo atingido)
+      m.kills = 30; m.deaths = 6; m.headshots = 11; m.shots = 486; m.hits = 203; m.score = 4350; m.xpEarned = 4350;
+      m.bestStreak = 9; m.longest = 46.2; m.damage = 4870; m.timeLeft = 131; m.playTime = 469;
+      m.medals = { HEADSHOT: { kind: 'head', n: 11 }, 'DOUBLE KILL': { kind: 'double', n: 3 }, 'TRIPLE KILL': { kind: 'triple', n: 1 }, LONGSHOT: { kind: 'long', n: 2 }, BLOODTHIRSTY: { kind: 'streak', n: 1 } };
+      const fin = [[2, 7], [1, 6], [2, 6], [0, 5], [1, 6]];
+      names.forEach((n, i) => m.hostile.set(n, { name: n, kills: fin[i][0], deaths: fin[i][1], score: fin[i][0] * 100 + fin[i][1] * 25 + 150, alive: true }));
+    }
     if (preset?.combat) {
       const cs = this.profile.callsign;
-      this.play.feed({ killer: 'self', victim: 'NOMAD', head: false }, cs);
-      this.play.feed({ killer: 'RAZOR', victim: 'self', head: false }, cs);
-      this.play.feed({ killer: 'self', victim: 'KESTREL', head: true }, cs);
+      this.play.feed({ killer: 'self', victim: 'HALVARD', head: false, weapon: 'frag' }, cs);
+      this.play.feed({ killer: 'self', victim: 'NOMAD', head: false, weapon: 'rifle' }, cs);
+      this.play.feed({ killer: 'RAZOR', victim: 'self', head: false, weapon: 'hostile' }, cs);
+      this.play.feed({ killer: 'self', victim: 'KESTREL', head: true, weapon: 'rifle' }, cs);
       for (const r of this.play.el.feed.children) r.style.animation = 'none';
       this.play.xp([['ENEMY KILLED', 100], ['HEADSHOT', 50]], 150);
       this.play.xpT = 0.5;
       this.play.hitmarker({ head: true, kill: true });
+      this.play.medal('head', 'HEADSHOT', 150);
+      this.play.medalT = 0.9;
+      const mm = this.play.el.medal.firstChild;
+      if (mm) mm.style.animation = 'none';
       // o shot.mjs captura ~23 frames depois do init: o marcador cai no meio da vida
       this.play.hitT = -0.26;
     }
@@ -360,6 +390,7 @@ export default {
     }
     if (showPlay) this.play.frame(dt, ctx, this.match, st);
     if (this.gs) this.gs.render(rdt);
+    if (this.hero) this.hero.render(rdt);
     if (this.match.phase === 'dead') {
       const left = Math.max(0, 4 - this.match.deadT);
       const cd = this.play.el.death.querySelector('.cd');

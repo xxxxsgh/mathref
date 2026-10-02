@@ -284,15 +284,15 @@ export class Effects {
     const env = this.envAt(point, _up);
     const lit = env.sun;
     const shade = 0.55 + 0.45 * env.sky;
-    const red = C(0.3, 0.012, 0.008).multiplyScalar(shade);
+    const red = C(0.4, 0.022, 0.016).multiplyScalar(shade);
     const dark = C(0.13, 0.006, 0.004).multiplyScalar(shade);
     const back = n.clone();
     const sc = o.scale ?? 1;
     // jato de entrada (curto, denso, estoura e some)
-    for (let i = 0, k = this.n(4) + 2; i < k; i++) {
-      const v = this.cone(back, 0.55).multiplyScalar(this.R(1.2, 3.2) * sc);
+    for (let i = 0, k = this.n(5) + 3; i < k; i++) {
+      const v = this.cone(back, 0.6).multiplyScalar(this.R(1.2, 3.2) * sc);
       ps.emit(point.clone().addScaledVector(back, 0.03), v, {
-        life: this.R(0.28, 0.5), drag: 7, gravity: 0.08, size: 0.05 * sc, size1: this.R(0.3, 0.5) * sc, rot: this.R(0, 6.3), spin: this.R(-2, 2),
+        life: this.R(0.3, 0.55), drag: 7, gravity: 0.08, size: 0.14 * sc, size1: this.R(0.45, 0.75) * sc, rot: this.R(0, 6.3), spin: this.R(-2, 2),
         color: red, alpha: 0.95, tile: PT.BLOOD, sunlit: lit, fadeIn: 0.02, erode: 0.55, soft: 0.1,
       });
     }
@@ -300,7 +300,7 @@ export class Effects {
     for (let i = 0, k = this.n(5) + 2; i < k; i++) {
       const v = this.cone(dir, 0.32).multiplyScalar(this.R(2.5, 6) * sc);
       ps.emit(point.clone().addScaledVector(dir, 0.28), v, {
-        life: this.R(0.35, 0.65), drag: 5, gravity: 0.25, size: 0.07 * sc, size1: this.R(0.4, 0.7) * sc, mode: i % 2 ? 1 : 0, stretch: 0.03,
+        life: this.R(0.35, 0.65), drag: 5, gravity: 0.25, size: 0.12 * sc, size1: this.R(0.5, 0.9) * sc, mode: i % 2 ? 1 : 0, stretch: 0.03,
         rot: this.R(0, 6.3), color: i % 2 ? dark : red, alpha: 0.9, tile: PT.BLOOD, sunlit: lit, erode: 0.5, soft: 0.1,
       });
     }
@@ -308,8 +308,8 @@ export class Effects {
     for (let i = 0, k = this.n(4) + 1; i < k; i++) {
       const v = this.cone(i % 2 ? dir : back, 0.8).multiplyScalar(this.R(0.4, 1.4) * sc);
       ps.emit(point.clone().addScaledVector(dir, this.R(-0.05, 0.3)), v, {
-        life: this.R(0.8, 1.5), drag: 2.5, gravity: 0.03, size: 0.12 * sc, size1: this.R(0.6, 1.0) * sc, rot: this.R(0, 6.3), spin: this.R(-0.6, 0.6),
-        color: C(0.22, 0.02, 0.016).multiplyScalar(shade), alpha: 0.28, tile: PT.SMOKE[(this.rng.next() * 3) | 0], sunlit: lit,
+        life: this.R(0.8, 1.5), drag: 2.5, gravity: 0.03, size: 0.25 * sc, size1: this.R(0.8, 1.3) * sc, rot: this.R(0, 6.3), spin: this.R(-0.6, 0.6),
+        color: C(0.3, 0.025, 0.02).multiplyScalar(shade), alpha: 0.38, tile: PT.SMOKE[(this.rng.next() * 3) | 0], sunlit: lit,
         fadeIn: 0.05, erode: 0.5, soft: 0.3, turb: 0.05,
       });
     }
@@ -325,7 +325,7 @@ export class Effects {
     const col = this.ctx.collision;
     if (col && o.decal !== false) {
       const hit = col.raycast(point.clone().addScaledVector(dir, 0.4), dir, 3.0, { filter: (c) => !c.dynamic && c.material !== 'flesh' });
-      if (hit) this.decals.add(hit.point, hit.normal, 'bloodSpray', this.R(0.5, 0.85) * (1 - hit.distance / 4), dir);
+      if (hit) this.decals.add(hit.point, hit.normal, 'bloodSpray', this.R(0.35, 0.6) * (1 - hit.distance / 4), dir, { alpha: 0.8 });
       // gotas no chão sob o alvo
       const g = col.raycast(point, _v.set(0, -1, 0), 3, { filter: (c) => !c.dynamic });
       if (g) this.decals.add(g.point.clone().addScaledVector(dir, this.R(0.2, 0.7)), g.normal, 'blood', this.R(0.25, 0.4), dir);

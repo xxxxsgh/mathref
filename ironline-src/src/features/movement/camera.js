@@ -181,7 +181,7 @@ export class CameraMotion {
       const vib = this.slideTilt * clamp(hs / 8, 0.3, 1);
       oy += wob(this.t * 38, 1.3) * 0.0035 * vib;
       roll += wob(this.t * 31, 2.1) * 0.003 * vib;
-      pitch -= 0.045 * this.slideTilt;
+      pitch -= 0.06 * this.slideTilt;
     }
     roll += -lean * T.leanRoll;
     ox += lean * T.leanDist;

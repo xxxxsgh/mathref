@@ -8,11 +8,14 @@
 import { svgText, pathFor } from './font.js';
 import { rifleSVG, pistolSVG, fragSVG, flashSVG, rankSVG, medalSVG, skullSVG, headshotSVG, knifeSVG } from './icons.js';
 import { MODE } from './match.js';
+import { callingCard, emblemSVG } from './art.js';
 import { levelOf, CROSS_COLORS, vfovToH } from './settings.js';
 
 const T = (s, o) => svgText(s, o);
-const t11 = (s, o = {}) => T(s, { size: 11, weight: 1.2, tracking: 2.3, ...o });
-const key = (k) => `<span class="key">${T(k, { size: 9, weight: 1.3 })}</span>`;
+const t11 = (s, o = {}) => T(s, { size: 12, weight: 1.4, tracking: 2.3, ...o });
+// valores numéricos: face pesada
+const N = (s, size = 20, o = {}) => T(String(s), { size, weight: 1.5, heavy: true, ...o });
+const key = (k) => `<span class="key">${T(k, { size: 11, weight: 1.45 })}</span>`;
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 // Logo: emblema (chevron duplo num losango chanfrado) + palavra
@@ -71,7 +74,10 @@ export class Screens {
   show(name) {
     this.cur = name;
     this.root.innerHTML = '';
-    if (!name) return;
+    if (!name) {
+      this.hud.onScreen?.(null, null);
+      return;
+    }
     const el = document.createElement('div');
     el.className = `scr ${name} interactive`;
     el.innerHTML = this[name]();
@@ -85,23 +91,16 @@ export class Screens {
     this.hud.onScreen?.(name, el);
   }
 
-  /** "cromo" de interface: linhas finas chanfradas, marcas e microtexto */
+  /** "cromo" de interface: linhas chanfradas e marcas (sem microtexto ilegível) */
   chrome(top = 118) {
-    const mt = (str, x, y, a = 'start') => {
-      const w = str.length * 4.6;
-      const x0 = a === 'end' ? x - w : x;
-      return `<g transform="translate(${x0},${y}) scale(.7)" opacity=".5"><path d="${pathFor(str.toUpperCase(), 1.7)}" fill="none" stroke="#f2f4ef" stroke-width="1"/></g>`;
-    };
     const B = 1002;
     return `<svg class="chrome" width="1920" height="1080" viewBox="0 0 1920 1080">
-      <g fill="none" stroke="rgba(242,244,239,.16)" stroke-width="1">
+      <g fill="none" stroke="rgba(242,244,239,.14)" stroke-width="1">
         <path d="M96,${top} H700 L716,${top + 10} H1204 L1220,${top} H1824"/>
         <path d="M96,${B} H640 L656,${B - 10} H1264 L1280,${B} H1824"/>
       </g>
       <g stroke="rgba(255,178,46,.75)" stroke-width="2"><path d="M96,${top} H140 M1780,${top} H1824 M716,${top + 10} H760 M1160,${top + 10} H1204"/></g>
-      <g fill="rgba(242,244,239,.35)">${Array.from({ length: 24 }, (_, i) => `<rect x="${730 + i * 19}" y="${top + 16}" width="1" height="${i % 4 ? 3 : 6}"/>`).join('')}</g>
-      ${mt('IRL-NET // UPLINK STABLE', 96, top + 10)}${mt('SECTOR 7G  ·  41.7120N 44.7830E', 1824, top + 10, 'end')}
-      ${mt('TACTICAL DATA SYNCED', 656, B - 26)}${mt('OPS CHANNEL 04', 1264, B - 26, 'end')}
+      <g fill="rgba(242,244,239,.3)">${Array.from({ length: 24 }, (_, i) => `<rect x="${730 + i * 19}" y="${top + 16}" width="1" height="${i % 4 ? 3 : 6}"/>`).join('')}</g>
     </svg>`;
   }
 
@@ -112,55 +111,72 @@ export class Screens {
     const P = this.hud.profile;
     const lv = levelOf(P.xp);
     const tabs = [['main', 'PLAY'], ['loadout', 'LOADOUT'], ['settings', 'SETTINGS']];
+    this.cardArt = this.cardArt || callingCard('', { seed: 3, theme: 0 });
     return `<div class="topbar sh">
       <div class="logo">${logo(22)}</div>
-      <div class="tabs">${tabs.map(([id, n]) => `<div class="tab ${id === active ? 'on' : ''}" data-go="${id}">${T(n, { size: 13, weight: 1.3, tracking: 2.6 })}</div>`).join('')}</div>
+      <div class="tabs">${tabs.map(([id, n]) => `<div class="tab ${id === active ? 'on' : ''}" data-go="${id}">${T(n, { size: 14, weight: 1.5, tracking: 2.6 })}</div>`).join('')}</div>
       <div class="card">
-        <div class="meta">${T(P.callsign, { size: 15, weight: 1.4, tracking: 2.4 })}${t11(`[${P.tag}]  ·  OPERATOR`, { size: 9, weight: 1.1 })}<div class="xpb"><i style="width:${((lv.into / lv.need) * 100).toFixed(1)}%"></i></div></div>
-        <span class="rk">${rankSVG(lv.level, '', 46)}</span>
-        <div class="lvl">${T(String(lv.level), { size: 18, weight: 1.45 })}</div>
+        <div class="pc" style="background-image:url(${this.cardArt})">
+          <span class="em">${emblemSVG('vance', 50, 'gold')}</span>
+          <div class="meta">${T(P.callsign, { size: 16, weight: 1.6, tracking: 2.4 })}${t11(`[${P.tag}]  ·  OPERATOR`, { size: 11 })}<div class="xpb"><i style="width:${((lv.into / lv.need) * 100).toFixed(1)}%"></i></div></div>
+        </div>
+        <div class="lvl"><span class="rk">${rankSVG(lv.level, '', 30)}</span>${N(lv.level, 18)}</div>
       </div></div>`;
   }
   footer(hints) {
-    return `<div class="foot sh">${hints.map(([k, l]) => `<div class="h">${key(k)}${t11(l, { size: 10 })}</div>`).join('')}<div class="ver">${t11('IRONLINE  ·  BUILD 0.1.0  ·  WEBGL2', { size: 9, weight: 1.05 })}</div></div>`;
+    return `<div class="foot sh">${hints.map(([k, l]) => `<div class="h">${key(k)}${t11(l, { size: 12 })}</div>`).join('')}<div class="ver">${t11('BUILD 0.2.0', { size: 11, weight: 1.3 })}</div></div>`;
   }
 
   // ─── principal ──────────────────────────────────────────────────────
   main() {
     const P = this.hud.profile;
     const ch = [
-      ['head', 'Headshot kills', Math.min(P.headshots % 10, 10), 10],
-      ['kill', 'Eliminate hostiles', Math.min(P.kills % 25, 25), 25],
-      ['long', 'Win an Elimination match', Math.min(P.wins % 1, 1), 1],
+      ['head', 'HEADSHOT KILLS', Math.min(P.headshots % 10, 10), 10, 2500],
+      ['kill', 'ELIMINATE HOSTILES', Math.min(P.kills % 25, 25), 25, 3000],
+      ['long', 'WIN AN ELIMINATION MATCH', Math.min(P.wins % 1, 1), 1, 5000],
     ];
-    return `${this.bgMenu()}${this.chrome()}${this.topbar('main')}
+    this.evCard = this.evCard || callingCard('IRON DAWN', { seed: 9, theme: 2, w: 600, h: 300, sub: 'LIMITED EVENT  ·  6 DAYS LEFT' });
+    this.bpCard = this.bpCard || callingCard('', { seed: 21, theme: 1, w: 420, h: 105 });
+    const g = this.hud.gunIcon;
+    const wname = this.ctx.services.weapon?.name || 'KR-9';
+    return `${this.bgMenu()}<div class="hero-glow"></div><div class="hero-host"></div><div class="hero-floor"></div><div class="shade-hero"></div>${this.chrome()}${this.topbar('main')}
       <div class="col sh">
         <div class="eyebrow">${t11('SOLO OPERATIONS  ·  QUICK PLAY')}</div>
-        <div class="title">${T(MODE.name, { size: 72, weight: 1.55, tracking: 3.2 })}</div>
+        <div class="title">${T(MODE.name, { size: 74, weight: 1.9, tracking: 3 })}</div>
         <div class="desc">Push into the Meridian district and neutralize the hostile cell before time runs out. Enemies regroup, flank and call for backup — use cover and keep the initiative.</div>
         <div class="facts">
-          <div class="f"><span class="k">${t11('MAP', { size: 9 })}</span>${T(MODE.map, { size: 15, weight: 1.35, tracking: 2.2 })}</div>
-          <div class="f"><span class="k">${t11('TIME LIMIT', { size: 9 })}</span>${T(fmtTime(MODE.time), { size: 15, weight: 1.35, tracking: 2.2 })}</div>
-          <div class="f"><span class="k">${t11('OBJECTIVE', { size: 9 })}</span>${T(MODE.target + ' KILLS', { size: 15, weight: 1.35, tracking: 2.2 })}</div>
-          <div class="f"><span class="k">${t11('THREAT', { size: 9 })}</span><span style="color:var(--red2)">${T('HIGH', { size: 15, weight: 1.35, tracking: 2.2 })}</span></div>
+          <div class="f"><span class="k">${t11('MAP')}</span>${T(MODE.map, { size: 16, weight: 1.6, tracking: 2.2 })}</div>
+          <div class="f"><span class="k">${t11('TIME LIMIT')}</span>${N(fmtTime(MODE.time), 16)}</div>
+          <div class="f"><span class="k">${t11('OBJECTIVE')}</span>${T(MODE.target + ' KILLS', { size: 16, weight: 1.6, tracking: 2.2 })}</div>
+          <div class="f"><span class="k">${t11('THREAT')}</span><span style="color:var(--red2)">${T('HIGH', { size: 16, weight: 1.6, tracking: 2.2 })}</span></div>
         </div>
         <div class="btns">
-          <div class="btn pri" data-act="deploy" tabindex="0">${T('DEPLOY', { size: 22, weight: 1.6, tracking: 4 })}<span class="chev">${T('>>', { size: 16, weight: 1.8, tracking: 0.8 })}</span></div>
-          <div class="btn" data-go="loadout" tabindex="0">${T('EDIT LOADOUT', { size: 14, weight: 1.3, tracking: 2.6 })}<span class="hint">${key('L')}</span></div>
-          <div class="btn" data-go="settings" tabindex="0">${T('SETTINGS', { size: 14, weight: 1.3, tracking: 2.6 })}<span class="hint">${key('O')}</span></div>
+          <div class="btn pri" data-act="deploy" tabindex="0">${T('DEPLOY', { size: 24, weight: 2.1, tracking: 4 })}<span class="chev">${T('>>', { size: 16, weight: 2.2, tracking: 0.8 })}</span></div>
+          <div class="btn" data-go="loadout" tabindex="0">${T('EDIT LOADOUT', { size: 15, weight: 1.55, tracking: 2.6 })}<span class="hint">${key('L')}</span></div>
+          <div class="btn" data-go="settings" tabindex="0">${T('SETTINGS', { size: 15, weight: 1.55, tracking: 2.6 })}<span class="hint">${key('O')}</span></div>
         </div>
       </div>
+      <div class="feat sh">
+        <div class="tile ev" style="background-image:url(${this.evCard})"><div class="tg">${t11('EVENT', { size: 11 })}</div><div class="pr"><i style="width:62%"></i></div><div class="pv">${t11('TIER 5 / 8')}</div></div>
+        <div class="tile wk"><div class="tg">${t11('WEAPON OF THE OPERATION', { size: 11 })}</div>
+          <div class="wimg">${g ? `<img src="${g.shaded || g.url}" style="height:58px;width:${Math.round(58 * g.aspect)}px" alt="">` : rifleSVG('', 200)}</div>
+          <div class="wn">${T(wname, { size: 18, weight: 1.7, tracking: 2.4 })}<span>${t11('+50% WEAPON XP')}</span></div></div>
+      </div>
+      <div class="opname sh"><div class="l1">${t11('OPERATOR')}</div>${T('SGT. ' + P.callsign, { size: 22, weight: 1.8, tracking: 3 })}<div class="l2">${t11('IRONLINE  ·  1ST RECON DET.')}</div></div>
       <div class="side sh">
         <div class="panel">
-          <div class="ph">${T('DAILY CHALLENGES', { size: 13, weight: 1.35, tracking: 2.4 })}<span class="r">${t11('RESETS 14H 22M', { size: 9 })}</span></div>
-          ${ch.map(([k, d, v, n]) => `<div class="chal"><div class="ic">${k === 'head' ? headshotSVG('', 22) : k === 'kill' ? skullSVG('', 22) : medalSVG('kill', 24)}</div>
-            <div class="tx"><span class="d">${d}</span><div class="pb"><i style="width:${(v / n) * 100}%"></i></div></div><span class="v">${T(`${v}/${n}`, { size: 11, weight: 1.25 })}</span></div>`).join('')}
+          <div class="ph">${T('DAILY CHALLENGES', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${t11('RESETS 14H 22M')}</span></div>
+          ${ch.map(([k, d, v, n, xp]) => `<div class="chal"><div class="ic">${medalSVG(k, 40)}</div>
+            <div class="tx"><span class="d">${T(d, { size: 12, weight: 1.45, tracking: 1.9 })}</span><div class="pb"><i style="width:${(v / n) * 100}%"></i></div><span class="x">${t11('+' + xp + ' XP')}</span></div><span class="v">${N(`${v}/${n}`, 14)}</span></div>`).join('')}
         </div>
-        <div class="panel"><div class="ph">${T('CAREER', { size: 13, weight: 1.35, tracking: 2.4 })}<span class="r">${t11(`${P.matches} MATCHES`, { size: 9 })}</span></div>
+        <div class="panel bp"><div class="ph">${T('SEASON 01  ·  BATTLE PASS', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${t11('TIER 23 / 100')}</span></div>
+          <div class="bpb"><div class="pips">${Array.from({ length: 10 }, (_, i) => `<i class="${i < 6 ? 'on' : i === 6 ? 'cur' : ''}"></i>`).join('')}</div>
+            <div class="rw"><div class="cc" style="background-image:url(${this.bpCard})"></div><div class="rt">${t11('NEXT REWARD', { size: 11 })}${T('CALLING CARD  ·  WHITEOUT', { size: 13, weight: 1.55, tracking: 1.8 })}</div></div></div></div>
+        <div class="panel"><div class="ph">${T('CAREER', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${t11(`${P.matches} MATCHES`)}</span></div>
           <div class="kv" style="grid-template-columns:1fr 1fr 1fr">
-            <div><span class="k">${t11('KILLS', { size: 9 })}</span>${T(String(P.kills), { size: 20, weight: 1.45 })}</div>
-            <div><span class="k">${t11('HEADSHOTS', { size: 9 })}</span>${T(String(P.headshots), { size: 20, weight: 1.45 })}</div>
-            <div><span class="k">${t11('WINS', { size: 9 })}</span>${T(String(P.wins), { size: 20, weight: 1.45 })}</div>
+            <div><span class="k">${t11('KILLS')}</span>${N(P.kills, 26)}</div>
+            <div><span class="k">${t11('HEADSHOTS')}</span>${N(P.headshots, 26)}</div>
+            <div><span class="k">${t11('WINS')}</span>${N(P.wins, 26)}</div>
           </div></div>
       </div>
       ${this.footer([['ENTER', 'DEPLOY'], ['L', 'LOADOUT'], ['O', 'SETTINGS']])}`;
@@ -192,7 +208,7 @@ export class Screens {
           <div class="nm">${T(wname, { size: 56, weight: 1.55, tracking: 3 })}</div>
           <div class="big"><div class="gs-host"></div><div class="gs-floor"></div><div class="gs-fallback">${W.svg(760)}</div></div>
           <div class="atts">${Object.entries(ATT).map(([k, a]) => `<div class="acol"><span class="k">${t11(a.label, { size: 9 })}</span>${a.opts.map((o, i) => `<div class="att ${L[k] === i ? 'on' : ''}" data-att="${k}:${i}">${T(o, { size: 11, weight: 1.3, tracking: 1.8 })}</div>`).join('')}</div>`).join('')}</div>
-          <div class="stats">${stats.map(([b, v], i) => `<div class="stat"><div class="t">${t11(STAT_NAMES[i], { size: 10 })}${T(String(v), { size: 11, weight: 1.3 })}</div><div class="b"><i class="d" style="width:${Math.max(b, v)}%;${v < b ? 'background:var(--red2)' : ''}"></i><i style="width:${Math.min(b, v)}%"></i></div></div>`).join('')}</div>
+          <div class="stats">${stats.map(([b, v], i) => `<div class="stat"><div class="t">${t11(STAT_NAMES[i])}${N(v, 12)}</div><div class="b"><i class="d" style="width:${Math.max(b, v)}%;${v < b ? 'background:var(--red2)' : ''}"></i><i style="width:${Math.min(b, v)}%"></i></div></div>`).join('')}</div>
         </div>
       </div>
       ${this.footer([['ESC', 'BACK'], ['ENTER', 'DEPLOY']])}`;
@@ -206,7 +222,7 @@ export class Screens {
       const v = S[o.id];
       if (o.type === 'range') {
         const p = ((v - o.min) / (o.max - o.min)) * 100;
-        return `<input type="range" min="${o.min}" max="${o.max}" step="${o.step}" value="${v}" data-opt="${o.id}" style="--p:${p}%"><span class="val">${T(o.fmt(v), { size: 13, weight: 1.35 })}</span>`;
+        return `<input type="range" min="${o.min}" max="${o.max}" step="${o.step}" value="${v}" data-opt="${o.id}" style="--p:${p}%"><span class="val">${N(o.fmt(v), 14)}</span>`;
       }
       if (o.type === 'bool') return `<div class="seg" data-opt="${o.id}">${['OFF', 'ON'].map((n, i) => `<b class="${!!v === !!i ? 'on' : ''}" data-v="${i}">${t11(n, { size: 10 })}</b>`).join('')}</div>`;
       return `<div class="seg" data-opt="${o.id}">${o.opts.map((n) => `<b class="${v === n ? 'on' : ''}" data-v="${n}">${t11(n, { size: 10 })}</b>`).join('')}</div>`;
@@ -254,14 +270,14 @@ export class Screens {
           <div class="btn" data-act="quit" tabindex="0">${T('QUIT TO MAIN MENU', { size: 14, weight: 1.3, tracking: 2.6 })}</div>
         </div>
       </div>
-      <div class="mstat panel sh"><div class="ph">${T('MATCH STATUS', { size: 13, weight: 1.35, tracking: 2.4 })}<span class="r">${T(fmtTime(m.timeLeft), { size: 12, weight: 1.3 })}</span></div>
+      <div class="mstat panel sh"><div class="ph">${T('MATCH STATUS', { size: 13, weight: 1.35, tracking: 2.4 })}<span class="r">${N(fmtTime(m.timeLeft), 13)}</span></div>
         <div class="kv">
-          <div><span class="k">${t11('KILLS', { size: 9 })}</span>${T(`${m.kills}/${MODE.target}`, { size: 22, weight: 1.45 })}</div>
-          <div><span class="k">${t11('DEATHS', { size: 9 })}</span>${T(String(m.deaths), { size: 22, weight: 1.45 })}</div>
-          <div><span class="k">${t11('SCORE', { size: 9 })}</span>${T(String(m.score), { size: 22, weight: 1.45 })}</div>
-          <div><span class="k">${t11('ACCURACY', { size: 9 })}</span>${T(Math.round(m.accuracy * 100) + '%', { size: 22, weight: 1.45 })}</div>
-          <div><span class="k">${t11('HEADSHOTS', { size: 9 })}</span>${T(String(m.headshots), { size: 22, weight: 1.45 })}</div>
-          <div><span class="k">${t11('BEST STREAK', { size: 9 })}</span>${T(String(m.bestStreak), { size: 22, weight: 1.45 })}</div>
+          <div><span class="k">${t11('KILLS', { size: 9 })}</span>${N(`${m.kills}/${MODE.target}`, 24)}</div>
+          <div><span class="k">${t11('DEATHS', { size: 9 })}</span>${N(String(m.deaths), 24)}</div>
+          <div><span class="k">${t11('SCORE', { size: 9 })}</span>${N(String(m.score), 24)}</div>
+          <div><span class="k">${t11('ACCURACY', { size: 9 })}</span>${N(Math.round(m.accuracy * 100) + '%', 24)}</div>
+          <div><span class="k">${t11('HEADSHOTS', { size: 9 })}</span>${N(String(m.headshots), 24)}</div>
+          <div><span class="k">${t11('BEST STREAK', { size: 9 })}</span>${N(String(m.bestStreak), 24)}</div>
         </div></div>
       ${this.footer([['ESC', 'RESUME']])}`;
   }
@@ -279,27 +295,27 @@ export class Screens {
     const lv = levelOf(P.xp);
     const rows = [...m.hostile.values()].sort((a, b) => b.score - a.score || b.kills - a.kills);
     const ping = (i) => 28 + ((i * 17) % 23);
-    const cell = (v, o = {}) => `<td>${T(String(v), { size: 13, weight: 1.3, ...o })}</td>`;
+    const cell = (v, o = {}) => `<td>${N(v, 14, o)}</td>`;
     const hdr = ['', 'SCORE', 'KILLS', 'DEATHS', 'K/D', 'ACCURACY', 'PING'].map((h) => `<th>${h ? t11(h, { size: 9 }) : ''}</th>`).join('');
     const kills = m.kills, deaths = m.deaths;
     return `<div class="sb sh">
       ${final ? '' : `<div class="hdr"><div class="l">${t11(`${MODE.name}  ·  ${MODE.map}`)}${T('SCOREBOARD', { size: 34, weight: 1.5, tracking: 3.4 })}</div>
-        <div class="r"><div class="big"><span style="color:var(--blue)">${T(String(kills), { size: 38, weight: 1.55 })}</span>${t11('VS', { size: 10 })}<span style="color:var(--red2)">${T(String(deaths), { size: 38, weight: 1.55 })}</span></div>
-        <div class="timer" style="padding:10px 14px;border:1px solid var(--line);background:var(--plate)">${T(fmtTime(m.timeLeft), { size: 16, weight: 1.4, tracking: 1.8 })}</div></div></div>`}
-      <div class="tm"><div class="tmh us">${T('IRONLINE', { size: 13, weight: 1.4, tracking: 2.6 })}${t11('OPERATOR', { size: 9 })}<span class="sc">${T(String(m.score), { size: 16, weight: 1.45 })}</span></div>
+        <div class="r"><div class="big"><span style="color:var(--blue)">${N(kills, 40)}</span>${t11('VS', { size: 10 })}<span style="color:var(--red2)">${N(deaths, 40)}</span></div>
+        <div class="timer" style="padding:10px 14px;border:1px solid var(--line);background:var(--plate)">${N(fmtTime(m.timeLeft), 16)}</div></div></div>`}
+      <div class="tm"><div class="tmh us">${T('IRONLINE', { size: 13, weight: 1.4, tracking: 2.6 })}${t11('OPERATOR', { size: 9 })}<span class="sc">${N(m.score, 16)}</span></div>
         <table><colgroup><col class="c0"><col><col><col><col><col><col></colgroup><thead><tr>${hdr}</tr></thead><tbody>
           <tr class="me"><td><div class="nmc"><span style="color:var(--amber)">${rankSVG(lv.level, '', 26)}</span><span class="rkc">${T(String(lv.level), { size: 11, weight: 1.3 })}</span>${T(`[${P.tag}] ${P.callsign}`, { size: 13, weight: 1.35, tracking: 2 })}</div></td>
-          ${cell(m.score)}${cell(kills)}${cell(deaths)}${cell(m.kd.toFixed(2))}${cell(Math.round(m.accuracy * 100) + '%')}${cell(24, { weight: 1.1 })}</tr>
+          ${cell(m.score)}${cell(kills)}${cell(deaths)}${cell(m.kd.toFixed(2))}${cell(Math.round(m.accuracy * 100) + '%')}${cell(24, { weight: 1.2 })}</tr>
         </tbody></table></div>
-      <div class="tm"><div class="tmh them">${T('HOSTILE CELL', { size: 13, weight: 1.4, tracking: 2.6 })}${t11('OPFOR', { size: 9 })}<span class="sc">${T(String(rows.reduce((a, r) => a + r.score, 0)), { size: 16, weight: 1.45 })}</span></div>
+      <div class="tm"><div class="tmh them">${T('HOSTILE CELL', { size: 13, weight: 1.4, tracking: 2.6 })}${t11('OPFOR', { size: 9 })}<span class="sc">${N(rows.reduce((a, r) => a + r.score, 0), 16)}</span></div>
         <table><colgroup><col class="c0"><col><col><col><col><col><col></colgroup><thead><tr>${hdr}</tr></thead><tbody>
         ${rows.map((r, i) => `<tr class="${r.alive ? '' : 'dead'}"><td><div class="nmc"><span style="color:var(--ink2)">${rankSVG(7 + i * 5, '', 26)}</span><span class="rkc">${T(String(8 + ((i * 13) % 40)), { size: 11, weight: 1.3 })}</span>${T(r.name, { size: 13, weight: 1.35, tracking: 2 })}</div></td>
-          ${cell(r.score)}${cell(r.kills)}${cell(r.deaths)}${cell((r.deaths ? r.kills / r.deaths : r.kills).toFixed(2))}${cell('—', { weight: 1.1 })}${cell(ping(i), { weight: 1.1 })}</tr>`).join('')}
+          ${cell(r.score)}${cell(r.kills)}${cell(r.deaths)}${cell((r.deaths ? r.kills / r.deaths : r.kills).toFixed(2))}${cell('—', { weight: 1.2 })}${cell(ping(i), { weight: 1.2 })}</tr>`).join('')}
         </tbody></table></div>
     </div>`;
   }
 
-  // ─── fim de partida ─────────────────────────────────────────────────
+  // ─── fim de partida: relatório pós-ação ─────────────────────────────
   end() {
     const m = this.hud.match;
     const P = this.hud.profile;
@@ -307,30 +323,79 @@ export class Screens {
     const before = levelOf(Math.max(0, P.xp - m.xpEarned));
     const after = levelOf(P.xp);
     const medals = Object.entries(m.medals);
-    const tile = (k, v, d = 0) => `<div style="animation-delay:${0.5 + d * 0.06}s"><span class="k">${t11(k, { size: 9 })}</span>${T(String(v), { size: 30, weight: 1.5 })}</div>`;
-    return `<div class="shade-full mesh" style="background-color:rgba(5,7,9,.78)"></div><div class="shade-vig"></div>${this.chrome()}<div class="grain" style="background-image:url(${this.grain})"></div>
-      <div class="res sh">${t11(`${MODE.name}  ·  ${MODE.map}  ·  ${fmtTime(Math.max(0, MODE.time - m.timeLeft))}`)}
-        <div class="w ${win ? 'win' : 'loss'}">${T(win ? 'VICTORY' : 'DEFEAT', { size: 92, weight: 1.6, tracking: 6 })}</div>
-        <div class="sub">${T(win ? 'HOSTILE CELL NEUTRALIZED' : 'OBJECTIVE FAILED', { size: 14, weight: 1.3, tracking: 3 })}</div></div>
-      <div class="grid sh">
-        <div class="panel"><div class="ph">${T('PERFORMANCE', { size: 13, weight: 1.35, tracking: 2.4 })}<span class="r">${t11('OPERATOR ' + P.callsign, { size: 9 })}</span></div>
-          <div class="tiles">${tile('SCORE', m.score, 0)}${tile('KILLS', m.kills, 1)}${tile('DEATHS', m.deaths, 2)}${tile('K/D RATIO', m.kd.toFixed(2), 3)}${tile('ACCURACY', Math.round(m.accuracy * 100) + '%', 4)}${tile('HEADSHOTS', m.headshots, 5)}${tile('BEST STREAK', m.bestStreak, 6)}${tile('LONGEST KILL', Math.round(m.longest) + 'M', 7)}${tile('DAMAGE', Math.round(m.damage), 8)}</div></div>
-        <div style="display:flex;flex-direction:column;gap:28px">
-          <div class="panel"><div class="ph">${T('MEDALS', { size: 13, weight: 1.35, tracking: 2.4 })}<span class="r">${t11(medals.length + ' EARNED', { size: 9 })}</span></div>
-            <div class="medals">${medals.length ? medals.map(([n, v]) => `<div class="md">${medalSVG(v.kind, 64)}${T(n, { size: 9, weight: 1.2, tracking: 1.6 })}<span class="c">${T('×' + v.n, { size: 10, weight: 1.3 })}</span></div>`).join('') : `<div style="color:var(--ink3);padding:10px 0">${t11('NO MEDALS THIS MATCH')}</div>`}</div></div>
-          <div class="panel"><div class="ph">${T('PROGRESSION', { size: 13, weight: 1.35, tracking: 2.4 })}<span class="r" style="color:var(--amber)">${T('+' + m.xpEarned + ' XP', { size: 12, weight: 1.35 })}</span></div>
-            <div class="prog">
-              <div class="xpl"><span style="color:var(--amber)">${rankSVG(after.level, '', 40)}</span>${T('LEVEL ' + after.level, { size: 16, weight: 1.45, tracking: 2.2 })}
-                <div class="xpb"><i class="g" style="width:${((after.into / after.need) * 100).toFixed(1)}%"></i><i style="width:${after.level > before.level ? 0 : ((before.into / before.need) * 100).toFixed(1)}%"></i></div>
-                ${T(`${after.into}/${after.need}`, { size: 11, weight: 1.25 })}</div>
-              ${after.level > before.level ? `<div style="color:var(--amber)">${T('LEVEL UP', { size: 13, weight: 1.45, tracking: 3 })}</div>` : ''}
-            </div></div>
+    const lv = after.level;
+    this.card = this.card || callingCard('IRON DAWN', { seed: 3, theme: 0, sub: 'SEASON 01 VETERAN' });
+    // classificação geral (eu + células hostis), por pontuação
+    const hostiles = [...m.hostile.values()];
+    const all = [
+      { me: true, name: `[${P.tag}] ${P.callsign}`, lvl: lv, score: m.score, kills: m.kills, deaths: m.deaths, hs: m.headshots, acc: Math.round(m.accuracy * 100) + '%' },
+      ...hostiles.map((r, i) => ({ name: r.name, lvl: 8 + ((i * 13 + r.name.length * 7) % 44), score: r.score, kills: r.kills, deaths: r.deaths, hs: Math.floor(r.kills / 2), acc: 18 + ((r.name.length * 7 + i * 5) % 17) + '%', seed: r.name })),
+    ].sort((a, b) => b.score - a.score);
+    const nemesis = hostiles.slice().sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)[0];
+    const theirScore = hostiles.reduce((a, r) => a + r.kills, 0);
+    const row = (r, i) => `<tr class="${r.me ? 'me' : ''}">
+        <td class="c-r">${N(i + 1, 14)}</td>
+        <td class="c-l"><span class="lb">${r.me ? emblemSVG('vance', 30, 'gold') : emblemSVG(r.seed, 30, 'red')}</span>${N(r.lvl, 13)}</td>
+        <td class="c-n">${T(r.name, { size: 14, weight: 1.55, tracking: 1.9 })}${r.me ? '' : `<span class="tm-r">${t11('HOSTILE')}</span>`}</td>
+        <td>${N(r.score, 15)}</td><td>${N(r.kills, 15)}</td><td>${N(r.deaths, 15)}</td><td>${N((r.deaths ? r.kills / r.deaths : r.kills).toFixed(2), 15)}</td><td>${N(r.hs, 15)}</td><td>${N(r.acc, 15)}</td></tr>`;
+    const hdr = ['#', 'LV', 'PLAYER', 'SCORE', 'KILLS', 'DEATHS', 'K/D', 'HS', 'ACC'];
+    const tile = (k, v, d = 0) => `<div style="animation-delay:${0.35 + d * 0.06}s"><span class="k">${t11(k)}</span>${N(v, 40)}</div>`;
+    const g = this.hud.gunIcon;
+    const wname = this.ctx.services.weapon?.name || 'KR-9';
+    const wkills = Math.max(0, m.kills - (m.fragKills || 0));
+    const bar = (k, v, max, txt) => `<div class="wb"><span class="k">${t11(k)}</span><div class="b"><i style="width:${Math.min(100, (v / max) * 100).toFixed(0)}%"></i></div>${N(txt ?? v, 14)}</div>`;
+    return `<div class="shade-full aar" style="background-color:rgba(5,7,9,.62)"></div><div class="aar-grade"></div><div class="shade-vig"></div>${this.aarFrame()}<div class="grain" style="background-image:url(${this.grain})"></div>
+      <div class="aar-top sh">
+        <div class="ttl">${t11(`${MODE.name}  ·  ${MODE.map}  ·  ${fmtTime(Math.max(0, MODE.time - m.timeLeft))}`)}${T('AFTER ACTION REPORT', { size: 34, weight: 1.9, tracking: 3 })}</div>
+        <div class="atabs"><span>${t11('SUMMARY', { size: 13 })}</span><span class="on">${t11('SCOREBOARD', { size: 13 })}</span><span>${t11('WEAPON STATS', { size: 13 })}</span><span>${t11('REWARDS', { size: 13 })}</span></div>
+        <div class="res ${win ? 'win' : 'loss'}">${T(win ? 'VICTORY' : 'DEFEAT', { size: 40, weight: 2.2, tracking: 5 })}<span>${t11(win ? 'HOSTILE CELL NEUTRALIZED' : 'OBJECTIVE FAILED')}</span></div>
+      </div>
+      <div class="aar-teams sh">
+        <div class="tm us">${emblemSVG('vance', 64, 'gold')}${T('IRONLINE', { size: 34, weight: 2, tracking: 3.4 })}</div>
+        <div class="vs"><span class="a">${N(m.kills, 54, { weight: 1.8 })}</span><span class="sk">${skullSVG('', 40)}</span><span class="b">${N(theirScore, 54, { weight: 1.8 })}</span></div>
+        <div class="tm them">${T('HOSTILE CELL', { size: 34, weight: 2, tracking: 3.4 })}${emblemSVG('opfor', 64, 'red')}</div>
+      </div>
+      <div class="aar-body">
+        <div class="lcol">
+          <div class="panel stand sh"><table><thead><tr>${hdr.map((h, i) => `<th class="${i < 3 ? ['c-r', 'c-l', 'c-n'][i] : ''}">${t11(h)}</th>`).join('')}</tr></thead><tbody>${all.map(row).join('')}</tbody></table></div>
+          <div class="me-strip sh">
+            <div class="pcard"><div class="cc" style="background-image:url(${this.card})"></div><div class="pi">${emblemSVG('vance', 56, 'gold')}<div>${T(P.callsign, { size: 20, weight: 1.75, tracking: 2.4 })}<div class="pl">${rankSVG(lv, '', 22)}${t11('LEVEL ' + lv)}</div></div></div>
+              <div class="xpbk">${[['KILLS', m.kills * 100], ['HEADSHOTS', m.headshots * 50], ['MEDALS', medals.reduce((a, [, v]) => a + v.n * 50, 0)], [win ? 'VICTORY BONUS' : 'MATCH BONUS', win ? 1500 : 300]].map(([k, v]) => `<div>${t11(k)}<span>${N('+' + v, 13)}</span></div>`).join('')}</div></div>
+            <div class="tiles">${tile('ELIMINATIONS', m.kills, 0)}${tile('DEATHS', m.deaths, 1)}${tile('K/D RATIO', m.kd.toFixed(2), 2)}${tile('ACCURACY', Math.round(m.accuracy * 100) + '%', 3)}${tile('SCORE', m.score, 4)}</div>
+          </div>
+          <div class="acts">
+            <div class="btn pri" data-act="restart" tabindex="0">${T('PLAY AGAIN', { size: 19, weight: 2, tracking: 3.4 })}<span class="chev">${T('>>', { size: 14, weight: 2.2, tracking: 0.8 })}</span></div>
+            <div class="btn" data-act="quit" tabindex="0">${T('MAIN MENU', { size: 15, weight: 1.55, tracking: 2.6 })}<span class="hint">${key('ESC')}</span></div>
+            <div class="nxt">${t11('NEXT MATCH IN')}${N('0:24', 16)}</div>
+          </div>
+        </div>
+        <div class="rcol sh">
+          ${nemesis ? `<div class="panel nem"><div class="nh">${T('NEMESIS', { size: 14, weight: 1.7, tracking: 3 })}</div>
+            <div class="nb">${emblemSVG(nemesis.name, 52, 'red')}<div class="nn">${T(nemesis.name, { size: 22, weight: 1.8, tracking: 2.6 })}${t11('HOSTILE CELL  ·  RIFLEMAN')}</div>
+            <div class="nk"><div><span class="k">${t11('KILLED')}</span>${N(nemesis.deaths, 26)}</div><div><span class="k">${t11('KILLED BY')}</span><span style="color:var(--red2)">${N(nemesis.kills, 26)}</span></div></div></div></div>` : ''}
+          <div class="panel wst"><div class="ph">${T('WEAPON STATS', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${t11('PRIMARY')}</span></div>
+            <div class="wtop"><div class="wimg">${g ? `<img src="${g.shaded || g.url}" style="height:54px;width:${Math.round(54 * g.aspect)}px" alt="">` : rifleSVG('', 190)}</div>${T(wname, { size: 20, weight: 1.8, tracking: 2.6 })}</div>
+            ${bar('KILLS', wkills, 30)}${bar('HEADSHOTS', m.headshots, Math.max(1, m.kills))}${bar('ACCURACY', m.accuracy * 100, 100, Math.round(m.accuracy * 100) + '%')}${bar('DAMAGE', m.damage, 5000, Math.round(m.damage))}${bar('LONGEST', m.longest, 80, Math.round(m.longest) + ' M')}</div>
+          <div class="panel md"><div class="ph">${T('MEDALS', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${t11(medals.length + ' EARNED')}</span></div>
+            <div class="medals">${medals.length ? medals.map(([n, v]) => `<div class="mdl">${medalSVG(v.kind, 62)}<span class="mn">${T(n, { size: 11, weight: 1.45, tracking: 1.4 })}</span><span class="c">${N('×' + v.n, 12)}</span></div>`).join('') : `<div style="color:var(--ink3);padding:10px 0">${t11('NO MEDALS THIS MATCH')}</div>`}</div></div>
+          <div class="panel prog"><div class="xpl"><span style="color:var(--amber)">${rankSVG(after.level, '', 38)}</span><div class="xx">${T('LEVEL ' + after.level, { size: 16, weight: 1.7, tracking: 2.2 })}
+              <div class="xpb"><i class="g" style="width:${((after.into / after.need) * 100).toFixed(1)}%"></i><i style="width:${after.level > before.level ? 0 : ((before.into / before.need) * 100).toFixed(1)}%"></i></div></div>
+              <div class="xr"><span style="color:var(--amber)">${N('+' + m.xpEarned + ' XP', 16)}</span>${N(`${after.into}/${after.need}`, 12, { weight: 1.3 })}</div></div>
+              ${after.level > before.level ? `<div style="color:var(--amber);margin-top:10px">${T('LEVEL UP', { size: 14, weight: 1.7, tracking: 3 })}</div>` : ''}</div>
         </div>
       </div>
-      <div class="acts">
-        <div class="btn pri" data-act="restart" tabindex="0">${T('PLAY AGAIN', { size: 18, weight: 1.6, tracking: 3.4 })}<span class="chev">${T('>>', { size: 14, weight: 1.8, tracking: 0.8 })}</span></div>
-        <div class="btn" data-act="quit" tabindex="0">${T('MAIN MENU', { size: 14, weight: 1.3, tracking: 2.6 })}</div>
-      </div>`;
+`;
+  }
+  /** moldura "sci-fi" do relatório: cantos chanfrados e réguas */
+  aarFrame() {
+    return `<svg class="chrome" width="1920" height="1080" viewBox="0 0 1920 1080">
+      <g fill="none" stroke="rgba(242,244,239,.16)" stroke-width="1.2">
+        <path d="M40,150 L80,110 H760 L790,140 H1130 L1160,110 H1840 L1880,150"/>
+        <path d="M40,960 L80,1000 H700 L730,970 H1190 L1220,1000 H1840 L1880,960"/>
+      </g>
+      <g stroke="rgba(255,178,46,.8)" stroke-width="2.4" fill="none"><path d="M80,110 H200 M1720,110 H1840 M790,140 H860 M1060,140 H1130"/></g>
+      <g fill="rgba(242,244,239,.35)">${Array.from({ length: 30 }, (_, i) => `<rect x="${812 + i * 10}" y="${i % 5 ? 148 : 146}" width="1.2" height="${i % 5 ? 3 : 6}"/>`).join('')}</g>
+    </svg>`;
   }
 
   // ─── interação ──────────────────────────────────────────────────────
@@ -364,7 +429,7 @@ export class Screens {
       const v = Number(r.value);
       hud.setOption(id, v);
       r.style.setProperty('--p', ((v - o.min) / (o.max - o.min)) * 100 + '%');
-      r.nextElementSibling.innerHTML = T(o.fmt(v), { size: 13, weight: 1.35 });
+      r.nextElementSibling.innerHTML = N(o.fmt(v), 14);
       if (id === 'fov') el.querySelector('.pv').innerHTML = this.preview('fov');
     });
     el.addEventListener('mouseover', (ev) => {
@@ -427,6 +492,7 @@ export class Screens {
     if (code === 'KeyL' && this.cur === 'main') { this.go('loadout'); return true; }
     if (code === 'KeyO' && this.cur === 'main') { this.go('settings'); return true; }
     if (code === 'Escape' || code === 'Backspace') {
+      if (this.cur === 'end') { this.hud.action('quit'); return true; }
       if (this.cur === 'loadout' || this.cur === 'settings') { this.show(this.hud.inMatch ? 'pause' : 'main'); return true; }
       if (this.cur === 'pause') { this.hud.action('resume'); return true; }
     }

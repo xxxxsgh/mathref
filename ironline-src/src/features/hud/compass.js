@@ -49,8 +49,8 @@ export class Compass {
     // sombra suave atrás das marcas (legibilidade sobre céu claro)
     const sg = g.createLinearGradient(0, 0, W, 0);
     sg.addColorStop(0, 'rgba(0,0,0,0)');
-    sg.addColorStop(0.2, 'rgba(0,0,0,.16)');
-    sg.addColorStop(0.8, 'rgba(0,0,0,.16)');
+    sg.addColorStop(0.2, 'rgba(0,0,0,.3)');
+    sg.addColorStop(0.8, 'rgba(0,0,0,.3)');
     sg.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = sg;
     g.fillRect(0, 2, W, 38);
@@ -66,13 +66,13 @@ export class Compass {
       g.globalAlpha = a * (major ? 0.95 : 0.55);
       g.fillStyle = '#f2f4ef';
       const th = card ? 10 : major ? 7 : 4;
-      g.fillRect(Math.round(x) - 0.75, 34 - th, 1.5, th);
+      g.fillRect(Math.round(x) - 1, 34 - th, 2, th);
       g.globalAlpha = a;
       if (card) {
-        drawText(g, card, x, 8, { size: card.length === 1 ? 14 : 11, weight: card.length === 1 ? 1.5 : 1.25, align: 'center', color: deg === 0 ? '#ffb22e' : '#f2f4ef' });
+        drawText(g, card, x, 7, { size: card.length === 1 ? 15 : 12, weight: card.length === 1 ? 1.75 : 1.5, align: 'center', color: deg === 0 ? '#ffb22e' : '#f2f4ef' });
       } else if (major) {
         g.globalAlpha = a * 0.6;
-        drawText(g, String(deg), x, 11, { size: 9, weight: 1.15, tracking: 1.6, align: 'center', color: '#f2f4ef' });
+        drawText(g, String(deg), x, 10, { size: 11, weight: 1.4, tracking: 1.4, align: 'center', color: '#f2f4ef' });
       }
     }
     // linha de base
@@ -110,6 +110,10 @@ export class Compass {
     g.closePath();
     g.fill();
     const hd = String(Math.round(heading) % 360).padStart(3, '0');
-    drawText(g, hd, cx, 51, { size: 12, weight: 1.35, tracking: 1.8, align: 'center', color: '#f2f4ef' });
+    g.fillStyle = 'rgba(8,10,12,.78)';
+    g.fillRect(cx - 24, 47, 48, 21);
+    g.fillStyle = 'rgba(255,178,46,.9)';
+    g.fillRect(cx - 24, 47, 48, 1.5);
+    drawText(g, hd, cx, 52, { size: 12, weight: 1.4, tracking: 1.4, align: 'center', color: '#f2f4ef', heavy: true });
   }
 }

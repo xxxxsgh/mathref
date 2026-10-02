@@ -466,9 +466,9 @@ export class Body {
       // recostado para trás: pelve à frente da coluna da câmera, perna
       // esquerda estendida (o que se vê), direita dobrada por baixo
       const sv = clamp(speed / 8, 0.5, 1);
-      P.pelvis.set(0.0, 0.2, 0.02);
+      P.pelvis.set(0.0, 0.2, -0.04);
       P.pelvisPitch = 0.75;
-      P.L.ankle.set(-0.17, 0.12 + 0.012 * Math.sin(slideT * 40), -0.86 - 0.03 * sv);
+      P.L.ankle.set(-0.2, 0.12 + 0.012 * Math.sin(slideT * 40), -0.92 - 0.03 * sv);
       P.L.pole.set(-0.1, 1, -0.2);
       P.L.toe = 0.95; // bico para cima, calcanhar raspando
       P.L.roll = -0.12;

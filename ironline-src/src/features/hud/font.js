@@ -100,22 +100,48 @@ function parse(d) {
 const GLYPHS = {};
 for (const [k, [w, d]] of Object.entries(G)) GLYPHS[k] = { w, lines: parse(d) };
 
+/*
+ * Face PESADA ("IRON HEAVY") para números e valores: o mesmo esqueleto,
+ * alargado (counters abertos para o traço grosso não entupir) e com alguns
+ * glifos redesenhados — '%' de estêncil, 'M'/'W' mais abertos, '1' sem
+ * bandeira longa. É desenhada com traço ~2× mais grosso (ver svgText).
+ */
+const HX = 1.18;
+const HEAVY_OVR = {
+  '%': [9.2, 'M1.8,10 L7.4,0 M0.6,0.8 H1.8 V2.2 H0.6 Z M7.4,7.8 H8.6 V9.2 H7.4 Z'],
+  M: [8.8, 'M0,10 V0 L4.4,5.6 L8.8,0 V10'],
+  W: [9.6, 'M0,0 L2.2,10 L4.8,3.2 L7.4,10 L9.6,0'],
+  '1': [5.2, 'M0.6,2.2 L3.4,0 V10'],
+  '.': [1.4, 'M0.7,9.2 V10'],
+  ':': [1.4, 'M0.7,2.4 V3.2 M0.7,9.2 V10'],
+  '/': [4.6, 'M0,10.4 L4.6,-0.4'],
+  '×': [5.4, 'M0.4,2.6 L5,7.4 M5,2.6 L0.4,7.4'],
+};
+const HEAVY = {};
+for (const [k, g] of Object.entries(GLYPHS)) {
+  if (HEAVY_OVR[k]) continue;
+  const wide = g.w >= 4;
+  const sx = wide ? HX : 1;
+  HEAVY[k] = { w: g.w * sx, lines: g.lines.map((l) => Object.assign(l.map(([x, y]) => [x * sx, y]), { closed: l.closed })) };
+}
+for (const [k, [w, d]] of Object.entries(HEAVY_OVR)) HEAVY[k] = { w, lines: parse(d) };
+
 const fallback = GLYPHS['?'];
-const glyph = (ch) => GLYPHS[ch] || GLYPHS[ch.toUpperCase()] || fallback;
+const glyph = (ch, heavy) => (heavy && (HEAVY[ch] || HEAVY[ch.toUpperCase()])) || GLYPHS[ch] || GLYPHS[ch.toUpperCase()] || fallback;
 
 /** Largura em unidades (altura de caixa = 10) com espaçamento `tracking`. */
-export function measure(str, tracking = 1.7) {
+export function measure(str, tracking = 1.7, heavy = false) {
   let w = 0;
   const s = String(str);
-  for (let i = 0; i < s.length; i++) w += glyph(s[i]).w + (i < s.length - 1 ? tracking : 0);
+  for (let i = 0; i < s.length; i++) w += glyph(s[i], heavy).w + (i < s.length - 1 ? tracking : 0);
   return w;
 }
 
 /** Caminho SVG (string) do texto em unidades, a partir de x0. */
-export function pathFor(str, tracking = 1.7, x0 = 0) {
+export function pathFor(str, tracking = 1.7, x0 = 0, heavy = false) {
   let x = x0, d = '';
   for (const ch of String(str)) {
-    const g = glyph(ch);
+    const g = glyph(ch, heavy);
     for (const l of g.lines) {
       d += `M${r(l[0][0] + x)},${r(l[0][1])}`;
       for (let j = 1; j < l.length; j++) d += `L${r(l[j][0] + x)},${r(l[j][1])}`;
@@ -131,13 +157,20 @@ const r = (v) => Math.round(v * 100) / 100;
  * Texto como <svg> inline. `size` = altura das maiúsculas em px.
  * weight: espessura do traço em unidades da grade (1 ≈ regular, 1.5 ≈ bold).
  */
-export function svgText(str, { size = 14, weight = 1.05, tracking = 1.7, cls = '', fill = 'currentColor' } = {}) {
+export function svgText(str, { size = 14, weight = 1.05, tracking = 1.7, cls = '', fill = 'currentColor', heavy = false } = {}) {
   const s = String(str).toUpperCase();
+  // piso de legibilidade: nada menor que 11 px de caixa-alta e traço de
+  // pelo menos ~1,45 px (traços de 1 px cintilam/serrilham em 1080p)
+  if (size < 11) size = 11;
+  if (heavy) weight = Math.min(2.6, Math.max(weight * 1.55, 2.05));
+  weight = Math.max(weight, 14.5 / size);
+  // respiro mínimo entre glifos: o traço "quadrado" avança weight/2 de cada lado
+  tracking = Math.max(tracking, weight + (heavy ? 1.1 : 0.7));
   const pad = weight; // margem para o traço não ser cortado
-  const w = measure(s, tracking);
+  const w = measure(s, tracking, heavy);
   const vw = w + pad * 2, vh = 10 + pad * 2;
   const k = size / 10;
-  return `<svg class="ft ${cls}" width="${r(vw * k)}" height="${r(vh * k)}" viewBox="${-pad} ${-pad} ${r(vw)} ${r(vh)}" aria-label="${esc(s)}"><path d="${pathFor(s, tracking)}" fill="none" stroke="${fill}" stroke-width="${weight}" stroke-linecap="square" stroke-linejoin="miter" stroke-miterlimit="3"/></svg>`;
+  return `<svg class="ft ${cls}" width="${r(vw * k)}" height="${r(vh * k)}" viewBox="${-pad} ${-pad} ${r(vw)} ${r(vh)}" aria-label="${esc(s)}"><path d="${pathFor(s, tracking, 0, heavy)}" fill="none" stroke="${fill}" stroke-width="${weight}" stroke-linecap="square" stroke-linejoin="miter" stroke-miterlimit="3"/></svg>`;
 }
 
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -147,10 +180,12 @@ const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>'
  * (x, y) = ponto da linha de base do lado do alinhamento… na verdade o TOPO
  * das maiúsculas: mais prático para HUD.
  */
-export function drawText(g, str, x, y, { size = 12, weight = 1.05, tracking = 1.7, align = 'left', color = '#fff' } = {}) {
+export function drawText(g, str, x, y, { size = 12, weight = 1.05, tracking = 1.7, align = 'left', color = '#fff', heavy = false } = {}) {
   const s = String(str).toUpperCase();
+  if (heavy) weight = Math.min(2.6, Math.max(weight * 1.55, 2.05));
+  tracking = Math.max(tracking, weight + (heavy ? 1.1 : 0.7));
   const k = size / 10;
-  const w = measure(s, tracking) * k;
+  const w = measure(s, tracking, heavy) * k;
   let x0 = x;
   if (align === 'center') x0 -= w / 2;
   else if (align === 'right') x0 -= w;
@@ -165,7 +200,7 @@ export function drawText(g, str, x, y, { size = 12, weight = 1.05, tracking = 1.
   g.beginPath();
   let cx = 0;
   for (const ch of s) {
-    const gl = glyph(ch);
+    const gl = glyph(ch, heavy);
     for (const l of gl.lines) {
       g.moveTo(l[0][0] + cx, l[0][1]);
       for (let j = 1; j < l.length; j++) g.lineTo(l[j][0] + cx, l[j][1]);
