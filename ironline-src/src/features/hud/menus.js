@@ -9,6 +9,7 @@ import { svgText, pathFor } from './font.js';
 import { rifleSVG, pistolSVG, fragSVG, flashSVG, rankSVG, medalSVG, skullSVG, headshotSVG, knifeSVG } from './icons.js';
 import { MODE } from './match.js';
 import { callingCard, emblemSVG } from './art.js';
+import { cropPhoto, photoTitle } from './photo.js';
 import { levelOf, CROSS_COLORS, vfovToH } from './settings.js';
 
 const T = (s, o) => svgText(s, o);
@@ -91,6 +92,43 @@ export class Screens {
     this.hud.onScreen?.(name, el);
   }
 
+  /**
+   * Arte de cartão: FOTO do próprio mundo (photo.js), recortada e com
+   * título; enquanto a foto não existe, a ilustração procedural. O
+   * elemento leva `data-photo` para ser trocado quando a foto chegar.
+   */
+  art(key, w, h, o = {}) {
+    const url = this.artUrl(key, w, h, o);
+    const id = 'a' + (this._ai = (this._ai || 0) + 1);
+    (this._artReq ||= new Map()).set(id, { key, w, h, o });
+    return `data-photo="${key}" data-art="${id}" style="background-image:url(${url})"`;
+  }
+  artUrl(key, w, h, o = {}) {
+    const ck = [key, w, h, o.title || '', o.sub || ''].join('|');
+    this._artCache ||= new Map();
+    if (this._artCache.has(ck)) return this._artCache.get(ck);
+    const ph = this.hud.photos?.get(key);
+    let url;
+    if (ph) {
+      url = cropPhoto(ph, w * 2 > 1200 ? w : w * 2, h * 2 > 1200 ? h : h * 2, {
+        fx: o.fx ?? 0.5, fy: o.fy ?? 0.5, zoom: o.zoom ?? 1,
+        overlay: (g, W, H) => photoTitle(g, W, H, o.title, o.sub),
+      });
+      this._artCache.set(ck, url);
+    } else {
+      url = callingCard(o.title || '', { seed: key.length * 7 + 2, theme: key === 'event' ? 2 : key === 'bp' ? 1 : 0, w: Math.max(w, 420), h: Math.max(h, 105), sub: o.sub || '' });
+    }
+    return url;
+  }
+  /** foto chegou: troca a arte dos elementos já na tela */
+  photoReady(key) {
+    if (!this.el) return;
+    for (const el of this.el.querySelectorAll(`[data-photo="${key}"]`)) {
+      const r = this._artReq?.get(el.dataset.art);
+      if (r) el.style.backgroundImage = `url(${this.artUrl(r.key, r.w, r.h, r.o)})`;
+    }
+  }
+
   /** "cromo" de interface: linhas chanfradas e marcas (sem microtexto ilegível) */
   chrome(top = 118) {
     const B = 1002;
@@ -111,12 +149,12 @@ export class Screens {
     const P = this.hud.profile;
     const lv = levelOf(P.xp);
     const tabs = [['main', 'PLAY'], ['loadout', 'LOADOUT'], ['settings', 'SETTINGS']];
-    this.cardArt = this.cardArt || callingCard('', { seed: 3, theme: 0 });
+
     return `<div class="topbar sh">
       <div class="logo">${logo(22)}</div>
       <div class="tabs">${tabs.map(([id, n]) => `<div class="tab ${id === active ? 'on' : ''}" data-go="${id}">${T(n, { size: 14, weight: 1.5, tracking: 2.6 })}</div>`).join('')}</div>
       <div class="card">
-        <div class="pc" style="background-image:url(${this.cardArt})">
+        <div class="pc" ${this.art('card', 400, 64, { fy: 0.42 })}>
           <span class="em">${emblemSVG('vance', 50, 'gold')}</span>
           <div class="meta">${T(P.callsign, { size: 16, weight: 1.6, tracking: 2.4 })}${t11(`[${P.tag}]  ·  OPERATOR`, { size: 11 })}<div class="xpb"><i style="width:${((lv.into / lv.need) * 100).toFixed(1)}%"></i></div></div>
         </div>
@@ -135,11 +173,9 @@ export class Screens {
       ['kill', 'ELIMINATE HOSTILES', Math.min(P.kills % 25, 25), 25, 3000],
       ['long', 'WIN AN ELIMINATION MATCH', Math.min(P.wins % 1, 1), 1, 5000],
     ];
-    this.evCard = this.evCard || callingCard('IRON DAWN', { seed: 9, theme: 2, w: 600, h: 300, sub: 'LIMITED EVENT  ·  6 DAYS LEFT' });
-    this.bpCard = this.bpCard || callingCard('', { seed: 21, theme: 1, w: 420, h: 105 });
     const g = this.hud.gunIcon;
     const wname = this.ctx.services.weapon?.name || 'KR-9';
-    return `${this.bgMenu()}<div class="hero-glow"></div><div class="hero-host"></div><div class="hero-floor"></div><div class="shade-hero"></div>${this.chrome()}${this.topbar('main')}
+    return `${this.bgMenu()}<div class="hero-host"></div><div class="shade-hero"></div>${this.chrome()}${this.topbar('main')}
       <div class="col sh">
         <div class="eyebrow">${t11('SOLO OPERATIONS  ·  QUICK PLAY')}</div>
         <div class="title">${T(MODE.name, { size: 74, weight: 1.9, tracking: 3 })}</div>
@@ -157,7 +193,7 @@ export class Screens {
         </div>
       </div>
       <div class="feat sh">
-        <div class="tile ev" style="background-image:url(${this.evCard})"><div class="tg">${t11('EVENT', { size: 11 })}</div><div class="pr"><i style="width:62%"></i></div><div class="pv">${t11('TIER 5 / 8')}</div></div>
+        <div class="tile ev" ${this.art('event', 600, 300, { title: 'IRON DAWN', sub: 'LIMITED EVENT  ·  6 DAYS LEFT', fy: 0.5 })}><div class="tg">${t11('EVENT', { size: 11 })}</div><div class="pr"><i style="width:62%"></i></div><div class="pv">${t11('TIER 5 / 8')}</div></div>
         <div class="tile wk"><div class="tg">${t11('WEAPON OF THE OPERATION', { size: 11 })}</div>
           <div class="wimg">${g ? `<img src="${g.shaded || g.url}" style="height:58px;width:${Math.round(58 * g.aspect)}px" alt="">` : rifleSVG('', 200)}</div>
           <div class="wn">${T(wname, { size: 18, weight: 1.7, tracking: 2.4 })}<span>${t11('+50% WEAPON XP')}</span></div></div>
@@ -171,7 +207,7 @@ export class Screens {
         </div>
         <div class="panel bp"><div class="ph">${T('SEASON 01  ·  BATTLE PASS', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${t11('TIER 23 / 100')}</span></div>
           <div class="bpb"><div class="pips">${Array.from({ length: 10 }, (_, i) => `<i class="${i < 6 ? 'on' : i === 6 ? 'cur' : ''}"></i>`).join('')}</div>
-            <div class="rw"><div class="cc" style="background-image:url(${this.bpCard})"></div><div class="rt">${t11('NEXT REWARD', { size: 11 })}${T('CALLING CARD  ·  WHITEOUT', { size: 13, weight: 1.55, tracking: 1.8 })}</div></div></div></div>
+            <div class="rw"><div class="cc" ${this.art('bp', 336, 84, { fy: 0.45 })}></div><div class="rt">${t11('NEXT REWARD', { size: 11 })}${T('CALLING CARD  ·  WHITEOUT', { size: 13, weight: 1.55, tracking: 1.8 })}</div></div></div></div>
         <div class="panel"><div class="ph">${T('CAREER', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${t11(`${P.matches} MATCHES`)}</span></div>
           <div class="kv" style="grid-template-columns:1fr 1fr 1fr">
             <div><span class="k">${t11('KILLS')}</span>${N(P.kills, 26)}</div>
@@ -324,7 +360,6 @@ export class Screens {
     const after = levelOf(P.xp);
     const medals = Object.entries(m.medals);
     const lv = after.level;
-    this.card = this.card || callingCard('IRON DAWN', { seed: 3, theme: 0, sub: 'SEASON 01 VETERAN' });
     // classificação geral (eu + células hostis), por pontuação
     const hostiles = [...m.hostile.values()];
     const all = [
@@ -359,7 +394,7 @@ export class Screens {
         <div class="lcol">
           <div class="panel stand sh"><table><thead><tr>${hdr.map((h, i) => `<th class="${i < 3 ? ['c-r', 'c-l', 'c-n'][i] : ''}">${t11(h)}</th>`).join('')}</tr></thead><tbody>${all.map(row).join('')}</tbody></table></div>
           <div class="me-strip sh">
-            <div class="pcard"><div class="cc" style="background-image:url(${this.card})"></div><div class="pi">${emblemSVG('vance', 56, 'gold')}<div>${T(P.callsign, { size: 20, weight: 1.75, tracking: 2.4 })}<div class="pl">${rankSVG(lv, '', 22)}${t11('LEVEL ' + lv)}</div></div></div>
+            <div class="pcard"><div class="cc" ${this.art('card', 640, 160, { title: 'IRON DAWN', sub: 'SEASON 01 VETERAN', fy: 0.42 })}></div><div class="pi">${emblemSVG('vance', 56, 'gold')}<div>${T(P.callsign, { size: 20, weight: 1.75, tracking: 2.4 })}<div class="pl">${rankSVG(lv, '', 22)}${t11('LEVEL ' + lv)}</div></div></div>
               <div class="xpbk">${[['KILLS', m.kills * 100], ['HEADSHOTS', m.headshots * 50], ['MEDALS', medals.reduce((a, [, v]) => a + v.n * 50, 0)], [win ? 'WIN BONUS' : 'MATCH BONUS', win ? 1500 : 300]].map(([k, v]) => `<div>${t11(k)}<span>${N('+' + v, 13)}</span></div>`).join('')}</div></div>
             <div class="tiles">${tile('ELIMINATIONS', m.kills, 0, 'BEST STREAK ' + m.bestStreak)}${tile('DEATHS', m.deaths, 1, 'DMG ' + Math.round(m.damage))}${tile('K/D RATIO', m.kd.toFixed(2), 2, 'CAREER ' + (P.kills / Math.max(1, P.matches * 6)).toFixed(2))}${tile('ACCURACY', Math.round(m.accuracy * 100) + '%', 3, m.hits + ' / ' + m.shots + ' HITS')}${tile('SCORE', m.score, 4, 'SPM ' + Math.round(m.score / Math.max(1, m.playTime / 60)))}</div>
           </div>

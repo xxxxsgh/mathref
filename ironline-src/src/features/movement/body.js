@@ -276,7 +276,9 @@ export class Body {
     const boot = new THREE.MeshStandardMaterial({ map: bt.map, normalMap: bt.normalMap, normalScale: new THREE.Vector2(0.8, 0.8), roughnessMap: bt.roughnessMap, roughness: 1, metalness: 0 });
     const rubber = new THREE.MeshStandardMaterial({ map: soleTexture(), roughness: 0.93, metalness: 0 });
     const lace = new THREE.MeshStandardMaterial({ color: 0x2a2419, roughness: 0.9, metalness: 0 });
-    const pad = new THREE.MeshStandardMaterial({ color: 0x4a4636, roughness: 0.5, metalness: 0.0 });
+    // joelheira: capa de cordura verde-oliva (mesma trama do tecido), fosca
+    // e empoeirada — nada de calota lisa/brilhante
+    const pad = new THREE.MeshStandardMaterial({ color: 0x5a5644, normalMap: fab.normalMap, normalScale: new THREE.Vector2(1.4, 1.4), roughness: 0.86, metalness: 0.0 });
     const webbing = new THREE.MeshStandardMaterial({ color: 0x3a3a2c, roughness: 0.85 });
     this.mats = [fabric, boot, rubber, pad, webbing, lace];
 
@@ -302,7 +304,7 @@ export class Body {
     shinG.translate(0, -0.02, 0);
     const padG = new THREE.SphereGeometry(1, 18, 12, 0, TAU, 0, Math.PI * 0.62);
     padG.rotateX(-Math.PI / 2); // calota virada para -Z (frente)
-    padG.scale(0.068, 0.085, 0.05);
+    padG.scale(0.064, 0.082, 0.042);
     const strapG = new THREE.TorusGeometry(0.067, 0.008, 6, 20);
     strapG.rotateX(Math.PI / 2);
     const kneeG = new THREE.SphereGeometry(1, 20, 14);
@@ -417,17 +419,24 @@ export class Body {
       // recostado para trás: pelve à frente da coluna da câmera, perna
       // esquerda estendida (o que se vê), direita dobrada por baixo
       const sv = clamp(speed / 8, 0.5, 1);
-      // joelho esquerdo levemente dobrado e erguido (~20 cm): coxa, joelheira
-      // e canela entram no quadro em perspectiva legível, não só a bota
-      P.pelvis.set(0.0, 0.2, -0.1);
-      P.pelvisPitch = 0.75;
-      P.L.ankle.set(-0.25, 0.11 + 0.01 * Math.sin(slideT * 40), -0.86 - 0.04 * sv);
-      P.L.pole.set(-0.25, 1, -0.05);
-      P.L.toe = 0.95; // bico para cima, calcanhar raspando
-      P.L.roll = -0.12;
-      // perna direita em "4": joelho aberto para fora e para baixo, pé sob o joelho esquerdo
-      P.R.ankle.set(-0.02, 0.07, -0.5);
-      P.R.pole.set(1, -0.15, -0.25);
+      // Geometria pensada a partir da câmera (olhos a 0.9 m, olhando ~15°
+      // para baixo): a pelve fica À FRENTE da coluna da cabeça (tronco
+      // recostado), a perna esquerda sai em diagonal para a esquerda-frente
+      // com o joelho levemente dobrado — no quadro ela entra pelo centro-baixo
+      // e termina na bota (bico para cima, cadarço virado para a câmera) no
+      // terço esquerdo, longe da arma (direita). A direita vai dobrada por
+      // baixo, joelho aberto para fora: fica fora do quadro / sob a arma.
+      P.pelvis.set(-0.04, 0.2, -0.24);
+      P.pelvisPitch = 0.9;
+      const chatter = 0.008 * Math.sin(slideT * 43) * sv;
+      // quase esticada (joelho sobe ~6 cm e abre para fora): a canela fica
+      // de lado para a câmera em vez de escondida atrás do joelho
+      P.L.ankle.set(-0.44, 0.125 + chatter, -1.1 - 0.04 * sv);
+      P.L.pole.set(-0.55, 1, 0);
+      P.L.toe = 0.78; // bico para cima, calcanhar raspando
+      P.L.roll = -0.18;
+      P.R.ankle.set(0.13, 0.06, -0.44);
+      P.R.pole.set(1, -0.2, -0.2);
       P.R.toe = 0.1;
       P.R.roll = 1.2;
       return;

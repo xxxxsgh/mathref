@@ -30,7 +30,9 @@ const TINT = {
 };
 
 /** Quanto cada superfície solta de poeira no slide (0..1). */
-const SURF = { dirt: 1, grass: 0.55, brick: 0.6, asphalt: 0.32, concrete: 0.4, wood: 0.3, metal: 0.15 };
+// asfalto/concreto quase não levantam pó (só arenito fino): no slide real o
+// rastro é ralo e fica PARA TRÁS — nada de "neblina" encobrindo a perna
+const SURF = { dirt: 1, grass: 0.45, brick: 0.45, asphalt: 0.11, concrete: 0.15, wood: 0.12, metal: 0.05 };
 
 function puffTexture() {
   const N = 128;
@@ -141,7 +143,7 @@ export class Dust {
       // o pé "empurra" a poeira: sai quase com a velocidade do jogador e
       // abre para os lados; o arrasto a faz ficar para trás em ~0.5 s
       const side = (rng.next() - 0.5) * 2.4;
-      _s.set(dir.x * speed * 1.05 - dir.z * side, 0.3 + rng.next() * 0.5, dir.z * speed * 1.05 + dir.x * side);
+      _s.set(dir.x * speed * 0.55 - dir.z * side, 0.2 + rng.next() * 0.35, dir.z * speed * 0.55 + dir.x * side);
       // superfície lisa e varrida (asfalto/concreto) solta pouca poeira —
       // só um véu fino; terra/grama levantam a nuvem cheia
       const m = SURF[material] ?? 0.5;

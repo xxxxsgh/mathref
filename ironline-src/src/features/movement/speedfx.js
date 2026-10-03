@@ -14,7 +14,7 @@ const LAYERS = [
   // [raio interno da máscara (%), raio externo (%), borrão máx. (px)]
   [40, 70, 1.6],
   [55, 88, 3.4],
-  [70, 105, 6.5],
+  [70, 105, 5.5],
 ];
 
 export class SpeedFx {
@@ -26,7 +26,7 @@ export class SpeedFx {
     for (const [a, b, px] of LAYERS) {
       const el = document.createElement('div');
       el.className = 'mv-speedfx';
-      const mask = `radial-gradient(ellipse 60% 56% at 50% 54%, transparent ${a}%, #000 ${b}%)`;
+      const mask = `radial-gradient(ellipse 62% 64% at 50% 60%, transparent ${a}%, #000 ${b}%)`;
       Object.assign(el.style, {
         position: 'absolute',
         inset: '0',

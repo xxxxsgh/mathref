@@ -168,8 +168,9 @@ export class CameraMotion {
     // ─ roll: strafe, slide, lean, mantle ─
     const tiltSide = clamp(side / T.sprint, -1, 1);
     // slide: cabeça tomba ~5° para o lado da perna de apoio (como no slide real)
-    const rollT = -tiltSide * 0.018 * (sliding ? 0 : 1) + (sliding ? 0.088 : 0);
-    this.roll = damp(this.roll, rollT, 6, dt);
+    // (~7°: o horizonte precisa ler inclinado no quadro, não só "sentir")
+    const rollT = -tiltSide * 0.018 * (sliding ? 0 : 1) + (sliding ? 0.125 : 0);
+    this.roll = damp(this.roll, rollT, sliding ? 11 : 6, dt);
     roll += this.roll;
     if (c.mantle) {
       const u = c.mantle.t / c.mantle.dur;
@@ -205,11 +206,11 @@ export class CameraMotion {
 
     // ─ FOV ─
     let f = 1;
-    if (sliding) f = 1.1;
-    else if (sprint === 2 && hs > 5) f = 1.11;
-    else if (sprint === 1 && hs > 3) f = 1.05;
+    if (sliding) f = 1.13;
+    else if (sprint === 2 && hs > 5) f = 1.12;
+    else if (sprint === 1 && hs > 3) f = 1.06;
     f = 1 + (f - 1) * (1 - ads);
-    this.fov = damp(this.fov, f, f > this.fov ? 5.5 : 8, dt);
+    this.fov = damp(this.fov, f, f > this.fov ? (sliding ? 9 : 5.5) : 8, dt);
     if (Math.abs(this.fov - 1) < 1e-4) p.fovFactors.delete('move');
     else p.fovFactors.set('move', this.fov);
   }

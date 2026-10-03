@@ -283,7 +283,7 @@ const g22 = (v) => Math.round(Math.pow(clamp(v, 0, 1), 1 / 2.2) * 255);
 
 /**
  * Atlas da bota (W×H): cor (sRGB), normal e ORM (R=AO, G=rugosidade).
- *   v < 0.6 : pé — camurça coyote, biqueira de couro liso (mais escura,
+ *   v < 0.6 : pé — camurça coyote escuro, biqueira de couro liso (mais escura,
  *             esfolada no bico), costuras pespontadas, poeira acumulada
  *             perto da sola e nos vincos, sal/manchas d'água.
  *   v ≥ 0.62: cano — nylon cordura (trama), costura vertical.
@@ -312,7 +312,7 @@ export function bootTextures() {
         const s = v / 0.6;
         // camurça coyote (linear) com variação de nap
         const nap = 0.86 + n2 * 0.22 + (n1 - 0.5) * 0.12;
-        r = 0.255 * nap; g = 0.19 * nap; b = 0.125 * nap;
+        r = 0.15 * nap; g = 0.108 * nap; b = 0.07 * nap;
         ro = 0.9 - n2 * 0.06;
         h = n2 * 0.25;
         // biqueira/contraforte de couro liso: bico (s>0.78) e calcanhar (s<0.16), parte baixa
@@ -321,7 +321,7 @@ export function bootTextures() {
         const cap = clamp(capT * (s > 0.5 ? 1 : lowBand), 0, 1);
         if (cap > 0) {
           const scuff = smooth(0.55, 0.8, n1 + (s > 0.9 ? 0.25 : 0)) * 0.6;
-          const lr = 0.17 + scuff * 0.1, lg = 0.125 + scuff * 0.08, lb = 0.08 + scuff * 0.06;
+          const lr = 0.075 + scuff * 0.09, lg = 0.056 + scuff * 0.07, lb = 0.04 + scuff * 0.05;
           r = r * (1 - cap) + lr * cap; g = g * (1 - cap) + lg * cap; b = b * (1 - cap) + lb * cap;
           ro = ro * (1 - cap) + (0.52 + scuff * 0.3 + n2 * 0.1) * cap;
           h += cap * 0.15;
@@ -345,8 +345,8 @@ export function bootTextures() {
         // poeira acumulada perto da sola e mancha de sal/água em ondas
         const dust = (1 - smooth(0.0, 0.32, up)) * (0.55 + n1 * 0.6);
         const tide = smooth(0.02, 0.0, Math.abs(up - 0.22 - (n3 - 0.5) * 0.12)) * 0.5;
-        const d = clamp(dust * 0.55 + tide, 0, 0.85);
-        r = r * (1 - d) + 0.42 * d; g = g * (1 - d) + 0.38 * d; b = b * (1 - d) + 0.32 * d;
+        const d = clamp(dust * 0.4 + tide * 0.7, 0, 0.5);
+        r = r * (1 - d) + 0.3 * d; g = g * (1 - d) + 0.27 * d; b = b * (1 - d) + 0.23 * d;
         ro = ro * (1 - d) + 0.97 * d;
       } else if (v >= 0.62) {
         // cordura: trama 2×2, coyote mais acinzentado
@@ -354,7 +354,7 @@ export function bootTextures() {
         const wx = Math.sin(u * TAU * 90), wy = Math.sin(t * TAU * 55);
         const weave = (wx > 0) !== (wy > 0) ? 1 : 0;
         const k = 0.86 + weave * 0.08 + (n2 - 0.5) * 0.1;
-        r = 0.2 * k; g = 0.165 * k; b = 0.12 * k;
+        r = 0.12 * k; g = 0.1 * k; b = 0.072 * k;
         ro = 0.8 + weave * 0.06;
         h = weave * 0.35 + n2 * 0.1;
         // costuras verticais (laterais) e colarinho escuro acolchoado

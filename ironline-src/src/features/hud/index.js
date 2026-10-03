@@ -23,6 +23,17 @@ import { Match, MODE } from './match.js';
 import * as Settings from './settings.js';
 import { Gunsmith, gunSilhouette } from './gunsmith.js';
 import { Hero } from './hero.js';
+import { Photos } from './photo.js';
+
+/**
+ * Poses das "fotos de campo" (arte dos cartões): vistas do próprio mapa
+ * com lente mais fechada. fov = FOV vertical em graus.
+ */
+const PHOTO_POSES = {
+  event: { position: [2.2, 0, 44], yaw: 0.05, pitch: 0.05, fov: 30 },
+  card: { position: [-2.5, 0, 8], yaw: -0.5, pitch: 0.2, fov: 42 },
+  bp: { position: [1.5, 0, -30], yaw: Math.PI - 0.12, pitch: 0.04, fov: 36 },
+};
 
 export default {
   name: 'hud',
@@ -51,6 +62,12 @@ export default {
     this.play.setGunIcon(this.gunIcon);
     this.play.setProfile(this.profile, Settings.levelOf(this.profile.xp).level);
     this.screens = new Screens(this, this.stage);
+    // fotos do mundo para os cartões (só onde há telas de frontend)
+    this.photos = new Photos(ctx);
+    this.photos.onReady((key) => this.screens.photoReady(key));
+    if (!ctx.shot || ctx.shot.preset?.menu || ctx.params.get('ui')) {
+      for (const [k, pose] of Object.entries(PHOTO_POSES)) this.photos.want(k, pose);
+    }
     this.match = new Match(ctx, {
       feed: (e) => this.play.feed(e, this.profile.callsign),
       xp: (l, t) => this.play.xp(l, t),
@@ -95,7 +112,17 @@ export default {
     const boot = document.getElementById('boot');
     if (boot) {
       if (ctx.shot) boot.remove();
-      else ctx.bus.once?.('ready', () => { boot.style.opacity = 0; setTimeout(() => boot.remove(), 600); });
+      else {
+        // a tela de carga cobre as fotos de campo (a câmera salta de pose
+        // por alguns frames) — some quando terminam, ou após 4 s
+        const t0 = performance.now();
+        const done = () => {
+          if (this.photos.pending && performance.now() - t0 < 4000) return requestAnimationFrame(done);
+          boot.style.opacity = 0;
+          setTimeout(() => boot.remove(), 600);
+        };
+        ctx.bus.once?.('ready', done);
+      }
     }
 
     // ── estado inicial ──────────────────────────────────────────────
@@ -146,19 +173,21 @@ export default {
     this.gs = null;
     // menu principal: mundo desfocado/graduado ao fundo + operador nítido
     const canvas = this.ctx.canvas;
-    if (canvas) canvas.style.filter = name === 'main' ? 'blur(5px) brightness(.62) saturate(.72) contrast(1.06)' : '';
+    // menu principal: cena 3D VIVA, nítida (o operador está no mundo); só
+    // o relatório/placar usam a cena desfocada por trás dos painéis
+    if (canvas) canvas.style.filter = '';
     if (name !== 'main' && this.hero) { this.hero.dispose(); this.hero = null; }
     if (name === 'main') {
       const host = el.querySelector('.hero-host');
       if (host && !this.hero) {
         try {
-          this.hero = new Hero(this.ctx, host, { w: 900, h: 1080, k: this.k * Math.min(2, devicePixelRatio || 1) });
+          this.hero = new Hero(this.ctx, host);
           this.hero.render(1 / 60);
         } catch (err) {
           console.warn('[hud] operador do menu indisponível', err);
           this.hero = null;
         }
-      } else if (host && this.hero) host.appendChild(this.hero.renderer.domElement);
+      }
     }
     if (name !== 'loadout') return;
     const gun = this.ctx.services.weapon?.gun;
@@ -357,6 +386,7 @@ export default {
   },
 
   frame(dt, ctx) {
+    this.photos.pump();
     // tempo real (as telas animam mesmo com a simulação pausada)
     const now = performance.now();
     const rdt = ctx.shot ? 1 / 60 : Math.min(0.05, (now - (this._lt || now)) / 1000);
