@@ -70,6 +70,9 @@ export function SettingsScreen(ui, o = {}) {
         toggle('invertY', 'Inverter eixo Y'),
         range('fov', 'Campo de visão (FOV)', 60, 100, 1, (v) => `${v}°`),
         range('viewmodelFov', 'FOV da arma', 50, 75, 1, (v) => `${v}°`),
+        choice('touchControls', 'Controles de toque', [['auto', 'Automático'], ['on', 'Sempre'], ['off', 'Nunca']]),
+        range('touchSensitivity', 'Sensibilidade do toque', 0.3, 3, 0.05, (v) => v.toFixed(2)),
+        range('touchButtonScale', 'Tamanho dos botões', 0.7, 1.4, 0.05, (v) => `${Math.round(v * 100)}%`),
       ];
     } else if (tab === 'video') {
       rows = [

@@ -24,7 +24,7 @@ npm run dev        # http://localhost:5173
 npm run build      # gera ../arena/
 npm run preview    # serve o build em /mathref/arena/
 npm test           # 15 testes unitários (Node, sem navegador)
-npm run test:e2e   # 25 checagens de ponta a ponta no Chromium (Playwright)
+npm run test:e2e   # 26 checagens de ponta a ponta no Chromium (Playwright)
 ```
 
 O `test:e2e` precisa do Playwright disponível (`npm i -D playwright` ou
@@ -56,6 +56,26 @@ Ferramentas de ajuste visual (mesmo pipeline do jogo):
 
 `Ctrl` funciona para agachar, mas `Ctrl+W` fecha a aba no navegador — por
 isso o padrão é `C`.
+
+### Celular e tablet
+
+Detectado automaticamente (configurável em *Configurações → Controles*:
+automático/sempre/nunca, sensibilidade do toque e tamanho dos botões). Ao
+tocar para jogar, o jogo pede tela cheia e orientação paisagem.
+
+| Ação | Toque |
+|---|---|
+| Andar | joystick flutuante na metade esquerda (até o fim para frente = correr) |
+| Mirar | arrastar na metade direita |
+| Atirar | segurar o botão vermelho (arrastar sobre ele também mira); há um segundo botão de tiro à esquerda |
+| Pular · agachar (alterna) · recarregar | `⤒` · `⤓` · `R` |
+| Mira do DMR / golpe pesado da faca | `◎` |
+| Trocar arma · inspecionar | `⇄` · `F` |
+| Loja · pausa · placar | `$` · `II` · `☰` (topo) |
+
+O HUD se reorganiza para deixar os cantos de baixo livres para os polegares,
+e o visualizador 3D aceita pinça para zoom. Na primeira vez num celular a
+qualidade começa em "baixa" com 80% de resolução.
 
 ---
 

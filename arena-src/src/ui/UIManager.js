@@ -1,5 +1,6 @@
 import { h } from './dom.js';
 import { HUD } from './HUD.js';
+import { TouchControls } from './TouchControls.js';
 import { MainMenu, QuitScreen } from './screens/MainMenu.js';
 import { PlayScreen } from './screens/PlayScreen.js';
 import { InventoryScreen } from './screens/InventoryScreen.js';
@@ -24,6 +25,9 @@ export class UIManager {
     this.hud = new HUD(this.root, game.settings);
     // HUD por baixo de telas e menus da partida
     this.root.prepend(this.hud.el);
+    // controles de toque ficam entre o HUD e os menus
+    this.touch = new TouchControls(this.root, game);
+    this.hud.el.after(this.touch.el);
     this.current = '';
     /** @type {HTMLElement|null} */
     this.overlay = null;
@@ -114,13 +118,18 @@ export class UIManager {
   }
 
   showClickToPlay() {
-    const el = h('div', { class: 'click-to-play', onclick: () => this.resumeMatch() }, ['CLIQUE PARA JOGAR', h('small', {}, 'Esc pausa • B loja • Tab placar • F inspecionar')]);
+    const touch = this.game.input.touchMode;
+    const el = h('div', { class: 'click-to-play', onclick: () => this.resumeMatch() }, [
+      touch ? 'TOQUE PARA JOGAR' : 'CLIQUE PARA JOGAR',
+      h('small', {}, touch ? 'Esquerda: andar • direita: mirar • segure o botão vermelho para atirar' : 'Esc pausa • B loja • Tab placar • F inspecionar'),
+    ]);
     this.setOverlay(el, 'click');
   }
 
   resumeMatch() {
     this.closeOverlay();
     this.game.audio.unlock();
+    if (this.game.input.touchMode) this.game.enterFullscreen();
     this.game.input.lock();
   }
 

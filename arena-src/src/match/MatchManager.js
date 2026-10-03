@@ -105,7 +105,7 @@ export class MatchManager {
       p.weapons.primary = this.makeWeapon(p, 'rifle');
       for (const b of this.bots) b.actor.weapons.primary = makeWeaponState(Math.random() < 0.8 ? 'rifle' : 'smg');
       this.spawnAll(true);
-      this.banner = { text: 'TREINO LIVRE', sub: 'Alvos e bots renascem • B abre a loja a qualquer momento', t: 4, color: '#5dffb0' };
+      this.banner = { text: 'TREINO LIVRE', sub: game.input.touchMode ? 'Alvos e bots renascem • $ abre a loja' : 'Alvos e bots renascem • B abre a loja a qualquer momento', t: 4, color: '#5dffb0' };
     } else {
       this.round.startRound();
     }
@@ -281,7 +281,7 @@ export class MatchManager {
       if (ev.type === 'roundStart') {
         this.spawnAll(false);
         for (const b of this.bots) this.botBuy(b.actor);
-        this.banner = { text: `ROUND ${R.round}`, sub: 'Fase de compra — B abre a loja', t: 2.6, color: '#e8edf2' };
+        this.banner = { text: `ROUND ${R.round}`, sub: this.game.input.touchMode ? 'Fase de compra — $ abre a loja' : 'Fase de compra — B abre a loja', t: 2.6, color: '#e8edf2' };
         this.game.audio.ui('roundStart');
       } else if (ev.type === 'live') {
         this.banner = { text: 'VALENDO', sub: 'Capture o Uplink ou elimine o time inimigo', t: 1.6, color: '#5dffb0' };

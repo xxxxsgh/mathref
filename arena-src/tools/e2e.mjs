@@ -346,6 +346,11 @@ try {
       const g = window.__np;
       g.ui.closeOverlay();
       g.input.locked = true;
+      // bots do treino podem matar o jogador no meio do teste
+      const p = g.match.player;
+      if (!p.alive) p.resetForRound();
+      p.spawnProtect = 999;
+      g.match.wc.equip('primary');
     });
     await sim(1.2);
     await ev(() => {
@@ -446,6 +451,73 @@ try {
       return (performance.now() - t0) / 120;
     });
     return `simulação ${ms.toFixed(2)} ms/frame (10 combatentes + alvos, sem render)`;
+  });
+  // ───── celular (toque) ─────
+  await check('celular: controles de toque (joystick, mira, tiro, pulo)', async () => {
+    await page.close(); // renderização por software: uma página por vez
+    const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+    const mp = await ctx.newPage();
+    mp.on('pageerror', (e) => errors.push(`mobile page: ${e.message}`));
+    mp.on('console', (m) => m.type() === 'error' && errors.push(`mobile console: ${m.text()}`));
+    await mp.goto(BASE, { waitUntil: 'load' });
+    await sleep(1500);
+    await mp.screenshot({ path: new URL('./shots/m1-menu.png', import.meta.url).pathname });
+    const touch = await mp.evaluate(() => document.body.classList.contains('touch') && window.__np.input.touchMode);
+    if (!touch) throw new Error('modo toque não detectado');
+    await mp.evaluate(() => window.__np.startMatch({ mode: 'practice', difficulty: 'easy', teamSize: 2 }));
+    await sleep(400);
+    await mp.tap('.click-to-play');
+    await sleep(600);
+    const r = await mp.evaluate(() => {
+      const g = window.__np;
+      const layer = document.querySelector('.touch-layer');
+      if (layer.classList.contains('hidden')) throw new Error('camada de toque escondida');
+      g.match.bots.forEach((b) => (b.actor.alive = false));
+      const P = (type, target, id, x, y) =>
+        target.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, cancelable: true }));
+      const p = g.match.player;
+      const pos0 = p.body.pos.clone();
+      const yaw0 = p.yaw;
+      // joystick: polegar esquerdo empurra para frente
+      P('pointerdown', layer, 11, 150, 260);
+      P('pointermove', layer, 11, 150, 200);
+      // mira: dedo direito arrasta para a esquerda
+      P('pointerdown', layer, 12, 600, 200);
+      P('pointermove', layer, 12, 560, 200);
+      g.simulate(0.8);
+      P('pointerup', layer, 11, 150, 200);
+      P('pointerup', layer, 12, 560, 200);
+      const moved = Math.hypot(p.body.pos.x - pos0.x, p.body.pos.z - pos0.z);
+      const turned = Math.abs(p.yaw - yaw0);
+      // tiro
+      const ws = p.weapon;
+      const ammo0 = ws.ammo;
+      const fire = document.querySelector('.t-fire');
+      P('pointerdown', fire, 13, 700, 280);
+      g.simulate(0.3);
+      P('pointerup', fire, 13, 700, 280);
+      // pulo
+      const jump = document.querySelector('.t-jump');
+      P('pointerdown', jump, 14, 800, 330);
+      g.simulate(1 / 60);
+      P('pointerup', jump, 14, 800, 330);
+      g.simulate(0.1);
+      const jumped = !p.body.grounded || p.body.pos.y > 0.05;
+      return { moved, turned, shots: ammo0 - ws.ammo, jumped };
+    });
+    await sleep(500);
+    await mp.screenshot({ path: new URL('./shots/m2-match.png', import.meta.url).pathname });
+    await mp.tap('.t-pause');
+    await sleep(300);
+    const paused = await mp.evaluate(() => window.__np.ui.overlayKind);
+    await mp.screenshot({ path: new URL('./shots/m3-pause.png', import.meta.url).pathname });
+    await ctx.close();
+    if (r.moved < 1) throw new Error(`não andou (${r.moved.toFixed(2)})`);
+    if (r.turned < 0.05) throw new Error('não mirou');
+    if (r.shots < 1) throw new Error('não atirou');
+    if (!r.jumped) throw new Error('não pulou');
+    if (paused !== 'pause') throw new Error(`pausa: ${paused}`);
+    return `andou ${r.moved.toFixed(1)} m, girou ${(r.turned * 57.3).toFixed(0)}°, ${r.shots} tiros, pulou, pausou`;
   });
 } finally {
   console.log(results.join('\n'));

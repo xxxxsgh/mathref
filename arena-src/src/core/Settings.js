@@ -24,6 +24,9 @@
  * @property {boolean} crosshairDot
  * @property {boolean} crosshairDynamic
  * @property {boolean} showFps
+ * @property {'auto'|'on'|'off'} touchControls
+ * @property {number} touchSensitivity
+ * @property {number} touchButtonScale
  */
 
 /** @type {SettingsData} */
@@ -47,7 +50,16 @@ export const DEFAULT_SETTINGS = {
   crosshairDot: false,
   crosshairDynamic: true,
   showFps: false,
+  touchControls: 'auto',
+  touchSensitivity: 1,
+  touchButtonScale: 1,
 };
+
+/** Aparelho de toque sem mouse (celular/tablet)? */
+export function isTouchDevice() {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  return window.matchMedia('(any-pointer: coarse)').matches && !window.matchMedia('(pointer: fine)').matches;
+}
 
 const RANGES = {
   sensitivity: [0.2, 8],
@@ -61,6 +73,8 @@ const RANGES = {
   crosshairSize: [2, 20],
   crosshairGap: [0, 14],
   crosshairThickness: [1, 5],
+  touchSensitivity: [0.3, 3],
+  touchButtonScale: [0.7, 1.4],
 };
 
 export class Settings {
@@ -71,6 +85,12 @@ export class Settings {
     this.data = { ...DEFAULT_SETTINGS };
     for (const [k, v] of Object.entries(save.data.settings || {})) {
       if (k in DEFAULT_SETTINGS && typeof v === typeof DEFAULT_SETTINGS[k]) this.data[k] = v;
+    }
+    // primeira vez num celular: qualidade baixa e resolução reduzida
+    const saved = save.data.settings || {};
+    if (isTouchDevice() && !('quality' in saved)) {
+      this.data.quality = 'low';
+      this.data.renderScale = 0.8;
     }
     this.clampAll();
     /** @type {((data: SettingsData, key?: string) => void)[]} */
@@ -83,6 +103,7 @@ export class Settings {
     }
     if (!['low', 'medium', 'high'].includes(this.data.quality)) this.data.quality = 'medium';
     if (!['easy', 'normal', 'hard', 'expert'].includes(this.data.difficulty)) this.data.difficulty = 'normal';
+    if (!['auto', 'on', 'off'].includes(this.data.touchControls)) this.data.touchControls = 'auto';
   }
 
   /**

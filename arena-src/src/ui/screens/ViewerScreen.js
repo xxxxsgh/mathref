@@ -76,6 +76,6 @@ export function ViewerScreen(ui, items, onClose) {
       h('button', { class: 'btn', onclick: () => { v.tDist = Math.max(v.minDist, v.tDist * 0.7); } }, 'Zoom +'),
       h('button', { class: 'btn', onclick: () => { v.tDist = Math.min(v.maxDist, v.tDist * 1.3); } }, 'Zoom −'),
     ]),
-    h('div', { class: 'vhint' }, 'Arraste: girar • Roda: zoom • ←/→: próximo item • Esc: sair'),
+    h('div', { class: 'vhint' }, g.input.touchMode ? 'Arraste: girar • Pinça: zoom' : 'Arraste: girar • Roda: zoom • ←/→: próximo item • Esc: sair'),
   ]);
 }

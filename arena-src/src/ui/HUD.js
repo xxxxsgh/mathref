@@ -252,7 +252,7 @@ export class HUD {
       this.centerMsg.append(m.deathInfo || 'Eliminado', h('small', {}, sub));
     } else if (comp && R.phase === 'buy') {
       this.centerMsg.innerHTML = '';
-      this.centerMsg.append(`Compra: ${Math.ceil(R.timer)}s`, h('small', {}, 'B — abrir loja'));
+      this.centerMsg.append(`Compra: ${Math.ceil(R.timer)}s`, h('small', {}, m.game.input.touchMode ? '$ — abrir loja' : 'B — abrir loja'));
     } else this.centerMsg.textContent = '';
 
     // inspeção

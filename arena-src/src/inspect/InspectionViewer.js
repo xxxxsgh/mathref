@@ -139,15 +139,37 @@ export class InspectionViewer {
     this.tPitch = 0.12;
   }
 
-  /** @param {HTMLElement} el */
+  /**
+   * Arrastar gira; roda ou pinça (dois dedos) dá zoom.
+   * @param {HTMLElement} el
+   */
   bind(el) {
+    el.style.touchAction = 'none';
+    /** @type {Map<number, { x: number, y: number }>} */
+    const pts = new Map();
+    let pinch = 0;
     el.addEventListener('pointerdown', (e) => {
-      this.dragging = true;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      el.setPointerCapture(e.pointerId);
+      this.dragging = pts.size === 1;
       this.lastX = e.clientX;
       this.lastY = e.clientY;
-      el.setPointerCapture(e.pointerId);
+      if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        pinch = Math.hypot(a.x - b.x, a.y - b.y);
+      }
     });
     el.addEventListener('pointermove', (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      this.idleTime = 0;
+      if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinch > 0 && d > 0) this.tDist = Math.max(this.minDist, Math.min(this.maxDist, this.tDist * (pinch / d)));
+        pinch = d;
+        return;
+      }
       if (!this.dragging) return;
       const dx = e.clientX - this.lastX;
       const dy = e.clientY - this.lastY;
@@ -155,9 +177,18 @@ export class InspectionViewer {
       this.lastY = e.clientY;
       this.tYaw -= dx * 0.008;
       this.tPitch = Math.max(-1.3, Math.min(1.3, this.tPitch + dy * 0.006));
-      this.idleTime = 0;
     });
-    const up = () => (this.dragging = false);
+    const up = (e) => {
+      pts.delete(e.pointerId);
+      pinch = 0;
+      this.dragging = false;
+      if (pts.size === 1) {
+        const [a] = [...pts.values()];
+        this.lastX = a.x;
+        this.lastY = a.y;
+        this.dragging = true;
+      }
+    };
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
     el.addEventListener(

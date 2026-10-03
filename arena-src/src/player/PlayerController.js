@@ -93,6 +93,13 @@ export class PlayerController {
       if (input.down('left')) fx -= 1;
       if (input.down('right')) fx += 1;
     }
+    // joystick virtual: analógico (inclinar pouco = andar devagar)
+    let analog = 1;
+    if (!o.frozen && input.axisActive) {
+      fx = input.axisX;
+      fz = input.axisY;
+      analog = Math.min(1, Math.hypot(fx, fz));
+    }
     const len = Math.hypot(fx, fz);
     if (len > 0) {
       fx /= len;
@@ -106,8 +113,10 @@ export class PlayerController {
 
     if (o.firing) this.noSprintTimer = 0.35;
     this.noSprintTimer -= dt;
-    this.sprinting = !o.frozen && input.down('sprint') && fz < 0 && !a.crouching && b.grounded && this.noSprintTimer <= 0;
-    let maxSpeed = MOVE.run * o.moveMult;
+    // no toque, empurrar o joystick até o fim para frente = correr
+    const wantSprint = input.down('sprint') || (input.axisActive && analog > 0.95 && fz < -0.8);
+    this.sprinting = !o.frozen && wantSprint && fz < 0 && !a.crouching && b.grounded && this.noSprintTimer <= 0;
+    let maxSpeed = MOVE.run * o.moveMult * (input.axisActive ? Math.max(0.35, analog) : 1);
     if (this.sprinting) maxSpeed *= MOVE.sprintMult;
     if (a.crouching) maxSpeed *= MOVE.crouchMult;
 
