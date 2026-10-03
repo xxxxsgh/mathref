@@ -14,6 +14,10 @@ Locomoção em primeira pessoa (passo fixo) + movimento de câmera (por frame).
 | mantle / vault | Espaço diante de borda (ou empurrando contra ela no ar) | borda até 2.05 m; obstáculo ≤1.2 m e fino (≤0.9 m) com chão do outro lado → vault mantendo o embalo |
 | lean | Q / E | 0.36 m + 7.4° de roll, limitado por paredes ao lado da cabeça |
 
+`player.state`: `speed` (no slide fica ≤ 0.9 m/s — sem passada, sem bob de
+corrida na arma), `groundSpeed` (velocidade física), `sprinting`, `tactical`,
+`sliding`, `stance`, `lean`, `mantling`, `airborne`.
+
 Eventos: `player:step` (pé, material, velocidade, postura), `player:jump`,
 `player:land` (velocidade de impacto, altura, material), `player:slide`,
 `player:mantle`, `player:stance`, `player:sprint`.

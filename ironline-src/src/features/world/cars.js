@@ -30,11 +30,13 @@ const KINDS = {
     green: [[-0.95, 0.94], [-0.42, 1.42], [1.62, 1.44], [1.92, 0.99]],
     doors: [-0.62, 0.42],
   },
+  // furgão: carroceria em CAIXA (perfil extrudado com chanfro arredondado),
+  // não loft superelíptico — o loft deixava o baú "inflado" como um balão
   van: {
-    len: 4.8, wb: 2.9, w: 1.82, gw: 1.66, rw: 0.32,
-    low: [[-2.4, 0.32], [-2.44, 0.52], [-2.38, 0.86], [-2.0, 1.02], [-1.6, 1.08], [2.38, 1.08], [2.42, 0.6], [2.38, 0.32]],
+    len: 4.8, wb: 2.9, w: 1.9, gw: 1.74, rw: 0.33, box: true,
+    low: [[-2.4, 0.32], [-2.42, 0.8], [-2.25, 0.99], [-1.62, 1.1], [2.42, 1.1], [2.42, 0.32]],
     green: [[-1.6, 1.08], [-0.9, 1.88], [2.36, 1.92], [2.38, 1.08]],
-    doors: [-0.75, 0.5],
+    doors: [-1.42, -0.18, 1.35],
   },
 };
 export const CAR_TINTS = [[0.85, 0.85, 0.82], [0.62, 0.64, 0.66], [0.75, 0.68, 0.55], [0.18, 0.24, 0.36], [0.55, 0.15, 0.12], [0.22, 0.22, 0.22], [0.35, 0.42, 0.3], [0.86, 0.84, 0.72]];
@@ -203,6 +205,89 @@ function greenGeo(kind, inset = 0) {
     });
   });
 }
+/**
+ * Furgão: perfil lateral (capô curto, para-brisa inclinado, baú reto) com
+ * arcos de roda recortados, extrudado na largura com chanfro arredondado de
+ * 7 cm — arestas vivas mas suaves como chapa estampada. Devolve
+ * [pintura, vidros] (para-brisa + janelas das portas da cabine).
+ */
+function flipFaces(g) {
+  const ng = g.index ? g.toNonIndexed() : g;
+  const P = ng.attributes.position;
+  for (let i = 0; i < P.count; i += 3) {
+    const x = P.getX(i + 1), y = P.getY(i + 1), z = P.getZ(i + 1);
+    P.setXYZ(i + 1, P.getX(i + 2), P.getY(i + 2), P.getZ(i + 2));
+    P.setXYZ(i + 2, x, y, z);
+  }
+  ng.computeVertexNormals();
+  return ng;
+}
+function vanGeo() {
+  return cached('vanbody3', () => {
+    const K = KINDS.van;
+    const ax = K.wb / 2, ar = K.rw + 0.06, ay = 0.36, bt = 0.07;
+    const sh = new THREE.Shape();
+    sh.moveTo(2.35, 0.36);
+    sh.lineTo(ax + ar, 0.36);
+    sh.absarc(ax, ay, ar, 0, Math.PI, false);
+    sh.lineTo(-ax + ar, 0.36);
+    sh.absarc(-ax, ay, ar, 0, Math.PI, false);
+    sh.lineTo(-2.33, 0.36);
+    sh.lineTo(-2.35, 0.78);
+    sh.quadraticCurveTo(-2.33, 0.93, -2.18, 0.96);
+    sh.lineTo(-1.6, 1.06);
+    sh.lineTo(-0.98, 1.84);
+    sh.quadraticCurveTo(-0.9, 1.9, -0.75, 1.9);
+    sh.lineTo(2.3, 1.9);
+    sh.lineTo(2.35, 1.86);
+    sh.lineTo(2.35, 0.36);
+    const depth = K.w - 2 * bt;
+    const paint = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bt, bevelSize: bt, bevelSegments: 3, curveSegments: 10, steps: 1 });
+    paint.translate(0, 0, -depth / 2);
+    paint.deleteAttribute('uv');
+    // vidros: para-brisa no plano inclinado + janelas das portas (as duas laterais)
+    const glass = [];
+    const d = new THREE.Vector2(-0.98 - -1.6, 1.84 - 1.06).normalize();
+    const n = new THREE.Vector3(-d.y, d.x, 0); // normal para fora (frente/cima)
+    // plano XZ (normal +Y) girado para a normal do para-brisa
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+    const wsg = new THREE.PlaneGeometry(Math.hypot(0.62, 0.78) - 0.08, depth - 0.1).rotateX(-Math.PI / 2);
+    wsg.applyQuaternion(q);
+    const mid = new THREE.Vector3((-1.6 + -0.98) / 2, (1.06 + 1.84) / 2, 0).addScaledVector(n, bt + 0.004);
+    wsg.translate(mid.x, mid.y, mid.z);
+    glass.push(wsg.toNonIndexed());
+    const win = new THREE.Shape();
+    win.moveTo(-1.38, 1.2);
+    win.lineTo(-0.22, 1.2);
+    win.lineTo(-0.22, 1.78);
+    win.lineTo(-0.86, 1.78);
+    win.lineTo(-1.38, 1.2);
+    const wg = new THREE.ShapeGeometry(win);
+    wg.deleteAttribute('uv');
+    const zr = depth / 2 + bt + 0.003;
+    glass.push(wg.clone().translate(0, 0, zr).toNonIndexed());
+    glass.push(flipFaces(wg.clone().translate(0, 0, -zr)));
+    for (const g of glass) { if (g.attributes.uv) g.deleteAttribute('uv'); if (g.attributes.normal) g.computeVertexNormals(); }
+    const pg = paint.index ? paint.toNonIndexed() : paint;
+    pg.computeVertexNormals();
+    return [pg, mergeSimpleGeos(glass)];
+  });
+}
+function mergeSimpleGeos(list) {
+  let n = 0;
+  for (const g of list) n += g.attributes.position.count;
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
+  let o = 0;
+  for (const g of list) {
+    pos.set(g.attributes.position.array, o * 3);
+    nor.set(g.attributes.normal.array, o * 3);
+    o += g.attributes.position.count;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  return g;
+}
 /** Para-choque arredondado. */
 const bumperGeo = () => cached('carbumper', () => new RoundedBoxGeometry(1, 1, 1, 3, 0.18));
 /** Aro de aço estampado (perfil em torno: aba, prato fundo, cubo). */
@@ -229,6 +314,28 @@ const tireGeo = () =>
   });
 
 const UNIT = () => cached('unitbox', () => new THREE.BoxGeometry(1, 1, 1));
+/** Caixa unitária com as faces voltadas para dentro (forro de cabine). */
+const innerBox = () =>
+  cached('innerbox', () => {
+    const g = new THREE.BoxGeometry(1, 1, 1).toNonIndexed();
+    const P = g.attributes.position, N = g.attributes.normal;
+    // inverte o sentido de cada triângulo e a normal
+    for (let i = 0; i < P.count; i += 3) {
+      for (const A of [P, N]) {
+        const x = A.getX(i + 1), y = A.getY(i + 1), z = A.getZ(i + 1);
+        A.setXYZ(i + 1, A.getX(i + 2), A.getY(i + 2), A.getZ(i + 2));
+        A.setXYZ(i + 2, x, y, z);
+      }
+      if (g.attributes.uv) {
+        const U = g.attributes.uv;
+        const u = U.getX(i + 1), v = U.getY(i + 1);
+        U.setXY(i + 1, U.getX(i + 2), U.getY(i + 2));
+        U.setXY(i + 2, u, v);
+      }
+    }
+    for (let i = 0; i < N.count; i++) N.setXYZ(i, -N.getX(i), -N.getY(i), -N.getZ(i));
+    return g;
+  });
 
 /**
  * Carro. opts: { kind: 'sedan'|'hatch'|'van', burnt, tint, flat (pneu
@@ -250,14 +357,20 @@ export function car(W, x, z, yaw, opts = {}) {
   const hx = K.len / 2, ax = K.wb / 2, hw = K.w / 2;
 
   // carroceria (loft: superfícies curvas com ombro, cantos arredondados em planta)
-  B.add(lowerGeo(kind), bodyMat, CM, { color: tint, ao: [lift + 0.3, lift + 0.8, 0.55] });
-  // estufa: vidro reflexivo (transparente: bancos e o outro lado aparecem) +
-  // teto/colunas/calhas na cor da carroceria + vedação de borracha
-  const gg = greenGeo(kind);
-  if (!burnt) B.add(gg[0], 'carglass', CM, { color: [1, 1, 1] });
-  else B.add(greenGeo(kind, 0.12)[0], 'black', CM, { color: [0.3, 0.28, 0.26] });
-  B.add(gg[1], bodyMat, CM, { color: tint });
-  B.add(gg[2], 'black', CM, { color: [0.5, 0.5, 0.5] });
+  if (K.box) {
+    const [vp, vg] = vanGeo();
+    B.add(vp, bodyMat, CM, { color: tint, ao: [lift + 0.3, lift + 0.8, 0.55] });
+    B.add(vg, burnt ? 'black' : 'carglass', CM, { color: burnt ? [0.3, 0.28, 0.26] : [1, 1, 1] });
+  } else {
+    B.add(lowerGeo(kind), bodyMat, CM, { color: tint, ao: [lift + 0.3, lift + 0.8, 0.55] });
+    // estufa: vidro reflexivo (transparente: bancos e o outro lado aparecem) +
+    // teto/colunas/calhas na cor da carroceria + vedação de borracha
+    const gg = greenGeo(kind);
+    if (!burnt) B.add(gg[0], 'carglass', CM, { color: [1, 1, 1] });
+    else B.add(greenGeo(kind, 0.12)[0], 'black', CM, { color: [0.3, 0.28, 0.26] });
+    B.add(gg[1], bodyMat, CM, { color: tint });
+    B.add(gg[2], 'black', CM, { color: [0.5, 0.5, 0.5] });
+  }
   const g = K.green;
   const roofY = Math.max(g[1][1], g[2][1]);
   // superfície lateral em (x, y) — para colar vincos, frisos e maçanetas
@@ -274,13 +387,16 @@ export function car(W, x, z, yaw, opts = {}) {
     }
   };
   if (!burnt) {
-    for (const dx of K.doors) seam(dx, 0.38, dx + 0.02, g[0][1] - 0.03);
+    for (const dx of K.doors) seam(dx, 0.38, dx + 0.02, K.box ? (dx < -1 ? 1.1 : 1.84) : g[0][1] - 0.03);
+    // furgão: trilho da porta corrediça e emenda horizontal do teto da cabine
+    if (K.box) seam(-0.18, 1.86, 1.35, 1.86);
     // friso de borracha lateral (proteção de porta) e soleira escura
     for (const s of [-1, 1]) {
       const xs0 = K.doors[0] - 0.05, xs1 = K.doors[K.doors.length - 1] + 0.05;
       for (let x = xs0; x < xs1 - 0.01; x += 0.25) {
         const xm = Math.min(xs1, x + 0.25);
-        B.add(UNIT(), 'black', L([(x + xm) / 2, 0.58, s * (sz((x + xm) / 2, 0.58) + 0.006)], [0, 0, 0], [xm - x + 0.005, 0.045, 0.02]), { color: [0.7, 0.7, 0.7] });
+        const fy = K.box ? 0.84 : 0.58;
+        B.add(UNIT(), 'black', L([(x + xm) / 2, fy, s * (sz((x + xm) / 2, fy) + 0.006)], [0, 0, 0], [xm - x + 0.005, 0.045, 0.02]), { color: [0.7, 0.7, 0.7] });
       }
     }
     // maçanetas embutidas
@@ -355,6 +471,16 @@ export function car(W, x, z, yaw, opts = {}) {
       B.add(UNIT(), burnt ? 'burnt' : 'fabric', L([sx + 0.24, 0.92, s * 0.38], [0, 0, -0.2], [0.1, 0.55, 0.46]), { color: seatC });
     }
     B.add(UNIT(), 'plastic', L([g[0][0] + 0.15, 0.9, 0], [0, 0, 0.3], [0.35, 0.12, K.gw - 0.2]), { color: burnt ? [0.08, 0.07, 0.06] : [0.15, 0.15, 0.15] });
+    // forro interno da cabine (caixa com faces para DENTRO): pelo vidro se vê
+    // um interior escuro (forro, assoalho, laterais) — não o vazio da
+    // carroceria de uma face só, que deixava a fachada atrás "atravessar"
+    if (!burnt) {
+      const x0 = g[0][0] + 0.25, x1 = g[g.length - 1][0] - 0.15;
+      const y1 = roofY - 0.06;
+      B.add(innerBox(), 'fabric', L([(x0 + x1) / 2, (0.42 + y1) / 2, 0], [0, 0, 0], [x1 - x0, y1 - 0.42, K.gw - 0.1]), { color: [0.1, 0.095, 0.09] });
+      // furgão: divisória atrás dos bancos (o baú é fechado)
+      if (kind === 'van') B.add(UNIT(), 'black', L([0.32, (0.42 + y1) / 2, 0], [0, 0, 0], [0.04, y1 - 0.42, K.gw - 0.12]), { color: [0.35, 0.34, 0.32] });
+    }
   }
   // dano: furos de bala na lateral, para-brisa trincado
   const dmg = opts.damage ?? (burnt ? 0.6 : rng.range(0, 0.8));
@@ -380,6 +506,7 @@ export function car(W, x, z, yaw, opts = {}) {
 
 /** Meia-largura da superfície lateral da parte baixa no ponto (x, y) — mesma fórmula do loft. */
 function sideZ(K, x, y) {
+  if (K.box) return K.w / 2;
   let xmin = Infinity, xmax = -Infinity;
   for (const [px] of K.low) { xmin = Math.min(xmin, px); xmax = Math.max(xmax, px); }
   const [b, t] = spanAt(K.low, Math.min(xmax - 0.01, Math.max(xmin + 0.01, x)));

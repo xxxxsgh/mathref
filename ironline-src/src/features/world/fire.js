@@ -42,30 +42,54 @@ varying float vSeed;
 varying float vFade;
 uniform float uTime;
 uniform float uBoost;
-float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float h21(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float vn(vec2 p) {
   vec2 i = floor(p), f = fract(p);
   f = f * f * (3.0 - 2.0 * f);
   return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y);
 }
+float fbm(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 4; i++) { s += vn(p) * a; p = p * 2.03 + 7.1; a *= 0.5; }
+  return s;
+}
+// rampa de corpo negro (vermelho escuro → laranja → amarelo → quase branco):
+// chama de combustível sujo à luz do dia — sem laranja de desenho animado
+vec3 blackbody(float t) {
+  vec3 c = vec3(0.55, 0.08, 0.01) * smoothstep(0.0, 0.25, t);
+  c = mix(c, vec3(1.0, 0.36, 0.06), smoothstep(0.2, 0.5, t));
+  c = mix(c, vec3(1.0, 0.62, 0.24), smoothstep(0.45, 0.78, t));
+  c = mix(c, vec3(1.0, 0.86, 0.62), smoothstep(0.75, 1.0, t));
+  return c;
+}
 void main() {
-  float t = uTime * (1.0 + vSeed * 0.3);
+  float t = uTime * (0.85 + vSeed * 0.35);
   float x = (vUv.x - 0.5) * 2.0;
   float y = vUv.y;
-  vec2 q = vec2(x * 1.6 + vSeed * 17.0, y * 2.2 - t * 2.4);
-  float n = vn(q * 1.7) * 0.55 + vn(q * 3.9 + 3.1) * 0.3 + vn(q * 8.3 + 7.7) * 0.15;
-  // perfil: base larga, ponta afilada e ondulante
-  float sway = (vn(vec2(y * 2.0 - t * 1.3, vSeed * 9.0)) - 0.5) * 0.5 * y;
-  float w = mix(0.95, 0.12, pow(y, 0.8));
-  float d = abs(x - sway) / w;
-  float body = (1.0 - d) * 1.25 - y * 0.85 + (n - 0.5) * 1.15;
-  float flame = smoothstep(0.0, 0.5, body) * smoothstep(0.0, 0.06, y);
-  // núcleo quente (amarelo-branco) e bordas vermelhas/fuliginosas
-  float core = smoothstep(0.35, 0.95, body) * (1.0 - y * 0.7);
-  vec3 col = mix(vec3(0.85, 0.12, 0.01), vec3(1.0, 0.48, 0.08), smoothstep(0.0, 0.45, body));
-  col = mix(col, vec3(1.0, 0.86, 0.55), core);
+  // campo turbulento rolando para cima com distorção de domínio (sem
+  // "espinhos" regulares): o fogo se rasga em línguas e fiapos soltos
+  vec2 q = vec2(x * 1.15 + vSeed * 13.0, y * 1.7 - t * 1.85);
+  vec2 w = vec2(fbm(q * 1.2), fbm(q * 1.2 + 5.2)) - 0.5;
+  float n = fbm(q * 2.3 + w * 1.8 + vec2(0.0, -t * 0.7));
+  float n2 = vn(q * 6.5 + w * 3.0 - vec2(0.0, t * 2.5));
+  // perfil: base larga e macia, afina e ondula com a altura
+  float sway = w.x * 0.7 * y + (vn(vec2(t * 0.9, vSeed * 7.0)) - 0.5) * 0.25 * y;
+  float width = mix(1.0, 0.5, smoothstep(0.0, 1.0, y));
+  float d = abs(x - sway) / width;
+  float shape = (1.0 - d * d) - y * 0.85;
+  // ruído cresce com a altura: a base é contínua, o topo se rasga em bolsões
+  float dens = shape + (n - 0.5) * (0.9 + 1.6 * y) + (n2 - 0.5) * 0.3;
+  float edge = smoothstep(1.0, 0.75, abs(x)) * smoothstep(1.0, 0.82, y);
+  float f = smoothstep(0.0, 0.32, dens) * smoothstep(0.0, 0.1, y) * edge;
+  // temperatura: núcleo denso e baixo = quente; bordas e topo = frios
+  float temp = clamp(dens * 1.25 * (1.0 - y * 0.6) + 0.05, 0.0, 1.0);
+  vec3 col = blackbody(temp) * (0.25 + 1.6 * temp * temp);
+  // fuligem: logo acima/ao redor das línguas o gás fica preto e escurece o fundo
+  float soot = smoothstep(-0.35, 0.05, dens) * (1.0 - f) * smoothstep(0.35, 0.85, y) * edge;
+  soot *= 0.55 * (0.6 + 0.4 * n2);
   float flick = 0.85 + 0.15 * vn(vec2(t * 6.0, vSeed * 31.0));
-  gl_FragColor = vec4(col * flame * uBoost * flick * vFade, 1.0);
+  // alfa pré-multiplicado: a chama SOMA luz, a fuligem cobre
+  gl_FragColor = vec4(col * f * uBoost * flick * vFade, clamp(soot + f * 0.25, 0.0, 1.0) * vFade);
 }`;
 
 const EMBER_VERT = /* glsl */ `
@@ -154,7 +178,7 @@ void main() {
   float n = fbm(q + (w - 0.5) * 1.5);
   float dens = clamp((1.0 - sqrt(r2)) * 1.3 + (n - 0.5) * 1.2 - 0.06, 0.0, 1.0);
   dens = smoothstep(0.0, 0.8, dens);
-  float a = dens * vA * 0.75;
+  float a = dens * vA * 0.95;
   if (a < 0.004) discard;
   // iluminação: normal de esfera (tela) → lado do sol claro, núcleo denso escuro
   float z = sqrt(max(0.0, 1.0 - r2));
@@ -175,10 +199,13 @@ export function createFires(list, rng) {
   const ep = [], er = [];
   for (const f of list) {
     // 5 línguas por foco: alturas/larguras/posições levemente diferentes
-    const n = f.tongues || 5;
+    // várias línguas estreitas sobrepostas (volume), alturas bem variadas:
+    // o contorno resultante é irregular, não uma "coroa" de pontas iguais
+    const n = Math.round((f.tongues || 5) * 1.8);
     for (let k = 0; k < n; k++) {
-      const ox = (rng.next() - 0.5) * f.w * 0.55, oz = (rng.next() - 0.5) * (f.d ?? f.w) * 0.55;
-      const sw = f.w * (0.5 + rng.next() * 0.45), sh = f.h * (0.6 + rng.next() * 0.5);
+      const ox = (rng.next() - 0.5) * f.w * 0.7, oz = (rng.next() - 0.5) * (f.d ?? f.w) * 0.7;
+      const tall = rng.next();
+      const sw = f.w * (0.6 + rng.next() * 0.45), sh = f.h * (0.55 + tall * tall * 0.7);
       const ph = (k / n) * Math.PI;
       const s = rng.next();
       for (const [u, v] of quad) {
@@ -198,14 +225,19 @@ export function createFires(list, rng) {
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setAttribute('aFire', new THREE.Float32BufferAttribute(fire, 4));
   g.setAttribute('aSize', new THREE.Float32BufferAttribute(size, 3));
-  const uniforms = { uCam: { value: new THREE.Vector3() }, uTime: { value: 0 }, uBoost: { value: 7 } };
+  const uniforms = { uCam: { value: new THREE.Vector3() }, uTime: { value: 0 }, uBoost: { value: 3.2 } };
   const mat = new THREE.ShaderMaterial({
     vertexShader: VERT,
     fragmentShader: FRAG,
     uniforms,
     transparent: true,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    // pré-multiplicado: cor soma (emissão), alfa cobre (fuligem)
+    blending: THREE.CustomBlending,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
+    blendSrcAlpha: THREE.ZeroFactor,
+    blendDstAlpha: THREE.OneFactor,
     side: THREE.DoubleSide,
     fog: false,
   });
@@ -267,10 +299,11 @@ export function createFires(list, rng) {
   const lights = [];
   for (const f of list) {
     if (!f.light) continue;
-    const L = new THREE.PointLight(0xff7a2e, f.light, f.range || 14, 2);
+    // luz de fogo à luz do dia: laranja-amarelada e contida (o sol domina)
+    const L = new THREE.PointLight(0xff9450, f.light * 0.8, f.range || 14, 2);
     L.position.set(f.x, f.y + f.h * 0.45, f.z);
     L.castShadow = false;
-    L.userData.base = f.light;
+    L.userData.base = f.light * 0.8;
     L.userData.seed = rng.next() * 100;
     group.add(L);
     lights.push(L);

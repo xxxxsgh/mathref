@@ -30,7 +30,9 @@ const PIVOT = new THREE.Vector3(0, -0.035, -0.14); // perto do poço do carregad
 // hip: arma mais longe, baixa e à direita (enquadramento de shooter moderno:
 // a boca aponta para a mira, a ótica ocupa ~7% da largura do quadro, a mão
 // de apoio entra pela parte de baixo, perto do centro)
-const HIP = { pos: new THREE.Vector3(0.085, -0.12, -0.3), rot: new THREE.Euler(0.05, 0.12, 0.0) };
+// hip: arma mais longe e mais centrada (enquadramento de FPS moderno — o
+// fuzil aponta para o centro e ocupa ~1/4 do quadro, não metade)
+const HIP = { pos: new THREE.Vector3(0.085, -0.155, -0.43), rot: new THREE.Euler(0.03, 0.07, 0.0) }; // mais baixa e à direita: o trilho não domina o quadro
 const EYE_RELIEF = 0.2; // distância olho → ponto de visada no ADS
 const ADS = { pos: new THREE.Vector3(), rot: new THREE.Euler(0, 0, 0) };
 const SPRINT = { pos: new THREE.Vector3(-0.03, -0.045, 0.03), rot: new THREE.Euler(-0.32, 0.62, 0.42) };
@@ -62,7 +64,9 @@ const HAND_R = basis([0.06, -1, -0.18], [1, 0.05, 0.12], [0.034, -0.088, 0.052])
 // mão fica de frente para a câmera e o antebraço desce para fora do quadro;
 // ADS — C-clamp baixo: dedos por baixo, polegar no flanco (nada entra na
 // janela da ótica)
-const GRIP_L = { phi: 3.5, z: -0.255, fwd: 1.1, thumbUp: 0.015, thumbX: -0.018 };
+// hip: pega POR CIMA do guarda-mão (dorso e dedos visíveis da câmera — a
+// mão lê como mão enluvada, não some atrás do punho da manga)
+const GRIP_L = { phi: 2.8, z: -0.42, fwd: 0.85, thumbUp: 0.0, thumbX: -0.02, over: true, roll: 0.3 };
 const GRIP_ADS = { phi: 4.1, z: -0.32, fwd: 0.35, thumbUp: -0.014 };
 const HAND_L = { guard: null, guardAds: null };
 
@@ -228,7 +232,10 @@ export default {
     OCC.uOccN.value = this.occ.length;
     // "ombros" (âncoras dos antebraços) no espaço do rig
     this.anchorR = new THREE.Vector3(0.3, -0.45, -0.08);
-    this.anchorL = new THREE.Vector3(-0.3, -0.9, -0.05);
+    // ombro esquerdo abaixo e um pouco atrás da câmera: o antebraço entra
+    // em escorço pela borda de baixo, na diagonal (com a arma mais longe no
+    // hip, a âncora antiga deixava um antebraço comprido "em pé")
+    this.anchorL = new THREE.Vector3(-0.3, -0.8, 0.2);
     this.followL = 0;
     this.wristBlend = 0.4;
     // ?whip=x,y,z,rx,ry,rz — testa outro enquadramento de hip; ?warm=x,y,z — ombro esquerdo (QA)
@@ -458,15 +465,20 @@ export default {
     this.pivot.updateMatrixWorld(true);
     this.R.ejectPort.getWorldPosition(_v);
     ctx.vm.camera.worldToLocal(c.position.copy(_v));
-    // sai paralela ao cano (como a cápsula real deixa a câmara), já
-    // girando: o eixo fica perpendicular ao voo e ela lê como cilindro
+    // sai já tombando em torno do eixo vertical, de LADO para a câmera:
+    // paralela ao cano ela era vista de topo (pela boca) e lia como um
+    // anel/disco flutuando ao lado da ótica
     c.quaternion.copy(this.pivot.quaternion);
-    c.rotateY(0.35 + rng.next() * 0.3);
+    c.rotateY(1.25 + rng.next() * 0.45);
     const d = c.userData;
-    d.v.set(1.6 + rng.next() * 0.6, 1.0 + rng.next() * 0.5, 0.35 + rng.next() * 0.3);
-    d.w.set(rng.range(-25, 25), rng.range(-35, -15), rng.range(-10, 10));
-    d.life = 1.1;
-    c.visible = true;
+    // ejeção real ~3–4 m/s: a cápsula cruza o quadro em poucos quadros (no
+    // ar ela só passa como um brilho de latão, não paira ao lado da arma)
+    d.v.set(3.0 + rng.next() * 0.8, 1.3 + rng.next() * 0.5, 0.5 + rng.next() * 0.3);
+    d.w.set(rng.range(-6, 6), rng.range(-30, -18), rng.range(-6, 6));
+    d.life = 0.4;
+    // modo shot: num quadro parado a cápsula (que no jogo cruza o quadro em
+    // ~0,1 s, borrada) vira um objeto suspenso ao lado da arma — não mostra
+    c.visible = !ctx.shot;
   },
 
   // ─── passo fixo: lógica ──────────────────────────────────────────────

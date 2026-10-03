@@ -163,6 +163,10 @@ export default {
     const decals = new Set(['streaks', 'soot', 'cracks', 'bullets', 'bulletsM', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs', 'contact']);
     const meshes = W.B.build(root, mats, { noShadow: new Set([...decals, 'room']) });
     const inst = W.I.build(root, mats);
+    // entulho miúdo partido em células (props.js): some além de uma
+    // distância — um pedaço de 20 cm a 90 m ocupa menos de um pixel
+    this.debris = inst.filter((m) => m.name.includes('#'));
+    this.debrisDist = quality.level === 'low' ? 50 : quality.level === 'medium' ? 70 : 95;
     this.windows = W.win.build(root, { grime: this.sets.grime, quality });
 
     // ── colunas de fumaça de incêndios distantes ──
@@ -179,7 +183,7 @@ export default {
     {
       const fr = makeRng(777);
       const fires = [
-        { x: -2.8, y: 0.42, z: -12, w: 1.7, d: 1.2, h: 1.6, light: 45, range: 10, tongues: 7, embers: 40, smoke: 26, smokeH: 16 },
+        { x: -2.8, y: 0.42, z: -12, w: 1.8, d: 1.3, h: 1.9, light: 45, range: 10, tongues: 8, embers: 40, smoke: 44, smokeH: 18 },
         { x: -3.5, y: 0.75, z: -12.9, w: 0.7, h: 0.7, tongues: 3, embers: 8 },
         // luz pontual NÃO projeta sombra: esta pilha fica colada ao interior jogável,
         // então sem luz própria (vazaria pela parede e acenderia o teto da sala)
@@ -220,7 +224,7 @@ export default {
       interior: { position: [17.2, ROOM.floor, -4.3], yaw: Math.PI / 2 + 0.05, pitch: -0.06 },
       viewmodel: { position: [-0.6, 0, 20], yaw: 0.2, pitch: -0.04 },
       ads: { position: [0, 0, 18], yaw: 0, pitch: 0.0 },
-      combat: { position: [0, 0, 18], yaw: 0, pitch: 0.0 },
+      combat: { position: [0.5, 0, 12.5], yaw: 0.05, pitch: 0.0 },
       menu: { position: [-3.5, 0.15, 33], yaw: -0.42, pitch: 0.09 },
     };
 
@@ -278,6 +282,15 @@ export default {
       this.smoke.material.uniforms.uTime.value = tnow;
     }
     this.fire?.userData.update(tnow, cam);
+    // corte por distância do entulho miúdo (por célula)
+    if (this.debris?.length) {
+      const D = this.debrisDist;
+      for (const m of this.debris) {
+        const bs = m.boundingSphere;
+        if (!bs) continue;
+        m.visible = cam.position.distanceTo(bs.center) - bs.radius < D;
+      }
+    }
     // céu e montanhas centrados na câmera
     this.sky.position.copy(cam.position);
     this.mountains.position.set(cam.position.x, 0, cam.position.z);

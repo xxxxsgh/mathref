@@ -471,16 +471,18 @@ void main() {
     vec4 vm = texture(tVm, vUv);
     if (uVmBlur > 0.01) {
       vec2 c = (vUv - 0.5) * vec2(uRes.x / uRes.y, 1.0);
-      float rPx = uVmBlur * smoothstep(0.1, 0.55, length(c)) * 14.0;
+      // ótica a ~20 cm do olho focado no alvo: a carcaça inteira sai de foco
+      // (como nas referências de ADS); só o miolo da janela (retículo) fica nítido
+      float rPx = uVmBlur * smoothstep(0.05, 0.24, length(c)) * 18.0 * (uRes.y / 1080.0);
       if (rPx > 0.5) {
         vec4 acc = vm;
         float a0 = ign(gl_FragCoord.xy + uFrame * 5.3) * 6.2831;
-        for (int i = 0; i < 12; i++) {
-          float f = (float(i) + 0.5) / 12.0;
+        for (int i = 0; i < 16; i++) {
+          float f = (float(i) + 0.5) / 16.0;
           float ang = float(i) * 2.39996 + a0;
           acc += texture(tVm, vUv + vec2(cos(ang), sin(ang)) * sqrt(f) * rPx / uRes);
         }
-        vm = acc / 13.0;
+        vm = acc / 17.0;
       }
     }
     col = vm.rgb + col * (1.0 - clamp(vm.a, 0.0, 1.0));

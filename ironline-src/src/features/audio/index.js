@@ -268,6 +268,17 @@ export default {
       play('hurt', { bus: 'foley', volume: 0.5 + a * 0.4, cap: 3 });
       if ((e?.amount || 0) > 30) eng.concussion(0.35);
     });
+    // partida (hud/match.js): a chegada de cada onda tem deixa sonora —
+    // sirene distante e caça passando; onda limpa = respiro e equipamento
+    bus.on('match:wave', (e) => {
+      const p = ctx.camera?.position;
+      if (p) this.play('siren', { position: new ctx.THREE.Vector3(p.x + 60, p.y + 20, p.z - 180), bus: 'amb', ref: 400, volume: 0.3, reverb: 0.7, sos: false, occlude: false, cap: 1, jitter: 0 });
+      if ((e?.wave || 1) > 1) this.play('jet', { bus: 'amb', volume: 0.3, reverb: 0.25, cap: 1, delay: 1.2 });
+    });
+    bus.on('match:waveClear', () => {
+      this.play('breath_out', { bus: 'foley', volume: 0.35, cap: 2 });
+      this.play('gear', { bus: 'foley', volume: 0.18, delay: 0.3, cap: 3 });
+    });
     bus.on('player:death', () => {
       eng.concussion(1);
       play('body_drop', { bus: 'foley', volume: 0.9 });

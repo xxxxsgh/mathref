@@ -46,14 +46,17 @@ export class Compass {
       const t = Math.abs(x - cx) / (W / 2);
       return Math.max(0, Math.min(1, (1 - t) / 0.28));
     };
-    // sombra suave atrás das marcas (legibilidade sobre céu claro)
-    const sg = g.createLinearGradient(0, 0, W, 0);
-    sg.addColorStop(0, 'rgba(0,0,0,0)');
-    sg.addColorStop(0.2, 'rgba(0,0,0,.3)');
-    sg.addColorStop(0.8, 'rgba(0,0,0,.3)');
+    // sombra suave atrás das marcas (legibilidade sobre céu claro): degradê
+    // nas duas direções — sem retângulo visível
+    const sg = g.createRadialGradient(cx, 24, 0, cx, 24, W / 2);
+    sg.addColorStop(0, 'rgba(0,0,0,.2)');
+    sg.addColorStop(0.7, 'rgba(0,0,0,.1)');
     sg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.save();
+    g.scale(1, 0.12);
     g.fillStyle = sg;
-    g.fillRect(0, 2, W, 38);
+    g.fillRect(0, 0, W, 48 / 0.12);
+    g.restore();
 
     const start = Math.ceil((heading - SPAN) / 5) * 5;
     for (let d = start; d <= heading + SPAN; d += 5) {
@@ -107,16 +110,19 @@ export class Compass {
     g.lineTo(cx, 43);
     g.closePath();
     g.fill();
-    const hd = String(Math.round(heading) % 360).padStart(3, '0');
-    g.fillStyle = 'rgba(236,235,228,.55)';
+    // rumo: número limpo (face pesada) com réguas finas que se apagam —
+    // leitura de "bearing" de instrumento, sem caixa
+    const hd = String(Math.round(heading) % 360);
     for (const sx of [-1, 1]) {
-      g.fillRect(cx + sx * 24 - (sx > 0 ? 1 : 0), 49, 1, 13);
-      g.fillRect(cx + sx * 24 - (sx > 0 ? 5 : 0), 49, 5, 1);
-      g.fillRect(cx + sx * 24 - (sx > 0 ? 5 : 0), 61, 5, 1);
+      const lg2 = g.createLinearGradient(cx + sx * 30, 0, cx + sx * 74, 0);
+      lg2.addColorStop(0, 'rgba(236,235,228,.5)');
+      lg2.addColorStop(1, 'rgba(236,235,228,0)');
+      g.fillStyle = lg2;
+      g.fillRect(Math.min(cx + sx * 30, cx + sx * 74), 56, 44, 1);
     }
     g.shadowColor = 'rgba(0,0,0,.85)';
     g.shadowBlur = 3;
-    drawText(g, hd, cx, 50, { size: 12, weight: 1.45, tracking: 1.6, align: 'center', color: '#f1f0ea', heavy: true });
+    drawText(g, hd, cx, 49, { size: 14, weight: 1.5, tracking: 1.8, align: 'center', color: '#f1f0ea', heavy: true });
     g.shadowBlur = 0;
   }
 }

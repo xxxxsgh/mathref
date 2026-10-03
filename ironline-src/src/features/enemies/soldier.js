@@ -693,16 +693,16 @@ function addSoftHat(b, M, V) {
   // aba: anel de cima (face para cima) e de baixo (face para baixo)
   const rings = (dy) => [
     { c: [0, 1.738 + dy, -0.004], ru: 0.106, rv: 0.116, n: 2.1 },
-    { c: [0, 1.722 + dy, -0.006], ru: 0.16, rv: 0.17, n: 2.05 },
-    { c: [0, 1.695 + dy, -0.008], ru: 0.19, rv: 0.2, n: 2 },
+    { c: [0, 1.722 + dy, -0.006], ru: 0.145, rv: 0.155, n: 2.05 },
+    { c: [0, 1.7 + dy, -0.008], ru: 0.168, rv: 0.178, n: 2 }, // aba ~34 cm, caída (não chapéu de desenho)
   ];
   b.loft(rings(0), capM, B.head, core, { seg: 32, caps: [false, false] });
   b.loft(rings(-0.005).reverse(), capM, B.head, core, { seg: 32, caps: [false, false] });
   // borda costurada da aba
   b.loft(
     [
-      { c: [0, 1.692, -0.008], ru: 0.191, rv: 0.201, n: 2 },
-      { c: [0, 1.7, -0.008], ru: 0.191, rv: 0.201, n: 2 },
+      { c: [0, 1.697, -0.008], ru: 0.169, rv: 0.179, n: 2 },
+      { c: [0, 1.705, -0.008], ru: 0.169, rv: 0.179, n: 2 },
     ],
     capM,
     B.head,

@@ -652,7 +652,8 @@ export function graffitiTexture(seed = 17) {
   const r = mulberry(seed);
   const [c, g] = canvas(2048, 1024);
   const F = '"DejaVu Sans", "FreeSans", "Liberation Sans", sans-serif';
-  const cols = ['#c8261e', '#141414', '#1f7a3e', '#1d47b8', '#e9e6dc', '#e08a10', '#8d2bb0', '#2aa6b8'];
+  // tinta spray desbotada pelo sol (realismo: nada de cor saturada "de jogo")
+  const cols = ['#8e2d24', '#1b1a19', '#3f5a43', '#38507a', '#c9c4b6', '#9a6d32', '#58435f', '#4b7478'];
   const words = ['ZEKO', 'RAVN', 'KRS', 'MAOZ', 'TOXA', 'ВИТЯ', 'SEKT', 'DUSE', 'GORA', 'NIX', 'ОЛЕГ', 'BRAK'];
   const drips = (x0, x1, y, col, n) => {
     g.strokeStyle = col; g.lineCap = 'round';
@@ -693,8 +694,8 @@ export function graffitiTexture(seed = 17) {
       const fill = cols[Math.floor(r() * cols.length)];
       g.rotate((r() - 0.5) * 0.2);
       g.font = `bold ${110 + r() * 20}px ${F}`;
-      g.strokeStyle = '#111'; g.lineWidth = 26; g.strokeText(w, 0, 6);
-      g.strokeStyle = '#eee'; g.lineWidth = 14; g.strokeText(w, 0, 6);
+      g.strokeStyle = '#161514'; g.lineWidth = 26; g.strokeText(w, 0, 6);
+      g.strokeStyle = '#cfcbbf'; g.lineWidth = 14; g.strokeText(w, 0, 6);
       g.fillStyle = fill; g.fillText(w, 0, 6);
       g.fillStyle = 'rgba(255,255,255,0.35)';
       g.fillRect(-200, -30, 400, 10);
@@ -703,7 +704,7 @@ export function graffitiTexture(seed = 17) {
     } else if (kind === 'stencil') {
       const w = stencils[si++ % stencils.length];
       g.font = `bold ${w.length > 8 ? 54 : 84}px ${F}`;
-      g.fillStyle = r() < 0.5 ? '#151515' : '#c8261e';
+      g.fillStyle = r() < 0.5 ? '#171615' : '#8e2d24';
       g.globalAlpha = 0.88;
       g.fillText(w, 0, 0);
       // pontes do estêncil
@@ -735,12 +736,27 @@ export function graffitiTexture(seed = 17) {
       drips(ox + 160, ox + 360, oy + 160, col, 3);
     }
     g.restore();
-    // poeira por cima: tinta velha desbotada e falhada
+    // poeira por cima: tinta velha desbotada e falhada — manchas grandes
+    // de desgaste (chuva/sol), lascas e poros do reboco aparecendo
     g.save();
     g.globalCompositeOperation = 'destination-out';
-    for (let k = 0; k < 250; k++) {
-      g.fillStyle = `rgba(0,0,0,${0.2 + r() * 0.5})`;
-      g.fillRect(ox + r() * 512, oy + r() * 256, 1 + r() * 4, 1 + r() * 4);
+    for (let k = 0; k < 7; k++) {
+      const x = ox + r() * 512, y = oy + r() * 256, rr = 40 + r() * 120;
+      const gr = g.createRadialGradient(x, y, 0, x, y, rr);
+      gr.addColorStop(0, `rgba(0,0,0,${0.25 + r() * 0.35})`);
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr;
+      g.fillRect(x - rr, y - rr, rr * 2, rr * 2);
+    }
+    for (let k = 0; k < 1600; k++) {
+      g.fillStyle = `rgba(0,0,0,${0.25 + r() * 0.6})`;
+      const w = 1 + r() * r() * 9;
+      g.fillRect(ox + r() * 512, oy + r() * 256, w, w * (0.5 + r()));
+    }
+    // escorrido vertical de chuva lavando a tinta
+    for (let k = 0; k < 40; k++) {
+      g.fillStyle = `rgba(0,0,0,${0.08 + r() * 0.15})`;
+      g.fillRect(ox + r() * 512, oy + r() * 128, 2 + r() * 5, 60 + r() * 180);
     }
     g.restore();
   }

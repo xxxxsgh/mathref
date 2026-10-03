@@ -136,7 +136,7 @@ export const clusterGeo = (v) =>
 export const sheetGeo = (v) =>
   cached('rsheet' + v, () => {
     const r = mulberry(1300 + v * 23);
-    const g = new THREE.BoxGeometry(1, 0.025, 0.7, 5, 1, 4);
+    const g = new THREE.BoxGeometry(1, 0.04, 0.7, 5, 1, 4); // reboco de 4 cm (não cartolina)
     const P = g.attributes.position;
     const bend = 0.12 + r() * 0.18;
     for (let i = 0; i < P.count; i++) {
@@ -187,9 +187,11 @@ function merge(geos) {
   return g;
 }
 
-const BRICK_T = [[0.62, 0.34, 0.25], [0.5, 0.29, 0.22], [0.7, 0.46, 0.33], [0.55, 0.47, 0.4], [0.66, 0.38, 0.27], [0.36, 0.24, 0.2]];
+// tijolos soltos empoeirados (pó de reboco por cima: menos saturados que na parede)
+const BRICK_T = [[0.52, 0.34, 0.27], [0.43, 0.3, 0.25], [0.57, 0.42, 0.34], [0.5, 0.45, 0.4], [0.48, 0.35, 0.29], [0.34, 0.26, 0.22]];
 // concreto quente e sujo de pó (cinza puro lia azulado sob o céu)
-const CONC_T = [[0.62, 0.58, 0.52], [0.53, 0.5, 0.45], [0.68, 0.63, 0.55], [0.43, 0.41, 0.38], [0.58, 0.54, 0.47], [0.36, 0.34, 0.31]];
+// concreto velho com pó (albedo real ~0,3–0,45): tons claros demais viravam papelão sob o sol
+const CONC_T = [[0.53, 0.5, 0.45], [0.46, 0.43, 0.39], [0.57, 0.53, 0.47], [0.37, 0.35, 0.33], [0.5, 0.46, 0.41], [0.31, 0.29, 0.27]];
 
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
@@ -308,8 +310,8 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
     } else {
       const s = rng.range(0.28, 0.6) * Math.min(1.2, r / 1.0);
       const v = rng.int(0, 7);
-      const painted = rng.chance(0.35);
-      I.add('rchunk' + v, chunkGeo(v), 'rubbleC', onSlope(place(lx, lz, s * 0.12), n, rng.range(0, 6.28), [rng.range(-0.6, 0.6), rng.range(-0.6, 0.6)], [s * rng.range(0.9, 1.4), s, s * rng.range(0.8, 1.2)]), painted ? tint.map((c) => c * 0.95) : rng.pick(CONC_T));
+      const painted = rng.chance(0.2);
+      I.add('rchunk' + v, chunkGeo(v), 'rubbleC', onSlope(place(lx, lz, s * 0.12), n, rng.range(0, 6.28), [rng.range(-0.6, 0.6), rng.range(-0.6, 0.6)], [s * rng.range(0.9, 1.4), s, s * rng.range(0.8, 1.2)]), painted ? tint.map((c) => c * 0.72) : rng.pick(CONC_T));
     }
   }
   // ── pedaços médios ──
@@ -327,9 +329,9 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
     } else if (kind < 0.93) {
       const s = rng.range(0.1, 0.3);
       const v = rng.int(0, 7);
-      I.add('rchunk' + v, chunkGeo(v), 'rubbleC', onSlope(place(lx, lz, s * 0.15), n, rng.range(0, 6.28), [rng.range(-0.8, 0.8), rng.range(-0.8, 0.8)], s), rng.chance(0.3) ? tint : rng.pick(CONC_T));
+      I.add('rchunk' + v, chunkGeo(v), 'rubbleC', onSlope(place(lx, lz, s * 0.15), n, rng.range(0, 6.28), [rng.range(-0.8, 0.8), rng.range(-0.8, 0.8)], s), rng.chance(0.25) ? tint.map((c) => c * 0.72) : rng.pick(CONC_T));
     } else {
-      const s = rng.range(0.35, 0.7);
+      const s = rng.range(0.22, 0.45);
       const v = rng.int(0, 2);
       I.add('rsheet' + v, sheetGeo(v), 'rubbleC', onSlope(place(lx, lz, 0.02), n, rng.range(0, 6.28), [rng.range(-0.5, 0.5), rng.range(-0.5, 0.5)], [s, 1, s]), tint.map((c) => c * rng.range(0.6, 0.8)));
     }
@@ -382,6 +384,14 @@ export function scatterDebris(W, x, z, r, n, opts = {}) {
     const a = rng.range(0, Math.PI * 2), d = Math.sqrt(rng.next()) * r;
     return [x + Math.cos(a) * d, z + Math.sin(a) * d];
   });
+  // cada aglomerado assenta numa mancha de pó/argamassa moída (o entulho
+  // caiu e se partiu ali): sem ela os pedaços "flutuam" sobre o asfalto limpo
+  if (opts.dust !== false) {
+    for (const c of centers) {
+      const s0 = rng.range(1.1, 1.9);
+      decal(W.B, 'stains', [c[0], y + 0.014 + rng.range(0, 0.002), c[1]], 'py', [s0, s0 * rng.range(0.7, 1.0)], [0, 0.5, 0.5, 1], rng.range(0, 6.28), [1.12, 1.06, 0.96]);
+    }
+  }
   for (let i = 0; i < n; i++) {
     const c = centers[i % nc];
     const a = rng.range(0, Math.PI * 2), d = Math.pow(rng.next(), 1.6) * Math.min(r, 1.2);
@@ -392,14 +402,17 @@ export function scatterDebris(W, x, z, r, n, opts = {}) {
       const onEdge = rng.chance(0.15);
       const bs = rng.range(0.7, 1.15);
       I.add('rbrick' + v, brickGeo(v), 'rubbleB', mat4([px, y + (onEdge ? 0.055 : 0.03) * bs, pz], [onEdge ? Math.PI / 2 : rng.range(-0.15, 0.15), rng.range(0, 6.28), rng.range(-0.15, 0.15)], bs), rng.pick(BRICK_T), { shadow: true });
-    } else if (k < 0.85) {
+    } else if (k < 0.92) {
+      // pedaço de concreto meio enterrado no próprio pó (centro abaixo do
+      // chão): assenta em vez de pousar numa quina
       const s = rng.range(0.03, 0.13);
       const v = rng.int(0, 7);
-      I.add('rchunk' + v, chunkGeo(v), 'rubbleC', mat4([px, y + s * 0.25, pz], [rng.range(0, 6), rng.range(0, 6), rng.range(0, 6)], s), rng.pick(CONC_T), { shadow: false });
+      I.add('rchunk' + v, chunkGeo(v), 'rubbleC', mat4([px, y + s * 0.12, pz], [rng.range(-0.5, 0.5), rng.range(0, 6), rng.range(-0.5, 0.5)], s), rng.pick(CONC_T), { shadow: s > 0.07 });
     } else {
-      const s = rng.range(0.12, 0.28);
+      // lasca de reboco: pequena, empoeirada (tom do pó, não "papelão" claro)
+      const s = rng.range(0.07, 0.17);
       const v = rng.int(0, 2);
-      I.add('rsheet' + v, sheetGeo(v), 'rubbleC', mat4([px, y + 0.02, pz], [rng.range(-0.2, 0.2), rng.range(0, 6), rng.range(-0.2, 0.2)], [s, 1, s]), (opts.tint || rng.pick(CONC_T)).map((c) => c * 0.7), { shadow: false });
+      I.add('rsheet' + v, sheetGeo(v), 'rubbleC', mat4([px, y + 0.012, pz], [rng.range(-0.15, 0.15), rng.range(0, 6), rng.range(-0.15, 0.15)], [s, 1, s]), (opts.tint || rng.pick(CONC_T)).map((c) => c * 0.58), { shadow: false });
     }
   }
 }

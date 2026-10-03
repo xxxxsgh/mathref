@@ -69,7 +69,7 @@ const TIERS = {
 function defaultParams() {
   return {
     exposure: 1.0,          // compensação manual (multiplicador)
-    autoExposure: { enabled: true, key: 0.16, strength: 0.6, minEV: -2.0, maxEV: 2.2, biasEV: 0.0, speedUp: 2.5, speedDown: 1.4 },
+    autoExposure: { enabled: true, key: 0.14, strength: 0.6, minEV: -2.0, maxEV: 2.2, biasEV: 0.0, speedUp: 2.5, speedDown: 1.4 },
     environmentIntensity: 0.55,
     indoorAmbient: 0.34,    // fração extra do ambiente sob teto (o world já escurece o interior dele)
     coveredAmbient: 0.4,    // quanto do ambiente a CENA já tem sob teto (estimativa p/ albedo)
@@ -83,12 +83,12 @@ function defaultParams() {
     // PCSS: tan do semi-ângulo efetivo do sol (0,0047 = disco real; mais
     // largo simula o espalhamento do céu perto do sol e suaviza o serrilhado)
     shadow: { lightSize: 0.02 },
-    ao: { radius: 0.75, intensity: 3.2, bias: 0.6, strength: 1.0 },
+    ao: { radius: 0.9, intensity: 3.6, bias: 0.6, strength: 1.0 }, // raio maior: escurece a junção objeto–chão (props não "flutuam")
     // tinta levemente quente/acinzentada: a perspectiva aérea pura do LUT
     // puxa para ciano perto do horizonte e "lava" o fundo da rua
-    fog: { density: 0.0011, falloff: 0.045, base: 0.0, start: 22, max: 0.8, tint: new THREE.Color(0.93, 0.92, 0.88), sun: 0.12 },
+    fog: { density: 0.0007, falloff: 0.045, base: 0.0, start: 22, max: 0.8, tint: new THREE.Color(0.93, 0.92, 0.88), sun: 0.12 },
     taa: { alpha: 0.1, gamma: 1.0 },
-    vol: { density: 0.0025, falloff: 0.09, base: 0.0, maxDist: 70, strength: 0.55, phaseG: 0.6, indoorDust: 22 },
+    vol: { density: 0.0025, falloff: 0.09, base: 0.0, maxDist: 70, strength: 0.32, phaseG: 0.6, indoorDust: 22 },
     bloom: { strength: 0.055, radius: 1.0, dirt: 0.5 },
     // gradação "fotográfica": AgX + contraste em log, saturação levemente
     // abaixo de 1, split-toning quase neutro (sem laranja/azul-petróleo de
@@ -96,19 +96,19 @@ function defaultParams() {
     grade: {
       tonemapper: 'agx',    // 'agx' | 'aces'
       whiteBalance: new THREE.Color(1.0, 1.0, 0.985),
-      contrast: 1.32,
-      saturation: 0.9,
+      contrast: 1.46,       // rodada 3: pretos mais densos (p5 da imagem ~0,08 como nas referências)
+      saturation: 0.85,
       shadowTint: new THREE.Color(0.985, 1.0, 1.02),
       highlightTint: new THREE.Color(1.02, 1.0, 0.975),
       lift: new THREE.Color(0.003, 0.004, 0.005),
-      gain: new THREE.Color(1.06, 1.06, 1.06), // AgX entrega brancos ~0,94: devolve o topo
-      black: 0.004,         // ponto de preto (flare) — pretos profundos
+      gain: new THREE.Color(1.12, 1.12, 1.12), // AgX entrega brancos ~0,94: devolve o topo (altas luzes até ~0,95)
+      black: 0.013,         // ponto de preto (flare) — pretos profundos
     },
     clarity: 0.08,          // contraste local (micro-contraste estilo 'clarity')
     lens: { ca: 0.006, vignette: 0.3, grain: 0.02, sharpen: null },
     menuBlur: 0,
     motionBlur: 0.5,
-    adsDof: 1.0,
+    adsDof: 1.0,          // desfoque da ótica no ADS (perto do olho): a carcaça sai de foco, o retículo não
   };
 }
 
@@ -670,6 +670,16 @@ const rendering = {
     const vp = _vp.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     if (!this.hasPrev) this.prevViewProj.copy(vp), (this.hasPrev = true);
     const prevVP = _pvp.copy(this.prevViewProj);
+    // câmera mexeu (recuo, balanço)? No modo shot a média progressiva só vale
+    // com a câmera PARADA — senão vira exposição dupla (fantasma em fachadas)
+    {
+      let dm = 0;
+      const a = vp.elements, b = prevVP.elements;
+      for (let i = 0; i < 16; i++) dm = Math.max(dm, Math.abs(a[i] - b[i]));
+      this.camMoved = dm > 2e-5;
+      if (this.camMoved) this.stillFrames = 0;
+      else this.stillFrames = (this.stillFrames || 0) + 1;
+    }
     this.prevViewProj.copy(vp);
     // ruído por quadro: com TAA acumulando, varia sempre (também no modo shot)
     const noiseFrame = taaOn ? this.frameIndex : ctx.shot ? 0 : this.frameIndex % 8;
@@ -856,12 +866,13 @@ const rendering = {
       u.uTexel.value.set(1 / w, 1 / h);
       u.uHistValid.value = this.taaFrames > 0 ? 1 : 0;
       // modo shot (câmera parada): média progressiva → supersample limpo
-      u.uAlpha.value = ctx.shot ? Math.max(1 / (this.taaFrames + 1), 0.035) : P.taa.alpha;
-      u.uGamma.value = ctx.shot ? Math.max(P.taa.gamma, 1.75) : P.taa.gamma;
+      const still = ctx.shot && !this.camMoved;
+      u.uAlpha.value = still ? Math.max(1 / (Math.min(this.taaFrames, this.stillFrames) + 1), 0.035) : P.taa.alpha;
+      u.uGamma.value = still ? Math.max(P.taa.gamma, 1.75) : P.taa.gamma;
       // câmera parada no modo shot: folga fixa no recorte → fios/grades
       // subpixel viram linhas contínuas (supersample real), sem fantasma
       // em traçantes/clarões (diferenças grandes ainda são cortadas)
-      u.uTol.value = ctx.shot ? 0.07 : 0;
+      u.uTol.value = still ? 0.07 : 0;
       draw(M.taa, next);
       this.histIndex = 1 - this.histIndex;
       this.taaFrames++;

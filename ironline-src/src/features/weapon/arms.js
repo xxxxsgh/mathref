@@ -450,7 +450,8 @@ export function buildSleeve(M, { left = false, watch = false } = {}) {
     glass.position.y = 0.0095;
     wg.add(glass);
     // ponteiros luminosos
-    const hm = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 0.6, 0.35) });
+    // lume de dia: quase apagado (o verde aceso lia como brinquedo)
+    const hm = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.1, 0.12, 0.1) });
     const h1 = new THREE.Mesh(new THREE.BoxGeometry(0.0012, 0.0004, 0.009), hm);
     h1.position.set(0.002, 0.0098, -0.004);
     h1.rotation.y = 0.5;

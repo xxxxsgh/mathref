@@ -118,6 +118,7 @@ procedural — nenhum asset externo.
 
 - Fonte: [`ironline-src/`](./ironline-src)
 - Build: `ironline/` (gerado pelo workflow)
+- **Documentação técnica:** [`docs/IRONLINE.md`](./docs/IRONLINE.md)
 - **Contrato entre features e presets de screenshot:** [`ironline-src/CONTRACT.md`](./ironline-src/CONTRACT.md)
 
 ```bash

@@ -10,7 +10,30 @@
  */
 const CALLSIGNS = ['KESTREL', 'VOLKOV', 'RAZOR', 'NOMAD', 'HALVARD', 'SPECTER', 'DRAGAN', 'ORLOV', 'CINDER', 'MAKAROV', 'TALON', 'BRASK', 'VIPER', 'KORSAK', 'GRIMM', 'STRYDE'];
 
-export const MODE = { id: 'elim', name: 'ELIMINATION', map: 'MERIDIAN STREET', target: 30, time: 600 };
+/**
+ * Modo FRONTLINE: o jogador segura a rua contra ONDAS do esquadrão hostil.
+ * Cada onda entra pelo fundo da rua (pontos de `world.enemySpawns` longe do
+ * jogador), com no máximo `maxAlive` vivos ao mesmo tempo; limpar a última
+ * onda vence, o relógio zerar perde. `target` = total de abates (soma).
+ * `?waves=2,3` encurta a partida (testes e2e); `?mt=segundos` muda o tempo;
+ * `?wi=segundos` muda o intervalo entre ondas.
+ */
+export const MODE = { id: 'waves', name: 'FRONTLINE', map: 'MERIDIAN STREET', waves: [4, 5, 6, 7, 8], target: 30, maxAlive: 5, time: 600, intermission: 7 };
+
+/** Aplica overrides de URL ao modo (antes de montar o HUD). */
+export function configureMode(params) {
+  const w = params?.get?.('waves');
+  if (w) {
+    const list = w.split(',').map((n) => Math.max(1, Math.min(20, Number(n) | 0))).filter(Boolean);
+    if (list.length) MODE.waves = list;
+  }
+  const mt = Number(params?.get?.('mt'));
+  if (mt > 0) MODE.time = mt;
+  const wi = Number(params?.get?.('wi'));
+  if (wi > 0) MODE.intermission = wi;
+  MODE.target = MODE.waves.reduce((a, b) => a + b, 0);
+  return MODE;
+}
 
 // XP por evento
 export const XP = { kill: 100, head: 50, long: 50, double: 50, triple: 100, streak5: 150, payback: 50, assist: 25, revenge: 50 };
@@ -45,6 +68,12 @@ export class Match {
     this.playTime = 0;
     this.hostile = new Map(); // nome → { kills, deaths, score }
     this.xpEarned = 0;
+    // ondas
+    this.wave = 0; // 1-based quando em jogo
+    this.toSpawn = 0;
+    this.spawnCd = 0;
+    this.waveT = 0; // intervalo antes da próxima onda (s)
+    this.waveAlive = new Set();
   }
 
   nameOf(enemy) {
@@ -137,7 +166,7 @@ export class Match {
     this.hooks.feed({ killer: 'self', victim: name, head, weapon: 'rifle' });
     this.hooks.xp(lines, total);
     if (medal) this.hooks.medal(medal[0], medal[1], total);
-    if (this.kills >= MODE.target && this.phase === 'play') this.finish(true);
+    // a vitória vem de limpar a última onda (updateWaves)
   }
   onPlayerDamage(e) {
     this.lastDamage = this.ctx.time.now;
@@ -161,6 +190,59 @@ export class Match {
   start() {
     this.reset();
     this.phase = 'play';
+    const en = this.ctx.services.enemies;
+    if (en) {
+      // a partida conduz a população: some com quem estava na rua
+      en.auto = false;
+      en.clear?.();
+    }
+    this.waveT = 2.5; // respiro antes da 1ª onda
+  }
+
+  /** Começa a onda n (1-based). */
+  beginWave(n) {
+    this.wave = n;
+    this.toSpawn = MODE.waves[n - 1] || 0;
+    this.spawnCd = 0;
+    this.waveAlive.clear();
+    this.hooks.wave?.(n, MODE.waves.length, this.toSpawn);
+  }
+
+  /** Um soldado da onda entra pelo fundo da rua, longe do jogador. */
+  spawnOne() {
+    const ctx = this.ctx;
+    const en = ctx.services.enemies;
+    const spawns = ctx.services.world?.enemySpawns || [];
+    if (!en?.spawn || !spawns.length) return false;
+    const pl = ctx.player.position;
+    const dist = (s) => Math.hypot(s.position[0] - pl.x, s.position[2] - pl.z);
+    let pool = spawns.filter((s) => dist(s) > 26);
+    if (!pool.length) pool = [...spawns].sort((a, b) => dist(b) - dist(a)).slice(0, 2);
+    const sp = pool[Math.floor(ctx.rng.next() * pool.length)];
+    // espalha quem nasce no mesmo ponto (sem entrar em parede)
+    const P = [...sp.position];
+    for (let k = 0; k < 4; k++) {
+      const x = sp.position[0] + (ctx.rng.next() - 0.5) * 2.4;
+      const z = sp.position[2] + (ctx.rng.next() - 0.5) * 5;
+      const c = { x, y: (sp.position[1] || 0) + 1, z };
+      if (!ctx.collision.overlapSphere(c, 0.45, (o) => o.blocksPlayer !== false && !o.trigger).length) {
+        P[0] = x;
+        P[2] = z;
+        break;
+      }
+    }
+    const e = en.spawn({ position: P, yaw: sp.yaw ?? Math.PI, variant: Math.floor(ctx.rng.next() * (en.variants || 4)) });
+    // a onda chega sabendo onde a linha está: entra em combate procurando
+    if (e?.brain) {
+      e.brain.awareness = Math.max(e.brain.awareness || 0, 0.6);
+      e.brain.hear?.(ctx.player.position.clone?.() || pl, 0.5);
+    }
+    if (e) this.waveAlive.add(e);
+    return !!e;
+  }
+
+  get waveCount() {
+    return MODE.waves.length;
   }
 
   finish(win) {
@@ -176,15 +258,42 @@ export class Match {
     if (this.phase === 'play') {
       this.playTime += dt;
       this.timeLeft = Math.max(0, this.timeLeft - dt);
-      if (this.timeLeft <= 0) this.finish(this.kills >= MODE.target);
+      if (this.timeLeft <= 0) this.finish(false);
       // regeneração
       if (p.alive && p.health < p.maxHealth && ctx.time.now - this.lastDamage > 4.2) {
         p.health = Math.min(p.maxHealth, p.health + 38 * dt);
       }
       for (const e of ctx.services.enemies?.list || []) if (e.alive) this.rowOf(this.nameOf(e)).alive = true;
+      this.updateWaves(dt);
     } else if (this.phase === 'dead') {
       this.deadT += dt;
+      // a onda continua chegando enquanto o jogador espera para renascer
+      this.updateWaves(dt);
       if (this.deadT > 4) this.respawn();
+    }
+  }
+
+  updateWaves(dt) {
+    if (this.phase === 'end') return;
+    for (const e of this.waveAlive) if (!e.alive) this.waveAlive.delete(e);
+    if (this.waveT > 0) {
+      this.waveT -= dt;
+      if (this.waveT <= 0) this.beginWave(this.wave + 1);
+      return;
+    }
+    if (!this.wave) return;
+    this.spawnCd -= dt;
+    if (this.toSpawn > 0 && this.waveAlive.size < MODE.maxAlive && this.spawnCd <= 0) {
+      if (this.spawnOne()) this.toSpawn--;
+      this.spawnCd = 1.1 + this.ctx.rng.next() * 1.4;
+    }
+    if (this.toSpawn <= 0 && this.waveAlive.size === 0) {
+      if (this.wave >= MODE.waves.length) {
+        if (this.phase === 'play' || this.phase === 'dead') this.finish(true);
+      } else {
+        this.waveT = MODE.intermission;
+        this.hooks.waveClear?.(this.wave, MODE.waves.length);
+      }
     }
   }
 

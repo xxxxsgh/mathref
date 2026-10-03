@@ -16,7 +16,7 @@
 import { drawText } from './font.js';
 
 export class Photos {
-  static HOLD = 4;
+  static HOLD = 3;
   constructor(ctx) {
     this.ctx = ctx;
     this.queue = [];

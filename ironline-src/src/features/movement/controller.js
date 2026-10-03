@@ -567,7 +567,12 @@ export class Controller {
 
     const st = p.state;
     st.moving = fy !== 0 || fx !== 0;
-    st.speed = hs;
+    // `speed` alimenta o balanço de passada da arma/HUD: no slide os pés não
+    // pisam (o corpo desliza), então ele cai para ~0.9 m/s — ainda "em
+    // movimento" para quem só testa > 0.5, mas sem bob de corrida na arma.
+    // A velocidade física real fica em `groundSpeed`.
+    st.groundSpeed = hs;
+    st.speed = this.slide ? Math.min(hs, 0.9) : hs;
     st.sprinting = this.sprint > 0 && hs > 1;
     st.tactical = this.sprint === 2 && hs > 1;
     st.crouching = this.stance === 'crouch' || this.stance === 'slide';

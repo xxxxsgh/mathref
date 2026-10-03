@@ -12,7 +12,7 @@
  */
 import * as THREE from 'three';
 
-export function makeLens({ w, h, color = new THREE.Color(1.0, 0.035, 0.02), intensity = 4 } = {}) {
+export function makeLens({ w, h, color = new THREE.Color(1.0, 0.035, 0.02), intensity = 12.0 } = {}) {
   const mat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -57,10 +57,10 @@ export function makeLens({ w, h, color = new THREE.Color(1.0, 0.035, 0.02), inte
         float MOA = 0.000290888 * 1.1; // escala de jogo (legível em 1080p)
         float px = max(fwidth(a.x), fwidth(a.y)) + 1e-6; // tamanho de um pixel em rad
         // traço com no mínimo ~1,1 px (nítido e sem serrilhado): cobertura analítica
-        float hw = 0.55 * MOA;
+        float hw = 0.85 * MOA;
         float core = 0.0;
         // ponto central 1 MOA
-        float dd = length(a) - 0.7 * MOA;
+        float dd = length(a) - 1.1 * MOA;
         core += 1.0 - smoothstep(-px * 0.5, px * 0.6, dd);
         // anel 65 MOA (raio 32,5)
         float rr = ring(a, 32.5 * MOA) - hw;
@@ -98,10 +98,10 @@ export function makeLens({ w, h, color = new THREE.Color(1.0, 0.035, 0.02), inte
         // filete de refração na borda do vidro (bisel do vidro pega luz)
         float bevel = smoothstep(0.93, 0.975, max(e.x, e.y)) * (1.0 - smoothstep(0.975, 0.995, max(e.x, e.y)));
         vec3 coat = film * (0.03 + 0.22 * fres) * (0.6 + 0.4 * vUv.y) + uEnvColor * (smudge * 0.035 + dust * 0.05 + edge * 0.04 + bevel * 0.35)
-                  + vec3(0.02, 0.05, 0.06) * 0.25; // tinta azul-esverdeada do vidro
+                  + vec3(0.02, 0.05, 0.055) * 0.3 + vec3(0.05, 0.07, 0.09) * smoothstep(0.2, 1.0, vUv.y) * 0.15; // tinta azul-esverdeada + reflexo do céu no alto do vidro
         vec3 col = coat + uColor * uIntensity * ret * inside;
         // vidro levemente tingido (âmbar fraco escurece o fundo um pouco)
-        float alpha = clamp(0.1 + bevel * 0.2 + fres * 0.22 + smudge * 0.03 + edge * 0.08, 0.0, 1.0);
+        float alpha = clamp(0.12 + bevel * 0.2 + fres * 0.22 + smudge * 0.03 + edge * 0.08, 0.0, 1.0);
         // o traço encobre um pouco o fundo (alfa): o vermelho continua
         // saturado mesmo contra céu claro, em vez de virar rosa/laranja
         alpha = max(alpha, clamp(ret * inside, 0.0, 1.0) * 0.7);

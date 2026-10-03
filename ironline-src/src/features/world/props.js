@@ -29,23 +29,46 @@ export class Instancer {
     s.mats.push(matrix.clone());
     s.cols.push(color);
   }
+  /**
+   * Cria os InstancedMesh. Conjuntos grandes (entulho espalhado pelo mapa
+   * inteiro) são PARTIDOS em células de `CELL` m ao longo da rua: a esfera
+   * envolvente de cada parte é pequena, então o frustum culling (câmera,
+   * sombra do sol, RSM) descarta o que está atrás/longe — antes um único
+   * InstancedMesh de ~1500 pedaços cobria a rua toda e era sempre desenhado.
+   */
   build(root, mats) {
     const out = [];
+    const CELL = 26;
+    const SPLIT = 160; // só vale partir conjuntos grandes (cada parte = 1 draw call)
+    const _p = new THREE.Vector3();
     for (const [key, s] of this.sets) {
-      const m = new THREE.InstancedMesh(s.geo, mats[s.mat], s.mats.length);
-      m.name = `inst:${key}`;
-      const c = new THREE.Color();
-      s.mats.forEach((M, i) => {
-        m.setMatrixAt(i, M);
-        m.setColorAt(i, c.setRGB(...s.cols[i]));
-      });
-      m.instanceMatrix.needsUpdate = true;
-      if (m.instanceColor) m.instanceColor.needsUpdate = true;
-      m.computeBoundingSphere();
-      m.castShadow = s.shadow;
-      m.receiveShadow = true;
-      root.add(m);
-      out.push(m);
+      const groups = new Map();
+      if (s.mats.length > SPLIT) {
+        s.mats.forEach((M, i) => {
+          _p.setFromMatrixPosition(M);
+          const c = Math.floor(_p.z / CELL) * 2 + (_p.x < 0 ? 0 : 1);
+          let g = groups.get(c);
+          if (!g) groups.set(c, (g = []));
+          g.push(i);
+        });
+      } else groups.set(0, s.mats.map((_, i) => i));
+      for (const [cell, idx] of groups) {
+        const m = new THREE.InstancedMesh(s.geo, mats[s.mat], idx.length);
+        m.name = groups.size > 1 ? `inst:${key}#${cell}` : `inst:${key}`;
+        const c = new THREE.Color();
+        idx.forEach((i, j) => {
+          m.setMatrixAt(j, s.mats[i]);
+          m.setColorAt(j, c.setRGB(...s.cols[i]));
+        });
+        m.instanceMatrix.needsUpdate = true;
+        if (m.instanceColor) m.instanceColor.needsUpdate = true;
+        m.computeBoundingSphere();
+        m.computeBoundingBox?.();
+        m.castShadow = s.shadow;
+        m.receiveShadow = true;
+        root.add(m);
+        out.push(m);
+      }
     }
     return out;
   }
@@ -336,7 +359,7 @@ export function dumpster(W, x, z, yaw) {
     g.rotateY(Math.PI / 2);
     return g;
   });
-  const green = [0.24, 0.36, 0.27];
+  const green = [0.27, 0.33, 0.28]; // verde desbotado pelo sol
   B.add(body, 'metal', M, { color: green, ao: [0.15, 0.8, 0.55] });
   // aba da boca
   for (const s of [-1, 1]) B.add(UNIT, 'metal', L([0, 1.31, s * 0.585], [1.96, 0.06, 0.05]), { color: green });

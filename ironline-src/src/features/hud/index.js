@@ -19,7 +19,7 @@
 import { CSS } from './style.js';
 import { PlayHud } from './play.js';
 import { Screens } from './menus.js';
-import { Match, MODE } from './match.js';
+import { Match, MODE, configureMode } from './match.js';
 import * as Settings from './settings.js';
 import { Gunsmith, gunSilhouette } from './gunsmith.js';
 import { Hero } from './hero.js';
@@ -40,6 +40,7 @@ export default {
   order: 90,
 
   init(ctx) {
+    configureMode(ctx.params);
     const root = document.createElement('div');
     root.id = 'hud';
     root.innerHTML = `<style>${CSS}</style><div class="fx"></div><div class="stage"></div>`;
@@ -78,6 +79,14 @@ export default {
       death: (killer) => this.onDeath(killer),
       respawn: () => this.onRespawn(),
       end: (win) => this.onEnd(win),
+      wave: (n, of, count) => {
+        this.play.banner(`WAVE ${n}`, `${count} HOSTILES INBOUND  ·  ${n} / ${of}`);
+        ctx.bus.emit('match:wave', { wave: n, of, count });
+      },
+      waveClear: (n, of) => {
+        this.play.banner(`WAVE ${n} CLEARED`, `NEXT WAVE IN ${MODE.intermission} S  ·  RELOAD AND REPOSITION`);
+        ctx.bus.emit('match:waveClear', { wave: n, of });
+      },
     });
     this.showHud = true;
     this.inMatch = false;
@@ -227,7 +236,7 @@ export default {
         if (sp) ctx.player.setPose(sp);
         ctx.player.health = ctx.player.maxHealth;
         ctx.player.alive = true;
-        this.play.banner(MODE.name, `ELIMINATE ${MODE.target} HOSTILES  ·  ${MODE.map}`);
+        this.play.banner(MODE.name, `HOLD THE STREET  ·  ${MODE.waves.length} WAVES  ·  ${MODE.map}`);
         ctx.bus.emit('match:start', { mode: MODE });
       }
       this.resume();
@@ -344,6 +353,7 @@ export default {
     names.forEach((n, i) => m.hostile.set(n, { name: n, kills: st[i][0], deaths: st[i][1], score: st[i][0] * 100 + st[i][1] * 10, alive: !!st[i][2] }));
     m.nameIdx = 5;
     m.win = true;
+    m.wave = Math.min(3, MODE.waves.length);
     if (this.ctx.params.get('ui') === 'end') {
       // relatório de fim: partida concluída (alvo atingido)
       m.kills = 30; m.deaths = 6; m.headshots = 11; m.shots = 486; m.hits = 203; m.score = 4350; m.xpEarned = 4350;

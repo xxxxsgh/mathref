@@ -25,7 +25,7 @@ const CROSS = [-66, -52];
 /** Crateras de morteiro na avenida: [x, z, raio, semente]. */
 // [x, z, raio, semente] — as pequenas (r < 0.8) são buracos de estilhaço/
 // asfalto afundado; todas com bacia real (furo na fatia da pista)
-const CRATERS = [[0.9, 14.5, 1.3, 1], [-2.2, -17, 1.2, 2], [3.0, -41, 1.4, 3], [-1.0, -84, 1.1, 4], [2.4, -118, 1.3, 5],
+const CRATERS = [[-3.2, 3.0, 1.3, 1], [-2.2, -17, 1.2, 2], [3.0, -41, 1.4, 3], [-1.0, -84, 1.1, 4], [2.4, -118, 1.3, 5],
   [-2.3, 18.2, 0.62, 6], [3.3, 5.5, 0.55, 7], [-3.0, -27, 0.7, 8], [-2.6, -100, 0.6, 9], [2.8, 36, 0.58, 10]];
 
 export function buildLayout(W) {
@@ -346,7 +346,7 @@ function dressStreet(W) {
   // pneus e tambor tombado junto da carcaça
   P.tire(W, 5.4, 19.4, { flat: true });
   P.tire(W, 5.7, 18.6, { flat: true });
-  P.barrel(W, 2.3, 20.5, { fallen: true, tint: [0.25, 0.32, 0.22] });
+  P.barrel(W, 2.3, 20.5, { fallen: true, tint: [0.27, 0.3, 0.24] });
 
   // carros estacionados / abandonados / queimados
   P.car(W, 4.6, 36, Math.PI / 2 + 0.03, { kind: 'sedan', tint: [0.74, 0.74, 0.71] });

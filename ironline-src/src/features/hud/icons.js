@@ -142,3 +142,25 @@ export function medalSVG(kind, s = 64, tierOverride) {
 
 // Seta do jogador no minimapa / indicador
 export const ARROW_PATH = 'M0,-9 L7,7 L0,3.6 L-7,7 Z';
+
+/**
+ * Ícone de desafio: anel de progresso (trilha + arco âmbar) com um glifo
+ * de traço no centro — mesma família de traço da fonte, sem medalha.
+ */
+export function challengeSVG(kind, frac = 0, s = 44) {
+  const r = 19, c = 2 * Math.PI * r;
+  const f = Math.max(0, Math.min(1, frac));
+  const glyph = {
+    // cabeça de perfil com retícula
+    head: '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"><circle cx="22" cy="22" r="7.5"/><path d="M22,11 V15.5 M22,28.5 V33 M11,22 H15.5 M28.5,22 H33"/></g><circle cx="22" cy="22" r="1.8" fill="currentColor"/>',
+    // alvo abatido: silhueta de busto com X
+    kill: '<path d="M22,12.5 a4.6,4.6 0 1,1 -0.01,0 Z M13.5,32 C13.5,25.5 17,22.6 22,22.6 C27,22.6 30.5,25.5 30.5,32 Z" fill="currentColor" opacity=".9"/><path d="M15,13 L29,31 M29,13 L15,31" stroke="#0b0d0f" stroke-width="3.4"/><path d="M15,13 L29,31 M29,13 L15,31" stroke="#e2b45a" stroke-width="1.6"/>',
+    // troféu
+    long: '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="miter"><path d="M16,12.5 H28 V19 C28,23.5 25.5,26 22,26 C18.5,26 16,23.5 16,19 Z"/><path d="M16,14.5 H12.5 C12.5,19 14,20.5 16.4,21 M28,14.5 H31.5 C31.5,19 30,20.5 27.6,21"/><path d="M22,26 V29.5 M17,32 H27 L26,29.5 H18 Z"/></g>',
+  }[kind] || '';
+  return `<svg width="${s}" height="${s}" viewBox="0 0 44 44" class="chal-ic">
+    <circle cx="22" cy="22" r="${r + 2.5}" fill="rgba(8,10,12,.55)"/>
+    <circle cx="22" cy="22" r="${r}" fill="none" stroke="rgba(242,244,239,.14)" stroke-width="2.2"/>
+    <circle cx="22" cy="22" r="${r}" fill="none" stroke="#e2b45a" stroke-width="2.2" stroke-dasharray="${(c * f).toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 22 22)"/>
+    <g color="#ecebe4">${glyph}</g></svg>`;
+}

@@ -6,7 +6,7 @@
  * prancheta 1920×1080. Navegação por mouse e teclado (↑/↓/Enter/Esc).
  */
 import { svgText, pathFor } from './font.js';
-import { rifleSVG, pistolSVG, fragSVG, flashSVG, rankSVG, medalSVG, skullSVG, headshotSVG, knifeSVG } from './icons.js';
+import { rifleSVG, pistolSVG, fragSVG, flashSVG, rankSVG, medalSVG, skullSVG, headshotSVG, knifeSVG, challengeSVG } from './icons.js';
 import { MODE } from './match.js';
 import { callingCard, emblemSVG } from './art.js';
 import { cropPhoto, photoTitle } from './photo.js';
@@ -16,7 +16,12 @@ const T = (s, o) => svgText(s, o);
 const t11 = (s, o = {}) => T(s, { size: 12, weight: 1.4, tracking: 2.3, ...o });
 // valores numéricos: face pesada
 const N = (s, size = 20, o = {}) => T(String(s), { size, weight: 1.5, heavy: true, ...o });
+/** face secundária: monoespaçada do sistema para metadados/leituras de dados */
+const mono = (s) => `<span class="mono">${String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</span>`;
 const key = (k) => `<span class="key">${T(k, { size: 11, weight: 1.45 })}</span>`;
+// função de cada combatente hostil (identidade na tabela, em vez de 'HOSTILE' repetido)
+const ROLES = ['RIFLEMAN', 'GUNNER', 'MARKSMAN', 'GRENADIER', 'SCOUT', 'BREACHER', 'RADIOMAN'];
+const hashStr = (t) => [...String(t)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 // Logo: emblema (chevron duplo num losango chanfrado) + palavra
@@ -109,14 +114,17 @@ export class Screens {
     if (this._artCache.has(ck)) return this._artCache.get(ck);
     const ph = this.hud.photos?.get(key);
     let url;
-    if (ph) {
+    // o.illus: arte ilustrada (calling card), nunca captura de jogo
+    if (ph && !o.illus) {
       url = cropPhoto(ph, w * 2 > 1200 ? w : w * 2, h * 2 > 1200 ? h : h * 2, {
         fx: o.fx ?? 0.5, fy: o.fy ?? 0.5, zoom: o.zoom ?? 1,
         overlay: (g, W, H) => photoTitle(g, W, H, o.title, o.sub),
       });
       this._artCache.set(ck, url);
     } else {
-      url = callingCard(o.title || '', { seed: key.length * 7 + 2, theme: key === 'event' ? 2 : key === 'bp' ? 1 : 0, w: Math.max(w, 420), h: Math.max(h, 105), sub: o.sub || '' });
+      // mesma proporção do elemento (background-size: cover não corta o título)
+      const k = Math.max(1, 420 / w, 105 / h);
+      url = callingCard(o.title || '', { seed: key.length * 7 + 2, theme: key === 'event' ? 2 : key === 'bp' ? 1 : 0, w: Math.round(w * k), h: Math.round(h * k), sub: o.sub || '' });
     }
     return url;
   }
@@ -162,7 +170,7 @@ export class Screens {
       </div></div>`;
   }
   footer(hints) {
-    return `<div class="foot sh">${hints.map(([k, l]) => `<div class="h">${key(k)}${t11(l, { size: 12 })}</div>`).join('')}<div class="ver">${t11('BUILD 0.2.0', { size: 11, weight: 1.3 })}</div></div>`;
+    return `<div class="foot sh">${hints.map(([k, l]) => `<div class="h">${key(k)}${t11(l, { size: 12 })}</div>`).join('')}<div class="ver">${mono('BUILD 0.3.0 · MERIDIAN')}</div></div>`;
   }
 
   // ─── principal ──────────────────────────────────────────────────────
@@ -171,19 +179,19 @@ export class Screens {
     const ch = [
       ['head', 'HEADSHOT KILLS', Math.min(P.headshots % 10, 10), 10, 2500],
       ['kill', 'ELIMINATE HOSTILES', Math.min(P.kills % 25, 25), 25, 3000],
-      ['long', 'WIN AN ELIMINATION MATCH', Math.min(P.wins % 1, 1), 1, 5000],
+      ['long', 'WIN A FRONTLINE MATCH', Math.min(P.wins % 1, 1), 1, 5000],
     ];
     const g = this.hud.gunIcon;
     const wname = this.ctx.services.weapon?.name || 'KR-9';
-    return `${this.bgMenu()}<div class="hero-host"></div><div class="shade-hero"></div>${this.chrome()}${this.topbar('main')}
+    return `<div class="dof"></div>${this.bgMenu()}<div class="hero-host"></div><div class="shade-hero"></div>${this.chrome()}${this.topbar('main')}
       <div class="col sh">
         <div class="eyebrow">${t11('SOLO OPERATIONS  ·  QUICK PLAY')}</div>
         <div class="title">${T(MODE.name, { size: 74, weight: 1.9, tracking: 3 })}</div>
-        <div class="desc">Push into the Meridian district and neutralize the hostile cell before time runs out. Enemies regroup, flank and call for backup — use cover and keep the initiative.</div>
+        <div class="desc">Hold Meridian Street against ${MODE.waves.length} assault waves before time runs out. Each wave pushes up the street, takes cover and flanks — reload between waves and keep the initiative.</div>
         <div class="facts">
           <div class="f"><span class="k">${t11('MAP')}</span>${T(MODE.map, { size: 16, weight: 1.6, tracking: 2.2 })}</div>
           <div class="f"><span class="k">${t11('TIME LIMIT')}</span>${N(fmtTime(MODE.time), 16)}</div>
-          <div class="f"><span class="k">${t11('OBJECTIVE')}</span>${T(MODE.target + ' KILLS', { size: 16, weight: 1.6, tracking: 2.2 })}</div>
+          <div class="f"><span class="k">${t11('OBJECTIVE')}</span>${T(MODE.waves.length + ' WAVES · ' + MODE.target + ' HOSTILES', { size: 16, weight: 1.6, tracking: 2.2 })}</div>
           <div class="f"><span class="k">${t11('THREAT')}</span><span style="color:var(--red2)">${T('HIGH', { size: 16, weight: 1.6, tracking: 2.2 })}</span></div>
         </div>
         <div class="btns">
@@ -198,17 +206,17 @@ export class Screens {
           <div class="wimg">${g ? `<img src="${g.shaded || g.url}" style="height:58px;width:${Math.round(58 * g.aspect)}px" alt="">` : rifleSVG('', 200)}</div>
           <div class="wn">${T(wname, { size: 18, weight: 1.7, tracking: 2.4 })}<span>${t11('+50% WEAPON XP')}</span></div></div>
       </div>
-      <div class="opname sh"><div class="l1">${t11('OPERATOR')}</div>${T('SGT. ' + P.callsign, { size: 22, weight: 1.8, tracking: 3 })}<div class="l2">${t11('IRONLINE  ·  1ST RECON DET.')}</div></div>
+      <div class="opname sh"><div class="l1">${t11('OPERATOR')}</div>${T('SGT. ' + P.callsign, { size: 22, weight: 1.8, tracking: 3 })}<div class="l2">${mono('1ST RECON DET. · IRONLINE')}</div></div>
       <div class="side sh">
         <div class="panel">
-          <div class="ph">${T('DAILY CHALLENGES', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${t11('RESETS 14H 22M')}</span></div>
-          ${ch.map(([k, d, v, n, xp]) => `<div class="chal"><div class="ic">${medalSVG(k, 40)}</div>
+          <div class="ph">${T('DAILY CHALLENGES', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${mono('RESETS 14H 22M')}</span></div>
+          ${ch.map(([k, d, v, n, xp]) => `<div class="chal"><div class="ic">${challengeSVG(k, v / n, 44)}</div>
             <div class="tx"><span class="d">${T(d, { size: 12, weight: 1.45, tracking: 1.9 })}</span><div class="pb"><i style="width:${(v / n) * 100}%"></i></div><span class="x">${t11('+' + xp + ' XP')}</span></div><span class="v">${N(`${v}/${n}`, 14)}</span></div>`).join('')}
         </div>
-        <div class="panel bp"><div class="ph">${T('SEASON 01  ·  BATTLE PASS', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${t11('TIER 23 / 100')}</span></div>
+        <div class="panel bp"><div class="ph">${T('SEASON 01  ·  BATTLE PASS', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${mono('TIER 23 / 100')}</span></div>
           <div class="bpb"><div class="pips">${Array.from({ length: 10 }, (_, i) => `<i class="${i < 6 ? 'on' : i === 6 ? 'cur' : ''}"></i>`).join('')}</div>
             <div class="rw"><div class="cc" ${this.art('bp', 336, 84, { fy: 0.45 })}></div><div class="rt">${t11('NEXT REWARD', { size: 11 })}${T('CALLING CARD  ·  WHITEOUT', { size: 13, weight: 1.55, tracking: 1.8 })}</div></div></div></div>
-        <div class="panel"><div class="ph">${T('CAREER', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${t11(`${P.matches} MATCHES`)}</span></div>
+        <div class="panel"><div class="ph">${T('CAREER', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${mono(`${P.matches} MATCHES`)}</span></div>
           <div class="kv" style="grid-template-columns:1fr 1fr 1fr">
             <div><span class="k">${t11('KILLS')}</span>${N(P.kills, 26)}</div>
             <div><span class="k">${t11('HEADSHOTS')}</span>${N(P.headshots, 26)}</div>
@@ -371,17 +379,28 @@ export class Screens {
     const row = (r, i) => `<tr class="${r.me ? 'me' : ''}">
         <td class="c-r">${N(i + 1, 14)}</td>
         <td class="c-l"><span class="lb">${r.me ? emblemSVG('vance', 30, 'gold') : emblemSVG(r.seed, 30, 'red')}</span>${N(r.lvl, 13)}</td>
-        <td class="c-n">${T(r.name, { size: 14, weight: 1.55, tracking: 1.9 })}${r.me ? '' : `<span class="tm-r">${t11('HOSTILE')}</span>`}</td>
+        <td class="c-n">${T(r.name, { size: 14, weight: 1.55, tracking: 1.9 })}${r.me ? '' : `<span class="tm-r">${t11(ROLES[hashStr(r.name) % ROLES.length])}</span>`}</td>
         <td>${N(r.score, 15)}</td><td>${N(r.kills, 15)}</td><td>${N(r.deaths, 15)}</td><td>${N((r.deaths ? r.kills / r.deaths : r.kills).toFixed(2), 15)}</td><td>${N(r.hs, 15)}</td><td>${N(r.acc, 15)}</td></tr>`;
     const hdr = ['#', 'LV', 'PLAYER', 'SCORE', 'KILLS', 'DEATHS', 'K/D', 'HS', 'ACC'];
-    const tile = (k, v, d = 0, sub = '') => `<div style="animation-delay:${0.35 + d * 0.06}s"><span class="k">${t11(k)}</span>${N(v, 32)}${sub ? `<span class="sub">${t11(sub, { size: 11 })}</span>` : ''}</div>`;
+    // mini-histograma por onda (determinístico): dá densidade de informação
+    // ao bloco em vez de um número solto num cartão vazio
+    const spark = (d, frac) => {
+      const n = Math.max(3, MODE.waves.length || 5);
+      let h = '';
+      for (let i = 0; i < n; i++) {
+        const v = 0.25 + 0.75 * Math.abs(Math.sin((i + 1) * 1.7 + d * 2.3)) * (0.55 + 0.45 * Math.max(0, Math.min(1, frac)));
+        h += `<b style="height:${(v * 100).toFixed(0)}%"${i === n - 1 ? ' class="l"' : ''}></b>`;
+      }
+      return `<div class="spark">${h}</div><div class="sk">${mono('PER WAVE')}</div>`;
+    };
+    const tile = (k, v, d = 0, sub = '', frac = 0) => `<div style="animation-delay:${0.35 + d * 0.06}s"><span class="k">${t11(k)}</span><div class="vv">${N(v, String(v).length >= 4 ? 30 : 36)}<span class="mt"><i style="width:${(Math.max(0, Math.min(1, frac)) * 100).toFixed(0)}%"></i></span></div>${spark(d, frac)}${sub ? `<span class="sub">${mono(sub)}</span>` : ''}</div>`;
     const g = this.hud.gunIcon;
     const wname = this.ctx.services.weapon?.name || 'KR-9';
     const wkills = Math.max(0, m.kills - (m.fragKills || 0));
     const bar = (k, v, max, txt) => `<div class="wb"><span class="k">${t11(k)}</span><div class="b"><i style="width:${Math.min(100, (v / max) * 100).toFixed(0)}%"></i></div>${N(txt ?? v, 14)}</div>`;
-    return `<div class="shade-full aar" style="background-color:rgba(5,7,9,.62)"></div><div class="aar-grade"></div><div class="shade-vig"></div>${this.aarFrame()}<div class="grain" style="background-image:url(${this.grain})"></div>
+    return `<div class="shade-full aar" style="background-color:rgba(5,7,9,.62)"></div><div class="aar-grade"></div><div class="topo" style="background-image:url(${makeTopo()})"></div><div class="shade-vig"></div>${this.aarFrame()}<div class="grain" style="background-image:url(${this.grain})"></div>
       <div class="aar-top sh">
-        <div class="ttl">${t11(`${MODE.name}  ·  ${MODE.map}  ·  ${fmtTime(Math.max(0, MODE.time - m.timeLeft))}`)}${T('AFTER ACTION REPORT', { size: 34, weight: 1.9, tracking: 3 })}</div>
+        <div class="ttl">${mono(`${MODE.name} · ${MODE.map} · ${fmtTime(Math.max(0, MODE.time - m.timeLeft))}`)}${T('AFTER ACTION REPORT', { size: 34, weight: 1.9, tracking: 3 })}</div>
         <div class="atabs"><span>${t11('SUMMARY', { size: 13 })}</span><span class="on">${t11('SCOREBOARD', { size: 13 })}</span><span>${t11('WEAPON STATS', { size: 13 })}</span><span>${t11('REWARDS', { size: 13 })}</span></div>
         <div class="res ${win ? 'win' : 'loss'}">${T(win ? 'VICTORY' : 'DEFEAT', { size: 40, weight: 2.2, tracking: 5 })}<span>${t11(win ? 'HOSTILE CELL NEUTRALIZED' : 'OBJECTIVE FAILED')}</span></div>
       </div>
@@ -394,9 +413,9 @@ export class Screens {
         <div class="lcol">
           <div class="panel stand sh"><table><thead><tr>${hdr.map((h, i) => `<th class="${i < 3 ? ['c-r', 'c-l', 'c-n'][i] : ''}">${t11(h)}</th>`).join('')}</tr></thead><tbody>${all.map(row).join('')}</tbody></table></div>
           <div class="me-strip sh">
-            <div class="pcard"><div class="cc" ${this.art('card', 640, 160, { title: 'IRON DAWN', sub: 'SEASON 01 VETERAN', fy: 0.42 })}></div><div class="pi">${emblemSVG('vance', 56, 'gold')}<div>${T(P.callsign, { size: 20, weight: 1.75, tracking: 2.4 })}<div class="pl">${rankSVG(lv, '', 22)}${t11('LEVEL ' + lv)}</div></div></div>
+            <div class="pcard"><div class="cc" ${this.art('card', 352, 110, { title: 'IRON DAWN', sub: 'SEASON 01 VETERAN', fy: 0.42, illus: true })}></div><div class="pi">${emblemSVG('vance', 56, 'gold')}<div>${T(P.callsign, { size: 20, weight: 1.75, tracking: 2.4 })}<div class="pl">${rankSVG(lv, '', 22)}${t11('LEVEL ' + lv)}</div></div></div>
               <div class="xpbk">${[['KILLS', m.kills * 100], ['HEADSHOTS', m.headshots * 50], ['MEDALS', medals.reduce((a, [, v]) => a + v.n * 50, 0)], [win ? 'WIN BONUS' : 'MATCH BONUS', win ? 1500 : 300]].map(([k, v]) => `<div>${t11(k)}<span>${N('+' + v, 13)}</span></div>`).join('')}</div></div>
-            <div class="tiles">${tile('ELIMINATIONS', m.kills, 0, 'BEST STREAK ' + m.bestStreak)}${tile('DEATHS', m.deaths, 1, 'DMG ' + Math.round(m.damage))}${tile('K/D RATIO', m.kd.toFixed(2), 2, 'CAREER ' + (P.kills / Math.max(1, P.matches * 6)).toFixed(2))}${tile('ACCURACY', Math.round(m.accuracy * 100) + '%', 3, m.hits + ' / ' + m.shots + ' HITS')}${tile('SCORE', m.score, 4, 'SPM ' + Math.round(m.score / Math.max(1, m.playTime / 60)))}</div>
+            <div class="tiles">${tile('ELIMINATIONS', m.kills, 0, 'BEST STREAK ' + m.bestStreak, m.kills / MODE.target)}${tile('DEATHS', m.deaths, 1, 'DMG TAKEN ' + Math.round(m.damage / 10), m.deaths / Math.max(1, m.kills + m.deaths))}${tile('K/D RATIO', m.kd.toFixed(2), 2, 'CAREER ' + (P.kills / Math.max(1, P.matches * 6)).toFixed(2), m.kd / 5)}${tile('ACCURACY', Math.round(m.accuracy * 100) + '%', 3, m.hits + '/' + m.shots + ' HITS', m.accuracy)}${tile('SCORE', m.score, 4, 'SPM ' + Math.round(m.score / Math.max(1, m.playTime / 60)), m.score / 5000)}</div>
           </div>
           <div class="acts">
             <div class="btn pri" data-act="restart" tabindex="0">${T('PLAY AGAIN', { size: 19, weight: 2, tracking: 3.4 })}<span class="chev">${T('>>', { size: 14, weight: 2.2, tracking: 0.8 })}</span></div>
@@ -408,10 +427,10 @@ export class Screens {
           ${nemesis ? `<div class="panel nem"><div class="nh">${T('NEMESIS', { size: 14, weight: 1.7, tracking: 3 })}</div>
             <div class="nb">${emblemSVG(nemesis.name, 52, 'red')}<div class="nn">${T(nemesis.name, { size: 22, weight: 1.8, tracking: 2.6 })}${t11('HOSTILE CELL  ·  RIFLEMAN')}</div>
             <div class="nk"><div><span class="k">${t11('KILLED')}</span>${N(nemesis.deaths, 26)}</div><div><span class="k">${t11('KILLED BY')}</span><span style="color:var(--red2)">${N(nemesis.kills, 26)}</span></div></div></div></div>` : ''}
-          <div class="panel wst"><div class="ph">${T('WEAPON STATS', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${t11('PRIMARY')}</span></div>
+          <div class="panel wst"><div class="ph">${T('WEAPON STATS', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${mono('PRIMARY')}</span></div>
             <div class="wtop"><div class="wimg">${g ? `<img src="${g.shaded || g.url}" style="height:54px;width:${Math.round(54 * g.aspect)}px" alt="">` : rifleSVG('', 190)}</div>${T(wname, { size: 20, weight: 1.8, tracking: 2.6 })}</div>
             ${bar('KILLS', wkills, 30)}${bar('HEADSHOTS', m.headshots, Math.max(1, m.kills))}${bar('ACCURACY', m.accuracy * 100, 100, Math.round(m.accuracy * 100) + '%')}${bar('DAMAGE', m.damage, 5000, Math.round(m.damage))}${bar('LONGEST', m.longest, 80, Math.round(m.longest) + ' M')}</div>
-          <div class="panel md"><div class="ph">${T('MEDALS', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${t11(medals.length + ' EARNED')}</span></div>
+          <div class="panel md"><div class="ph">${T('MEDALS', { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${mono(medals.length + ' EARNED')}</span></div>
             <div class="medals">${medals.length ? medals.map(([n, v]) => `<div class="mdl">${medalSVG(v.kind, 62)}<span class="mn">${T(n, { size: 11, weight: 1.45, tracking: 1.4 })}</span><span class="c">${N('×' + v.n, 12)}</span></div>`).join('') : `<div style="color:var(--ink3);padding:10px 0">${t11('NO MEDALS THIS MATCH')}</div>`}</div></div>
           <div class="panel prog"><div class="xpl"><span style="color:var(--amber)">${rankSVG(after.level, '', 38)}</span><div class="xx">${T('LEVEL ' + after.level, { size: 16, weight: 1.7, tracking: 2.2 })}
               <div class="xpb"><i class="g" style="width:${((after.into / after.need) * 100).toFixed(1)}%"></i><i style="width:${after.level > before.level ? 0 : ((before.into / before.need) * 100).toFixed(1)}%"></i></div></div>
@@ -554,3 +573,51 @@ function makeGrain() {
 }
 
 export { vfovToH };
+
+/**
+ * Textura de "carta topográfica": curvas de nível de um ruído de valor
+ * suave (4 oitavas), traço fino anti-serrilhado pela distância à isolinha
+ * (|frac − .5| / gradiente). Usada bem apagada atrás do relatório — dá
+ * matéria ao fundo sem virar padrão repetido.
+ */
+let _topo = null;
+function makeTopo() {
+  if (_topo) return _topo;
+  const W = 960, H = 540;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  const img = g.createImageData(W, H);
+  // grade de valores aleatórios + interpolação suave
+  const G = 64, vals = new Float32Array(G * G);
+  let s = 4242;
+  for (let i = 0; i < vals.length; i++) { s = (s * 16807) % 2147483647; vals[i] = s / 2147483647; }
+  const sm = (t) => t * t * (3 - 2 * t);
+  const vn = (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), fx = sm(x - xi), fy = sm(y - yi);
+    const v = (a, b) => vals[((b & (G - 1)) * G + (a & (G - 1)))];
+    const a = v(xi, yi) + (v(xi + 1, yi) - v(xi, yi)) * fx;
+    const b = v(xi, yi + 1) + (v(xi + 1, yi + 1) - v(xi, yi + 1)) * fx;
+    return a + (b - a) * fy;
+  };
+  const f = (x, y) => vn(x / 170, y / 170) * 0.55 + vn(x / 80 + 7, y / 80 + 3) * 0.28 + vn(x / 38 + 1, y / 38 + 9) * 0.12 + vn(x / 17, y / 17) * 0.05;
+  const L = 16; // número de curvas no intervalo
+  const F = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) F[y * W + x] = f(x, y) * L;
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      const i = y * W + x, v = F[i];
+      const gx = (F[i + 1] - F[i - 1]) * 0.5, gy = (F[i + W] - F[i - W]) * 0.5;
+      const gl = Math.hypot(gx, gy) + 1e-5;
+      const d = Math.abs(v - Math.round(v)) / gl; // distância em px à isolinha
+      const index = Math.round(v) % 5 === 0; // curva mestra mais forte
+      const a = Math.max(0, 1 - d / (index ? 0.9 : 0.6));
+      const o = i * 4;
+      img.data[o] = img.data[o + 1] = img.data[o + 2] = 235;
+      img.data[o + 3] = a * (index ? 255 : 150);
+    }
+  }
+  g.putImageData(img, 0, 0);
+  _topo = cv.toDataURL('image/png');
+  return _topo;
+}

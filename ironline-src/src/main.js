@@ -118,10 +118,14 @@ const ctx = {
 let pipeline = () => ctx.defaultRender();
 
 // ─── redimensionamento ───────────────────────────────────────────────────
+// Resolução dinâmica: `dyn.scale` (0,6..1) multiplica o pixel ratio quando
+// o tempo de frame real passa do orçamento de 60 fps (fora do modo shot;
+// `?dynres=0` desliga). O TAA/CAS do compositor disfarça a troca.
+const dyn = { scale: 1, enabled: !shot && params.get('dynres') !== '0', acc: 0, n: 0, t: 0, min: 0.6 };
 function resize() {
   const w = container.clientWidth || innerWidth;
   const h = container.clientHeight || innerHeight;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.dprCap));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.dprCap) * dyn.scale);
   renderer.setSize(w, h, false);
   camera.aspect = vmCamera.aspect = w / h;
   camera.updateProjectionMatrix();
@@ -230,11 +234,39 @@ function frame(frameDt) {
   }
 }
 
+function updateDynRes(realDt) {
+  if (!dyn.enabled || time.scale <= 0 || document.hidden) {
+    dyn.acc = dyn.n = dyn.t = 0;
+    return;
+  }
+  dyn.acc += realDt;
+  dyn.n++;
+  dyn.t += realDt;
+  if (dyn.t < 2) return;
+  const ms = (dyn.acc / dyn.n) * 1000;
+  dyn.acc = dyn.n = dyn.t = 0;
+  let next = dyn.scale;
+  if (ms > 19) next = Math.max(dyn.min, dyn.scale * 0.88);
+  else if (ms < 13.5 && dyn.scale < 1) next = Math.min(1, dyn.scale * 1.08);
+  if (Math.abs(next - dyn.scale) > 0.01) {
+    dyn.scale = next;
+    resize();
+  }
+}
+ctx.dynres = dyn;
+
 let last = performance.now();
 function tick(now) {
   requestAnimationFrame(tick);
+  // __hold: ferramentas (shot.mjs/e2e) congelam o loop para capturar a tela
+  // sem disputar a GPU (SwiftShader leva segundos por frame).
+  if (window.__hold) {
+    last = now;
+    return;
+  }
   const real = Math.min(0.1, (now - last) / 1000);
   last = now;
+  updateDynRes(real);
   frame(time.virtual ? STEP : real);
 }
 

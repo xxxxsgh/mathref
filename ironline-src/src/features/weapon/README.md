@@ -13,7 +13,7 @@ Viewmodel em primeira pessoa e lógica de tiro do IRONLINE. Tudo procedural.
 | `textures.js` | geradores CPU: grime, cordura, camuflagem original, gravação a laser |
 | `optic.js` | lente da holográfica: retículo no infinito (sem paralaxe), traço nítido com cobertura analítica, revestimento AR de filme fino (âmbar/verde) com Fresnel, manchas e poeira |
 | `arms.js` | mãos enluvadas: dedos e polegar numa **malha contínua com skinning** (16 ossos; vinco palmar e franzido dorsal nas juntas), protetor de nós moldado; poses de dedos (a da mão de apoio é resolvida em `grip.js`); mangas com **2 ossos** (punho segue a mão, antebraço segue o cotovelo — o pulso dobra liso) e manguito da luva com velcro no mesmo esqueleto; dobras, bainha, volume do antebraço, relógio |
-| `grip.js` | resolvedor de pega: SDF do guarda-mão; apoia a palma tangente, flexiona cada falange até encostar e busca a pose do polegar (grade + descida de coordenadas). Duas pegas: hip (palma no flanco esquerdo-baixo, dedos para a frente abraçando por baixo, polegar no flanco — o dorso da mão fica de frente para a câmera e o antebraço desce para fora do quadro) e C-clamp baixo (ADS — nada entra na janela da ótica) |
+| `grip.js` | resolvedor de pega: SDF do guarda-mão; apoia a palma tangente, flexiona cada falange até encostar e busca a pose do polegar (grade + descida de coordenadas). Duas pegas: hip (pega POR CIMA do guarda-mão: dorso e dedos visíveis da câmera, a mão lê como luva e não some atrás do punho da manga) e C-clamp baixo (ADS — nada entra na janela da ótica) |
 | `anim.js` | molas, easing, trilhas de keyframes |
 
 ## Controles
@@ -22,6 +22,10 @@ Viewmodel em primeira pessoa e lógica de tiro do IRONLINE. Tudo procedural.
 `I` inspeciona, `1` saca de novo. Vazio → recarga automática.
 
 ## Câmera
+
+Enquadramento de hip (`HIP` em `index.js`): arma a ~40 cm, quase centrada e
+apontando para o centro da tela (ocupa ~1/4 do quadro, como nos FPS
+modernos); o antebraço esquerdo entra em escorço pela borda de baixo.
 
 A câmera da viewmodel copia a rotação da câmera do mundo a cada frame, então o
 sol (mesma direção/cor/intensidade do `world.sun`) e o IBL do céu ficam no
@@ -40,7 +44,7 @@ mesmo referencial do mundo. Sol ocluído por raycast (sombra de prédios) e teto
 
 No preset `combat` a arma dispara rajadas só visuais (sem dano).
 
-Cápsulas: a cápsula visível no quadro é da arma (latão 5,56 modelado — aro, canal de extração,
+Cápsulas (ejeção a ~3–4 m/s, cruzam o quadro em ~0,4 s; ocultas no modo shot, onde um quadro parado as deixaria suspensas): a cápsula visível no quadro é da arma (latão 5,56 modelado — aro, canal de extração,
 ombro, boca queimada — saindo paralela ao cano e girando). O serviço publica `ejectPort` +
 `brassByVfx: false`, então a vfx só cria a "herdeira" no mundo (cai, quica e fica no chão).
 

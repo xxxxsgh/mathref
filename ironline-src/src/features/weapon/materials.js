@@ -240,7 +240,7 @@ export function makeMaterials() {
   // é o que faz a mão "ler" como mão a 1080p)
   M.knuckle = std({ color: 0x1b1b1a, roughness: 0.6, metalness: 0.0 }, { wear: 0.5, wearColor: 0x55524c, wearMetal: 0.0, scratch: 0.4, grime: 0.3, bump: 0.7 });
   M.sleeve = withDetail(
-    new THREE.MeshPhysicalMaterial({ color: 0xc2c2ba, roughness: 0.9, metalness: 0, sheen: 0.3, sheenRoughness: 0.8, sheenColor: new THREE.Color(0x4a4638) }),
+    new THREE.MeshPhysicalMaterial({ color: 0xa9a8a0, roughness: 0.9, metalness: 0, sheen: 0.3, sheenRoughness: 0.8, sheenColor: new THREE.Color(0x4a4638) }),
     { kind: 'camo', scale: 150, camoScale: 6, wear: 0.25, wearColor: 0x8a8370, grime: 0.55, bump: 0.8 },
   );
   M.strap = withDetail(

@@ -169,7 +169,7 @@ documento.
 | `audio` | audio | `play(nome, { position?, volume? })`, `setVolume(v)`, `context` |
 | `movement` | movement | `builtin: bool`, `stance() → 'stand'|'crouch'|'prone'|'slide'` |
 | `weapon` | weapon | `gun` (Object3D na vm), `muzzle` (Object3D), getters `ammo`, `reserve`, `magSize`, `ads` (0..1), `reloading`, `name` |
-| `enemies` | enemies | `list`, `spawn(pose) → enemy`, `count()` |
+| `enemies` | enemies | `list`, `spawn(pose) → enemy`, `count()`, `clear()`, `auto` (bool: repõe o esquadrão sozinho; a partida desliga e conduz as ondas) |
 | `vfx` | vfx | `impact(point, normal, material?)`, `tracer(from, to)`, `muzzleFlash(obj3d)` |
 | `hud` | hud | `root`, `setMenu(bool)`, `setVisible(bool)` |
 
@@ -189,6 +189,7 @@ documento.
 | `weapon:reload` / `weapon:reloaded` / `weapon:dry` | `{…}` | weapon |
 | `enemy:fire` | `{ enemy, origin, dir }` | enemies |
 | `enemy:damage` / `enemy:death` | `{ enemy, amount?, info }` | enemies |
+| `match:start` / `match:wave` / `match:waveClear` | `{ mode }` / `{ wave, of, count }` / `{ wave, of }` | hud |
 
 ## Parâmetros de URL
 
@@ -203,6 +204,8 @@ documento.
 | `&sim=s` | segundos de aquecimento antes do 1º frame |
 | `&pause=1` | congela a simulação depois do aquecimento (só renderiza) |
 | `&preserve=1` | `preserveDrawingBuffer` (o shot.mjs liga para medir luminância) |
+| `?dynres=0` | desliga a resolução dinâmica (fora do modo shot o pixel ratio cai até 0,6× quando o frame passa de ~19 ms e volta quando sobra folga) |
+| `?waves=1,1&wi=1&mt=300` | partida curta: ondas, intervalo entre ondas e tempo (hud) |
 
 ## Modo screenshot (`?shot=<preset>`)
 
@@ -254,3 +257,11 @@ o valor retornado é impresso. A máquina tem 4 CPUs e o SwiftShader é lento:
 mire as capturas (`--size 720`, `?only=`) enquanto itera.
 
 `npm test` roda `tools/unit.test.mjs` (núcleo puro, sem DOM).
+
+`node tools/e2e.mjs [--q low] [--size 640x360] [--shots dir]` joga uma
+partida curta de verdade (menu → loadout → DEPLOY → anda/pula → mata o
+inimigo da onda 1 → recarrega → onda 2 → relatório pós-ação) e falha com
+qualquer pageerror/console.error/erro de feature. Leva ~8 min no SwiftShader.
+
+`window.__hold = true` congela o loop (as ferramentas usam isso para
+capturar a tela sem esperar um frame novo do SwiftShader).

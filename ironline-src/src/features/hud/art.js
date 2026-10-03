@@ -141,12 +141,29 @@ export function emblemSVG(seed = 0, s = 48, tone = 'steel') {
     'M32,22 L38,30 L56,20 L48,34 L40,36 L36,48 H28 L24,36 L16,34 L8,20 L26,30 Z',
   ][hash(seed) % 4];
   const pal = { gold: ['#fff1b8', '#d89a26', '#6b3d06'], steel: ['#f4f7f9', '#8f9aa3', '#2f363c'], red: ['#ffd0c4', '#c8382a', '#4a0d07'] }[tone];
+  // silhueta da insígnia também varia: escudo, roundel, losango, hexágono
+  const shapes = [
+    ['M32,2 L58,12 V34 C58,48 46,57 32,62 C18,57 6,48 6,34 V12 Z', 'M32,7 L53,15.5 V34 C53,45 44,52.5 32,57 C20,52.5 11,45 11,34 V15.5 Z'],
+    ['M32,2 A30,30 0 1,1 31.99,2 Z', 'M32,7.5 A24.5,24.5 0 1,1 31.99,7.5 Z'],
+    ['M32,1 L63,32 L32,63 L1,32 Z', 'M32,8 L56,32 L32,56 L8,32 Z'],
+    ['M32,2 L58,17 V47 L32,62 L6,47 V17 Z', 'M32,7.5 L53,19.8 V44.2 L32,56.5 L11,44.2 V19.8 Z'],
+  ];
+  const h = hash(seed);
+  const [outer, inner] = shapes[(h >>> 3) % 4];
+  // marcas de rebite/gravação no anel (detalhe que lê como peça metálica)
+  const studs = Array.from({ length: 8 }, (_, i) => {
+    const a = (i / 8) * Math.PI * 2;
+    return `<circle cx="${(32 + Math.cos(a) * 27.2).toFixed(1)}" cy="${(32 + Math.sin(a) * 27.2).toFixed(1)}" r=".9"/>`;
+  }).join('');
   return `<svg width="${s}" height="${s}" viewBox="0 0 64 64"><defs>
     <linearGradient id="${id}" x1="0" y1="0" x2=".4" y2="1"><stop offset="0" stop-color="${pal[0]}"/><stop offset=".45" stop-color="${pal[1]}"/><stop offset="1" stop-color="${pal[2]}"/></linearGradient>
-    <radialGradient id="${id}b" cx=".5" cy=".35" r=".75"><stop offset="0" stop-color="#2a3138"/><stop offset="1" stop-color="#0a0d10"/></radialGradient></defs>
-    <path d="M32,2 L58,12 V34 C58,48 46,57 32,62 C18,57 6,48 6,34 V12 Z" fill="url(#${id})"/>
-    <path d="M32,7 L53,15.5 V34 C53,45 44,52.5 32,57 C20,52.5 11,45 11,34 V15.5 Z" fill="url(#${id}b)"/>
-    <path d="${sym}" fill="url(#${id})" fill-rule="evenodd"/>
+    <radialGradient id="${id}b" cx=".5" cy=".35" r=".75"><stop offset="0" stop-color="#2a3138"/><stop offset="1" stop-color="#0a0d10"/></radialGradient>
+    <linearGradient id="${id}s" x1="0" y1="0" x2="1" y2="1"><stop offset=".3" stop-color="#fff" stop-opacity="0"/><stop offset=".45" stop-color="#fff" stop-opacity=".22"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+    <path d="${outer}" fill="url(#${id})"/>
+    <path d="${inner}" fill="url(#${id}b)"/>
+    ${(h >>> 3) % 4 === 1 ? `<g fill="${pal[0]}" opacity=".55">${studs}</g>` : ''}
+    <g transform="translate(32 32) scale(1.12) translate(-32 -32)"><path d="${sym}" fill="url(#${id})" fill-rule="evenodd" stroke="${pal[2]}" stroke-width=".6"/></g>
+    <path d="${outer}" fill="url(#${id}s)"/>
   </svg>`;
 }
 

@@ -47,8 +47,11 @@ Iluminação global e compositor HDR do IRONLINE. Tudo procedural, sem assets.
 9. Tonemap: micro-contraste, bloom, sujeira de lente (só fontes fortes),
    aberração cromática, curva de filme AgX (padrão; `?tm=aces` ou
    `setGrade({ tonemapper: 'aces' })` volta ao ACES), gradação fotográfica
-   (WB quase neutro, contraste em log, saturação 0,9, split-toning sutil,
-   lift/gain), vinheta → sRGB com dithering PCG (sem padrão fixo).
+   (WB quase neutro, contraste em log 1,46, saturação 0,85, split-toning
+   sutil, lift/gain, ponto de preto 0,013 — p5 da imagem ≈ 0,08 como nas
+   fotos de referência), vinheta → sRGB com dithering PCG (sem padrão fixo).
+   No ADS a viewmodel inteira sai de foco (raio até 18 px a 1080p), exceto o
+   miolo da janela da ótica, onde fica o retículo.
 10. Final: FXAA (low) ou nitidez CAS, grão de filme, dithering.
 
 Sombras suaves com endurecimento de contato (PCSS): no combine, a busca de

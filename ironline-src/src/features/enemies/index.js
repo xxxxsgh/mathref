@@ -388,6 +388,8 @@ export default {
       for (const sp of world?.enemySpawns || []) spawn(sp);
     }
 
+    const self = this;
+    this.auto = true;
     ctx.provide('enemies', {
       list: this.list,
       spawn,
@@ -397,6 +399,12 @@ export default {
         for (const e of this.list) e.dispose();
         this.list.length = 0;
       },
+      /**
+       * auto = true (padrão): o esquadrão é reposto sozinho quando corpos
+       * somem. A partida (hud/match.js) desliga isso e conduz as ondas.
+       */
+      get auto() { return self.auto; },
+      set auto(v) { self.auto = !!v; },
       nav: this.nav,
       squad: this.squad,
       stats: () => this.stats,
@@ -427,7 +435,7 @@ export default {
     // quina da van (x≈3.8..5.7, z≈3.6..8.4): espiada pela direita
     // (o clarão "preso" do modo combat fica no ÚLTIMO a atirar: o da jersey,
     // mais longe — o da van mira sem atirar e continua legível)
-    const main = mk([P[0] + 3.1, 0, P[2] - 1.0], 0, { aim: 1, lean: -0.9, crouch: 0.38 });
+    const main = mk([P[0] + 2.6, 0, P[2] - 1.0], 0, { aim: 1, lean: -0.9, crouch: 0.38 });
     // atrás da jersey central, atirando por cima
     mk([-0.9, 0, -3.75], 1, { fire: true, aim: 1, crouch: 0.45, interval: 0.21 });
     // flanqueando pela calçada esquerda, corrida agachada
@@ -461,6 +469,7 @@ export default {
           this.respawnT = (this.respawnT ?? 0) + 1;
         }
       }
+      if (this.auto === false) this.respawnT = 0;
       if (this.respawnT > 0) {
         const spawns = ctx.services.world?.enemySpawns || [];
         const pl = ctx.player.position;

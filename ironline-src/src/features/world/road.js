@@ -210,7 +210,9 @@ export function crater(W, c) {
     const s = outer ? rng.range(0.14, 0.3) : rng.range(0.28, 0.55);
     const tilt = outer ? rng.range(0.05, 0.3) : rng.range(0.35, 0.85);
     const M = mat4([x + Math.cos(a) * d, outer ? 0.012 : 0.04 + s * 0.08, z + Math.sin(a) * d], [rng.range(-0.1, 0.1), -a + rng.range(-0.3, 0.3), tilt], [s, 0.42, s * rng.range(0.6, 0.9)]);
-    I.add('rslab' + (i % 4), slabGeo(i % 4), 'asphalt', M, outer ? [0.9, 0.88, 0.84] : [1.0, 0.98, 0.95]);
+    // placas cobertas do pó da explosão (não lâminas pretas): tom do asfalto velho
+    // asfalto velho é escuro (albedo ~0,1–0,15): placas claras liam como papel
+    I.add('aslab' + (i % 4), slabGeo(i % 4), 'rubbleA', M, outer ? [0.62, 0.6, 0.57] : [0.52, 0.5, 0.48]);
   }
   // respingos de pedras em volta
   for (let i = 0; i < Math.round(r * 16); i++) {

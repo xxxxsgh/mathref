@@ -591,7 +591,9 @@ export function createMaterials(q, renderer) {
   };
 
   const mats = {
-    plaster: std(sets.plaster, { normalScale: new THREE.Vector2(1.6, 1.6) }, { ground: 0.9, streaks: 0.85, dust: 0.25, tb: true }, true),
+    // reboco caiado real ~0,6–0,7 de albedo: um pouco abaixo da textura (fachada
+    // ao sol não estoura) e mais escorrido/sujo de chão (cidade sem manutenção)
+    plaster: std(sets.plaster, { color: 0xddd7cd, normalScale: new THREE.Vector2(1.6, 1.6) }, { ground: 1.0, streaks: 1.0, dust: 0.3, macro: 0.75, tb: true }, true),
     plasterIn: std(sets.plaster, {}, { ground: 0.4, streaks: 0, dust: 0.2, macro: 0.4, tb: true }, true),
     concrete: std(sets.concrete, { normalScale: new THREE.Vector2(1.6, 1.6) }, { ground: 0.8, streaks: 0.75, dust: 0.45, tb: true }, true),
     brick: std(sets.brick, { normalScale: new THREE.Vector2(1.3, 1.3) }, { ground: 0.9, streaks: 0.7, dust: 0.25, macro: 0.75 }, true),
@@ -611,7 +613,10 @@ export function createMaterials(q, renderer) {
     // caixas de munição (textura de face com estêncil, montada no index)
     crate: std(null, { roughness: 0.85 }, { ground: 0.3, streaks: 0, dust: 0.45, macro: 0.3 }, true),
     // entulho: triplanar (sem UV), relevo por bump do próprio albedo
-    rubbleC: std(sets.concrete, { normalMap: null, roughnessMap: null, metalnessMap: null, aoMap: null, roughness: 0.9, metalness: 0 }, { tri: 1 / 1.4, triBump: 0.022, ground: 0.25, streaks: 0, dust: 0.55, macro: 0.3 }, true),
+    rubbleC: std(sets.concrete, { normalMap: null, roughnessMap: null, metalnessMap: null, aoMap: null, roughness: 0.9, metalness: 0 }, { tri: 1 / 1.4, triBump: 0.022, ground: 0.25, streaks: 0, dust: 0.38, macro: 0.35 }, true),
+    // placas de asfalto arrancadas (borda de cratera): asfalto triplanar com
+    // pouco pó — com o pó do concreto as faces de cima viravam "papel" branco
+    rubbleA: std(sets.asphalt, { normalMap: null, roughnessMap: null, metalnessMap: null, aoMap: null, roughness: 0.88, metalness: 0 }, { tri: 1 / 1.6, triBump: 0.015, ground: 0.2, streaks: 0, dust: 0.12, macro: 0.4 }, true),
     // tijolos soltos: barro cozido triplanar (lascas, poros, fuligem)
     rubbleB: std(sets.clay, { normalMap: null, roughnessMap: null, metalnessMap: null, aoMap: null, roughness: 0.92, metalness: 0 }, { tri: 1 / 0.5, ground: 0, streaks: 0, dust: 0.3, macro: 0.4 }, true),
     // monte base: cascalho triplanar com normal map + AO triplanar (pedras angulosas, vãos escuros)
@@ -637,5 +642,5 @@ export const SURFACE = {
   pavers: 'concrete', metal: 'metal', carpaint: 'metal', corrugated: 'metal', wood: 'wood', tiles: 'concrete',
   dirt: 'dirt', fabric: 'dirt', far: 'concrete', glass: 'glass', room: 'concrete', rubber: 'rubber',
   plastic: 'plastic', carglass: 'glass', taillight: 'plastic', puddle: 'dirt', gravel: 'dirt', black: 'metal', cable: 'metal', chrome: 'metal', light: 'glass',
-  window: 'glass', bag: 'plastic', burnt: 'metal', iron: 'metal', crate: 'wood', bark: 'wood', leaves: 'wood', palm: 'wood', grass: 'dirt', ivy: 'wood', rubble: 'concrete', rubbleC: 'concrete', rubbleB: 'brick', rubbleD: 'dirt', contact: 'concrete', mesh: 'metal', manhole: 'metal', ceiling: 'concrete',
+  window: 'glass', bag: 'plastic', burnt: 'metal', iron: 'metal', crate: 'wood', bark: 'wood', leaves: 'wood', palm: 'wood', grass: 'dirt', ivy: 'wood', rubble: 'concrete', rubbleC: 'concrete', rubbleA: 'asphalt', rubbleB: 'brick', rubbleD: 'dirt', contact: 'concrete', mesh: 'metal', manhole: 'metal', ceiling: 'concrete',
 };

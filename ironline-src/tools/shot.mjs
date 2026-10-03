@@ -15,7 +15,7 @@
  *   --frames N            frames renderizados depois de __ready (padrão 20)
  *   --eval "js"           roda no page depois de __ready, antes dos frames (repetível; pareia como --out, ou 1 para todos)
  *   --size 1080|720       resolução (padrão 1080 → 1920x1080)
- *   --timeout ms          por captura (padrão 240000; SwiftShader é lento)
+ *   --timeout ms          por captura (padrão 600000; SwiftShader é lento — 1080p em high leva ~6 min)
  *   --keep-errors         não falha (exit 0) com erros de página
  *
  * Sobe o PRÓPRIO servidor Vite numa porta livre, então vários agentes podem
@@ -42,7 +42,7 @@ process.env.PLAYWRIGHT_BROWSERS_PATH ||= '/opt/pw-browsers';
 
 // ─── argumentos ──────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);
-const opt = { params: [], out: [], evals: [], frames: 20, size: 1080, timeout: 240000, all: false, outdir: SCRATCH, extra: '', keepErrors: false };
+const opt = { params: [], out: [], evals: [], frames: 20, size: 1080, timeout: 600000, all: false, outdir: SCRATCH, extra: '', keepErrors: false };
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   const next = () => argv[++i];
@@ -167,7 +167,10 @@ try {
       };
     });
     mkdirSync(dirname(out), { recursive: true });
-    await page.screenshot({ path: out });
+    // congela o loop: a captura não espera um frame novo do SwiftShader
+    await page.evaluate(() => (window.__hold = true));
+    await page.screenshot({ path: out, timeout: opt.timeout });
+    await page.evaluate(() => (window.__hold = false));
     const dt = ((Date.now() - t0) / 1000).toFixed(1);
     console.log(`  ✓ ${out}  luma=${stats.luma.toFixed(3)} frames=${stats.frames} calls=${stats.calls} tris=${stats.tris} [${stats.features}] ${dt}s`);
     if (stats.errors.length) {

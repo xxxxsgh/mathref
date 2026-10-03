@@ -101,7 +101,7 @@ export class PlayHud {
       <div class="vit sh">
         <div class="who"><span class="rk">${rankSVG(24, '', 30)}</span><span class="cs"></span><span class="lv"></span></div>
         <div class="streak"></div>
-        <div class="hp"><div class="bar"><div class="lag"></div><div class="cur"></div><div class="seg"></div></div><div class="num"></div></div>
+        <div class="hp"><div class="bar"><div class="lag"></div><div class="cur"></div></div><div class="num"></div></div>
       </div>
       <div class="death"></div>`;
     stage.appendChild(root);
@@ -192,7 +192,7 @@ export class PlayHud {
   addIndicator(x, z, amount) {
     const el = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     el.setAttribute('viewBox', '-200 -200 400 400');
-    const R = 150, A = 0.42;
+    const R = 232, A = 0.3;
     const P = (r, a) => [r * Math.sin(a), -r * Math.cos(a)];
     const wedge = (r0, th, A2, n = 24) => {
       const pts = [];
@@ -252,15 +252,9 @@ export class PlayHud {
     X.innerHTML = '';
     const head = document.createElement('div');
     head.className = 'tot';
-    head.innerHTML = T('+' + total, { size: 22, weight: 1.55, tracking: 1.2, heavy: true });
+    head.innerHTML = T('+' + total, { size: 16, weight: 1.45, tracking: 1.2, heavy: true });
     X.appendChild(head);
-    if (lines.length) {
-      const r = document.createElement('div');
-      r.className = 'row';
-      r.style.animationDelay = '.06s';
-      r.innerHTML = lines.map(([label, v]) => T(`${label} ${v}`, { size: 11, weight: 1.35, tracking: 1.9 })).join('<span class="dot"></span>');
-      X.appendChild(r);
-    }
+    // (a composição — abate/headshot — já aparece na medalha; aqui só o total)
     X.classList.remove('on', 'out');
     void X.offsetWidth;
     X.classList.add('on');
@@ -270,7 +264,7 @@ export class PlayHud {
     const m = document.createElement('div');
     m.className = 'm';
     // sem pontos aqui: a pontuação aparece só no toast sob a mira
-    m.innerHTML = `<div class="ic">${medalSVG(kind, 54)}</div><div class="mt">${T(title, { size: 13, weight: 1.45, tracking: 2.6 })}</div>`;
+    m.innerHTML = `<div class="ic">${medalSVG(kind, 30)}</div><div class="mt">${T(title, { size: 11, weight: 1.4, tracking: 2.4 })}</div>`;
     this.el.medal.innerHTML = '';
     this.el.medal.appendChild(m);
     this.medalT = 0;
@@ -353,7 +347,7 @@ export class PlayHud {
       // brilho de borda: centro de um elipse na borda, na direção relativa
       const rr = (rel * Math.PI) / 180;
       const ex = 50 + Math.sin(rr) * 68, ey = 50 - Math.cos(rr) * 68;
-      d.eg.style.background = `radial-gradient(ellipse 30% 40% at ${clamp(ex, -8, 108).toFixed(1)}% ${clamp(ey, -8, 108).toFixed(1)}%, rgba(150,10,6,.34), rgba(120,8,4,.12) 40%, rgba(110,0,0,0) 66%)`;
+      d.eg.style.background = `radial-gradient(ellipse 30% 40% at ${clamp(ex, -8, 108).toFixed(1)}% ${clamp(ey, -8, 108).toFixed(1)}%, rgba(96,14,10,.32), rgba(70,10,8,.12) 40%, rgba(60,0,0,0) 66%)`;
       d.eg.style.opacity = (ea * 0.9 * Math.min(1, d.k)).toFixed(3);
     }
 
@@ -363,7 +357,7 @@ export class PlayHud {
     const miss = 1 - frac;
     this.flashA = damp(this.flashA, 0, 2.6, rdt);
     const pulse = frac < 0.35 ? 0.1 * (0.5 + 0.5 * Math.sin(ctx.time.now * 6.5)) : 0;
-    const vigA = clamp(Math.pow(miss, 0.8) * 1.05 + this.flashA * 0.3 + pulse, 0, 1);
+    const vigA = clamp(Math.pow(miss, 0.8) * 0.8 + this.flashA * 0.22 + pulse, 0, 1);
     this.set('vig', vigA.toFixed(3), (v) => (this.vig.style.opacity = v));
     this.set('desat', clamp(miss * 1.5 - 0.15 + this.flashA * 0.35, 0, 1).toFixed(2), (v) => (this.desat.style.opacity = v));
     this.set('flash', this.flashA.toFixed(3), (v) => (this.flash.style.opacity = v));
@@ -386,6 +380,10 @@ export class PlayHud {
       E.usN.innerHTML = T(String(v), { size: 16, weight: 1.4, heavy: true });
       E.usF.style.width = clamp(v / MODE.target, 0, 1) * 100 + '%';
     });
+    this.set('wave', m.wave || 0, (v) => {
+      const md = this.root.querySelector('.score .top .mode');
+      if (md) md.innerHTML = T(v ? `WAVE ${v} / ${MODE.waves.length}` : MODE.name, { size: 12, weight: 1.45, tracking: 2.4 });
+    });
     const alive = ctx.services.enemies?.count?.() ?? 0;
     this.set('them', m.deaths + '|' + alive, () => {
       E.thN.innerHTML = T(String(m.deaths), { size: 16, weight: 1.4, heavy: true });
@@ -397,7 +395,7 @@ export class PlayHud {
     for (const row of [...E.feed.children]) {
       row._t = (row._t || 0) + rdt;
       // envelhece: linhas antigas esmaecem antes de sair
-      const fo = row._t < 2.5 ? 1 : Math.max(0.5, 1 - (row._t - 2.5) * 0.16);
+      const fo = row._t < 3 ? 1 : Math.max(0.72, 1 - (row._t - 3) * 0.1);
       if (row._fo !== fo.toFixed(2)) { row._fo = fo.toFixed(2); row.style.opacity = row._fo; }
       if (row._t > 6 && !row.classList.contains('out')) row.classList.add('out');
       if (row._t > 6.5) row.remove();
