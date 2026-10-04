@@ -916,59 +916,127 @@ export function grassTexture(seed = 31) {
 }
 
 /**
- * Caixa de munição de madeira (face 0..1): tábuas horizontais pintadas de
- * verde-oliva, juntas escuras, tinta lascada mostrando madeira, estêncil
- * amarelo (calibre/lote) e marcas de manuseio. Retorna { map, normalMap }.
+ * Caixa de munição de madeira — ATLAS 1024×1024 com faces DIFERENTES:
+ *   quadrante (0,0)-(.5,.5)  lateral longa, estêncil variante A
+ *   quadrante (.5,0)-(1,.5)  lateral longa, estêncil variante B / sem texto
+ *   quadrante (0,.5)-(.5,1)  cabeceira (tábuas verticais, sem texto)
+ *   quadrante (.5,.5)-(1,1)  tampa (tábuas longas, marcas de bota/manuseio)
+ * Tinta oliva fosca e desbotada (não verde de desenho), madeira crua nas
+ * lascas e quinas, sujeira de mão, escorridos e pó nas juntas. O estêncil é
+ * apagado em pontos (spray gasto). Retorna { map, normalMap, rect }.
  */
 export function crateTexture(seed = 43) {
   const r = mulberry(seed);
-  const [c, g] = canvas(512, 512);
-  const [hc, hg] = canvas(512, 512);
+  const S = 1024, Q = 512;
+  const [c, g] = canvas(S, S);
+  const [hc, hg] = canvas(S, S);
   hg.fillStyle = 'rgb(140,140,140)';
-  hg.fillRect(0, 0, 512, 512);
-  const planks = 4;
-  for (let i = 0; i < planks; i++) {
-    const y = (i * 512) / planks;
-    const t = r();
-    g.fillStyle = `rgb(${98 + t * 16},${108 + t * 14},${70 + t * 12})`;
-    g.fillRect(0, y, 512, 512 / planks);
-    // veio da madeira sob a tinta
-    for (let k = 0; k < 40; k++) {
-      g.strokeStyle = `rgba(30,35,20,${0.05 + r() * 0.08})`;
-      g.lineWidth = 1 + r() * 2;
-      const yy = y + r() * (512 / planks);
-      g.beginPath(); g.moveTo(0, yy); g.bezierCurveTo(170, yy + (r() - 0.5) * 8, 340, yy + (r() - 0.5) * 8, 512, yy + (r() - 0.5) * 6); g.stroke();
+  hg.fillRect(0, 0, S, S);
+  const quad = (qx, qy, vertical, planks, stencil) => {
+    const X = qx * Q, Y = qy * Q;
+    g.save(); hg.save();
+    g.beginPath(); g.rect(X, Y, Q, Q); g.clip();
+    hg.beginPath(); hg.rect(X, Y, Q, Q); hg.clip();
+    for (let i = 0; i < planks; i++) {
+      const t = r();
+      const p0 = (i * Q) / planks, pw = Q / planks;
+      // oliva militar fosco, cada tábua com tom próprio (lote de tinta/sol)
+      const R = 84 + t * 18, G = 88 + t * 14, B = 60 + t * 10;
+      g.fillStyle = `rgb(${R},${G},${B})`;
+      if (vertical) g.fillRect(X + p0, Y, pw, Q); else g.fillRect(X, Y + p0, Q, pw);
+      // veio da madeira sob a tinta + nós
+      for (let k = 0; k < 60; k++) {
+        g.strokeStyle = `rgba(${r() < 0.5 ? '25,28,15' : '150,140,100'},${0.04 + r() * 0.07})`;
+        g.lineWidth = 0.6 + r() * 1.6;
+        const o = p0 + r() * pw;
+        g.beginPath();
+        if (vertical) { g.moveTo(X + o, Y); g.bezierCurveTo(X + o + (r() - 0.5) * 8, Y + 170, X + o + (r() - 0.5) * 8, Y + 340, X + o + (r() - 0.5) * 6, Y + Q); }
+        else { g.moveTo(X, Y + o); g.bezierCurveTo(X + 170, Y + o + (r() - 0.5) * 8, X + 340, Y + o + (r() - 0.5) * 8, X + Q, Y + o + (r() - 0.5) * 6); }
+        g.stroke();
+      }
+      if (r() < 0.6) {
+        const kx = vertical ? X + p0 + pw * (0.3 + r() * 0.4) : X + r() * Q, ky = vertical ? Y + r() * Q : Y + p0 + pw * (0.3 + r() * 0.4);
+        g.fillStyle = 'rgba(40,35,20,0.35)';
+        g.beginPath(); g.ellipse(kx, ky, vertical ? 5 : 12, vertical ? 12 : 5, 0, 0, Math.PI * 2); g.fill();
+      }
+      // junta entre tábuas: fenda escura + relevo
+      g.fillStyle = 'rgba(18,16,10,0.9)';
+      hg.fillStyle = 'rgb(30,30,30)';
+      if (vertical) { g.fillRect(X + p0, Y, 3, Q); hg.fillRect(X + p0 - 1, Y, 5, Q); }
+      else { g.fillRect(X, Y + p0, Q, 3); hg.fillRect(X, Y + p0 - 1, Q, 5); }
+      // pregos
+      for (const e of [0.06, 0.94]) for (const f of [0.3, 0.7]) {
+        const nx = vertical ? X + p0 + pw * f : X + Q * e, ny = vertical ? Y + Q * e : Y + p0 + pw * f;
+        g.fillStyle = 'rgba(40,32,24,0.9)'; g.beginPath(); g.arc(nx, ny, 3.2, 0, 6.3); g.fill();
+        g.fillStyle = 'rgba(120,70,40,0.35)'; g.beginPath(); g.arc(nx, ny + 6, 4, 0, 6.3); g.fill();
+        hg.fillStyle = 'rgb(170,170,170)'; hg.beginPath(); hg.arc(nx, ny, 3, 0, 6.3); hg.fill();
+      }
     }
-    hg.fillStyle = 'rgb(40,40,40)';
-    hg.fillRect(0, y, 512, 5);
-    g.fillStyle = 'rgba(15,15,10,0.85)';
-    g.fillRect(0, y, 512, 4);
-  }
-  // lascas de tinta (madeira clara aparecendo)
-  for (let k = 0; k < 160; k++) {
-    const x = r() * 512, y = r() * 512, rr = 1 + r() * (r() < 0.1 ? 10 : 4);
-    blob(g, r, x, y, rr, 7, 0.6);
-    g.fillStyle = `rgba(${150 + r() * 40},${120 + r() * 30},${80 + r() * 20},0.9)`;
-    g.fill();
-  }
-  // estêncil
-  g.fillStyle = 'rgba(214,190,90,0.92)';
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = 'bold 54px "DejaVu Sans Mono", "Liberation Mono", monospace';
-  g.fillText('7,62×39', 256, 200);
-  g.font = 'bold 34px "DejaVu Sans Mono", "Liberation Mono", monospace';
-  g.fillText('ПС  1×440', 256, 262);
-  g.font = '26px "DejaVu Sans Mono", "Liberation Mono", monospace';
-  g.fillText('17-' + (10 + Math.floor(r() * 80)) + '-24', 256, 312);
-  g.globalCompositeOperation = 'destination-out';
-  for (let k = 0; k < 500; k++) { g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(140 + r() * 240, 170 + r() * 160, 2, 2); }
-  g.globalCompositeOperation = 'source-over';
-  // faixa de manuseio / sujeira na base
-  const grd = g.createLinearGradient(0, 380, 0, 512);
-  grd.addColorStop(0, 'rgba(40,30,20,0)');
-  grd.addColorStop(1, 'rgba(40,30,20,0.55)');
-  g.fillStyle = grd; g.fillRect(0, 380, 512, 132);
-  return { map: tex(c), normalMap: canvasNormal(hc, 3) };
+    if (stencil) {
+      // estêncil de spray creme gasto (pontes do molde, bordas difusas)
+      g.save();
+      g.translate(X + Q / 2, Y + Q / 2);
+      g.rotate((r() - 0.5) * 0.03);
+      g.fillStyle = 'rgba(196,184,138,0.78)';
+      g.shadowColor = 'rgba(196,184,138,0.5)'; g.shadowBlur = 3;
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = 'bold 50px "DejaVu Sans Mono", "Liberation Mono", monospace';
+      g.fillText(stencil[0], 0, -70);
+      g.font = 'bold 32px "DejaVu Sans Mono", "Liberation Mono", monospace';
+      g.fillText(stencil[1], 0, -10);
+      g.font = '24px "DejaVu Sans Mono", "Liberation Mono", monospace';
+      g.fillText(stencil[2], 0, 36);
+      g.restore();
+      // falhas do spray (destination-out só no texto: pinta tinta oliva por cima)
+      for (let k = 0; k < 900; k++) {
+        const t = r();
+        g.fillStyle = `rgba(${84 + t * 18},${88 + t * 14},${60 + t * 10},${0.35 + r() * 0.5})`;
+        g.fillRect(X + 90 + r() * 330, Y + 150 + r() * 160, 1 + r() * 3, 1 + r() * 3);
+      }
+    }
+    // lascas de tinta (madeira crua cinza-clara), mais nas bordas do quadrante
+    for (let k = 0; k < 260; k++) {
+      const edge = r() < 0.6;
+      let x = X + r() * Q, y = Y + r() * Q;
+      if (edge) { if (r() < 0.5) x = X + (r() < 0.5 ? r() * 30 : Q - r() * 30); else y = Y + (r() < 0.5 ? r() * 30 : Q - r() * 30); }
+      const rr = 1 + r() * (r() < 0.1 ? 9 : 3.5);
+      blob(g, r, x, y, rr, 7, 0.7);
+      g.fillStyle = `rgba(${128 + r() * 30},${118 + r() * 24},${92 + r() * 18},0.92)`;
+      g.fill();
+      blob(hg, r, x, y, rr, 7, 0.7);
+      hg.fillStyle = 'rgb(118,118,118)'; hg.fill();
+    }
+    // sujeira de mãos/manuseio, escorridos e pó (manchas grandes e suaves)
+    for (let k = 0; k < 14; k++) {
+      const x = X + r() * Q, y = Y + r() * Q, rad = 30 + r() * 110;
+      const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+      const dark = r() < 0.6;
+      grd.addColorStop(0, dark ? `rgba(30,26,18,${0.12 + r() * 0.15})` : `rgba(150,140,115,${0.1 + r() * 0.15})`);
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grd; g.fillRect(X, Y, Q, Q);
+    }
+    for (let k = 0; k < 10; k++) {
+      const x = X + r() * Q, y0 = Y + r() * Q * 0.5, len = 60 + r() * 220;
+      const grd = g.createLinearGradient(0, y0, 0, y0 + len);
+      grd.addColorStop(0, 'rgba(35,30,20,0.18)'); grd.addColorStop(1, 'rgba(35,30,20,0)');
+      g.fillStyle = grd; g.fillRect(x, y0, 3 + r() * 8, len);
+    }
+    // base mais suja (respingo do chão)
+    const grd = g.createLinearGradient(0, Y + Q * 0.75, 0, Y + Q);
+    grd.addColorStop(0, 'rgba(48,38,26,0)'); grd.addColorStop(1, 'rgba(48,38,26,0.5)');
+    g.fillStyle = grd; g.fillRect(X, Y + Q * 0.75, Q, Q * 0.25);
+    g.restore(); hg.restore();
+  };
+  quad(0, 0, false, 4, ['7,62×39', 'ПС  1×440', '17-' + (10 + Math.floor(r() * 80)) + '-24']);
+  quad(1, 0, false, 4, r() < 0.5 ? ['5,45×39', 'ПС  2×540', '21-' + (10 + Math.floor(r() * 80)) + '-23'] : null);
+  quad(0, 1, true, 3, null);
+  quad(1, 1, false, 5, null);
+  const map = tex(c);
+  // canvas: y para baixo; textura com flipY → v = 1 - y/S
+  const rect = {
+    sideA: [0, 0.5, 0.5, 1], sideB: [0.5, 0.5, 1, 1], end: [0, 0, 0.5, 0.5], lid: [0.5, 0, 1, 0.5],
+  };
+  return { map, normalMap: canvasNormal(hc, 3), rect };
 }
 
 /** Cacos de vidro espalhados (triângulos claros, alguns grandes). */

@@ -102,8 +102,14 @@ export class Player {
     if (inp.action('back')) _wish.sub(_fwd);
     if (inp.action('right')) _wish.add(_right);
     if (inp.action('left')) _wish.sub(_right);
-    const moving = _wish.lengthSq() > 0;
-    if (moving) _wish.normalize();
+    let mag = 1;
+    // eixo analógico (joystick de toque): direção e intensidade proporcionais
+    if (inp.axis?.active) {
+      _wish.set(0, 0, 0).addScaledVector(_fwd, inp.axis.y).addScaledVector(_right, inp.axis.x);
+      mag = Math.min(1, _wish.length());
+    }
+    const moving = _wish.lengthSq() > 1e-6;
+    if (moving) _wish.normalize().multiplyScalar(mag);
     const sprint = moving && inp.action('sprint') && inp.action('forward');
     const speed = sprint ? this.sprintSpeed : this.walkSpeed;
     const accel = this.onGround ? 12 : 2.5;

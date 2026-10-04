@@ -16,6 +16,10 @@ import { cached, mat4 } from './geo.js';
 import { cyl, torus, decal, contact } from './shapes.js';
 import { bulletRect } from './decals.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { treadTire, bevelBox, bevelCyl, part, vary } from './propkit.js';
+
+/** Pneu com banda de rodagem em blocos, eixo Z (rodando no plano XY do carro). */
+const carTire = (v) => cached('cartireZ' + v, () => treadTire(v).clone().rotateX(Math.PI / 2));
 
 const KINDS = {
   sedan: {
@@ -121,7 +125,7 @@ function xsamples(x0, x1, n) {
 
 /** Parte baixa: seções superelípticas, ombro arredondado, cantos em planta, arcos de roda. */
 function lowerGeo(kind) {
-  return cached('carlow2_' + kind, () => {
+  return cached('carlow3_' + kind, () => {
     const K = KINDS[kind];
     const ax = K.wb / 2, ar = K.rw + 0.08, ay = K.rw + 0.02;
     let xmin = Infinity, xmax = -Infinity;
@@ -138,14 +142,14 @@ function lowerGeo(kind) {
       if (t - b < 0.02) b = t - 0.02;
       const endD = x > 0 ? xmax - x : x - xmin;
       const e = Math.max(0, 1 - endD / 0.7);
-      const hw = hw0 * (1 - 0.13 * Math.pow(e, 2.0));
+      const hw = hw0 * (1 - 0.17 * Math.pow(e, 1.8));
       const mid = (t + b) / 2, hh = (t - b) / 2;
       const ring = [];
       for (let j = 0; j < M; j++) {
         const th = (j / M) * Math.PI * 2;
         const c = Math.cos(th), sn = Math.sin(th);
         const up = sn > 0;
-        let z = hw * spow(c, up ? 0.42 : 0.22);
+        let z = hw * spow(c, up ? 0.55 : 0.3);
         const y = mid + hh * spow(sn, up ? 0.5 : 0.2);
         // tumblehome: lateral fecha um pouco acima da linha de cintura
         z *= 1 - 0.045 * Math.max(0, (y - mid) / Math.max(hh, 0.01));
@@ -443,11 +447,22 @@ export function car(W, x, z, yaw, opts = {}) {
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
       const wx = sx * ax, wz = sz * (hw - 0.17);
-      B.add(cached('archliner', () => new THREE.CylinderGeometry(1, 1, 1, 14, 1, true, -Math.PI / 2, Math.PI)), 'black', L([wx, K.rw + 0.02, sz * (hw - 0.3)], [-Math.PI / 2, 0, 0], [K.rw + 0.07, 0.42, K.rw + 0.07]), { color: [1, 1, 1] });
+      B.add(cached('archliner', () => new THREE.CylinderGeometry(1, 1, 1, 14, 1, true, -Math.PI / 2, Math.PI)), 'black', L([wx, K.rw + 0.02, sz * (hw - 0.3)], [-Math.PI / 2, 0, 0], [K.rw + 0.07, 0.42, K.rw + 0.07]), { color: [0.35, 0.33, 0.3] });
+      // caixa de roda fechada por dentro: parede interna escura (nada de luz
+      // atravessando o vão acima do pneu) + AO de contato sob cada roda
+      B.add(cached('archwall', () => new THREE.CircleGeometry(1, 16, 0, Math.PI)), 'black', L([wx, K.rw + 0.02, sz * (hw - 0.5)], [0, sz > 0 ? 0 : Math.PI, 0], [K.rw + 0.07, K.rw + 0.07, 1]), { color: [0.18, 0.17, 0.16] });
+      B.add(cached('archwall', () => new THREE.CircleGeometry(1, 16, 0, Math.PI)), 'black', L([wx, K.rw + 0.02, sz * (hw - 0.5)], [0, sz > 0 ? Math.PI : 0, 0], [K.rw + 0.07, K.rw + 0.07, 1]), { color: [0.18, 0.17, 0.16] });
+      // lábio do para-lama: arco boleado acompanhando a caixa de roda
+      {
+        const ar = K.rw + (K.box ? 0.06 : 0.08);
+        const zl = sz * (sideZ(K, wx, K.rw + 0.25) - 0.012);
+        B.add(cached('archlip', () => new THREE.TorusGeometry(1, 0.075, 6, 18, Math.PI)), bodyMat, L([wx, K.box ? 0.36 : K.rw + 0.02, zl], [0, 0, 0], [ar, ar, 0.35]), { color: tint.map((c) => c * 0.92) });
+      }
       const isFlat = flat && sx === 1 && sz === 1;
       const ry = isFlat ? K.rw - 0.06 : K.rw;
       if (!burnt) {
-        B.add(tireGeo(), 'rubber', L([wx, ry, wz], [0, 0, 0], [K.rw / 0.32, isFlat ? 0.75 : 1, K.rw / 0.32]), { color: [1, 1, 1] });
+        const tk = K.rw / 0.33;
+        B.add(carTire(sx > 0 ? 0 : 1), 'rubber', L([wx, ry, wz], [0, 0, rng.range(0, 6)], [tk, isFlat ? tk * 0.8 : tk, 1.05]), { color: vary(rng, [0.85, 0.85, 0.83], { tone: 0.06, fade: 0.25, dirt: 0.2 }) });
         const rimC = rng.chance(0.5) ? [0.55, 0.55, 0.53] : [0.2, 0.2, 0.2];
         B.add(rimGeo(), 'chrome', L([wx, ry, wz + sz * 0.02], [0, sz > 0 ? 0 : Math.PI, 0], [K.rw / 0.32, K.rw / 0.32, 1]), { color: rimC });
         for (let k = 0; k < 4; k++) {
@@ -462,22 +477,64 @@ export function car(W, x, z, yaw, opts = {}) {
       }
     }
   }
-  // interior: bancos (escuros; esqueleto de molas no queimado)
+  // interior modelado: bancos com almofadas boleadas e encosto de cabeça,
+  // banco traseiro inteiriço, painel com capô do quadro de instrumentos,
+  // volante, console central, forros de porta e assoalho com tapete.
+  // (queimado: só as armações de aço dos bancos e o painel derretido)
   {
-    const seatC = burnt ? [0.12, 0.1, 0.08] : [0.12, 0.11, 0.1];
-    for (const sx of [-0.25, 0.7]) for (const s of [-1, 1]) {
-      if (kind === 'van' && sx > 0) continue;
-      B.add(UNIT(), burnt ? 'burnt' : 'fabric', L([sx, 0.62, s * 0.38], [0, 0, 0], [0.5, 0.12, 0.48]), { color: burnt ? [1, 1, 1] : seatC });
-      B.add(UNIT(), burnt ? 'burnt' : 'fabric', L([sx + 0.24, 0.92, s * 0.38], [0, 0, -0.2], [0.1, 0.55, 0.46]), { color: seatC });
+    const fabric = burnt ? 'burnt' : 'fabric';
+    const seatC = burnt ? [0.55, 0.5, 0.45] : vary(rng, rng.pick([[0.16, 0.15, 0.14], [0.22, 0.2, 0.17], [0.3, 0.26, 0.2], [0.13, 0.14, 0.17]]), { tone: 0.1, fade: 0.3, dirt: 0.1 });
+    const fx = g[0][0] + 0.75; // banco dianteiro: atrás do para-brisa
+    const rows = kind === 'van' ? [fx] : [fx, fx + 0.9];
+    rows.forEach((sx, ri) => {
+      const bench = ri === 1;
+      for (const s of bench ? [0] : [-1, 1]) {
+        const sw = bench ? K.gw - 0.25 : 0.5;
+        const zc = s * 0.36;
+        if (burnt) {
+          // armação: tubos do assento e encosto, molas em zigue-zague
+          part(B, CM, bevelBox(sw, 0.03, 0.48, 0.01), 'burnt', [sx, 0.5, zc], [0, 0, 0], [0.9, 0.85, 0.8]);
+          part(B, CM, bevelBox(0.03, 0.5, sw, 0.01), 'burnt', [sx + 0.26, 0.78, zc], [0, Math.PI / 2, -0.25], [0.9, 0.85, 0.8]);
+          continue;
+        }
+        part(B, CM, bevelBox(0.5, 0.12, sw, 0.045, { wear: 0.15 }), fabric, [sx, 0.55, zc], [0, 0, -0.06], seatC);
+        part(B, CM, bevelBox(0.13, 0.58, sw - 0.02, 0.05, { wear: 0.15 }), fabric, [sx + 0.27, 0.86, zc], [0, 0, -0.22], seatC);
+        if (!bench) {
+          // encosto de cabeça em duas hastes
+          part(B, CM, bevelBox(0.1, 0.17, 0.26, 0.045), fabric, [sx + 0.36, 1.24, zc], [0, 0, -0.18], seatC);
+          for (const k of [-0.07, 0.07]) part(B, CM, bevelCyl(0.006, 0.006, 0.08, 6), 'chrome', [sx + 0.34, 1.13, zc + k], [0, 0, -0.18], [0.6, 0.6, 0.6]);
+        }
+      }
+    });
+    // painel: bloco boleado + capô do quadro + saídas de ar
+    const dashX = g[0][0] + 0.22;
+    part(B, CM, bevelBox(0.42, 0.22, K.gw - 0.16, 0.06, { wear: 0.1 }), 'plastic', [dashX, 0.86, 0], [0, 0, 0.18], burnt ? [0.1, 0.09, 0.08] : [0.14, 0.14, 0.135]);
+    if (!burnt) {
+      const dz = 0.36; // volante à esquerda (+z local = esquerda de quem olha para -x)
+      part(B, CM, bevelBox(0.16, 0.08, 0.36, 0.035), 'plastic', [dashX + 0.12, 1.0, dz], [0, 0, 0.1], [0.11, 0.11, 0.105]);
+      // volante: aro + cubo + coluna
+      const sw = CM.clone().multiply(mat4([dashX + 0.33, 0.93, dz], [0, 0, 0.45]));
+      B.add(cached('steer', () => new THREE.TorusGeometry(0.18, 0.016, 8, 24)), 'plastic', sw.clone().multiply(mat4([0, 0, 0], [0, Math.PI / 2, 0])), { color: [0.1, 0.1, 0.1] });
+      B.add(cyl(10), 'plastic', sw.clone().multiply(mat4([0, 0, 0], [0, 0, Math.PI / 2], [0.05, 0.04, 0.05])), { color: [0.12, 0.12, 0.12] });
+      for (const a of [0, 2.1, 4.2]) B.add(UNIT(), 'plastic', sw.clone().multiply(mat4([0, Math.cos(a) * 0.09, Math.sin(a) * 0.09], [a, 0, 0], [0.02, 0.18, 0.025])), { color: [0.11, 0.11, 0.11] });
+      B.add(cyl(8), 'plastic', CM.clone().multiply(mat4([dashX + 0.2, 0.9, dz], [0, 0, Math.PI / 2 + 0.45], [0.035, 0.26, 0.035])), { color: [0.1, 0.1, 0.1] });
+      // console central e alavanca de câmbio
+      if (kind !== 'van') {
+        part(B, CM, bevelBox(0.7, 0.18, 0.2, 0.04), 'plastic', [dashX + 0.5, 0.58, 0], [0, 0, 0], [0.13, 0.13, 0.125]);
+        part(B, CM, bevelCyl(0.008, 0.01, 0.16, 6), 'chrome', [dashX + 0.45, 0.72, 0], [0, 0, 0.2], [0.3, 0.3, 0.3]);
+      }
+      // forros de porta (painel escuro com braço) dos dois lados
+      for (const s of [-1, 1]) part(B, CM, bevelBox(K.doors[K.doors.length - 1] - K.doors[0] - 0.1, 0.32, 0.03, 0.012), 'plastic', [(K.doors[0] + K.doors[K.doors.length - 1]) / 2, 0.7, s * (K.gw / 2 - 0.02)], [0, 0, 0], [0.16, 0.155, 0.15]);
     }
-    B.add(UNIT(), 'plastic', L([g[0][0] + 0.15, 0.9, 0], [0, 0, 0.3], [0.35, 0.12, K.gw - 0.2]), { color: burnt ? [0.08, 0.07, 0.06] : [0.15, 0.15, 0.15] });
     // forro interno da cabine (caixa com faces para DENTRO): pelo vidro se vê
     // um interior escuro (forro, assoalho, laterais) — não o vazio da
     // carroceria de uma face só, que deixava a fachada atrás "atravessar"
     if (!burnt) {
       const x0 = g[0][0] + 0.25, x1 = g[g.length - 1][0] - 0.15;
       const y1 = roofY - 0.06;
-      B.add(innerBox(), 'fabric', L([(x0 + x1) / 2, (0.42 + y1) / 2, 0], [0, 0, 0], [x1 - x0, y1 - 0.42, K.gw - 0.1]), { color: [0.1, 0.095, 0.09] });
+      B.add(innerBox(), 'fabric', L([(x0 + x1) / 2, (0.42 + y1) / 2, 0], [0, 0, 0], [x1 - x0, y1 - 0.42, K.gw - 0.1]), { color: [0.13, 0.125, 0.115] });
+      // forro de teto mais claro (o que mais aparece pelo vidro)
+      B.add(UNIT(), 'fabric', L([(x0 + x1) / 2, y1 - 0.01, 0], [0, 0, 0], [x1 - x0 - 0.05, 0.01, K.gw - 0.15]), { color: [0.42, 0.4, 0.36] });
       // furgão: divisória atrás dos bancos (o baú é fechado)
       if (kind === 'van') B.add(UNIT(), 'black', L([0.32, (0.42 + y1) / 2, 0], [0, 0, 0], [0.04, y1 - 0.42, K.gw - 0.12]), { color: [0.35, 0.34, 0.32] });
     }
@@ -512,17 +569,17 @@ function sideZ(K, x, y) {
   const [b, t] = spanAt(K.low, Math.min(xmax - 0.01, Math.max(xmin + 0.01, x)));
   const endD = x > 0 ? xmax - x : x - xmin;
   const e = Math.max(0, 1 - endD / 0.7);
-  const hw = (K.w / 2) * (1 - 0.13 * e * e);
+  const hw = (K.w / 2) * (1 - 0.17 * Math.pow(e, 1.8));
   const mid = (t + b) / 2, hh = Math.max(0.01, (t - b) / 2);
   const q = Math.max(-1, Math.min(1, (y - mid) / hh));
   if (q > 0) {
     const sn = q * q;
     const c = Math.sqrt(Math.max(0, 1 - sn * sn));
-    return hw * Math.pow(c, 0.42) * (1 - 0.045 * q);
+    return hw * Math.pow(c, 0.55) * (1 - 0.045 * q);
   }
   const sn = Math.pow(-q, 5);
   const c = Math.sqrt(Math.max(0, 1 - sn * sn));
-  return hw * Math.pow(c, 0.22);
+  return hw * Math.pow(c, 0.3);
 }
 
 /** Normal lateral do carro mais próxima de um eixo (para decalques). */

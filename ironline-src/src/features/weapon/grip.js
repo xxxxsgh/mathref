@@ -96,11 +96,31 @@ export function solveClamp(hand, gunRoot, { phi = 3.75, z = -0.43, fwd = 0.38, l
   gunRoot.updateMatrixWorld(true);
   _inv.copy(gunRoot.matrixWorld).invert();
 
-  const pose = clonePose(POSES.guard);
-  // dedos: espalhamento natural (indicador um pouco para a frente)
-  pose.spread = [0.1, 0.03, -0.04, -0.12];
-  for (let i = 0; i < 4; i++) pose.f[i] = [0, 0, 0];
-  pose.t = [0.3, 0.2, 0.2, 0.1, 0.1];
+  const fit = fitHand(hand, gunRoot, {
+    sdf: guardSdf,
+    gap,
+    thumb: { target: new THREE.Vector3(thumbX, thumbUp, z - 0.05), maxY: over ? null : 0.018 },
+  });
+  return { pos, quat, pose: fit.pose, cost: fit.cost };
+}
+
+/**
+ * Encaixe genérico de dedos/polegar contra um SDF (espaço da arma), com a
+ * mão JÁ posicionada (hand.root filho da arma). Usado pela pega do
+ * guarda-mão, pelas mãos na pistola, na faca e na granada.
+ *   sdf(p)    distância (m) do ponto p (Vector3, espaço da arma) à superfície
+ *   fingers   dedos resolvidos (os demais copiam `base`)
+ *   base      pose de partida/fixa (ex.: indicador no gatilho)
+ *   thumb     { target: Vector3, maxY?, weight? } ou null (polegar de `base`)
+ *   spread    abertura natural dos dedos
+ */
+export function fitHand(hand, gunRoot, { sdf, gap = 0.0007, fingers = [0, 1, 2, 3], base = null, thumb = null, spread = [0.1, 0.03, -0.04, -0.12], minFlex = [0.05, 0.1, 0.1], maxFlex = [1.45, 1.75, 1.75], indexTarget = null } = {}) {
+  gunRoot.updateMatrixWorld(true);
+  _inv.copy(gunRoot.matrixWorld).invert();
+  const pose = clonePose(base || POSES.guard);
+  if (!base) pose.spread = spread.slice();
+  for (const i of fingers) pose.f[i] = [0, 0, 0];
+  if (thumb) pose.t = [0.3, 0.2, 0.2, 0.1, 0.1];
   hand.apply(pose);
 
   // ─ dedos: flexiona cada falange até encostar ─
@@ -109,55 +129,104 @@ export function solveClamp(hand, gunRoot, { phi = 3.75, z = -0.43, fwd = 0.38, l
     let m = Infinity;
     for (const k of [0.3, 0.55, 0.8, 1.0]) {
       toGun(joint, pt.set(0, 0, -L * k), _inv, _p);
-      m = Math.min(m, guardSdf(_p) - r);
+      m = Math.min(m, sdf(_p) - r);
     }
     return m;
   };
-  for (let i = 0; i < 4; i++) {
+  for (const i of fingers) {
     const f = FINGERS[i];
     const joints = hand.fingers[i];
     for (let sgi = 0; sgi < 3; sgi++) {
       const r = f.r * (1 - sgi * 0.07) * 0.98;
       const L = f.L[sgi];
-      let a = sgi === 0 ? 0.05 : 0.1;
-      const max = sgi === 0 ? 1.45 : 1.75;
+      let a = minFlex[sgi];
+      const max = maxFlex[sgi];
       for (; a <= max; a += 0.02) {
         pose.f[i][sgi] = a;
         hand.apply(pose);
         if (segClear(joints[sgi], L, r) <= gap) break;
       }
+      if (a > max) pose.f[i][sgi] = max;
       // recua meio passo se atravessou
       if (segClear(joints[sgi], L, r) < 0) {
-        pose.f[i][sgi] = Math.max(0, a - 0.02);
+        pose.f[i][sgi] = Math.max(0, pose.f[i][sgi] - 0.02);
         hand.apply(pose);
       }
     }
+  }
+  // ─ indicador no gatilho: busca a flexão que põe a polpa distal no alvo ─
+  if (indexTarget) {
+    const j = hand.fingers[0];
+    const L2 = FINGERS[0].L[2];
+    let bestI = Infinity, bi = pose.f[0].slice(), bs = pose.spread[0];
+    for (let a = 0; a <= 1.5; a += 0.05) {
+      for (let b = 0.2; b <= 1.7; b += 0.05) {
+        for (const c of [0.2, 0.35, 0.5, 0.65]) {
+          for (const sp of [-0.15, -0.05, 0.05, 0.15]) {
+            pose.f[0] = [a, b, c];
+            pose.spread[0] = sp;
+            hand.apply(pose);
+            toGun(j[2], pt.set(0, -0.004, -L2 * 0.62), _inv, _p);
+            let cst = _p.distanceToSquared(indexTarget);
+            // o dedo não atravessa a arma (exceto a polpa no gatilho)
+            toGun(j[1], pt.set(0, 0, -FINGERS[0].L[1] * 0.5), _inv, _p);
+            const d1 = sdf(_p) - FINGERS[0].r * 0.9;
+            if (d1 < 0) cst += d1 * d1 * 40;
+            if (cst < bestI) (bestI = cst), (bi = [a, b, c]), (bs = sp);
+          }
+        }
+      }
+    }
+    pose.f[0] = bi;
+    pose.spread[0] = bs;
+  }
+  if (!thumb) {
+    hand.apply(pose);
+    return { pose, cost: 0 };
   }
 
   // ─ polegar: descida de coordenadas ─
   const th = hand.thumb;
   const TL = THUMB.L;
-  const TR = [0.0135, 0.0108, 0.0098];
-  const target = new THREE.Vector3();
+  const TR = [THUMB.rad[0] * 0.9, THUMB.rad[1], THUMB.rad[2]];
+  const target = thumb.target;
+  const wT = thumb.weight ?? 20;
+  // espaço local da mão (espelhado): y > 0 = dorso. O polegar NUNCA cruza
+  // para o dorso (anatomia: ele opõe pela palma/lateral radial)
+  const mInv = new THREE.Matrix4();
+  const hl = new THREE.Vector3();
   const cost = () => {
     hand.apply(pose);
     let c2 = 0;
+    hand.mirror.updateMatrixWorld(true);
+    mInv.copy(hand.mirror.matrixWorld).invert();
+    for (let k = 0; k < 3; k++) {
+      for (const q of [0.5, 1.0]) {
+        th[k].updateMatrixWorld(true);
+        hl.set(0, 0, -TL[k] * q).applyMatrix4(th[k].matrixWorld).applyMatrix4(mInv);
+        if (hl.y > 0.0) c2 += (hl.y * 1000) ** 2 * 0.05;
+      }
+    }
     for (let k = 0; k < 3; k++) {
       for (const q of [0.35, 0.7, 1.0]) {
         toGun(th[k], pt.set(0, 0, -TL[k] * q), _inv, _p);
-        const d = guardSdf(_p) - TR[k];
+        const d = sdf(_p) - TR[k];
         if (d < 0) c2 += d * d * 4e4; // atravessou: muito caro
         else if (k > 0) c2 += d * d * 250; // médio/distal encostados
       }
     }
-    // ponta: sobre o flanco esquerdo-alto, à frente da palma
+    // ponta do polegar no alvo
     toGun(th[2], pt.set(0, 0, -TL[2]), _inv, _p);
-    target.set(thumbX, thumbUp, z - 0.05);
-    c2 += _p.distanceToSquared(target) * 20;
-    if (!over && _p.y > 0.018) c2 += (_p.y - 0.018) ** 2 * 400;
+    c2 += _p.distanceToSquared(target) * wT;
+    // ponto de passagem da junta MCP do polegar (ex.: membrana sobre o dorso do punho)
+    if (thumb.mcpTarget) {
+      toGun(th[1], pt.set(0, 0, 0), _inv, _p);
+      c2 += _p.distanceToSquared(thumb.mcpTarget) * (thumb.mcpWeight ?? 30);
+    }
+    if (thumb.maxY != null && _p.y > thumb.maxY) c2 += (_p.y - thumb.maxY) ** 2 * 400;
     return c2;
   };
-  const lim = [[-0.8, 1.6], [-1.0, 1.4], [-1.2, 1.4], [-0.1, 0.9], [-0.1, 0.9]];
+  const lim = thumb.lim || [[-0.4, 1.4], [-0.25, 1.4], [-0.9, 1.2], [-0.1, 0.9], [-0.1, 0.9]];
   // busca grossa em grade (evita mínimos locais), depois refino
   let best = Infinity, bt = pose.t.slice();
   for (let yw = lim[0][0]; yw <= lim[0][1]; yw += 0.2) {
@@ -188,5 +257,19 @@ export function solveClamp(hand, gunRoot, { phi = 3.75, z = -0.43, fwd = 0.38, l
     }
   }
   hand.apply(pose);
-  return { pos, quat, pose, cost: best };
+  return { pose, cost: best };
+}
+
+// ─── SDFs úteis (3D) ─────────────────────────────────────────────────────
+/** Caixa arredondada 3D centrada em c (Vector3-like), meia-extensão h, raio r. */
+export function sdBox3(p, c, h, r) {
+  const qx = Math.abs(p.x - c.x) - h.x + r, qy = Math.abs(p.y - c.y) - h.y + r, qz = Math.abs(p.z - c.z) - h.z + r;
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0) - r;
+}
+/** Cápsula de a até b com raio r (elipse: escala sx em X). */
+export function sdCapsule(p, a, b, r) {
+  const bax = b.x - a.x, bay = b.y - a.y, baz = b.z - a.z;
+  const pax = p.x - a.x, pay = p.y - a.y, paz = p.z - a.z;
+  const h = Math.min(1, Math.max(0, (pax * bax + pay * bay + paz * baz) / (bax * bax + bay * bay + baz * baz)));
+  return Math.hypot(pax - bax * h, pay - bay * h, paz - baz * h) - r;
 }

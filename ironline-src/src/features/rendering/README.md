@@ -29,8 +29,13 @@ Iluminação global e compositor HDR do IRONLINE. Tudo procedural, sem assets.
    subpixel de Halton quando o TAA está ligado (high/ultra; MSAA só em
    medium/ultra).
 2. Viewmodel → alvo próprio com α (pré-multiplicado), mesmo jitter.
-3. AO ½ res em duas escalas (anel de 0,75 m + anel de contato de ~0,2 m) +
-   blur bilateral; entra SÓ na luz indireta (ambiente e GI), nunca no sol.
+3. AO ½ res em três escalas (anel largo de 0,9 m, curto de ~0,25 m e de
+   CONTATO de ~8 cm) + blur bilateral. Canal R = AO do ambiente (com
+   multi-rebatimento por albedo, Jimenez/GTAO: frestas escurecem sem
+   acinzentar); canal G = oclusão de contato, que também entra na luz
+   DIRETA (`ao.direct`, micro-sombra que o shadow map não resolve: junção
+   caixote–chão, pneu–asfalto, meio-fio, rodapé). Sem SSAO (low, ou o
+   governador cortou) roda a AO barata: ¼ res, 6 amostras, só curto + contato.
 4. GI ¼ res: junta os VPLs do RSM (irradiância com cossenos nos dois lados;
    sob teto só valem VPLs também cobertos — luz que entrou pela janela).
 5. Volumétrico ½ res: raymarch do shadow map E do depth do RSM (o RSM vê
@@ -96,12 +101,15 @@ bueiros, trilhos e fios param de cintilar (Kaplanyan/Tokuyoshi).
 
 | Preset | AA | AO | GI (RSM) | Volumétrico | Contato | Sombra próxima | Motion blur | Poeira |
 |---|---|---|---|---|---|---|---|---|
-| low | FXAA | — | — | — | — | 1024² / 30 m, PCF | — | — |
-| medium | MSAA 4× + CAS | 10 amostras | 12 | — | sim | 2048² / 34 m + PCSS (cru 1024²) | — | — |
-| high | TAA + CAS | 14 | 20 | 20 passos | sim | 4096² / 38 m + PCSS (cru 2048²) | sim | 700 |
-| ultra | TAA + MSAA 4× | 18 | 24 | 28 passos | sim | 4096² / 46 m + PCSS (cru 4096²) | sim | 1100 |
+| low | FXAA | barata (¼ res, 6, contato) | — | — | — | 1024² / 30 m, PCF | — | — |
+| medium | MSAA 4× + CAS | 12 amostras | 12 | — | sim | 2048² / 34 m + PCSS (cru 1024²) | — | — |
+| high | TAA + CAS | 18 | 20 | 20 passos | sim | 4096² / 38 m + PCSS (cru 2048²) | sim | 700 |
+| ultra | TAA + MSAA 4× | 24 | 24 | 28 passos | sim | 4096² / 46 m + PCSS (cru 4096²) | sim | 1100 |
 
 Todas usam a cascata larga de sombra (1024² low/medium, 2048² high/ultra).
+`quality.shadowScale` (governador, degraus "−") divide a sombra próxima e o
+mapa cru do PCSS; `quality.ssao = false` cai para a AO barata de contato
+(`quality.contactAO = false` desliga até ela).
 
 Alvo em GPU intermediária, 1080p/high: ≤ 5 ms de pós (AO 0,6 · GI ¼ res
 0,5 · volumétrico 0,7 · combine com PCSS 1,2 · TAA 0,4 · bloom 0,5 · tonemap+final

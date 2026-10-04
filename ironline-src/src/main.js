@@ -10,9 +10,10 @@ import * as THREE from 'three';
 import { Bus } from './core/Bus.js';
 import { makeRng, mulberry32 } from './core/Rng.js';
 import { FixedStep } from './core/FixedStep.js';
-import { createQuality } from './core/Quality.js';
+import { createQuality, classifyDevice, probeDevice, rungIndex, rungSettings, AUTO_LADDER } from './core/Quality.js';
+import { Governor } from './core/Governor.js';
 import { createRenderer } from './core/Renderer.js';
-import { Input } from './core/Input.js';
+import { Input, prefersTouch } from './core/Input.js';
 import { Collision } from './core/Collision.js';
 import { Player } from './core/Player.js';
 import { parseShot, SHOT_PRESETS } from './core/Shots.js';
@@ -26,7 +27,10 @@ const shot = parseShot(params);
 if (shot) Math.random = mulberry32(shot.seed);
 
 const bus = new Bus();
-const quality = createQuality(params.get('q') || 'high', bus);
+// Qualidade: padrão 'auto' (classe do aparelho + governador). O modo shot
+// fica em 'high' fixo — capturas precisam ser comparáveis entre máquinas.
+const device = shot ? classifyDevice({ gpu: 'shot' }) : classifyDevice(probeDevice(window));
+const quality = createQuality(params.get('q') || (shot ? 'high' : 'auto'), bus, device);
 const container = document.getElementById('app');
 const ui = document.getElementById('ui');
 const renderer = createRenderer(container, quality, { preserve: !!shot || params.has('preserve') });
@@ -49,6 +53,13 @@ vmScene.add(vmCamera);
 
 const collision = new Collision();
 const input = new Input(renderer.domElement, bus);
+// toque: ?touch=1|0 força; senão liga em aparelhos só de toque (e troca
+// sozinho ao primeiro toque/clique — ver core/Input.js)
+{
+  const t = params.get('touch');
+  if (t === '1' || t === '0') input.touchForced = t === '1';
+  if (!shot && (input.touchForced ?? (prefersTouch(window) || device.mobile))) input.setTouchMode(true);
+}
 const player = new Player(camera, collision, input, bus);
 
 const time = { now: 0, frame: 0, step: STEP, scale: 1, alpha: 1, virtual: !!shot, frameDt: STEP };
@@ -117,15 +128,26 @@ const ctx = {
 };
 let pipeline = () => ctx.defaultRender();
 
-// ─── redimensionamento ───────────────────────────────────────────────────
-// Resolução dinâmica: `dyn.scale` (0,6..1) multiplica o pixel ratio quando
-// o tempo de frame real passa do orçamento de 60 fps (fora do modo shot;
-// `?dynres=0` desliga). O TAA/CAS do compositor disfarça a troca.
-const dyn = { scale: 1, enabled: !shot && params.get('dynres') !== '0', acc: 0, n: 0, t: 0, min: 0.6 };
+// ─── redimensionamento + governador de desempenho ───────────────────────
+// `governor.scale` (minScale..1) multiplica o pixel ratio quando o tempo de
+// frame real passa do orçamento (60 fps; 30 em celular). Em qualidade
+// 'auto' ele também desce/sobe degraus de AUTO_LADDER com histerese (ver
+// core/Governor.js). Fora do modo shot; `?dynres=0` desliga.
+const governor = new Governor({
+  targetFps: Number(params.get('fps')) || device.targetFps,
+  minScale: device.minScale,
+  rung: quality.rung ? rungIndex(quality.rung) : rungIndex(quality.level),
+  ceiling: rungIndex(device.ceiling),
+  floor: AUTO_LADDER.length - 1,
+  auto: quality.mode === 'auto',
+  enabled: !shot && params.get('dynres') !== '0',
+});
+const govLog = params.has('govlog');
+let govApplying = false;
 function resize() {
   const w = container.clientWidth || innerWidth;
   const h = container.clientHeight || innerHeight;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.dprCap) * dyn.scale);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.dprCap) * governor.scale);
   renderer.setSize(w, h, false);
   camera.aspect = vmCamera.aspect = w / h;
   camera.updateProjectionMatrix();
@@ -135,6 +157,13 @@ function resize() {
 addEventListener('resize', resize);
 bus.on('quality:change', () => {
   renderer.shadowMap.enabled = !!quality.shadows;
+  // troca vinda de fora (menu de configurações): o governador acompanha
+  if (!govApplying) {
+    governor.auto = quality.mode === 'auto';
+    governor.rung = quality.rung ? rungIndex(quality.rung) : rungIndex(quality.level);
+    governor.scale = 1;
+    governor.hold(2);
+  }
   resize();
 });
 
@@ -234,26 +263,33 @@ function frame(frameDt) {
   }
 }
 
-function updateDynRes(realDt) {
-  if (!dyn.enabled || time.scale <= 0 || document.hidden) {
-    dyn.acc = dyn.n = dyn.t = 0;
+function updateGovernor(realDt) {
+  if (!governor.enabled) return;
+  if (time.scale <= 0 || document.hidden) {
+    governor.hold(0.5);
     return;
   }
-  dyn.acc += realDt;
-  dyn.n++;
-  dyn.t += realDt;
-  if (dyn.t < 2) return;
-  const ms = (dyn.acc / dyn.n) * 1000;
-  dyn.acc = dyn.n = dyn.t = 0;
-  let next = dyn.scale;
-  if (ms > 19) next = Math.max(dyn.min, dyn.scale * 0.88);
-  else if (ms < 13.5 && dyn.scale < 1) next = Math.min(1, dyn.scale * 1.08);
-  if (Math.abs(next - dyn.scale) > 0.01) {
-    dyn.scale = next;
-    resize();
-  }
+  const d = governor.sample(realDt);
+  if (!d) return;
+  if (govLog) console.info('[ironline] governador', d, governor.last);
+  if (d.rung != null && quality.mode === 'auto') {
+    govApplying = true;
+    try {
+      quality.set({ ...rungSettings(d.rung), rung: AUTO_LADDER[d.rung].name });
+    } finally {
+      govApplying = false;
+    }
+    bus.emit('quality:auto', { rung: AUTO_LADDER[d.rung].name, scale: governor.scale, reason: d.reason });
+  } else resize();
 }
-ctx.dynres = dyn;
+ctx.governor = governor;
+// compatibilidade: ctx.dynres.scale / enabled / min (API antiga)
+ctx.dynres = {
+  get scale() { return governor.scale; },
+  get enabled() { return governor.enabled; },
+  set enabled(v) { governor.enabled = !!v; },
+  get min() { return governor.minScale; },
+};
 
 let last = performance.now();
 function tick(now) {
@@ -264,9 +300,10 @@ function tick(now) {
     last = now;
     return;
   }
-  const real = Math.min(0.1, (now - last) / 1000);
+  const raw = (now - last) / 1000;
+  const real = Math.min(0.1, raw);
   last = now;
-  updateDynRes(real);
+  updateGovernor(raw); // sem limite: o governador descarta picos > 250 ms sozinho
   frame(time.virtual ? STEP : real);
 }
 

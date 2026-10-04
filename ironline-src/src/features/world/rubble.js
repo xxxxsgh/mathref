@@ -21,6 +21,8 @@ import * as THREE from 'three';
 import { cached, mat4 } from './geo.js';
 import { mulberry } from './noise.js';
 import { rebar, decal, cylBetween, contact } from './shapes.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // ─── ruído de valor 2D simples (para a altura do monte) ────────────────
 function vnoise(x, z, seed) {
@@ -60,9 +62,11 @@ export const chunkGeo = (v) =>
       p.x += (r() - 0.5) * 0.05; p.y += (r() - 0.5) * 0.05; p.z += (r() - 0.5) * 0.05;
       P.setXYZ(i, p.x, p.y, p.z);
     }
-    const ng = g.toNonIndexed();
-    ng.computeVertexNormals(); // facetas nítidas
-    ng.scale(1, 0.55 + (v % 3) * 0.18, 0.75 + (v % 2) * 0.2);
+    g.scale(1, 0.55 + (v % 3) * 0.18, 0.75 + (v % 2) * 0.2);
+    // normais vincadas: facetas de QUEBRA nítidas (> 40°), faces subdivididas
+    // e arestas gastas suaves — sem o ar de poliedro de papel
+    g.deleteAttribute('uv');
+    const ng = toCreasedNormals(g, 0.7);
     return ng;
   });
 
@@ -93,22 +97,60 @@ export const slabGeo = (v) =>
     return ng;
   });
 
-/** Tijolo lascado (0.24 × 0.07 × 0.115) — variantes com quinas comidas / meio tijolo. */
+/**
+ * Tijolo lascado (0.24 × 0.07 × 0.115): caixa BOLEADA (arestas gastas,
+ * não cartão de quinas vivas) com quinas comidas, faces levemente
+ * abauladas e restos de argamassa (cor de vértice clara em manchas) —
+ * variantes com meio tijolo e tijolo furado.
+ */
 export const brickGeo = (v) =>
-  cached('rbrick' + v, () => {
+  cached('rbrick2_' + v, () => {
     const r = mulberry(900 + v * 7);
     const half = v === 3;
-    const g = new THREE.BoxGeometry(half ? 0.12 : 0.24, 0.068, 0.115, 2, 1, 1);
+    const W0 = half ? 0.12 : 0.24;
+    const g = new RoundedBoxGeometry(W0, 0.068, 0.115, 2, 0.008).toNonIndexed();
     const P = g.attributes.position;
+    // quinas comidas: 1–2 cantos aleatórios afundados
+    const bites = Array.from({ length: 1 + Math.floor(r() * 2) }, () => [Math.sign(r() - 0.5) * W0 / 2, Math.sign(r() - 0.5) * 0.034, Math.sign(r() - 0.5) * 0.0575, 0.03 + r() * 0.035]);
+    const mort = [r() * 6, r() * 6, 0.3 + r() * 0.4];
+    const col = new Float32Array(P.count * 3);
     for (let i = 0; i < P.count; i++) {
-      const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
-      const corner = Math.abs(x) > 0.05 && r() < 0.35;
-      const k = corner ? 0.7 + r() * 0.2 : 0.96 + r() * 0.06;
-      P.setXYZ(i, x * k, y * (0.94 + r() * 0.08), z * (corner ? 0.8 : 0.97 + r() * 0.05));
+      let x = P.getX(i), y = P.getY(i), z = P.getZ(i);
+      for (const [bx, by, bz, br] of bites) {
+        const d = Math.hypot(x - bx, y - by, z - bz);
+        if (d < br) {
+          const k = (br - d) * 0.7;
+          x -= Math.sign(bx) * k; y -= Math.sign(by) * k * 0.6; z -= Math.sign(bz) * k;
+        }
+      }
+      // abaulado + rugosidade de barro cozido
+      const n = Math.sin(x * 80 + mort[0]) * Math.sin(z * 90 + mort[1]) * 0.0015;
+      P.setXYZ(i, x * (1 + n * 8), y * (1.0 + Math.cos(x * 20) * 0.04) + n, z * (1 + n * 6));
+      // argamassa aderida: manchas claras nas faces de assentamento
+      const m = Math.abs(y) > 0.03 && Math.sin(x * 37 + mort[0]) * Math.cos(z * 41 + mort[1]) > 0.75 - mort[2] * 0.4 ? 1 : 0;
+      const tone = 0.92 + r() * 0.08;
+      col[i * 3] = tone + m * 0.3; col[i * 3 + 1] = tone + m * 0.36; col[i * 3 + 2] = tone + m * 0.42;
     }
-    const ng = g.toNonIndexed();
-    ng.computeVertexNormals();
-    return ng;
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    return g;
+  });
+
+/** Grão de entulho fino (1–4 cm): octaedro amassado, 8 faces — barato para milhares. */
+export const gritGeo = (v) =>
+  cached('rgrit' + v, () => {
+    const g = new THREE.OctahedronGeometry(1, 0).toNonIndexed();
+    const r = mulberry(1500 + v * 11);
+    const P = g.attributes.position;
+    const key = new Map();
+    for (let i = 0; i < P.count; i++) {
+      const k = `${P.getX(i).toFixed(2)},${P.getY(i).toFixed(2)},${P.getZ(i).toFixed(2)}`;
+      let d = key.get(k);
+      if (!d) key.set(k, (d = [0.6 + r() * 0.7, 0.4 + r() * 0.4, 0.6 + r() * 0.7]));
+      P.setXYZ(i, P.getX(i) * d[0], P.getY(i) * d[1], P.getZ(i) * d[2]);
+    }
+    g.computeVertexNormals();
+    return g;
   });
 
 /** Torrão de alvenaria: 4–7 tijolos ainda presos pela argamassa. */
@@ -188,10 +230,14 @@ function merge(geos) {
 }
 
 // tijolos soltos empoeirados (pó de reboco por cima: menos saturados que na parede)
-const BRICK_T = [[0.52, 0.34, 0.27], [0.43, 0.3, 0.25], [0.57, 0.42, 0.34], [0.5, 0.45, 0.4], [0.48, 0.35, 0.29], [0.34, 0.26, 0.22]];
+const BRICK_T = [[0.52, 0.34, 0.27], [0.43, 0.3, 0.25], [0.57, 0.42, 0.34], [0.5, 0.45, 0.4], [0.48, 0.35, 0.29], [0.34, 0.26, 0.22],
+  // cobertos de pó de reboco, queimados/fuligem, refratário amarelado
+  [0.54, 0.46, 0.4], [0.3, 0.24, 0.21], [0.58, 0.46, 0.34], [0.45, 0.38, 0.33]];
+/** Tom de tijolo com variação contínua (dois tijolos nunca iguais). */
+const brickTone = (rng) => rng.pick(BRICK_T).map((c) => c * (0.88 + rng.next() * 0.22));
 // concreto quente e sujo de pó (cinza puro lia azulado sob o céu)
 // concreto velho com pó (albedo real ~0,3–0,45): tons claros demais viravam papelão sob o sol
-const CONC_T = [[0.53, 0.5, 0.45], [0.46, 0.43, 0.39], [0.57, 0.53, 0.47], [0.37, 0.35, 0.33], [0.5, 0.46, 0.41], [0.31, 0.29, 0.27]];
+const CONC_T = [[0.6, 0.57, 0.51], [0.53, 0.5, 0.45], [0.64, 0.6, 0.53], [0.45, 0.43, 0.4], [0.57, 0.53, 0.47], [0.39, 0.37, 0.34]];
 
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
@@ -322,18 +368,18 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
     const kind = rng.next();
     if (kind < brickK * 0.55) {
       const v = rng.int(0, 3);
-      I.add('rbrick' + v, brickGeo(v), 'rubbleB', onSlope(place(lx, lz, 0.02), n, rng.range(0, 6.28), [rng.range(-0.5, 0.5), rng.range(-0.9, 0.9)], 1), rng.pick(BRICK_T), { shadow: true });
+      I.add('rbrick' + v, brickGeo(v), 'rubbleB', onSlope(place(lx, lz, 0.02), n, rng.range(0, 6.28), [rng.range(-0.5, 0.5), rng.range(-0.9, 0.9)], 1), brickTone(rng), { shadow: true });
     } else if (kind < brickK * 0.8) {
       const v = rng.int(0, 2);
-      I.add('rclus' + v, clusterGeo(v), 'rubbleB', onSlope(place(lx, lz, 0.0), n, rng.range(0, 6.28), [rng.range(-0.6, 0.6), rng.range(-0.6, 0.6)], rng.range(0.85, 1.15)), rng.pick(BRICK_T));
-    } else if (kind < 0.93) {
+      I.add('rclus' + v, clusterGeo(v), 'rubbleB', onSlope(place(lx, lz, 0.0), n, rng.range(0, 6.28), [rng.range(-0.6, 0.6), rng.range(-0.6, 0.6)], rng.range(0.85, 1.15)), brickTone(rng));
+    } else if (kind < 0.97) {
       const s = rng.range(0.1, 0.3);
       const v = rng.int(0, 7);
       I.add('rchunk' + v, chunkGeo(v), 'rubbleC', onSlope(place(lx, lz, s * 0.15), n, rng.range(0, 6.28), [rng.range(-0.8, 0.8), rng.range(-0.8, 0.8)], s), rng.chance(0.25) ? tint.map((c) => c * 0.72) : rng.pick(CONC_T));
     } else {
       const s = rng.range(0.22, 0.45);
       const v = rng.int(0, 2);
-      I.add('rsheet' + v, sheetGeo(v), 'rubbleC', onSlope(place(lx, lz, 0.02), n, rng.range(0, 6.28), [rng.range(-0.5, 0.5), rng.range(-0.5, 0.5)], [s, 1, s]), tint.map((c) => c * rng.range(0.6, 0.8)));
+      I.add('rsheet' + v, sheetGeo(v), 'rubbleC', onSlope(place(lx, lz, 0.02), n, rng.range(0, 6.28), [rng.range(-0.5, 0.5), rng.range(-0.5, 0.5)], [s, 1, s]), tint.map((c) => c * rng.range(0.5, 0.65)));
     }
   }
   // ── talude de cascalho miúdo (sem sombra) ──
@@ -345,7 +391,19 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
     const s = rng.range(0.03, 0.12);
     const v = rng.int(0, 7);
     const red = rng.chance(brickK * 0.5);
-    I.add('rchunk' + v, chunkGeo(v), 'rubbleC', mat4(place(lx, lz, s * 0.2), [rng.range(0, 6), rng.range(0, 6), rng.range(0, 6)], s), red ? rng.pick(BRICK_T) : rng.pick(CONC_T), { shadow: false });
+    I.add('rchunk' + v, chunkGeo(v), 'rubbleC', mat4(place(lx, lz, s * 0.2), [rng.range(0, 6), rng.range(0, 6), rng.range(0, 6)], s), red ? brickTone(rng) : rng.pick(CONC_T), { shadow: false });
+  }
+  // ── camada fina: grãos de 1–4 cm e pó grosso (sem sombra) sobre o monte
+  // inteiro e escorrendo além do pé — o que tira o ar "facetado" de
+  // pedaços soltos sobre uma superfície lisa
+  const nGrit = Math.round(r * r * 110 * (opts.density ?? 1)) + 40;
+  for (let i = 0; i < nGrit; i++) {
+    const a = rng.range(0, Math.PI * 2), d = r * Math.pow(rng.next(), 0.6) * 1.45;
+    const lx = Math.cos(a) * d, lz = Math.sin(a) * d;
+    const s = rng.range(0.008, 0.032) * (d > r ? 0.8 : 1);
+    const v = rng.int(0, 5);
+    const c = rng.chance(brickK * 0.35) ? brickTone(rng) : rng.pick(CONC_T).map((q) => q * rng.range(0.75, 1.1));
+    I.add('rgrit' + v, gritGeo(v), 'rubbleC', mat4(place(lx, lz, s * 0.3), [rng.range(0, 6), rng.range(0, 6), rng.range(0, 6)], s), c, { shadow: false });
   }
   // ── vergalhões, canos e tábuas ──
   const nBar = Math.round(r * (opts.rebar ?? 3.4));
@@ -392,6 +450,14 @@ export function scatterDebris(W, x, z, r, n, opts = {}) {
       decal(W.B, 'stains', [c[0], y + 0.014 + rng.range(0, 0.002), c[1]], 'py', [s0, s0 * rng.range(0.7, 1.0)], [0, 0.5, 0.5, 1], rng.range(0, 6.28), [1.12, 1.06, 0.96]);
     }
   }
+  // grãos finos em volta de cada aglomerado (pó grosso, cascalho miúdo)
+  for (let i = 0; i < n * 3; i++) {
+    const c = centers[i % nc];
+    const a = rng.range(0, Math.PI * 2), d = Math.pow(rng.next(), 0.8) * Math.min(r, 1.4);
+    const s = rng.range(0.007, 0.025);
+    const gv = rng.int(0, 5);
+    I.add('rgrit' + gv, gritGeo(gv), 'rubbleC', mat4([c[0] + Math.cos(a) * d, y + s * 0.25, c[1] + Math.sin(a) * d], [rng.range(0, 6), rng.range(0, 6), rng.range(0, 6)], s), rng.pick(CONC_T).map((q) => q * rng.range(0.7, 1.05)), { shadow: false });
+  }
   for (let i = 0; i < n; i++) {
     const c = centers[i % nc];
     const a = rng.range(0, Math.PI * 2), d = Math.pow(rng.next(), 1.6) * Math.min(r, 1.2);
@@ -401,7 +467,7 @@ export function scatterDebris(W, x, z, r, n, opts = {}) {
       const v = rng.int(0, 3);
       const onEdge = rng.chance(0.15);
       const bs = rng.range(0.7, 1.15);
-      I.add('rbrick' + v, brickGeo(v), 'rubbleB', mat4([px, y + (onEdge ? 0.055 : 0.03) * bs, pz], [onEdge ? Math.PI / 2 : rng.range(-0.15, 0.15), rng.range(0, 6.28), rng.range(-0.15, 0.15)], bs), rng.pick(BRICK_T), { shadow: true });
+      I.add('rbrick' + v, brickGeo(v), 'rubbleB', mat4([px, y + (onEdge ? 0.055 : 0.03) * bs, pz], [onEdge ? Math.PI / 2 : rng.range(-0.15, 0.15), rng.range(0, 6.28), rng.range(-0.15, 0.15)], bs), brickTone(rng), { shadow: true });
     } else if (k < 0.92) {
       // pedaço de concreto meio enterrado no próprio pó (centro abaixo do
       // chão): assenta em vez de pousar numa quina

@@ -35,6 +35,10 @@ export class ShadowFitter {
     this.radius = { low: 30, medium: 34, high: 38, ultra: 46 }[lvl] ?? 38;
     const base = quality.shadowMapSize || 2048;
     this.mapSize = { low: base, medium: Math.max(base, 2048), high: Math.max(base, 4096), ultra: Math.max(base, 4096) }[lvl] ?? base;
+    // governador de desempenho (quality.shadowScale 0,25..1): corta a
+    // resolução do mapa antes de trocar de preset (potência de 2, ≥ 512)
+    const k = Math.max(0.125, Math.min(1, quality.shadowScale ?? 1));
+    if (k < 1) this.mapSize = Math.max(512, 2 ** Math.round(Math.log2(this.mapSize * k)));
     this.softness = { low: 1.2, medium: 1.3, high: 1.1, ultra: 1.2 }[lvl] ?? 1.2;
   }
 

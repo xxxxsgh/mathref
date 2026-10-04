@@ -1,8 +1,10 @@
 /**
- * Feature `world` — o mapa "Distrito Velho": bairro urbano destruído
- * (Leste Europeu / Oriente Médio) com fachadas detalhadas, materiais PBR
- * procedurais, céu atmosférico, iluminação de sol baixo com sombras e um
- * interior jogável.
+ * Feature `world` — mapas (`?map=street|factory`, padrão street):
+ *   street   "MERIDIAN STREET" (Distrito Velho): bairro urbano destruído com
+ *            fachadas detalhadas e o térreo jogável do prédio R4;
+ *   factory  "FOUNDRY 9": fundição abandonada em vários níveis (galpão com
+ *            ponte rolante, passarelas, escritórios, pátio de carga).
+ * Materiais PBR procedurais, céu atmosférico, sol baixo com sombras.
  *
  * Arquivos desta pasta:
  *   noise.js      ruído tileável (fBm, Worley, rachaduras) + normal/AO
@@ -11,15 +13,20 @@
  *   materials.js  materiais + patch de intemperismo em espaço de mundo
  *   geo.js        Builder: mescla por (material, chunk), UV de mundo, colisores
  *   shapes.js     cilindros, cabos em catenária, vergalhões, decalques
+ *   propkit.js    peças boleadas com UV/desgaste/AO assados, variação por instância
+ *   furniture.js  mobília modelada (mesas, cadeiras, arquivo, armário, estante)
  *   buildings.js  gerador paramétrico de prédios
- *   props.js      carros, barreiras, sacos de areia, entulho, árvores…
- *   interior.js   térreo jogável do prédio R4
- *   layout.js     planta do mapa
+ *   props.js      barreiras, sacos, entulho, caixas, caçambas, lixo…
+ *   cars.js       carros (carroceria em loft, interior, rodas)
+ *   interior.js   térreo jogável do prédio R4 (street)
+ *   layout.js     planta do mapa street
+ *   factory.js    planta e peças do mapa factory
  *   sky.js        céu, montanhas, envmap
  *
  * Contrato (CONTRACT.md → services.world): root, sun, hemi, bounds,
  * spawnPoints, enemySpawns, shotPoses, materialAt — mais extras:
- * environment, sky, atmosphere, interior, stats.
+ * environment, sky, atmosphere, interior, stats, mapId, map, maps,
+ * mapUrl(id), setMap(id). Detalhes em README.md desta pasta.
  */
 import * as THREE from 'three';
 import { createMaterials, SURFACE, weather, setOcclusionVolumes } from './materials.js';
@@ -35,6 +42,62 @@ import { vegetationMaterials, FOLIAGE_U } from './vegetation.js';
 import { makeRng } from './noise.js';
 import { buildLayout } from './layout.js';
 import { ROOM } from './interior.js';
+import { buildFactory, factoryMaterials, FACTORY } from './factory.js';
+import { LAYOUT } from './materials.js';
+
+/**
+ * Mapas disponíveis. Seleção por URL: `?map=street|factory` (padrão street).
+ * Trocar de mapa = recarregar a página com o parâmetro (ver docs/IRONLINE.md).
+ */
+export const MAPS = [
+  { id: 'street', name: 'MERIDIAN STREET', description: 'Avenida destruída de um bairro urbano: fachadas, cruzamento, ruela, posto de controle e o térreo jogável do prédio R4.' },
+  { id: 'factory', name: 'FOUNDRY 9', description: 'Fundição abandonada: galpão de máquinas com ponte rolante, passarelas, escritórios de dois pisos e pátio de carga com doca e contêineres.' },
+];
+
+/** Dados do mapa de rua (o original). */
+const STREET = {
+  id: 'street',
+  bounds: [[-23.5, -1, -150], [23.5, 40, 60]],
+  spawnPoints: [
+    { position: [0, 0, 20], yaw: 0, pitch: 0 },
+    { position: [3, 0, 46], yaw: 0, pitch: 0 },
+    { position: [17, ROOM.floor, -6], yaw: Math.PI / 2, pitch: 0 },
+  ],
+  enemySpawns: [
+    { position: [1.2, 0, -8.5], yaw: Math.PI },
+    { position: [-2.5, 0, -24], yaw: Math.PI },
+    { position: [3.5, 0, -35.5], yaw: Math.PI },
+    { position: [0, 0, -44.5], yaw: Math.PI },
+    { position: [-4, 0, -58], yaw: Math.PI },
+  ],
+  shotPoses: {
+    street: { position: [-1.6, 0, 26], yaw: -0.07, pitch: 0.035 },
+    interior: { position: [17.2, ROOM.floor, -4.3], yaw: Math.PI / 2 + 0.05, pitch: -0.06 },
+    viewmodel: { position: [-0.6, 0, 20], yaw: 0.2, pitch: -0.04 },
+    ads: { position: [0, 0, 18], yaw: 0, pitch: 0.0 },
+    combat: { position: [0.5, 0, 12.5], yaw: 0.05, pitch: 0.0 },
+    menu: { position: [-3.5, 0.15, 33], yaw: -0.42, pitch: 0.09 },
+  },
+  occlusion: [{ min: [ROOM.x0, -0.2, ROOM.z0], max: [ROOM.x1, ROOM.h + 0.25, ROOM.z1], k: 0.36 }],
+  fires: [
+    { x: -2.8, y: 0.42, z: -12, w: 1.8, d: 1.3, h: 1.9, light: 45, range: 10, tongues: 8, embers: 40, smoke: 44, smokeH: 18 },
+    { x: -3.5, y: 0.75, z: -12.9, w: 0.7, h: 0.7, tongues: 3, embers: 8 },
+    // luz pontual NÃO projeta sombra: esta pilha fica colada ao interior jogável,
+    // então sem luz própria (vazaria pela parede e acenderia o teto da sala)
+    { x: 6.6, y: 0.18, z: 2.0, w: 0.9, h: 1.1, light: 0, range: 9, tongues: 5, embers: 24, smoke: 14, smokeH: 10 },
+    { x: 6.6, y: 0.88, z: -29.5, w: 0.5, h: 0.75, tongues: 4, embers: 14 },
+    { x: -8.3, y: 0.9, z: -96, w: 1.2, h: 1.2, tongues: 5, embers: 16 },
+    { x: 3.2, y: 0.5, z: -78, w: 1.3, h: 1.3, tongues: 5, embers: 16 },
+  ],
+  smoke: [
+    { x: 30, z: -105, h: 70, w: 15, seed: 0.13 },
+    { x: -46, z: -140, h: 85, w: 20, seed: 0.57 },
+    { x: 70, z: -60, h: 55, w: 12, seed: 0.81 },
+    { x: -80, z: -40, h: 60, w: 15, seed: 0.33 },
+  ],
+  build: (W) => buildLayout(W),
+};
+const MAP_DATA = { street: STREET, factory: { ...FACTORY, build: (W) => buildFactory(W) } };
 import { createSky, createMountains, createEnvironment, ATMOS } from './sky.js';
 
 const SHADOW_EXTENT = 48;
@@ -46,6 +109,12 @@ export default {
   init(ctx) {
     const { scene, collision, quality, renderer } = ctx;
     const t0 = performance.now();
+    // ── seleção de mapa (?map=street|factory) ──
+    const req = String(ctx.params?.get?.('map') || 'street').toLowerCase();
+    const mapId = MAP_DATA[req] ? req : 'street';
+    if (req !== mapId) console.warn(`[world] mapa desconhecido "${req}", usando street`);
+    const MAP = MAP_DATA[mapId];
+    this.mapId = mapId;
     const root = new THREE.Group();
     root.name = 'world';
     scene.add(root);
@@ -117,7 +186,17 @@ export default {
     for (const k of ['streaks', 'soot', 'cracks', 'bullets', 'bulletsM', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs', 'contact']) {
       weather(mats[k], { macro: 0, ground: 0, streaks: 0, dust: 0 });
     }
-    setOcclusionVolumes([{ min: [ROOM.x0, -0.2, ROOM.z0], max: [ROOM.x1, ROOM.h + 0.25, ROOM.z1], k: 0.36 }]);
+    setOcclusionVolumes(MAP.occlusion);
+    if (mapId === 'factory') {
+      factoryMaterials(mats);
+      LAYOUT.uRoom.value.set(...MAP.room);
+      LAYOUT.uPath.value.set(...MAP.path);
+      LAYOUT.uWalk.value.set(0, 0);
+    } else {
+      LAYOUT.uRoom.value.set(9.8, -13.7, 23.2, 1.7);
+      LAYOUT.uPath.value.set(ROOM.x0 + 0.3, -4.0, 17.0, -5.5);
+      LAYOUT.uWalk.value.set(6.0, 9.5);
+    }
     this.mats = mats;
 
     // ── céu, névoa, luzes ──
@@ -158,10 +237,10 @@ export default {
       trashSpots: [],
     };
     W.B.realShadows = quality.level === 'high' || quality.level === 'ultra';
-    buildLayout(W);
+    MAP.build(W);
     const tris = W.B.tris;
     const decals = new Set(['streaks', 'soot', 'cracks', 'bullets', 'bulletsM', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs', 'contact']);
-    const meshes = W.B.build(root, mats, { noShadow: new Set([...decals, 'room']) });
+    const meshes = W.B.build(root, mats, { noShadow: new Set([...decals, 'room', 'fglass', 'fsign', 'puddle']) });
     const inst = W.I.build(root, mats);
     // entulho miúdo partido em células (props.js): some além de uma
     // distância — um pedaço de 20 cm a 90 m ocupa menos de um pixel
@@ -171,30 +250,12 @@ export default {
 
     // ── colunas de fumaça de incêndios distantes ──
     if (quality.level !== 'low') {
-      this.smoke = createSmoke([
-        { x: 30, z: -105, h: 70, w: 15, seed: 0.13 },
-        { x: -46, z: -140, h: 85, w: 20, seed: 0.57 },
-        { x: 70, z: -60, h: 55, w: 12, seed: 0.81 },
-        { x: -80, z: -40, h: 60, w: 15, seed: 0.33 },
-      ], ATMOS);
+      this.smoke = createSmoke(MAP.smoke, ATMOS);
       scene.add(this.smoke);
     }
     // ── focos de incêndio: luz local quente (contraste) ──
-    {
-      const fr = makeRng(777);
-      const fires = [
-        { x: -2.8, y: 0.42, z: -12, w: 1.8, d: 1.3, h: 1.9, light: 45, range: 10, tongues: 8, embers: 40, smoke: 44, smokeH: 18 },
-        { x: -3.5, y: 0.75, z: -12.9, w: 0.7, h: 0.7, tongues: 3, embers: 8 },
-        // luz pontual NÃO projeta sombra: esta pilha fica colada ao interior jogável,
-        // então sem luz própria (vazaria pela parede e acenderia o teto da sala)
-        { x: 6.6, y: 0.18, z: 2.0, w: 0.9, h: 1.1, light: 0, range: 9, tongues: 5, embers: 24, smoke: 14, smokeH: 10 },
-        { x: 6.6, y: 0.88, z: -29.5, w: 0.5, h: 0.75, tongues: 4, embers: 14 },
-        { x: -8.3, y: 0.9, z: -96, w: 1.2, h: 1.2, tongues: 5, embers: 16 },
-        { x: 3.2, y: 0.5, z: -78, w: 1.3, h: 1.3, tongues: 5, embers: 16 },
-      ];
-      this.fire = createFires(fires, fr);
-      root.add(this.fire);
-    }
+    this.fire = createFires(MAP.fires, makeRng(777));
+    root.add(this.fire);
 
     // ── IBL ──
     // O ambiente vai em scene.environment (todos os PBR recebem IBL difuso e
@@ -219,14 +280,7 @@ export default {
       colliders: collision.colliders.size,
     };
 
-    const shotPoses = {
-      street: { position: [-1.6, 0, 26], yaw: -0.07, pitch: 0.035 },
-      interior: { position: [17.2, ROOM.floor, -4.3], yaw: Math.PI / 2 + 0.05, pitch: -0.06 },
-      viewmodel: { position: [-0.6, 0, 20], yaw: 0.2, pitch: -0.04 },
-      ads: { position: [0, 0, 18], yaw: 0, pitch: 0.0 },
-      combat: { position: [0.5, 0, 12.5], yaw: 0.05, pitch: 0.0 },
-      menu: { position: [-3.5, 0.15, 33], yaw: -0.42, pitch: 0.09 },
-    };
+    const shotPoses = JSON.parse(JSON.stringify(MAP.shotPoses));
 
     // depuração: ?wpose=x,y,z,yaw,pitch substitui a pose do preset atual
     const wp = ctx.params.get('wpose');
@@ -242,21 +296,27 @@ export default {
       sky,
       environment,
       atmosphere: ATMOS,
-      bounds: new THREE.Box3(new THREE.Vector3(-23.5, -1, -150), new THREE.Vector3(23.5, 40, 60)),
-      spawnPoints: [
-        { position: [0, 0, 20], yaw: 0, pitch: 0 },
-        { position: [3, 0, 46], yaw: 0, pitch: 0 },
-        { position: [17, ROOM.floor, -6], yaw: Math.PI / 2, pitch: 0 },
-      ],
-      enemySpawns: [
-        { position: [1.2, 0, -8.5], yaw: Math.PI },
-        { position: [-2.5, 0, -24], yaw: Math.PI },
-        { position: [3.5, 0, -35.5], yaw: Math.PI },
-        { position: [0, 0, -44.5], yaw: Math.PI },
-        { position: [-4, 0, -58], yaw: Math.PI },
-      ],
+      bounds: new THREE.Box3(new THREE.Vector3(...MAP.bounds[0]), new THREE.Vector3(...MAP.bounds[1])),
+      spawnPoints: MAP.spawnPoints.map((p) => ({ ...p, position: [...p.position] })),
+      enemySpawns: MAP.enemySpawns.map((p) => ({ ...p, position: [...p.position] })),
       shotPoses,
-      interior: { ...ROOM },
+      interior: mapId === 'street' ? { ...ROOM } : null,
+      /** Mapa carregado e lista de mapas ({ id, name, description }). */
+      mapId,
+      maps: MAPS.map((m) => ({ ...m })),
+      map: { ...MAPS.find((m) => m.id === mapId) },
+      /** URL desta página com outro mapa (trocar = navegar/recarregar). */
+      mapUrl: (id) => {
+        const u = new URL(window.location.href);
+        u.searchParams.set('map', id);
+        return u.toString();
+      },
+      /** Troca de mapa: recarrega a página com ?map=<id>. */
+      setMap: (id) => {
+        if (!MAP_DATA[id] || id === mapId) return false;
+        window.location.assign(ctx.services.world.mapUrl(id));
+        return true;
+      },
       stats: this.stats,
       /** Material de superfície num ponto (para passos, impactos). */
       materialAt: (hit) => hit?.collider?.material || 'concrete',
