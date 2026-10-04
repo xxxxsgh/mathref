@@ -44,6 +44,7 @@ const gauss = (d, w) => Math.exp(-((d / w) ** 2));
 const C_FAB = [0.05, 0.052, 0.035]; // tecido verde-oliva (dorso)
 const C_LEA = [0.026, 0.025, 0.024]; // couro sintético (palma, pontas)
 const C_TPU = [0.017, 0.017, 0.017]; // protetor moldado / almofadas
+const C_PAN = [0.03, 0.031, 0.024]; // painel dorsal de borracha (verde quase preto)
 const mix3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 /** z da junta MCP interpolado pela posição x (arco dos nós). */
@@ -109,7 +110,12 @@ function palmGeo(fb, tb) {
       let pad = padU * padX * sm(0.35, 0.6, s);
       let groove = 0;
       for (const gx of [-0.0202, 0.0, 0.0197]) groove += gauss(x - gx, 0.0014);
-      y += (0.0017 - 0.0011 * groove) * pad;
+      y += (0.0024 - 0.0014 * groove) * pad;
+      // painel dorsal de borracha fina sobre os metacarpos (borda em relevo)
+      const dPanU = sm(0.24, 0.29, u) * (1 - sm(0.59, 0.64, u));
+      const dPanX = 1 - sm(0.023, 0.027, Math.abs(x + 0.002 - 0.003 * u));
+      const dpan = dPanU * dPanX * sm(0.35, 0.6, s);
+      y += 0.001 * dpan;
       // eixo: z do punho até os nós (a palma vai além dos nós na face palmar: membrana)
       const zf = mcpZ(x) + 0.004 + 0.009 * Math.min(0, s);
       const z = zW + (zf - zW) * u;
@@ -121,13 +127,12 @@ function palmGeo(fb, tb) {
       const pal = sm(0.05, -0.25, s); // 1 = face palmar
       let C = mix3(C_FAB, C_LEA, pal);
       C = mix3(C, C_TPU, pad);
-      // costuras: lateral (palma/dorso), borda do protetor, faixa do punho
+      C = mix3(C, C_PAN, dpan * 0.9);
+      // costuras: lateral (palma/dorso), borda do protetor e do painel, faixa do punho
       let seam = gauss(s + 0.1, 0.05);
       seam += gauss(padU * padX - 0.5, 0.18) * (s > 0.3 ? 1 : 0) * 0.7;
       seam += gauss(u - 0.16, 0.012) * (s > -0.2 ? 0.8 : 0);
-      // costuras do painel dorsal (do protetor de nós até a faixa do punho)
-      const dors = s > 0.4 ? sm(0.18, 0.24, u) * (1 - sm(0.66, 0.71, u)) : 0;
-      seam += (gauss(x + 0.024 - 0.006 * u, 0.0011) + gauss(x - 0.021 + 0.004 * u, 0.0011)) * dors;
+      seam += gauss(dpan - 0.5, 0.16) * (s > 0.3 ? 0.8 : 0);
       const dk = 1 - 0.45 * Math.min(1, seam);
       col.push(C[0] * dk, C[1] * dk, C[2] * dk);
       // ─ skinning ─

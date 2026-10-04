@@ -19,17 +19,19 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { cached } from './geo.js';
 
 const q3 = (v) => Math.round(v * 1000) / 1000;
+/** toNonIndexed só quando indexada (evita o aviso do three). */
+export const nonIndexed = (g) => (g.index ? g.toNonIndexed() : g);
 
 /**
  * Caixa boleada w×h×d com raio r e UV em metros (u ao longo do maior lado
  * da face). `wear` (0..1) clareia as quinas; `cav` escurece a face de baixo.
  * Cacheada por dimensões (geometria compartilhada entre peças iguais).
  */
-export function bevelBox(w, h, d, r = 0.01, { wear = 0.25, seg = 2, uvScale = 1 } = {}) {
+export function bevelBox(w, h, d, r = 0.01, { wear = 0.25, seg = 1, uvScale = 1 } = {}) {
   w = q3(w); h = q3(h); d = q3(d);
   const rr = q3(Math.max(0.001, Math.min(r, w / 2.05, h / 2.05, d / 2.05)));
   return cached(`bbox_${w}_${h}_${d}_${rr}_${wear}_${seg}_${uvScale}`, () => {
-    const g = new RoundedBoxGeometry(w, h, d, seg, rr).toNonIndexed();
+    const g = nonIndexed(new RoundedBoxGeometry(w, h, d, seg, rr));
     const P = g.attributes.position, N = g.attributes.normal;
     const uv = new Float32Array(P.count * 2);
     const col = new Float32Array(P.count * 3);
@@ -147,7 +149,7 @@ export const CRATE_RECT = { sideA: [0, 0.5, 0.5, 1], sideB: [0.5, 0.5, 1, 1], en
  */
 export function atlasBox(w, h, d, r, rects, key) {
   return cached(`abox_${key}_${q3(w)}_${q3(h)}_${q3(d)}_${q3(r)}`, () => {
-    const g = new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2.05, h / 2.05, d / 2.05)).toNonIndexed();
+    const g = nonIndexed(new RoundedBoxGeometry(w, h, d, 1, Math.min(r, w / 2.05, h / 2.05, d / 2.05)));
     const P = g.attributes.position, N = g.attributes.normal;
     const uv = new Float32Array(P.count * 2), col = new Float32Array(P.count * 3);
     const fn = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
@@ -181,12 +183,11 @@ export function atlasBox(w, h, d, r, rects, key) {
  * talão e banda de rodagem com BLOCOS (sulcos em V e canal central) —
  * deslocamento radial por ângulo × posição lateral. Eixo = Y (deitado).
  */
-export const treadTire = (v = 0) =>
-  cached('tire3_' + v, () => {
+export const treadTire = (v = 0, radial = 72, n = 22) =>
+  cached(`tire3_${v}_${radial}_${n}`, () => {
     const R = 0.33, Ri = 0.21, Wd = 0.2;
     const prof = [];
     // de dentro (talão, embaixo) → flanco → banda → flanco → talão (em cima)
-    const n = 22;
     for (let i = 0; i <= n; i++) {
       const t = i / n, a = -Math.PI / 2 + t * Math.PI;
       // superelipse: banda larga e quase plana, ombro arredondado
@@ -194,9 +195,9 @@ export const treadTire = (v = 0) =>
       const rr = Ri + (R - Ri) * Math.pow(Math.abs(c), 0.35);
       prof.push(new THREE.Vector2(rr, Math.sign(s2) * Math.pow(Math.abs(s2), 0.55) * Wd / 2));
     }
-    const g = new THREE.LatheGeometry(prof, 72);
+    const g = new THREE.LatheGeometry(prof, radial);
     const P = g.attributes.position;
-    const seg = 36 + v * 4;
+    const seg = Math.min(36 + v * 4, Math.floor(radial / 2) - 2);
     for (let i = 0; i < P.count; i++) {
       const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
       const r = Math.hypot(x, z);

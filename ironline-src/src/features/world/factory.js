@@ -1211,7 +1211,7 @@ function trailer(W, xRear, z) {
   for (const dx of [2.2, 3.5, 4.8]) for (const s of [-1, 1]) {
     const tk = 0.5 / 0.33;
     const tz = z + s * (Wd / 2 - 0.35);
-    B.add(cached('trtire', () => treadTire(0).clone().rotateX(Math.PI / 2)), 'rubber', mat4([xRear - dx, 0.5, tz], [0, 0, rng.range(0, 6)], [tk, tk, 1.4]), { color: [0.85, 0.85, 0.83] });
+    B.add(cached('trtire', () => treadTire(0, 48, 12).clone().rotateX(Math.PI / 2)), 'rubber', mat4([xRear - dx, 0.5, tz], [0, 0, rng.range(0, 6)], [tk, tk, 1.4]), { color: [0.85, 0.85, 0.83] });
     B.add(cyl(16), 'metal', mat4([xRear - dx, 0.5, z + s * (Wd / 2 - 0.2)], [Math.PI / 2, 0, 0], [0.22, 0.05, 0.22]), { color: [0.5, 0.48, 0.45] });
   }
   // pés de apoio dianteiros

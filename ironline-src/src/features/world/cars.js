@@ -19,7 +19,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { treadTire, bevelBox, bevelCyl, part, vary } from './propkit.js';
 
 /** Pneu com banda de rodagem em blocos, eixo Z (rodando no plano XY do carro). */
-const carTire = (v) => cached('cartireZ' + v, () => treadTire(v).clone().rotateX(Math.PI / 2));
+const carTire = (v) => cached('cartireZ' + v, () => treadTire(v, 48, 12).clone().rotateX(Math.PI / 2));
 
 const KINDS = {
   sedan: {

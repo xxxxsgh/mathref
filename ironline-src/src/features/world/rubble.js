@@ -23,6 +23,7 @@ import { mulberry } from './noise.js';
 import { rebar, decal, cylBetween, contact } from './shapes.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
+import { nonIndexed } from './propkit.js';
 
 // ─── ruído de valor 2D simples (para a altura do monte) ────────────────
 function vnoise(x, z, seed) {
@@ -103,12 +104,13 @@ export const slabGeo = (v) =>
  * abauladas e restos de argamassa (cor de vértice clara em manchas) —
  * variantes com meio tijolo e tijolo furado.
  */
-export const brickGeo = (v) =>
-  cached('rbrick2_' + v, () => {
+export const brickGeo = (v, cheap = false) =>
+  cached('rbrick2_' + v + (cheap ? 'c' : ''), () => {
     const r = mulberry(900 + v * 7);
     const half = v === 3;
     const W0 = half ? 0.12 : 0.24;
-    const g = new RoundedBoxGeometry(W0, 0.068, 0.115, 2, 0.008).toNonIndexed();
+    // barata (torrões, dentro do monte): caixa 2×1×1 sem bisel
+    const g = cheap ? nonIndexed(new THREE.BoxGeometry(W0, 0.068, 0.115, 2, 1, 1)) : nonIndexed(new RoundedBoxGeometry(W0, 0.068, 0.115, 1, 0.008));
     const P = g.attributes.position;
     // quinas comidas: 1–2 cantos aleatórios afundados
     const bites = Array.from({ length: 1 + Math.floor(r() * 2) }, () => [Math.sign(r() - 0.5) * W0 / 2, Math.sign(r() - 0.5) * 0.034, Math.sign(r() - 0.5) * 0.0575, 0.03 + r() * 0.035]);
@@ -139,7 +141,7 @@ export const brickGeo = (v) =>
 /** Grão de entulho fino (1–4 cm): octaedro amassado, 8 faces — barato para milhares. */
 export const gritGeo = (v) =>
   cached('rgrit' + v, () => {
-    const g = new THREE.OctahedronGeometry(1, 0).toNonIndexed();
+    const g = nonIndexed(new THREE.OctahedronGeometry(1, 0));
     const r = mulberry(1500 + v * 11);
     const P = g.attributes.position;
     const key = new Map();
@@ -162,7 +164,7 @@ export const clusterGeo = (v) =>
     for (let row = 0; row < rows; row++) {
       const n = 2 + Math.floor(r() * 2);
       for (let k = 0; k < n; k++) {
-        const b = brickGeo(Math.floor(r() * 3)).clone();
+        const b = brickGeo(Math.floor(r() * 3), true).clone();
         b.translate(k * 0.25 + (row % 2) * 0.125 - 0.25, row * 0.078, 0);
         parts.push(b);
       }
@@ -396,12 +398,12 @@ export function rubblePile(W, x, z, r, h, opts = {}) {
   // ── camada fina: grãos de 1–4 cm e pó grosso (sem sombra) sobre o monte
   // inteiro e escorrendo além do pé — o que tira o ar "facetado" de
   // pedaços soltos sobre uma superfície lisa
-  const nGrit = Math.round(r * r * 110 * (opts.density ?? 1)) + 40;
+  const nGrit = Math.round(r * r * 55 * (opts.density ?? 1)) + 24;
   for (let i = 0; i < nGrit; i++) {
     const a = rng.range(0, Math.PI * 2), d = r * Math.pow(rng.next(), 0.6) * 1.45;
     const lx = Math.cos(a) * d, lz = Math.sin(a) * d;
     const s = rng.range(0.008, 0.032) * (d > r ? 0.8 : 1);
-    const v = rng.int(0, 5);
+    const v = rng.int(0, 2);
     const c = rng.chance(brickK * 0.35) ? brickTone(rng) : rng.pick(CONC_T).map((q) => q * rng.range(0.75, 1.1));
     I.add('rgrit' + v, gritGeo(v), 'rubbleC', mat4(place(lx, lz, s * 0.3), [rng.range(0, 6), rng.range(0, 6), rng.range(0, 6)], s), c, { shadow: false });
   }
@@ -451,11 +453,11 @@ export function scatterDebris(W, x, z, r, n, opts = {}) {
     }
   }
   // grãos finos em volta de cada aglomerado (pó grosso, cascalho miúdo)
-  for (let i = 0; i < n * 3; i++) {
+  for (let i = 0; i < n * 2; i++) {
     const c = centers[i % nc];
     const a = rng.range(0, Math.PI * 2), d = Math.pow(rng.next(), 0.8) * Math.min(r, 1.4);
     const s = rng.range(0.007, 0.025);
-    const gv = rng.int(0, 5);
+    const gv = rng.int(0, 2);
     I.add('rgrit' + gv, gritGeo(gv), 'rubbleC', mat4([c[0] + Math.cos(a) * d, y + s * 0.25, c[1] + Math.sin(a) * d], [rng.range(0, 6), rng.range(0, 6), rng.range(0, 6)], s), rng.pick(CONC_T).map((q) => q * rng.range(0.7, 1.05)), { shadow: false });
   }
   for (let i = 0; i < n; i++) {

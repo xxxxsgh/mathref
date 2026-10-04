@@ -284,6 +284,8 @@ export default {
         if (ok) self.st.nade.release = true;
         return ok;
       },
+      /** Detona uma granada do jogador no ponto (QA/roteiros): mesmo dano/efeito do arremesso. */
+      explodeAt: (point, kind = 'frag') => self.throwables.detonate(kind, new THREE.Vector3(point.x, point.y, point.z)),
       refill: () => self.lo.refill(),
       setGrenades: (n) => (self.lo.grenades = Math.max(0, n | 0)),
       debugPose: (n, t) => self.debugPose(n, t),
@@ -391,7 +393,7 @@ export default {
     st.cooldown += 60 / st.rpm;
     st.lastShot = ctx.time.now;
     st.burstCount++;
-    if (st.ammo === 0 && g.recoil.slide) st.slideLock = true;
+    if (g.recoil.slide) st.slideLock = st.ammo === 0; // ferrolho trava aberto no último tiro
     const a = st.ads;
     const S = this.spr;
     const rc = g.recoil;

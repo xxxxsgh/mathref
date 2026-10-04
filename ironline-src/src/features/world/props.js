@@ -448,7 +448,7 @@ export function dish(W, p, n) {
  */
 const bagGeo = (v) =>
   cached('trashbag3_' + v, () => {
-    const g = new THREE.SphereGeometry(1, 48, 36);
+    const g = new THREE.SphereGeometry(1, 30, 20);
     const P = g.attributes.position;
     const rr = mulberry(400 + v * 17);
     // volumes do conteúdo: 4 "caroços" que esticam o plástico
