@@ -99,7 +99,9 @@ export function solveClamp(hand, gunRoot, { phi = 3.75, z = -0.43, fwd = 0.38, l
   const fit = fitHand(hand, gunRoot, {
     sdf: guardSdf,
     gap,
-    thumb: { target: new THREE.Vector3(thumbX, thumbUp, z - 0.05), maxY: over ? null : 0.018 },
+    // pega por cima: o polegar desce pelo flanco esquerdo apontando para a
+    // frente (visível da câmera), não sobe para junto do indicador
+    thumb: { target: new THREE.Vector3(thumbX, thumbUp, z - 0.05), maxY: over ? null : 0.018, ...(over ? { lim: [[-1.4, 1.4], [-1.2, 1.4], [-1.4, 1.4], [-0.1, 0.9], [-0.1, 0.9]], ceilY: 0.012 } : {}) },
   });
   return { pos, quat, pose: fit.pose, cost: fit.cost };
 }
@@ -111,7 +113,8 @@ export function solveClamp(hand, gunRoot, { phi = 3.75, z = -0.43, fwd = 0.38, l
  *   sdf(p)    distância (m) do ponto p (Vector3, espaço da arma) à superfície
  *   fingers   dedos resolvidos (os demais copiam `base`)
  *   base      pose de partida/fixa (ex.: indicador no gatilho)
- *   thumb     { target: Vector3, maxY?, weight? } ou null (polegar de `base`)
+ *   thumb     { target: Vector3, maxY?, ceilY?, weight?, mcpTarget?, lim? } ou null
+ *             (polegar de `base`); ceilY = teto em Y para falanges do polegar
  *   spread    abertura natural dos dedos
  */
 export function fitHand(hand, gunRoot, { sdf, gap = 0.0007, fingers = [0, 1, 2, 3], base = null, thumb = null, spread = [0.1, 0.03, -0.04, -0.12], minFlex = [0.05, 0.1, 0.1], maxFlex = [1.45, 1.75, 1.75], indexTarget = null } = {}) {
@@ -133,11 +136,14 @@ export function fitHand(hand, gunRoot, { sdf, gap = 0.0007, fingers = [0, 1, 2, 
     }
     return m;
   };
-  for (const i of fingers) {
+  // raios efetivos das falanges (o dedo afina da base à ponta, ver arms.js)
+  const RK = [1.0, 0.9, 0.8];
+  // flexiona as falanges seguintes (a partir de `from`) até encostarem
+  const curl = (i, from) => {
     const f = FINGERS[i];
     const joints = hand.fingers[i];
-    for (let sgi = 0; sgi < 3; sgi++) {
-      const r = f.r * (1 - sgi * 0.07) * 0.98;
+    for (let sgi = from; sgi < 3; sgi++) {
+      const r = f.r * RK[sgi];
       const L = f.L[sgi];
       let a = minFlex[sgi];
       const max = maxFlex[sgi];
@@ -153,6 +159,35 @@ export function fitHand(hand, gunRoot, { sdf, gap = 0.0007, fingers = [0, 1, 2, 
         hand.apply(pose);
       }
     }
+  };
+  for (const i of fingers) {
+    const f = FINGERS[i];
+    const joints = hand.fingers[i];
+    // 1º: guloso (a proximal flexiona até encostar)
+    curl(i, 0);
+    const aC = pose.f[i][0];
+    // 2º: dedos de verdade envolvem com a junta do meio (PIP) — a proximal
+    // pode "flutuar" um pouco para a média/distal abraçarem o perfil, em vez
+    // de o dedo deitar reto e duro por cima. Pontuação: contato da média e da
+    // distal, PIP ≥ ~0,7·MCP, sem atravessar
+    let best = Infinity, bf = pose.f[i].slice();
+    for (let a = aC; a >= Math.max(minFlex[0], aC - 0.7) - 1e-6; a -= 0.1) {
+      pose.f[i] = [a, 0, 0];
+      hand.apply(pose);
+      curl(i, 1);
+      const [, b, c] = pose.f[i];
+      let sc = 0;
+      for (let k = 0; k < 3; k++) {
+        const cl = segClear(joints[k], f.L[k], f.r * RK[k]);
+        if (cl < 0) sc += cl * cl * 4e5;
+        else sc += Math.max(0, cl - gap) ** 2 * (k === 0 ? 400 : 3000);
+      }
+      if (b < 0.7 * a) sc += (0.7 * a - b) ** 2 * 0.6;
+      if (c > b + 0.2) sc += (c - b - 0.2) ** 2 * 0.4;
+      if (sc < best) (best = sc), (bf = pose.f[i].slice());
+    }
+    pose.f[i] = bf;
+    hand.apply(pose);
   }
   // ─ indicador no gatilho: busca a flexão que põe a polpa distal no alvo ─
   if (indexTarget) {
@@ -188,7 +223,7 @@ export function fitHand(hand, gunRoot, { sdf, gap = 0.0007, fingers = [0, 1, 2, 
   // ─ polegar: descida de coordenadas ─
   const th = hand.thumb;
   const TL = THUMB.L;
-  const TR = [THUMB.rad[0] * 0.9, THUMB.rad[1], THUMB.rad[2]];
+  const TR = [(THUMB.rad[0] + THUMB.rad[1]) * 0.45, THUMB.rad[1], THUMB.rad[2]];
   const target = thumb.target;
   const wT = thumb.weight ?? 20;
   // espaço local da mão (espelhado): y > 0 = dorso. O polegar NUNCA cruza
@@ -212,6 +247,8 @@ export function fitHand(hand, gunRoot, { sdf, gap = 0.0007, fingers = [0, 1, 2, 
         toGun(th[k], pt.set(0, 0, -TL[k] * q), _inv, _p);
         const d = sdf(_p) - TR[k];
         if (d < 0) c2 += d * d * 4e4; // atravessou: muito caro
+        // teto: o polegar fica abaixo do ferrolho (não cruza por trás dele)
+        if (thumb.ceilY != null && k > 0 && _p.y > thumb.ceilY) c2 += (_p.y - thumb.ceilY) ** 2 * 3e3;
         else if (k > 0) c2 += d * d * 250; // médio/distal encostados
       }
     }
@@ -227,35 +264,44 @@ export function fitHand(hand, gunRoot, { sdf, gap = 0.0007, fingers = [0, 1, 2, 
     return c2;
   };
   const lim = thumb.lim || [[-0.4, 1.4], [-0.25, 1.4], [-0.9, 1.2], [-0.1, 0.9], [-0.1, 0.9]];
-  // busca grossa em grade (evita mínimos locais), depois refino
-  let best = Infinity, bt = pose.t.slice();
+  // busca grossa em grade (evita mínimos locais), depois refino por descida
+  // de coordenadas a partir dos MELHORES candidatos (não só do primeiro)
+  const cands = [];
   for (let yw = lim[0][0]; yw <= lim[0][1]; yw += 0.2) {
     for (let pc = lim[1][0]; pc <= lim[1][1]; pc += 0.2) {
       for (let rl = lim[2][0]; rl <= lim[2][1]; rl += 0.26) {
-        pose.t[0] = yw; pose.t[1] = pc; pose.t[2] = rl; pose.t[3] = 0.15; pose.t[4] = 0.15;
-        const c2 = cost();
-        if (c2 < best) (best = c2), (bt = pose.t.slice());
-      }
-    }
-  }
-  pose.t = bt;
-  for (let step = 0.12; step > 0.004; step *= 0.6) {
-    let improved = true;
-    for (let it = 0; it < 30 && improved; it++) {
-      improved = false;
-      for (let k = 0; k < 5; k++) {
-        for (const sg of [1, -1]) {
-          const old = pose.t[k];
-          pose.t[k] = Math.min(lim[k][1], Math.max(lim[k][0], old + sg * step));
-          const c2 = cost();
-          if (c2 < best - 1e-12) {
-            best = c2;
-            improved = true;
-          } else pose.t[k] = old;
+        for (const fl of [0.15, 0.55]) {
+          pose.t[0] = yw; pose.t[1] = pc; pose.t[2] = rl; pose.t[3] = fl; pose.t[4] = fl * 0.8;
+          cands.push([cost(), pose.t.slice()]);
         }
       }
     }
   }
+  cands.sort((p1, p2) => p1[0] - p2[0]);
+  let best = Infinity, bt = pose.t.slice();
+  for (const [c0, t0] of cands.slice(0, 6)) {
+    pose.t = t0.slice();
+    let cb = c0;
+    for (let step = 0.12; step > 0.004; step *= 0.6) {
+      let improved = true;
+      for (let it = 0; it < 30 && improved; it++) {
+        improved = false;
+        for (let k = 0; k < 5; k++) {
+          for (const sg of [1, -1]) {
+            const old = pose.t[k];
+            pose.t[k] = Math.min(lim[k][1], Math.max(lim[k][0], old + sg * step));
+            const c2 = cost();
+            if (c2 < cb - 1e-12) {
+              cb = c2;
+              improved = true;
+            } else pose.t[k] = old;
+          }
+        }
+      }
+    }
+    if (cb < best) (best = cb), (bt = pose.t.slice());
+  }
+  pose.t = bt;
   hand.apply(pose);
   return { pose, cost: best };
 }

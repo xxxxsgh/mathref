@@ -67,10 +67,25 @@ A feature `rendering` assume o render inteiro pelo gancho
 
 ## Funcionalidades
 
-- **Modo FRONTLINE**: 5 ondas (4-5-6-7-8 = 30 hostis) em 10 minutos.
-  Limpar a última onda vence; o relógio zerar perde. Renascimento em 4 s no
-  ponto mais seguro, regeneração de vida, XP, medalhas e relatório pós-ação
-  com estatísticas; perfil salvo em `localStorage`.
+- **Três modos** (cartões no menu principal; `?mode=`):
+  - **FRONTLINE** (eliminação): 5 ondas (4-5-6-7-8 = 30 hostis) em 10
+    minutos. Limpar a última onda vence; o relógio zerar perde.
+  - **HARDPOINT** (defesa): tomar e segurar uma zona marcada no chão (anel
+    no mundo, marcador na tela, barras de captura e posse) contra ondas sem
+    fim que convergem para ela. 90 s de posse vencem; hostis tomando a zona
+    (ou 7 minutos) perdem.
+  - **SURVIVAL**: ondas crescentes com 3 vidas; a última traz o
+    **JUGGERNAUT** — soldado blindado (placas, viseira, metralhadora leve,
+    1600 de vida, lento) com barra de chefe. Limpar a onda do chefe vence.
+  Renascimento em 4 s no ponto mais seguro, regeneração de vida, XP,
+  medalhas e relatório pós-ação com estatísticas por modo.
+- **Progressão**: perfil em `localStorage` — XP de abates, headshots,
+  medalhas e objetivos; 55 níveis; desbloqueios por nível (atordoante,
+  acessórios, camuflagens procedurais da arma, armas extras publicadas pela
+  feature weapon) com cadeados no loadout, toast de LEVEL UP e lista de
+  desbloqueios no relatório.
+- **Seletor de mapa** no menu (cartões com planta, nome e descrição; o mapa
+  atual em destaque) — troca recarregando com `?map=`.
 - **Dois mapas** (seleção por `?map=`, ver [Mapas](#mapas)):
   - **MERIDIAN STREET** (`street`, padrão): rua, cruzamento, ruela, posto
     de controle e o térreo jogável do prédio R4.
@@ -88,7 +103,8 @@ A feature `rendering` assume o render inteiro pelo gancho
   skinning, painéis, costuras e protetor de nós) encaixadas na geometria de
   cada arma.
 - **Inimigos** com hitboxes por osso (headshot), percepção por visão e
-  audição, supressão, flanco, callouts e ragdoll.
+  audição, supressão, flanco, callouts e ragdoll — em qualquer mapa (tudo
+  lido de `services.world`); chefe juggernaut no modo SURVIVAL.
 - **Qualidade automática** (padrão): a classe do aparelho (GPU, celular,
   núcleos, memória) escolhe o preset inicial e um governador de desempenho
   ajusta resolução dinâmica e degraus de qualidade com histerese para manter
@@ -148,7 +164,8 @@ Parâmetros de URL úteis (lista completa no `CONTRACT.md`):
 | `?q=auto\|low\|medium\|high\|ultra` | qualidade (padrão `auto`) |
 | `?touch=1\|0` | força/desliga os controles de toque |
 | `?only=a,b` / `?skip=a,b` | carrega só / todas menos essas features |
-| `?waves=1,1&wi=1&mt=300` | partida curta (ondas, intervalo, tempo) |
+| `?mode=waves\|hardpoint\|survival` | modo de jogo (padrão: o último escolhido no menu) |
+| `?waves=1,1&wi=1&mt=300` | partida curta (ondas, intervalo, tempo); `&hold=s` (posse do HARDPOINT), `&lives=n` (SURVIVAL) |
 | `?dynres=0` | desliga o governador de desempenho (resolução dinâmica + degraus) |
 | `?shot=<preset>` | modo screenshot determinístico (abaixo) |
 
@@ -254,7 +271,9 @@ Joga uma partida curta de verdade (`?waves=1,1&wi=1`): menu → loadout →
 DEPLOY → anda/sprint/pulo → um bot no navegador mira e mata o inimigo da
 onda 1 → recarrega → onda 2 → relatório pós-ação com vitória. Falha com
 qualquer `pageerror`, `console.error` ou erro de feature. Opções:
-`--q low`, `--size 640x360`, `--timeout ms`, `--shots dir` (salva
+`--q low`, `--size 640x360`, `--timeout ms`, `--mode hardpoint|survival`,
+`--map factory` (o bot do HARDPOINT segura a zona e confere captura e
+vitória pela posse), `--shots dir` (salva
 `1-menu`, `2-loadout`, `3-combat`, `4-end`). No SwiftShader leva ~10
 minutos; `shot.mjs` em 1080p no preset `high` leva ~6–9 min por imagem
 (o `--timeout` padrão é 600 s).
@@ -264,6 +283,8 @@ minutos; `shot.mjs` em 1080p no preset `high` leva ~6–9 min por imagem
 - A ação de interação está mapeada no núcleo, mas não implementada; a
   atordoante ainda não cega/atordoa a IA (emite `weapon:flashbang` para quem
   quiser reagir).
+- A atordoante trancada por nível só aparece trancada na UI até a feature
+  weapon publicar `setTacticals(n)` (a HUD já chama o gancho).
 - Partida apenas contra IA (sem multiplayer).
 - Pesado em GPUs fracas no preset `high` — o modo automático (padrão)
   desce sozinho; `?q=low` força o mais leve.

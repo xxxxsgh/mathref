@@ -112,7 +112,18 @@ export const VARIANTS = [
   { name: 'lead', camo: 'arid', gear: '#6c5d45', gear2: '#5a4c3a', helmetCamo: 1, belt: '#4a4034', glove: '#3d3429', boot: '#3e3124', bala: '#4d473a', shirt: '#57524a', ruck: true, face: 'bala', head: 'cap', cap: '#5b5241', scarf: true, nvg: false, lens: '#241c15' },
   // atirador de flanco: chapéu de aba (boonie), chest rig leve, sem mochila
   { name: 'scout', camo: 'woodland', gear: '#4f4c3a', gear2: '#3f3d2f', helmetCamo: 1, belt: '#36342a', glove: '#33302a', boot: '#2f271f', bala: '#45463b', shirt: '#4b4d41', ruck: false, face: 'bala', head: 'boonie', scarf: true, nvg: false, sleeves: 'rolled', lens: '#1c1e20' },
+  // CHEFE (sobrevivência): juggernaut — traje blindado pesado sobre o
+  // uniforme urbano: placas de peito/costas sobrepostas com nervuras, gola
+  // alta, ombreiras em lâminas, protetores de braço/coxa/canela, avental de
+  // virilha, capacete com sobrecasco + viseira balística inteiriça e
+  // protetor de mandíbula; metralhadora leve (caixa de munição, cano
+  // pesado com camisa perfurada, bipé rebatido). Geometria criada sob
+  // demanda (não entra no sorteio de variantes das ondas).
+  { name: 'juggernaut', camo: 'urban', gear: '#2a2b28', gear2: '#20211f', helmetCamo: 0, helmet: '#2f312d', belt: '#222320', glove: '#1d1d1b', boot: '#262019', bala: '#2c2d29', shirt: '#34362f', ruck: false, face: 'bala', head: 'helmet', nvg: false, sleeves: 'full', lens: '#16201d', boss: true },
 ];
+/** Variantes do sorteio comum (o chefe fica de fora). */
+export const REGULAR_VARIANTS = VARIANTS.filter((v) => !v.boss).length;
+export const BOSS_VARIANT = VARIANTS.findIndex((v) => v.boss);
 
 export function buildSoldierGeometry(variant = VARIANTS[0]) {
   const b = new SkinBuilder();
@@ -361,9 +372,11 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
       // parafusos de suspensão
       b.cyl([sx * 0.124, 1.705, 0.05], [sx * 0.131, 1.705, 0.05], 0.007, 0.007, M.metal, B.head, core, 8);
     }
-    // shroud de NVG
-    b.box([0.055, 0.045, 0.018], { p: [0, 1.79, 0.13], r: [-0.55, 0, 0] }, M.poly, B.head, core, 0.004);
-    b.box([0.03, 0.018, 0.016], { p: [0, 1.775, 0.142], r: [-0.55, 0, 0] }, M.metal, B.head, core, 0.003);
+    // shroud de NVG (o chefe usa viseira — ver addJuggernaut)
+    if (!V.boss) {
+      b.box([0.055, 0.045, 0.018], { p: [0, 1.79, 0.13], r: [-0.55, 0, 0] }, M.poly, B.head, core, 0.004);
+      b.box([0.03, 0.018, 0.016], { p: [0, 1.775, 0.142], r: [-0.55, 0, 0] }, M.metal, B.head, core, 0.003);
+    }
     // velcro no topo e na traseira
     b.box([0.09, 0.008, 0.07], { p: [0, 1.842, -0.01], r: [-0.08, 0, 0] }, M.patch, B.head, core, 0.004);
     // contrapeso / bateria na nuca
@@ -621,8 +634,12 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
   // ═══ DETALHES SECUNDÁRIOS (silhueta) ══════════════════════════════════
   addExtras(b, M, V, chestW);
 
+  // ═══ BLINDAGEM DO CHEFE ═══════════════════════════════════════════════
+  if (V.boss) addJuggernaut(b, M, chestW);
+
   // ═══ FUZIL ════════════════════════════════════════════════════════════
   addRifle(b, M);
+  if (V.boss) addLmgParts(b, M);
 
   return b.build();
 }
@@ -1099,4 +1116,110 @@ function addExtras(b, M, V, chestW) {
       b.ellipsoid([0.05, 0.062, 0.03], { p: [sx * 0.2, 1.155, -0.07] }, M.kneepad, armW(side), grp, 12, 10);
       b.box([0.11, 0.012, 0.012], { p: [sx * 0.2, 1.12, -0.05], r: [0.3, 0, 0] }, M.webbing, armW(side), grp, 0.003);
     }
+}
+
+/**
+ * Traje blindado do juggernaut (chefe). Peças rígidas grandes que mudam a
+ * silhueta de longe: tronco mais largo e alto (placas sobrepostas + gola),
+ * ombros em "lâminas", membros com caneleiras/braçadeiras, capacete com
+ * sobrecasco e viseira inteiriça escura (a cabeça continua sendo o ponto
+ * fraco — a viseira é o alvo).
+ */
+function addJuggernaut(b, M, chestW) {
+  const core = GROUPS.core;
+  const A = { color: '#22241f', rough: 0.5, metal: 0, fabric: 0.04 }; // aço pintado (verde-oliva escuro)
+  const A2 = { color: '#151614', rough: 0.55, metal: 0, fabric: 0.05 }; // bordas/lâminas escuras
+  const R = { color: '#5a140e', rough: 0.6, metal: 0.05, fabric: 0.1 }; // faixa de identificação
+  const VIS = { color: '#0f1714', rough: 0.08, metal: 0.1, fabric: 0 };
+  // ── tronco: placa frontal sobreposta (3 segmentos com nervuras) ──
+  b.box([0.42, 0.44, 0.075], { p: [0, 1.3, 0.215], r: [-0.06, 0, 0] }, A, chestW, core, 0.035, 3);
+  for (const [y, w] of [[1.17, 0.4], [1.29, 0.43], [1.41, 0.41]]) b.box([w, 0.024, 0.024], { p: [0, y, 0.258 - (y - 1.29) * 0.06], r: [-0.06, 0, 0] }, A2, chestW, core, 0.008);
+  // faixa vermelha de identificação no peito + placa de "nome"
+  b.box([0.3, 0.035, 0.01], { p: [0, 1.36, 0.258], r: [-0.06, 0, 0] }, R, chestW, core, 0.004);
+  // placa traseira + "mochila" de baterias/blindagem
+  b.box([0.43, 0.46, 0.07], { p: [0, 1.31, -0.205], r: [0.04, 0, 0] }, A, chestW, core, 0.035, 3);
+  b.box([0.3, 0.22, 0.09], { p: [0, 1.25, -0.27], r: [0.04, 0, 0] }, A2, chestW, core, 0.03);
+  // laterais (cummerbund rígido)
+  for (const sx of [1, -1]) b.box([0.06, 0.26, 0.3], { p: [sx * 0.225, 1.2, 0.0] }, A2, chestW, core, 0.025);
+  // gola alta (protege pescoço/nuca)
+  b.loft(
+    [
+      { c: [0, 1.46, -0.005], ru: 0.215, rv: 0.19, n: 2.6 },
+      { c: [0, 1.53, -0.02], ru: 0.17, rv: 0.16, n: 2.4 },
+      { c: [0, 1.6, -0.03], ru: 0.135, rv: 0.135, n: 2.2 },
+    ],
+    A2,
+    B.chest,
+    core,
+    { seg: 28, caps: [false, false] },
+  );
+  // ── ombreiras em lâminas + braçadeiras ──
+  for (const side of ['L', 'R']) {
+    const sx = side === 'L' ? 1 : -1;
+    const grp = side === 'L' ? GROUPS.armL : GROUPS.armR;
+    const ua = B['upperArm.' + side], fa = B['foreArm.' + side];
+    const sh = (p) => [[ua, 0.7], [B.chest, 0.3]];
+    for (let k = 0; k < 3; k++) {
+      b.box([0.15 - k * 0.012, 0.03, 0.2 - k * 0.015], { p: [sx * (0.215 + k * 0.012), 1.525 - k * 0.055, -0.012], r: [0, 0, sx * -(0.42 + k * 0.2)] }, k ? A2 : A, sh, grp, 0.012);
+    }
+    b.box([0.035, 0.16, 0.1], { p: [sx * 0.25, 1.3, -0.015] }, A, ua, grp, 0.015);
+    b.box([0.035, 0.13, 0.095], { p: [sx * 0.24, 1.02, -0.01] }, A, fa, grp, 0.014);
+    // cotoveleira rígida
+    b.ellipsoid([0.05, 0.055, 0.045], { p: [sx * 0.205, 1.15, -0.07] }, A2, (p) => [[ua, 0.5], [fa, 0.5]], grp, 10, 8);
+  }
+  // ── avental de virilha, coxas e canelas ──
+  b.box([0.22, 0.22, 0.04], { p: [0, 0.86, 0.17], r: [0.08, 0, 0] }, A2, B.hips, core, 0.015);
+  b.box([0.18, 0.17, 0.042], { p: [0, 0.87, 0.19], r: [0.08, 0, 0] }, A, B.hips, core, 0.015);
+  for (const side of ['L', 'R']) {
+    const sx = side === 'L' ? 1 : -1;
+    const th = B['thigh.' + side], sn = B['shin.' + side];
+    b.box([0.13, 0.24, 0.045], { p: [sx * 0.105, 0.76, 0.1], r: [-0.05, 0, 0] }, A, th, core, 0.018);
+    b.box([0.05, 0.22, 0.12], { p: [sx * 0.18, 0.78, 0.0] }, A2, th, core, 0.015);
+    b.box([0.11, 0.26, 0.045], { p: [sx * 0.102, 0.3, 0.075], r: [0.03, 0, 0] }, A, sn, core, 0.018);
+    b.ellipsoid([0.07, 0.07, 0.045], { p: [sx * 0.1, 0.5, 0.095] }, A2, (p) => [[sn, 0.6], [th, 0.4]], core, 12, 8);
+  }
+  // ── capacete: sobrecasco, viseira inteiriça, mandíbula ──
+  b.ellipsoid([0.135, 0.12, 0.15], { p: [0, 1.78, -0.012] }, A, B.head, core, 22, 14);
+  // viseira (arco frontal, da testa ao queixo)
+  b.loft(
+    [
+      { c: [0, 1.62, 0.016], ru: 0.122, rv: 0.138, n: 2.2 },
+      { c: [0, 1.7, 0.02], ru: 0.128, rv: 0.144, n: 2.2 },
+      { c: [0, 1.775, 0.012], ru: 0.126, rv: 0.142, n: 2.2 },
+    ],
+    VIS,
+    B.head,
+    core,
+    { seg: 20, caps: [false, false], arc: [0.16 * Math.PI, 0.84 * Math.PI] },
+  );
+  // moldura da viseira (topo) e dobradiças laterais
+  b.loft(
+    [
+      { c: [0, 1.772, 0.012], ru: 0.132, rv: 0.148, n: 2.2 },
+      { c: [0, 1.792, 0.01], ru: 0.132, rv: 0.148, n: 2.2 },
+    ],
+    A2,
+    B.head,
+    core,
+    { seg: 20, caps: [false, false], arc: [0.12 * Math.PI, 0.88 * Math.PI] },
+  );
+  for (const sx of [1, -1]) b.cyl([sx * 0.118, 1.73, 0.03], [sx * 0.145, 1.73, 0.03], 0.03, 0.028, A2, B.head, core, 14);
+  // protetor de mandíbula sob a viseira
+  b.box([0.17, 0.045, 0.06], { p: [0, 1.6, 0.1], r: [0.35, 0, 0] }, A, B.head, core, 0.016);
+}
+
+/** Metralhadora leve: caixa de munição, cano pesado com camisa, bipé, alça. */
+function addLmgParts(b, M) {
+  const g = GROUPS.gun, w = B.weapon, BORE = 0.072;
+  // caixa de munição (verde) ao lado/abaixo do receptor + cinta
+  b.box([0.075, 0.1, 0.11], { p: [0.03, -0.035, 0.135] }, { color: '#3f4632', rough: 0.6, fabric: -1 }, w, g, 0.008);
+  b.box([0.02, 0.012, 0.06], { p: [0.02, 0.06, 0.135], r: [0, 0, -0.4] }, M.gunWorn, w, g, 0.002);
+  // camisa perfurada do cano pesado
+  b.cyl([0, BORE, 0.42], [0, BORE, 0.66], 0.022, 0.022, M.gunMetal, w, g, 14);
+  for (let k = 0; k < 6; k++) b.box([0.046, 0.008, 0.016], { p: [0, BORE, 0.45 + k * 0.035] }, M.gunRubber, w, g, 0.002, 1);
+  b.cyl([0, BORE, 0.66], [0, BORE, 0.74], 0.017, 0.016, M.gunMetal, w, g, 12);
+  // bipé rebatido sob o cano
+  for (const sx of [1, -1]) b.box([0.008, 0.008, 0.2], { p: [sx * 0.014, BORE - 0.035, 0.55] }, M.gunMetal, w, g, 0.002);
+  // alça de transporte
+  b.box([0.012, 0.03, 0.09], { p: [0, BORE + 0.05, 0.36] }, M.gunPoly, w, g, 0.004);
 }

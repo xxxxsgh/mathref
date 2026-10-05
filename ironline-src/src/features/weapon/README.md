@@ -83,7 +83,7 @@ mesmo referencial do mundo. Sol ocluído por raycast (sombra de prédios) e teto
 - `&wcrop=x,y,w` — amplia um recorte do enquadramento REAL (x, y, largura em fração da tela) — QA das mãos.
 - `&wpr=dx,dy,dz,px,py,pz` / `&wpl=Fx,Fy,Fz,Dx,Dy,Dz,px,py,pz` — testa a pega direita/esquerda na pistola (dorso/dedos e ponto da palma).
 - `&wview=yaw,pitch,dist[,x,y,z]` — gira a arma diante da câmera focando o ponto (x,y,z) da arma.
-- `&whand=yaw,pitch,pose` — só as mãos, numa pose de `POSES` (`guard`/`trigger` = pegas resolvidas da arma ativa).
+- `&whand=yaw,pitch,pose[,dist]` — só as mãos, numa pose de `POSES` (`guard`/`trigger` = pegas resolvidas da arma ativa).
 - `&wgrip=phi,fwd,thumbUp[,z,over,thumbX]` — testa outra pega da mão de apoio (ver `grip.js`).
 - `&whip=x,y,z[,rx,ry,rz]` — testa outro enquadramento de hip (posição do pivô no espaço da câmera).
 - `&warm=x,y,z[,follow,wrist]` — "ombro" esquerdo, quanto o antebraço segue o eixo da mão e quanto o punho dobra.

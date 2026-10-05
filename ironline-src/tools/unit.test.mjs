@@ -249,3 +249,6 @@ test('joystick de toque: zona morta, teclas digitais e sprint', () => {
 
 // testes da feature weapon (loadout, granada) — arquivo próprio da feature
 import '../src/features/weapon/weapon.test.mjs';
+
+// testes da feature hud (progressão, modos, captura do hardpoint) — arquivo próprio da feature
+import '../src/features/hud/hud.test.mjs';

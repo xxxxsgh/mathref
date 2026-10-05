@@ -79,8 +79,8 @@ export class PlayHud {
       <div class="banner sh"></div>
       <div class="score sh">
         <div class="top"><div class="timer"></div><div class="mode">${T(MODE.name, { size: 12, weight: 1.45, tracking: 2.4 })}</div></div>
-        <div class="rowx us"><div class="n"></div><div class="trk"><div class="fill"></div></div><div class="tag">${T('IRONLINE', { size: 11, weight: 1.35, tracking: 2.2 })}</div><div class="goal">${T('TO ' + MODE.target, { size: 11, weight: 1.3, tracking: 1.9 })}</div></div>
-        <div class="rowx them"><div class="n"></div><div class="trk"><div class="fill"></div></div><div class="tag">${T('HOSTILES', { size: 11, weight: 1.35, tracking: 2.2 })}</div><div class="goal"></div></div>
+        <div class="rowx us"><div class="n"></div><div class="trk"><div class="fill"></div></div><div class="tag"></div><div class="goal"></div></div>
+        <div class="rowx them"><div class="n"></div><div class="trk"><div class="fill"></div></div><div class="tag"></div><div class="goal"></div></div>
       </div>
       <div class="feed"></div>
       <div class="equip sh">
@@ -109,7 +109,7 @@ export class PlayHud {
     this.el = {
       cross: q('.cross'), cl: [...q('.cross').children], hit: q('.hitm'), hitI: [...q('.hitm .xs').children], hitO: [...q('.hitm .xo').children], ring: q('.hitm .ring'),
       prompt: q('.prompt'), xp: q('.xp'), medal: q('.medal'), banner: q('.banner'), dmg: q('.dmg'),
-      timer: q('.score .timer'), usN: q('.rowx.us .n'), usF: q('.rowx.us .fill'), thN: q('.rowx.them .n'), thF: q('.rowx.them .fill'), thG: q('.rowx.them .goal'),
+      timer: q('.score .timer'), usN: q('.rowx.us .n'), usF: q('.rowx.us .fill'), usG: q('.rowx.us .goal'), usT: q('.rowx.us .tag'), thN: q('.rowx.them .n'), thF: q('.rowx.them .fill'), thG: q('.rowx.them .goal'), thT: q('.rowx.them .tag'),
       feed: q('.feed'), wname: q('.wpn .nm'), mag: q('.wpn .mag'), res: q('.wpn .rv'), ticks: q('.wpn .ticks'), reload: q('.wpn .reload'), reloadI: q('.wpn .reload i'), wstate: q('.wpn .state'),
       vit: q('.vit'), cs: q('.vit .cs'), lv: q('.vit .lv'), streak: q('.vit .streak'), hpLag: q('.vit .lag'), hpCur: q('.vit .cur'), hpNum: q('.vit .num'),
       death: q('.death'), equip: q('.equip'), wpn: q('.wpn'),
@@ -376,19 +376,40 @@ export class PlayHud {
       E.timer.innerHTML = T(`${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`, { size: 17, weight: 1.4, tracking: 1.4, heavy: true });
       E.timer.classList.toggle('low', v <= 60);
     });
-    this.set('us', m.kills, (v) => {
-      E.usN.innerHTML = T(String(v), { size: 16, weight: 1.4, heavy: true });
-      E.usF.style.width = clamp(v / MODE.target, 0, 1) * 100 + '%';
-    });
-    this.set('wave', m.wave || 0, (v) => {
-      const md = this.root.querySelector('.score .top .mode');
-      if (md) md.innerHTML = T(v ? `WAVE ${v} / ${MODE.waves.length}` : MODE.name, { size: 12, weight: 1.45, tracking: 2.4 });
-    });
+    // placar por modo: linha "nossa" e linha "deles"
     const alive = ctx.services.enemies?.count?.() ?? 0;
-    this.set('them', m.deaths + '|' + alive, () => {
-      E.thN.innerHTML = T(String(m.deaths), { size: 16, weight: 1.4, heavy: true });
-      E.thF.style.width = clamp(m.deaths / MODE.target, 0, 1) * 100 + '%';
-      E.thG.innerHTML = T(`${alive} ACTIVE`, { size: 11, weight: 1.3, tracking: 1.9 });
+    const t11 = (x) => T(x, { size: 11, weight: 1.33, tracking: 2 });
+    let us, th;
+    if (MODE.id === 'hardpoint') {
+      const hold = Math.floor(Math.min(MODE.holdGoal, m.zs?.hold || 0));
+      us = { n: hold, f: hold / MODE.holdGoal, tag: 'ZONE HOLD', goal: `TO ${MODE.holdGoal}S` };
+      th = { n: m.zoneFoes || 0, f: Math.max(0, -(m.zs?.cap || 0)), tag: 'IN ZONE', goal: `${alive} ACTIVE` };
+    } else if (MODE.id === 'survival') {
+      us = { n: m.kills, f: m.kills / MODE.target, tag: 'IRONLINE', goal: 'TO ' + MODE.target };
+      th = { n: m.deaths, f: MODE.lives ? m.deaths / MODE.lives : 0, tag: 'LIVES', goal: `${m.lives} / ${MODE.lives} LEFT` };
+    } else {
+      us = { n: m.kills, f: m.kills / MODE.target, tag: 'IRONLINE', goal: 'TO ' + MODE.target };
+      th = { n: m.deaths, f: m.deaths / MODE.target, tag: 'HOSTILES', goal: `${alive} ACTIVE` };
+    }
+    this.set('us', `${MODE.id}|${us.n}|${us.f.toFixed(3)}`, () => {
+      E.usN.innerHTML = T(String(us.n), { size: 16, weight: 1.4, heavy: true });
+      E.usF.style.width = clamp(us.f, 0, 1) * 100 + '%';
+    });
+    this.set('usL', us.tag + us.goal, () => {
+      E.usT.innerHTML = t11(us.tag);
+      E.usG.innerHTML = t11(us.goal);
+    });
+    this.set('wave', `${MODE.id}|${m.wave || 0}`, () => {
+      const v = m.wave || 0;
+      const md = this.root.querySelector('.score .top .mode');
+      const label = !v ? MODE.name : MODE.id === 'hardpoint' ? `HARDPOINT  ·  WAVE ${v}` : `WAVE ${v} / ${MODE.waves.length}`;
+      if (md) md.innerHTML = T(label, { size: 12, weight: 1.45, tracking: 2.4 });
+    });
+    this.set('them', `${th.n}|${th.f.toFixed(3)}|${th.tag}|${th.goal}`, () => {
+      E.thN.innerHTML = T(String(th.n), { size: 16, weight: 1.4, heavy: true });
+      E.thF.style.width = clamp(th.f, 0, 1) * 100 + '%';
+      E.thT.innerHTML = t11(th.tag);
+      E.thG.innerHTML = t11(th.goal);
     });
 
     // feed: envelhecimento

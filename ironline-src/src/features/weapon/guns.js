@@ -53,7 +53,7 @@ function makeHolster(T, k = 1) {
 // legível no quadro: dorso e nós voltados para a câmera, dedos abraçando o
 // trilho, polegar no flanco esquerdo-baixo); ADS: C-clamp baixo (nada entra
 // na janela da ótica)
-export const RIFLE_GRIP = { phi: 2.9, z: -0.34, fwd: 0.7, thumbUp: -0.012, thumbX: -0.026, over: true, roll: 0.5 };
+export const RIFLE_GRIP = { phi: 2.9, z: -0.34, fwd: 0.2, thumbUp: -0.012, thumbX: -0.026, over: true, roll: 0.5 };
 export const RIFLE_GRIP_ADS = { phi: 4.1, z: -0.32, fwd: 0.35, thumbUp: -0.014 };
 
 function rifleReload(empty) {
@@ -139,7 +139,9 @@ export function makeRifle(M, handR, handL, params) {
   R.root.add(magSpare);
 
   const eyeRelief = 0.2;
-  const hip = pose6([0.085, -0.155, -0.43], [0.03, 0.07, 0.0]);
+  // hip: guarda-mão girado ~11° para a esquerda — a mão de apoio aparece de
+  // lado (dorso, nós e dedos por cima do trilho) em vez de "de punho"
+  const hip = pose6([0.105, -0.152, -0.425], [0.045, 0.2, -0.05]);
   const ads = pose6([0, 0, 0], [0, 0, 0]);
   ads.pos.set(0, 0, -eyeRelief).sub(R.sight.clone().sub(pivot));
   const sprint = pose6([-0.03, -0.045, 0.03], [-0.32, 0.62, 0.42]);
@@ -304,7 +306,9 @@ export function makePistol(M, handR, handL, params) {
   R.root.position.copy(pivot).negate();
   const eyeRelief = 0.34;
   // hip: duas mãos, braços estendidos, baixa e à direita do centro
-  const hip = pose6([0.09, -0.085, -0.4], [0.05, 0.38, -0.12]);
+  // (mais baixa e mais de flanco: os polegares deitam no flanco esquerdo e o
+  // dorso das mãos aparece, em vez de só os punhos vistos de trás)
+  const hip = pose6([0.1, -0.125, -0.44], [-0.05, 0.6, -0.18]);
   const ads = pose6([0, 0, 0], [0, 0, 0]);
   ads.pos.set(0, 0, -eyeRelief).sub(R.sight.clone().sub(pivot));
   const sprint = pose6([0.02, -0.08, 0.06], [-0.55, 0.35, 0.25]);
@@ -319,13 +323,17 @@ export function makePistol(M, handR, handL, params) {
   handR.root.position.copy(hR.pos);
   handR.root.quaternion.copy(hR.quat);
   // dedos médio/anelar/mínimo abraçam o punho; polegar para a frente no flanco esquerdo
+  // ?wprt=tx,ty,tz,mx,my,mz,teto — alvo da ponta/da junta MCP do polegar direito (QA)
+  const tR = params.get('wprt')?.split(',').map(Number) || [-0.022, -0.022, -0.028, -0.012, -0.032, 0.026, -0.012];
   const fitR = fitHand(handR, R.root, {
     sdf: (p) => pistolGripSdf(p),
     fingers: [1, 2, 3],
     base: POSES.trigger,
     indexTarget: V(0.0, -0.032, -0.0655), // face do gatilho
     gap: 0.0008,
-    thumb: { target: V(-0.021, -0.025, -0.03), weight: 60, mcpTarget: V(-0.01, -0.03, 0.028), mcpWeight: 200, lim: [[-0.8, 2.4], [-0.8, 1.6], [-1.6, 1.6], [-0.1, 0.9], [-0.1, 0.9]] },
+    // polegar deitado no flanco esquerdo da armação, ABAIXO do ferrolho,
+    // apontando para o alvo; a membrana fica sob o rabo-de-castor
+    thumb: { target: V(tR[0], tR[1], tR[2]), weight: 60, mcpTarget: V(tR[3], tR[4], tR[5]), mcpWeight: 200, ceilY: tR[6], lim: [[-0.8, 2.4], [-0.8, 1.6], [-1.6, 1.6], [-0.1, 0.9], [-0.1, 0.9]] },
   });
   const poseTrigger = fitR.pose;
   const poseGrip = clonePose(poseTrigger);
@@ -334,7 +342,7 @@ export function makePistol(M, handR, handL, params) {
   // ─ mão esquerda (apoio): palma no flanco esquerdo do punho, dedos sobre os
   // da direita (sob o guarda-mato), polegar apontando para o alvo ─
   const wl = params.get('wpl');
-  const L = wl ? wl.split(',').map(Number) : [0.35, -0.55, -0.75, -1, -0.1, 0.15, -0.019, -0.074, -0.006];
+  const L = wl ? wl.split(',').map(Number) : [0.25, -0.3, -0.9, -1, 0.25, 0.1, -0.02, -0.072, -0.022];
   const F = V(L[0], L[1], L[2]).normalize();
   const Dd = V(L[3], L[4], L[5]);
   const palmC = V(L[6], L[7], L[8]);
@@ -357,17 +365,21 @@ export function makePistol(M, handR, handL, params) {
   });
   // palma direita (lado direito do punho)
   caps.push([at(handR.root, [0, 0, -0.03]), at(handR.root, [0, 0, -0.07]), 0.018]);
+  const tgC = V(0, -0.034, -0.07), tgH = V(0.0045, 0.0135, 0.03);
   const fistSdf = (p) => {
-    let d = pistolGripSdf(p);
+    // + guarda-mato: o indicador esquerdo passa por BAIXO dele
+    let d = Math.min(pistolGripSdf(p), sdBox3(p, tgC, tgH, 0.003));
     for (const [a, b, r] of caps) d = Math.min(d, sdCapsule(p, a, b, r));
     return d;
   };
+  // ?wplt=tx,ty,tz,teto — alvo da ponta do polegar esquerdo (QA)
+  const tL = params.get('wplt')?.split(',').map(Number) || [-0.021, -0.032, -0.088, -0.012];
   const fitL = fitHand(handL, R.root, {
     sdf: fistSdf,
     minFlex: [0.25, 0.3, 0.2],
     gap: 0.0008,
     spread: [0.04, 0.0, -0.04, -0.09],
-    thumb: { target: V(-0.021, -0.032, -0.088), weight: 60 },
+    thumb: { target: V(tL[0], tL[1], tL[2]), weight: 60, ceilY: tL[3] },
   });
   // ADS: mesma pega (a pistola sobe inteira até o olho)
   const gripL = { pos: bl.pos.clone(), quat: bl.quat.clone(), pose: fitL.pose };
@@ -395,7 +407,7 @@ export function makePistol(M, handR, handL, params) {
     anims: { reload: pistolReload(false), reloadEmpty: pistolReload(true), inspect: pistolInspect(), equip: pistolEquip(), holster: makeHolster(0.26, 1.4) },
     occ, casing: buildCasing9(M),
     recoil: { z: 0.4, x: 1.25, xAds: 0.7, climb: 0.0055, climbAds: 0.0045, kick: 0.11, slide: true },
-    anchorL: V(-0.2, -0.6, -0.05), followL: 0.15, wristL: 0.4,
+    anchorL: V(-0.32, -0.6, -0.05), followL: 0.1, wristL: 0.4,
     anchorR: V(0.24, -0.55, -0.05),
   };
 }

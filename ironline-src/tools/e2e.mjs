@@ -4,6 +4,11 @@
  * do modo shot) num Chromium headless e falha se algo quebrar.
  *
  *   node tools/e2e.mjs [--q low|medium|high] [--size 640x360] [--timeout ms] [--shots dir] [--extra "k=v&k2=v2"]
+ *                      [--mode waves|hardpoint|survival] [--map street|factory]
+ *
+ * `--mode hardpoint`: o bot fica no centro da zona (anel do HARDPOINT) e
+ * atira em quem aparecer; confere captura e vitória pela posse (`hold=12`).
+ * `--mode survival`: as ondas curtas terminam no chefe (juggernaut).
  *
  * Roteiro:
  *   1. carrega o jogo (`?waves=1,1&wi=1`: duas ondas de 1 soldado, intervalo
@@ -38,7 +43,7 @@ try {
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '/opt/pw-browsers';
 
 const argv = process.argv.slice(2);
-const opt = { q: 'low', size: '640x360', timeout: 600000, shots: '', extra: '' };
+const opt = { q: 'low', size: '640x360', timeout: 600000, shots: '', extra: '', mode: '', map: '' };
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === '--q') opt.q = argv[++i];
@@ -46,6 +51,8 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--timeout') opt.timeout = Number(argv[++i]);
   else if (a === '--shots') opt.shots = argv[++i];
   else if (a === '--extra') opt.extra = argv[++i]; // parâmetros de URL somados (ex.: "dynres=0")
+  else if (a === '--mode') opt.mode = argv[++i];
+  else if (a === '--map') opt.map = argv[++i];
   else {
     console.error('argumento desconhecido:', a);
     process.exit(2);
@@ -140,8 +147,31 @@ async function botTick() {
     const m = ctx.services.hud.match;
     const alive = (en?.list || []).filter((e) => e.alive);
     const st = { phase: m.phase, kills: m.kills, wave: m.wave, alive: alive.length, screen: ctx.services.hud.screen, firing: false };
-    if (m.phase !== 'play' || !alive.length) {
+    if (m.phase !== 'play' || (!alive.length && !m.zone)) {
       ctx.input.simulate('fire', false);
+      return st;
+    }
+    // HARDPOINT: segura o centro da zona e só atira em quem está à vista
+    const zone = m.zone;
+    if (zone) {
+      const zp = p.position;
+      if (Math.hypot(zp.x - zone.x, zp.z - zone.z) > 1.5) p.setPose({ position: [zone.x, zone.y || 0, zone.z] });
+      st.zone = { cap: +m.zs.cap.toFixed(2), hold: +m.zs.hold.toFixed(1), owner: m.zs.owner };
+      const eye = p.eyePosition;
+      let tgt = null;
+      for (const e of alive) {
+        const c = e.group.position.clone().setY(e.group.position.y + 1.15);
+        if (ctx.collision.lineOfSight(eye, c, { filter: (o) => !o.data?.enemy }) && (!tgt || c.distanceTo(eye) < tgt.distanceTo(eye))) tgt = c;
+      }
+      if (!tgt) {
+        ctx.input.simulate('fire', false);
+        return st;
+      }
+      const d = tgt.clone().sub(eye);
+      p.yaw = Math.atan2(-d.x, -d.z);
+      p.pitch = Math.atan2(d.y, Math.hypot(d.x, d.z));
+      ctx.input.simulate('fire', true);
+      st.firing = true;
       return st;
     }
     let best = null;
@@ -150,20 +180,30 @@ async function botTick() {
       if (!best || d < best.d) best = { e, d };
     }
     const tgt = best.e.group.position.clone();
-    const chest = tgt.clone().setY(tgt.y + 1.15);
+    // peito de verdade (agachado atrás de cobertura fica bem mais baixo)
+    const chest = tgt.clone().setY(tgt.y + 1.15 - (best.e.anim?.p?.crouch || 0) * 0.5);
     const eye = p.eyePosition;
-    const los = ctx.collision.lineOfSight ? ctx.collision.lineOfSight(eye, chest, { filter: (c) => !c.data?.enemy }) : true;
+    const filt = { filter: (c) => !c.data?.enemy };
+    const los = ctx.collision.lineOfSight ? ctx.collision.lineOfSight(eye, chest, filt) : true;
     if (best.d > 14 || !los) {
-      // aproxima: 9 m à frente do inimigo, do lado do jogador, na pista
+      // aproxima: ~9 m do inimigo, do lado do jogador, num ponto livre COM
+      // linha de visada até o peito (contorna a cobertura pelos lados)
       const dz = p.position.z > tgt.z ? 9 : -9;
-      for (const dx of [0, 1.5, -1.5, 3, -3]) {
-        const P = new T.Vector3(tgt.x + dx, 0, tgt.z + dz);
+      let first = null;
+      for (const [dx, k] of [[0, 1], [2, 1], [-2, 1], [4, 0.8], [-4, 0.8], [6, 0.6], [-6, 0.6], [0, 0.6], [3, 0.4], [-3, 0.4]]) {
+        const P = new T.Vector3(tgt.x + dx, 0, tgt.z + dz * k);
         const c = new T.Vector3(P.x, 1, P.z);
         if (ctx.collision.overlapSphere(c, 0.45, (o) => !o.trigger && !o.data?.enemy).length) continue;
         const y = ctx.collision.groundHeight ? ctx.collision.groundHeight(P.x, P.z, 3) : 0;
-        p.setPose({ position: [P.x, Number.isFinite(y) ? y : 0, P.z] });
-        break;
+        const pos = [P.x, Number.isFinite(y) ? y : 0, P.z];
+        first ||= pos;
+        const ey = new T.Vector3(P.x, pos[1] + 1.62, P.z);
+        if (!ctx.collision.lineOfSight || ctx.collision.lineOfSight(ey, chest, filt)) {
+          first = pos;
+          break;
+        }
       }
+      if (first) p.setPose({ position: first });
     }
     const e2 = p.eyePosition;
     const d = chest.clone().sub(e2);
@@ -178,7 +218,9 @@ async function botTick() {
 
 try {
   log(`carregando (q=${opt.q}, ${W}x${H})`);
-  await page.goto(`${base}?q=${opt.q}&waves=1,1&wi=1&mt=900${opt.extra ? '&' + opt.extra : ''}`, { waitUntil: 'load', timeout: opt.timeout });
+  const modeQ = opt.mode ? `&mode=${opt.mode}${opt.mode === 'hardpoint' ? '&hold=12' : ''}` : '';
+  const mapQ = opt.map ? `&map=${opt.map}` : '';
+  await page.goto(`${base}?q=${opt.q}&waves=1,1&wi=1&mt=900${modeQ}${mapQ}${opt.extra ? '&' + opt.extra : ''}`, { waitUntil: 'load', timeout: opt.timeout });
   await page.waitForFunction(() => window.__ready === true, null, { timeout: opt.timeout, polling: 200 });
   // instrumentação: conta eventos do bus
   await ev(() => {
@@ -225,12 +267,29 @@ try {
   check(moved > 1.5, `jogador andou ${moved.toFixed(2)} m`);
 
   // onda 1 → abate, recarga; onda 2 → fim
-  check(await until(() => window.__ironline.services.hud.match.wave >= 1 && window.__ironline.services.enemies.count() > 0, null, 180000), 'onda 1 entrou');
+  // espera em TEMPO DE JOGO (até 12 s simulados; teto real de 15 min): sob
+  // carga o SwiftShader anda ~0,01 s de jogo por segundo real
+  {
+    const g0 = await ev(() => window.__ironline.time.now);
+    let ok = false;
+    for (const end = Date.now() + 900000; Date.now() < end; ) {
+      const s = await ev(() => {
+        const c = window.__ironline;
+        return { ok: c.services.hud.match.wave >= 1 && c.services.enemies.count() > 0, t: c.time.now };
+      });
+      if (s.ok) { ok = true; break; }
+      if (s.t - g0 > 12) break;
+      await wait(500);
+    }
+    check(ok, 'onda 1 entrou');
+  }
   let reloaded = false;
   let shotTaken = false;
-  const end = Date.now() + opt.timeout;
+  // a partida tem até 240 s de JOGO (teto real: --timeout × 6)
+  const end = Date.now() + opt.timeout * 6;
+  const gEnd = (await ev(() => window.__ironline.time.now)) + 240;
   let last = null;
-  while (Date.now() < end) {
+  while (Date.now() < end && (await ev(() => window.__ironline.time.now)) < gEnd) {
     const st = await botTick();
     if (JSON.stringify([st.phase, st.kills, st.wave, st.alive, st.screen]) !== last) {
       last = JSON.stringify([st.phase, st.kills, st.wave, st.alive, st.screen]);
@@ -240,7 +299,7 @@ try {
       shotTaken = true;
       await snap('3-combat');
     }
-    if (st.kills >= 1 && !reloaded) {
+    if (st.kills >= 1 && !reloaded && opt.mode !== 'hardpoint') {
       await ev(() => window.__ironline.input.simulate('fire', false));
       check(await ev(() => (window.__ev['enemy:death'] || 0) >= 1), 'inimigo morto (enemy:death)');
       check(await ev(() => (window.__ev['weapon:hit'] || 0) >= 1), 'tiros acertaram (weapon:hit)');
@@ -273,12 +332,17 @@ try {
   check(await until(() => window.__ironline.services.hud.screen === 'end', null, 30000), 'relatório pós-ação aberto');
   const fin = await ev(() => {
     const m = window.__ironline.services.hud.match;
-    return { win: m.win, kills: m.kills, deaths: m.deaths, shots: m.shots, hits: m.hits, score: m.score, waves: m.wave, ev: window.__ev };
+    return { win: m.win, kills: m.kills, deaths: m.deaths, shots: m.shots, hits: m.hits, score: m.score, waves: m.wave, ev: window.__ev, captured: m.zs?.captured || 0, hold: +(m.zs?.hold || 0).toFixed(1), boss: !!m.bossKilled };
   });
   log('final', fin);
-  check(fin.win === true, 'partida vencida (todas as ondas limpas)');
-  check(fin.kills >= 2, `abates: ${fin.kills}`);
-  check(fin.ev['match:wave'] >= 2 && fin.ev['match:waveClear'] >= 1, 'ondas anunciadas');
+  check(fin.win === true, opt.mode === 'hardpoint' ? 'partida vencida (posse da zona)' : 'partida vencida (todas as ondas limpas)');
+  if (opt.mode === 'hardpoint') {
+    check(fin.captured >= 1, `zona capturada (${fin.captured}×, posse ${fin.hold} s)`);
+  } else {
+    check(fin.kills >= 2, `abates: ${fin.kills}`);
+    check(fin.ev['match:wave'] >= 2 && fin.ev['match:waveClear'] >= 1, 'ondas anunciadas');
+  }
+  if (opt.mode === 'survival') check(fin.boss, 'chefe (juggernaut) entrou e foi abatido');
   await snap('4-end');
 
   // desempenho (indicativo: SwiftShader na CPU, não representa GPU real)

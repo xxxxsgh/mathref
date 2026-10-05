@@ -508,4 +508,83 @@ export const CSS = /* css */ `
 #hud .me-strip .pcard .xpbk { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border-top: 1px solid var(--line); }
 #hud .me-strip .pcard .xpbk > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; background: rgba(10,13,16,.95); color: var(--ink2); }
 #hud .me-strip .pcard .xpbk span { color: var(--amber); }
+
+/* ── modos (menu principal) ───────────────────────────────────────── */
+#hud .modes { display: flex; gap: 8px; margin-top: 18px; }
+#hud .mode-c { display: flex; align-items: center; gap: 12px; width: 206px; height: 60px; padding: 0 14px; cursor: pointer; color: var(--ink2);
+  background: linear-gradient(180deg, rgba(14,17,20,.78), rgba(10,13,16,.6)); border: 1px solid rgba(255,255,255,.1); transition: border-color .15s, color .15s, background .15s; }
+#hud .mode-c .mt { display: flex; flex-direction: column; gap: 6px; }
+#hud .mode-c .mt > .ft:last-child { color: var(--ink3); }
+#hud .mode-c .mi { color: var(--ink3); display: flex; }
+#hud .mode-c:hover { color: var(--ink); border-color: rgba(255,255,255,.24); }
+#hud .mode-c.on { color: var(--ink); border-color: rgba(226,180,90,.7); background: linear-gradient(180deg, rgba(64,52,28,.88), rgba(28,24,16,.72)); box-shadow: inset 0 -3px 0 var(--amber); }
+#hud .mode-c.on .mi, #hud .mode-c.on .mt > .ft:last-child { color: var(--amber); }
+/* ── seletor de mapa ──────────────────────────────────────────────── */
+#hud .maps .mcards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; }
+#hud .mapc { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 0 0 10px; cursor: pointer; background: rgba(6,8,10,.55); border: 1px solid rgba(255,255,255,.08); transition: border-color .15s, transform .15s; }
+#hud .mapc:hover { border-color: rgba(255,255,255,.3); transform: translateY(-2px); }
+#hud .mapc.cur { border-color: rgba(226,180,90,.75); box-shadow: 0 0 0 1px rgba(226,180,90,.35), 0 10px 26px rgba(0,0,0,.35); }
+#hud .mapc .th { position: relative; height: 96px; overflow: hidden; border-bottom: 1px solid rgba(255,255,255,.08); }
+#hud .mapc .th svg { display: block; }
+#hud .mapc:not(.cur) .th svg { filter: saturate(.6) brightness(.8); }
+#hud .mapc .tag { position: absolute; left: 0; top: 0; padding: 5px 8px; background: var(--amber); color: #121110; }
+#hud .mapc .tag.go { background: rgba(10,12,14,.82); color: var(--ink); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+#hud .mapc .mn { padding: 0 10px; color: var(--ink); }
+#hud .mapc.cur .mn { color: var(--amber2); }
+#hud .mapc .md { padding: 0 10px; color: var(--ink2); font-size: 12.5px; line-height: 1.35; letter-spacing: .01em; }
+#hud .mapc.loading { opacity: .6; }
+#hud .maploading { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: rgba(5,7,9,.86); color: var(--ink); }
+#hud .maploading > .ft:first-child { color: var(--amber); }
+/* ── loadout: desbloqueios, camuflagens ───────────────────────────── */
+#hud .slot .cm { color: var(--amber); }
+#hud .slot.locked, #hud .att.locked, #hud .cw.locked { cursor: not-allowed; }
+#hud .slot.locked .lbl { opacity: .5; }
+#hud .slot .lk, #hud .att .lk { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; padding: 4px 8px; color: var(--amber); background: rgba(0,0,0,.4); border: 1px solid rgba(226,180,90,.35); }
+#hud .att.locked { color: var(--ink3); background: rgba(10,12,14,.45); }
+#hud .att.locked:hover { color: var(--ink3); border-color: rgba(255,255,255,.06); }
+#hud .att .lk { padding: 2px 6px; }
+#hud .camos { margin-top: 6px; }
+#hud .camos .ph { padding: 12px 16px; }
+#hud .camos .sw { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; padding: 12px 14px 8px; }
+#hud .cw { position: relative; height: 50px; cursor: pointer; border: 1px solid rgba(255,255,255,.12); background: linear-gradient(135deg, #3b3b3a, #262624 60%, #4a4842); overflow: hidden; }
+#hud .cw i { position: absolute; inset: 0; background-size: 64px 64px; }
+#hud .cw:hover { border-color: rgba(255,255,255,.4); }
+#hud .cw.on { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber), inset 0 0 0 2px rgba(0,0,0,.5); }
+#hud .cw.locked i { filter: grayscale(1) brightness(.35); }
+#hud .cw.locked b { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--amber); }
+#hud .camos .cn { display: flex; justify-content: space-between; align-items: center; padding: 4px 16px 12px; color: var(--ink); }
+#hud .camos .cn span { color: var(--ink3); }
+#hud .nxu { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px 14px; margin-top: 6px; padding: 12px 16px; background: rgba(10,13,16,.78); border: 1px solid rgba(255,255,255,.08); color: var(--ink); }
+#hud .nxu .k { color: var(--ink3); }
+#hud .nxu .r { color: var(--amber); }
+#hud .nxu .xpb { grid-column: 1 / -1; height: 4px; background: rgba(255,255,255,.1); }
+#hud .nxu .xpb i { display: block; height: 100%; background: var(--amber); }
+/* ── relatório: desbloqueios + toast de nível ─────────────────────── */
+#hud .prog .unl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; color: var(--amber); }
+#hud .prog .unl .u { display: flex; align-items: center; gap: 8px; padding: 5px 9px; background: rgba(226,180,90,.1); border: 1px solid rgba(226,180,90,.4); color: var(--ink); }
+#hud .prog .unl .kd { color: var(--amber); }
+#hud .lvup { position: absolute; left: 50%; top: 8px; z-index: 20; display: flex; align-items: center; gap: 22px; padding: 18px 34px 18px 24px; transform: translateX(-50%);
+  background: linear-gradient(90deg, rgba(40,32,16,.96), rgba(16,14,10,.94)); border: 1px solid rgba(226,180,90,.7); box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 18px 60px rgba(0,0,0,.6), 0 0 40px rgba(226,180,90,.18);
+  color: var(--amber); animation: lvIn 4.6s cubic-bezier(.2,.9,.3,1) 1.1s both; pointer-events: none; }
+#hud .lvup.pin { animation: none; }
+#hud .lvup .tx { display: flex; flex-direction: column; gap: 8px; }
+#hud .lvup .tx > .ft:nth-child(2) { color: var(--ink); }
+#hud .lvup .ul { display: flex; gap: 10px; margin-top: 4px; }
+#hud .lvup .ul span { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; background: rgba(0,0,0,.35); border: 1px solid rgba(226,180,90,.35); color: var(--ink); }
+#hud .lvup .ul svg { color: var(--amber); }
+@keyframes lvIn { 0% { opacity: 0; transform: translate(-50%, -24px) scale(.96); } 8% { opacity: 1; transform: translate(-50%, 0) scale(1); } 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -12px); } }
+
+/* menu principal com modos + mapas: coluna e painel lateral mais compactos */
+#hud .main .title { margin-top: 14px; }
+#hud .main .desc { margin-top: 12px; font-size: 17px; line-height: 1.45; }
+#hud .main .facts { margin-top: 18px; padding: 12px 0; }
+#hud .main .btns { margin-top: 22px; gap: 6px; }
+#hud .main .feat { top: 836px; }
+#hud .main .feat .tile { height: 134px; }
+#hud .main .side { top: 150px; gap: 8px; }
+#hud .main .chal { padding: 8px 20px; }
+#hud .main .side .panel .ph { padding: 12px 20px; }
+#hud .main .mapc .md { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+#hud .main .opname { left: 1010px; top: 896px; }
+#hud .me-strip .pcard .xpbk > div:nth-child(5) { grid-column: 1 / -1; }
 `;

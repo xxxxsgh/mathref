@@ -34,7 +34,7 @@ export const FINGERS = [
   { x: 0.0292, z: -0.0785, y: -0.0012, L: [0.036, 0.021, 0.019], r: 0.0079 }, // mínimo
 ];
 // polegar: osso 0 = metacarpo (sai da base da palma), 1 = proximal, 2 = distal
-export const THUMB = { x: -0.026, y: -0.0095, z: -0.018, L: [0.041, 0.032, 0.027], r: 0.0104, rad: [0.0132, 0.0111, 0.0103, 0.0093] };
+export const THUMB = { x: -0.026, y: -0.0095, z: -0.018, L: [0.041, 0.032, 0.027], r: 0.0104, rad: [0.015, 0.0108, 0.0098, 0.0089] };
 
 const smoothstep01 = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 const sm = (a, b, t) => smoothstep01((t - a) / (b - a));
@@ -69,7 +69,7 @@ function mcpZ(x) {
  */
 function palmGeo(fb, tb) {
   const NU = 34, NT = 44;
-  const pos = [], col = [], skI = [], skW = [], idx = [];
+  const pos = [], col = [], pan = [], skI = [], skW = [], idx = [];
   const zW = 0.012;
   for (let iu = 0; iu <= NU; iu++) {
     const u = iu / NU;
@@ -135,6 +135,7 @@ function palmGeo(fb, tb) {
       seam += gauss(dpan - 0.5, 0.16) * (s > 0.3 ? 0.8 : 0);
       const dk = 1 - 0.45 * Math.min(1, seam);
       col.push(C[0] * dk, C[1] * dk, C[2] * dk);
+      pan.push(Math.max(pal, pad * 0.6), Math.min(1, seam));
       // ─ skinning ─
       const wf = sm(0.7, 1.0, u) * 0.7;
       const ws = FINGERS.map((f) => gauss(x / capS - f.x, 0.0105));
@@ -142,7 +143,10 @@ function palmGeo(fb, tb) {
       const a = order[0], b = order[1];
       const sum = ws[a] + ws[b] || 1;
       const wA = (wf * ws[a]) / sum, wB = (wf * ws[b]) / sum;
-      const wT = 0.45 * gauss(x + 0.022, 0.012) * gauss(u - 0.4, 0.2) * sm(0.2, -0.4, s);
+      // borda radial (tenar + membrana entre polegar e indicador) acompanha o
+      // metacarpo do polegar: ao abrir o polegar a palma estica como pele,
+      // em vez de o polegar sair da palma como um tubo solto
+      const wT = (0.75 - 0.25 * sm(-0.2, 0.6, s)) * gauss(x / capS + 0.027, 0.011) * gauss(u - 0.42, 0.24);
       const wP = Math.max(0, 1 - wA - wB - wT);
       skI.push(0, fb[a], fb[b], tb);
       skW.push(wP, wA, wB, wT);
@@ -157,6 +161,7 @@ function palmGeo(fb, tb) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('glove', new THREE.Float32BufferAttribute(pan, 2));
   g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skI, 4));
   g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skW, 4));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array((pos.length / 3) * 2), 2));
@@ -166,74 +171,117 @@ function palmGeo(fb, tb) {
 }
 
 /**
- * Tubo de um dígito (dedo/polegar) com pesos de skinning, ao longo de −Z a
- * partir da junta-base (x, y, z). sj = posições das 3 juntas ao longo do
- * eixo; len = comprimento até a ponta; rad = raios [base, médio, distal,
- * ponta]; bones = [palma, b0, b1, b2].
+ * Dígito (dedo/polegar) com pesos de skinning, ao longo de −Z a partir da
+ * junta-base (x, y, z). sj = posições das 3 juntas ao longo do eixo; len =
+ * comprimento até a ponta; rad = raios [base, junta 1, junta 2, ponta];
+ * bones = [palma, b0, b1, b2].
+ *
+ * Anatomia (luva justa): seção elíptica mais larga que alta, afinando da
+ * base à ponta; "cintura" no meio de cada falange e côndilos mais largos nas
+ * juntas; nó saliente no dorso de cada junta com rugas de tecido franzido;
+ * vinco de flexão fundo na palma; polpas carnudas em cada falange; ponta
+ * com dorso achatado (unha sob a luva) e polpa arredondada embaixo.
  */
 function digitTube({ x, y, z, sj, len, rad, back = 0.014, bones, thumb = false }) {
-  const SEG = 22;
+  const SEG = 28;
   const r = rad[1];
-  // estações: densas nas juntas e na ponta
+  const capL = rad[3] * (thumb ? 1.45 : 1.6); // calota da ponta (alongada)
+  const tipStart = len - capL;
+  // estações densas (rugas e vincos de ~1 mm precisam de resolução)
   const st = [];
-  for (let s = -back; s < len - r * 1.15; s += 0.0022) st.push(s);
-  for (let k = 0; k <= 12; k++) st.push(len - r * 1.15 + r * 1.15 * Math.sin((k / 12) * Math.PI / 2));
-  const radAt = (s) => {
+  for (let s = -back; s < tipStart; s += 0.0012) st.push(s);
+  for (let k = 0; k <= 16; k++) st.push(tipStart + capL * Math.sin((k / 16) * Math.PI / 2));
+  const lerpR = (s) => {
     if (s <= 0) return rad[0];
-    if (s >= sj[2]) return rad[2] + (rad[3] - rad[2]) * Math.min(1, (s - sj[2]) / (len - sj[2]));
-    if (s >= sj[1]) return rad[1] + (rad[2] - rad[1]) * ((s - sj[1]) / (sj[2] - sj[1]));
-    return rad[0] + (rad[1] - rad[0]) * (s / sj[1]);
+    if (s <= sj[1]) return rad[0] + (rad[1] - rad[0]) * (s / sj[1]);
+    if (s <= sj[2]) return rad[1] + (rad[2] - rad[1]) * ((s - sj[1]) / (sj[2] - sj[1]));
+    return rad[2] + (rad[3] - rad[2]) * Math.min(1, (s - sj[2]) / Math.max(1e-4, tipStart - sj[2]));
   };
-  const pos = [], col = [], skI = [], skW = [], idx = [];
-  const tipSeam = sj[2] + (len - sj[2]) * 0.3; // borda do reforço de couro da ponta
-  const padC = sj[0] + (sj[1] - sj[0]) * 0.5, padH = (sj[1] - sj[0]) * 0.3;
+  // cintura entre as juntas (diáfise da falange mais fina que os côndilos)
+  const waist = (s) => {
+    for (let q = 0; q < 2; q++) {
+      const a = q === 0 ? 0 : sj[q], b = sj[q + 1];
+      if (s > a && s < b) return Math.sin(((s - a) / (b - a)) * Math.PI);
+    }
+    return 0;
+  };
+  const knuckle = thumb ? [0, 0.16, 0.14] : [0, 0.15, 0.1];
+  const pos = [], col = [], pan = [], skI = [], skW = [], idx = [];
+  const tipSeam = sj[2] + (len - sj[2]) * 0.34; // borda do reforço de couro da ponta
+  // almofada dorsal na falange proximal (no polegar o segmento 0 é o metacarpo)
+  const pq = thumb ? 1 : 0;
+  const padC = sj[pq] + (sj[pq + 1] - sj[pq]) * 0.52, padH = (sj[pq + 1] - sj[pq]) * (thumb ? 0.24 : 0.28);
+  // polegar: reforço de couro cobre a falange distal inteira e a face palmar
+  const tipSeamT = thumb ? sj[2] - r * 0.25 : tipSeam;
   for (let i = 0; i < st.length; i++) {
     const s = st[i];
-    const rr = radAt(s);
-    const tipStart = len - rr * 1.15;
-    const cap = s > tipStart ? Math.sqrt(Math.max(0, 1 - ((s - tipStart) / (len - tipStart)) ** 2)) : 1;
-    // pesos: palma → b0 → b1 → b2
-    const t0 = sm(-r * 0.9, r * 0.5, s), t1 = sm(sj[1] - r * 0.5, sj[1] + r * 0.45, s), t2 = sm(sj[2] - r * 0.45, sj[2] + r * 0.4, s);
+    const rr = lerpR(s);
+    const tc = s > tipStart ? (s - tipStart) / capL : 0;
+    // perfil da ponta: superelipse (rombuda, não ogiva) — fecha em tc = 1
+    const cap = tc > 0 ? Math.pow(Math.max(0, 1 - Math.pow(tc, 2.4)), 1 / 2.4) : 1;
+    // pesos: palma → b0 → b1 → b2 (transição curta: a junta dobra como dobradiça)
+    const t0 = sm(-r * 0.6, r * 0.35, s), t1 = sm(sj[1] - r * 0.38, sj[1] + r * 0.38, s), t2 = sm(sj[2] - r * 0.36, sj[2] + r * 0.36, s);
     const w = [1 - t0, t0 - t1, t1 - t2, t2];
+    const dist = sm(sj[2] - r * 0.3, len, s); // 0 → 1 ao longo da falange distal
     for (let j = 0; j < SEG; j++) {
       const th = (j / SEG) * Math.PI * 2;
       const c = Math.cos(th), sn = Math.sin(th);
-      let k = rr;
+      const up = Math.max(0, sn), dn = Math.max(0, -sn);
+      let k = rr * (1 - (thumb ? 0.08 : 0.045) * waist(s));
       for (let q = 1; q < 3; q++) {
-        const g = gauss(s - sj[q], r * 0.75);
-        // junta: nó saliente no dorso, vinco de flexão na palma, tecido franzido
-        k += r * 0.07 * g * Math.max(0, sn);
-        k -= r * 0.1 * gauss(s - sj[q], r * 0.2) * Math.max(0, -sn);
-        k += r * 0.03 * Math.sin(s * 1500 + th * 2) * g * Math.max(0, sn);
+        const d = s - sj[q];
+        const g = gauss(d, r * 0.5);
+        // côndilos: a junta é mais larga que a diáfise
+        k += r * 0.05 * g * Math.abs(c);
+        // nó dorsal (um pouco distal ao eixo da junta, como a cabeça da falange)
+        k += r * knuckle[q] * gauss(d - r * 0.08, r * 0.42) * up ** 1.6;
+        // tecido franzido sobre o nó: 3–4 rugas finas transversais
+        k += r * 0.035 * Math.sin(d * 2400 + c * 1.2) * gauss(d, r * 0.75) * up;
+        // vinco de flexão fundo na face palmar
+        k -= r * 0.14 * gauss(d + r * 0.05, r * 0.16) * dn ** 0.8;
       }
-      // polpas das falanges na face palmar
+      // vinco palmar na base do dedo (prega digitopalmar)
+      if (!thumb) k -= r * 0.1 * gauss(s - r * 0.45, r * 0.16) * dn ** 0.8;
+      // polpas das falanges na face palmar (a distal é a mais cheia)
       for (let q = 0; q < 3; q++) {
         const a = sj[q], b = q < 2 ? sj[q + 1] : len;
-        k += r * 0.07 * gauss(s - (a + b) / 2, (b - a) * 0.3) * Math.max(0, -sn);
+        const amp = q === 2 ? 0.13 : 0.07;
+        k += r * amp * gauss(s - (a + b) * 0.5 - (q === 2 ? -0.08 * (b - a) : 0), (b - a) * 0.3) * dn;
       }
-      // almofada de TPU na falange proximal (dedos, dorso)
-      let pad = 0;
-      if (!thumb) {
-        pad = (1 - sm(padH * 0.8, padH * 1.15, Math.abs(s - padC))) * sm(0.45, 0.7, sn);
-        k += r * 0.09 * pad;
-      }
+      // almofada de TPU na falange proximal (dedos, dorso): degrau nítido
+      const pad = (1 - sm(padH * 0.85, padH * 1.05, Math.abs(s - padC))) * sm(0.5, 0.72, sn);
+      k += r * 0.1 * pad;
       // costura lateral (fourchette) em relevo, um pouco para a palma
-      const seamS = gauss(sn + 0.18, 0.07) * (s > -0.004 ? 1 : 0);
-      k += r * 0.025 * seamS;
-      // ponta: dorso achatado (unha sob a luva)
-      const flat = s > sj[2] ? 1 - 0.1 * Math.max(0, sn) * sm(sj[2], len, s) : 1;
+      const seamS = gauss(sn + 0.18, 0.06) * (s > -0.004 ? 1 : 0);
+      k += r * 0.03 * seamS;
+      // ponta: dorso achatado (unha sob a luva), polpa mais cheia
+      k *= 1 - 0.16 * up * up * dist;
       k *= cap;
-      const ex = thumb ? 1.06 : 1.0, ey = thumb ? 0.9 : 0.92 * flat;
-      pos.push(x + c * k * ex, y + sn * k * ey, z - s);
+      // polegar: falange distal larga e achatada (polpa espatulada), proximal
+      // mais roliça — é o que separa o polegar de um "tubo"
+      const ex = thumb ? 1.02 + 0.12 * dist : 1.0 + 0.04 * dist;
+      const ey = (thumb ? 0.88 - 0.12 * dist : 0.84 - 0.04 * dist) * (sn > 0 ? 1 : 1.05);
+      // o eixo da ponta sobe um pouco (polpa embaixo, unha em cima)
+      const yc = rr * 0.12 * tc * tc;
+      pos.push(x + c * k * ex, y + yc + sn * k * ey, z - s);
       // cores: dorso tecido; palma e reforço da ponta em couro; almofada TPU
-      const pal = sm(0.0, -0.3, sn);
-      const tip = sm(tipSeam - 0.0012, tipSeam + 0.0008, s + Math.max(0, -sn) * 0.012);
-      let C = mix3(C_FAB, C_LEA, Math.max(pal, tip));
+      const pal = sm(0.02, -0.28, sn);
+      const tip = sm(tipSeamT - 0.0012, tipSeamT + 0.0008, s + dn * 0.012);
+      const lea = Math.max(pal, tip);
+      let C = mix3(C_FAB, C_LEA, lea);
       C = mix3(C, C_TPU, pad);
-      let seam = seamS * (1 - tip) + gauss(s + Math.max(0, -sn) * 0.012 - tipSeam, 0.0009) * 0.8;
-      if (!thumb) seam += gauss((1 - sm(padH * 0.8, padH * 1.15, Math.abs(s - padC))) * sm(0.45, 0.7, sn) - 0.5, 0.2) * 0.5 * (sn > 0.3 ? 1 : 0);
-      const dk = 1 - 0.45 * Math.min(1, seam);
+      let seam = seamS * (1 - tip) + gauss(s + dn * 0.012 - tipSeamT, 0.0008) * 0.9;
+      seam += gauss((1 - sm(padH * 0.85, padH * 1.05, Math.abs(s - padC))) * sm(0.5, 0.72, sn) - 0.5, 0.2) * 0.6 * (sn > 0.3 ? 1 : 0);
+      // sombra nas rugas e no vinco (sujeira acumulada nas dobras)
+      let fold = 0;
+      for (let q = 1; q < 3; q++) {
+        const d = s - sj[q];
+        fold += Math.max(0, -Math.sin(d * 2400 + c * 1.2)) * gauss(d, r * 0.75) * up * 0.35;
+        fold += gauss(d + r * 0.05, r * 0.2) * dn * 0.5;
+      }
+      const dk = (1 - 0.5 * Math.min(1, seam)) * (1 - 0.35 * Math.min(1, fold));
       col.push(C[0] * dk, C[1] * dk, C[2] * dk);
+      pan.push(Math.max(lea, pad * 0.6), Math.min(1, seam));
       skI.push(bones[0], bones[1], bones[2], bones[3]);
       skW.push(w[0], w[1], w[2], w[3]);
     }
@@ -247,6 +295,7 @@ function digitTube({ x, y, z, sj, len, rad, back = 0.014, bones, thumb = false }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('glove', new THREE.Float32BufferAttribute(pan, 2));
   g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skI, 4));
   g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skW, 4));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array((pos.length / 3) * 2), 2));
@@ -287,7 +336,7 @@ export class Hand {
       }
       fb.push(bones.length - 3);
       const len = sj[2] + f.L[2];
-      const rad = [f.r * 1.04, f.r * 0.97, f.r * 0.91, f.r * 0.84];
+      const rad = [f.r * 1.08, f.r * 0.95, f.r * 0.84, f.r * 0.76]; // afina da base à ponta
       digitGeos.push(digitTube({ x: f.x, y: f.y, z: f.z, sj, len, rad, back: 0.018, bones: [0, bones.length - 3, bones.length - 2, bones.length - 1] }));
       return joints;
     });

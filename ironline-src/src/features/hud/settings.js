@@ -12,7 +12,8 @@ export const DEFAULTS = {
   adsSens: 0.85, // multiplicador em mira
   invertY: false,
   fov: 105, // FOV HORIZONTAL em 16:9 (o jogador usa vertical)
-  quality: 'high',
+  quality: 'auto', // 'auto' (governador) ou um preset fixo
+  touchSens: 1, // multiplicador da mira por arrasto (toque)
   volume: 0.8,
   crosshair: 'white',
   minimapRotate: true,
@@ -35,20 +36,18 @@ export function save(obj, key = KEY) {
 }
 
 /** Perfil (progressão entre partidas). */
-export const PROFILE_DEFAULTS = { callsign: 'VANCE', tag: 'IRN', xp: 41250, kills: 0, headshots: 0, matches: 0, wins: 0, loadout: { primary: 0, optic: 1, muzzle: 0, grip: 1, lethal: 0, tactical: 0 } };
+/**
+ * Perfil novo começa no nível 1 (os desbloqueios saem do XP — progression.js).
+ * `camo` = camuflagem da primária, `mode` = último modo escolhido no menu
+ * (sobrevive à recarga da página ao trocar de mapa), `bosses`/`holds` =
+ * contadores de carreira dos modos novos.
+ */
+export const PROFILE_DEFAULTS = { callsign: 'VANCE', tag: 'IRN', xp: 0, kills: 0, headshots: 0, matches: 0, wins: 0, bosses: 0, captures: 0, camo: 'none', mode: 'waves', loadout: { primary: 0, optic: 0, muzzle: 0, grip: 0, lethal: 0, tactical: 0 } };
 export const loadProfile = () => load(PROFILE, PROFILE_DEFAULTS);
 export const saveProfile = (p) => save(p, PROFILE);
 
-/** Nível a partir do XP: curva levemente crescente. */
-export function levelOf(xp) {
-  let lv = 1, need = 2500, acc = 0;
-  while (xp >= acc + need && lv < 55) {
-    acc += need;
-    lv++;
-    need = 2500 + lv * 220;
-  }
-  return { level: lv, into: xp - acc, need };
-}
+/** Nível a partir do XP (curva em progression.js — lógica pura testada). */
+export { levelOf } from './progression.js';
 
 const SENS_BASE = 0.00037; // rad/px por ponto de sensibilidade (6 → 0.0022)
 const REF_ASPECT = 16 / 9;
@@ -61,6 +60,10 @@ export function apply(ctx, s, { skipQuality = false } = {}) {
   ctx.input.invertY = !!s.invertY;
   ctx.player.baseFov = Math.round(hfovToV(s.fov) * 10) / 10;
   ctx.services.audio?.setVolume?.(s.volume);
-  if (!skipQuality && ctx.quality.level !== s.quality && !ctx.shot && !ctx.params.has('q')) ctx.quality.set?.(s.quality);
+  ctx.services.touch?.setSensitivity?.(s.touchSens);
+  // compara com `setting` ('auto' ou o preset escolhido), não com `level` (em
+  // auto o nível muda sozinho e não pode ser "corrigido" a cada apply)
+  const cur = ctx.quality.setting ?? ctx.quality.level;
+  if (!skipQuality && cur !== s.quality && !ctx.shot && !ctx.params.has('q')) ctx.quality.set?.(s.quality);
 }
 export const baseSensitivity = (s) => SENS_BASE * s.sens;

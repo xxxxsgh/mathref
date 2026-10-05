@@ -840,11 +840,11 @@ export default {
     blendPoses(this.poseL, [[g.gripL.pose, handW[0] * (1 - st.ads)], [g.gripLAds.pose, handW[0] * st.ads], [POSES.mag, handW[1]], [POSES.flat, handW[2] + handW[3]]]);
     this.handL.apply(this.poseL);
 
-    // depuração: só as mãos, orientação identidade (?whand=yaw,pitch,pose)
+    // depuração: só as mãos, orientação identidade (?whand=yaw,pitch,pose[,dist])
     const wh = this.whand;
     if (wh) {
-      const [y, p, pn] = wh.split(',');
-      this.pivot.position.set(0, 0, -0.32);
+      const [y, p, pn, dist] = wh.split(',');
+      this.pivot.position.set(0, 0, -(Number(dist) || 0.32));
       this.pivot.rotation.set(Number(p) || 0, Number(y) || 0, 0, 'YXZ');
       for (const c of g.root.children) if (c !== this.handR.root && c !== this.handL.root) c.visible = false;
       this.handR.root.position.set(0.06, 0, 0.04);
