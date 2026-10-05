@@ -66,6 +66,24 @@ test('weapon/loadout: desistir no meio da guarda volta a sacar a mesma; ciclo e 
   assert.equal(w.ammo, w.def.magSize);
 });
 
+test('weapon/loadout: setGrenades/setTacticals fixam a contagem (inteiro ≥ 0) e travam o uso em 0', () => {
+  const lo = new Loadout(WEAPON_DEFS);
+  assert.equal(lo.setTacticals(0), 0);
+  assert.equal(lo.tacticals, 0);
+  assert.equal(lo.useEquipment('flash'), false, 'tática travada não é usada');
+  assert.equal(lo.grenades, EQUIP_DEFS.frag.count, 'mexer na tática não afeta a frag');
+  assert.equal(lo.setTacticals(3.7), 3);
+  assert.equal(lo.setTacticals(-2), 0);
+  assert.equal(lo.setTacticals(2), 2);
+  assert.equal(lo.useEquipment('flash'), true);
+  assert.equal(lo.tacticals, 1);
+  assert.equal(lo.setGrenades(1), 1);
+  assert.equal(lo.useEquipment('frag'), true);
+  assert.equal(lo.useEquipment('frag'), false);
+  lo.refill();
+  assert.equal(lo.tacticals, EQUIP_DEFS.flash.count);
+});
+
 /** Chão em y = 0 e uma parede em z = −6 num mundo de colisão real. */
 function world() {
   const c = new Collision();

@@ -32,11 +32,11 @@ encaixe do carregador).
 | `aux.js` | rig auxiliar: mão direita livre + manga que segura a faca/granada enquanto a arma desce; trilhas do golpe e do arremesso |
 | `projectiles.js` | granadas no mundo: malha, passo físico contra `ctx.collision`, detonação (vfx), dano em área com linha de visão |
 | `geo.js` | primitivas hard-surface e `Kit` (funde por material, normais vincadas) |
-| `materials.js` | PBR com detalhe injetado (triplanar, desgaste de quina, arranhões, sujeira, digitais, estrias), oclusão de contato analítica, IBL dessaturado; luva com painéis por cor de vértice; materiais da pistola, faca e granadas |
+| `materials.js` | (luva com `panels`: tecido com trama em relevo × couro sintético liso de grão fino, pesponto em relevo nas costuras; os varyings `vWObj`/`vWObjN` e o gancho `#include <map_fragment>` são API — o sistema de camuflagem do HUD injeta neles via `weapon.materials`) PBR com detalhe injetado (triplanar, desgaste de quina, arranhões, sujeira, digitais, estrias), oclusão de contato analítica, IBL dessaturado; luva com painéis por cor de vértice; materiais da pistola, faca e granadas |
 | `textures.js` | geradores CPU: grime, cordura, camuflagem original, gravação a laser |
 | `optic.js` | lente da holográfica (retículo no infinito, revestimento AR) |
-| `arms.js` | **mãos anatômicas**: palma (loft de seções superelípticas com arco dorsal, cabeças dos metacarpos, tenar/hipotenar, cavidade palmar) + 4 dedos + polegar numa malha só com skinning de 14 ossos; proporções de mão masculina com luva justa (nós ≈ 8,3 cm, dedo médio ≈ 9,8 cm, ~2 mm entre dedos); borda da palma ponderada nas falanges (os nós arredondam ao fechar) e tenar seguindo o polegar; painéis da luva (dorso de tecido verde-oliva, palma/pontas de couro sintético, protetor de nós de TPU segmentado, almofadas nas falanges, costuras laterais em relevo, vincos nas juntas); mangas com 2 ossos e manguito com velcro; relógio |
-| `grip.js` | resolvedor de pega: `solveClamp` (guarda-mão do fuzil) e `fitHand` genérico contra qualquer SDF (dedos flexionam falange a falange até encostar; polegar por busca em grade + descida de coordenadas, sem cruzar para o dorso; indicador busca a face do gatilho; ponto de passagem da junta do polegar). A mão de apoio na pistola abraça as cápsulas dos dedos REAIS da mão direita |
+| `arms.js` | **mãos anatômicas** (dedos afinam da base à ponta ~30%, seção elíptica, cintura nas falanges e côndilos nas juntas, nó dorsal com rugas de tecido franzido, vinco palmar fundo, polpas, ponta com dorso achatado e polpa cheia; polegar com falange distal larga/achatada; borda radial da palma acompanha o metacarpo do polegar como membrana; atributo `glove` = [couro, costura] por vértice): palma (loft de seções superelípticas com arco dorsal, cabeças dos metacarpos, tenar/hipotenar, cavidade palmar) + 4 dedos + polegar numa malha só com skinning de 14 ossos; proporções de mão masculina com luva justa (nós ≈ 8,3 cm, dedo médio ≈ 9,8 cm, ~2 mm entre dedos); borda da palma ponderada nas falanges (os nós arredondam ao fechar) e tenar seguindo o polegar; painéis da luva (dorso de tecido verde-oliva, palma/pontas de couro sintético, protetor de nós de TPU segmentado, almofadas nas falanges, costuras laterais em relevo, vincos nas juntas); mangas com 2 ossos e manguito com velcro; relógio |
+| `grip.js` | resolvedor de pega: `solveClamp` (guarda-mão do fuzil) e `fitHand` genérico contra qualquer SDF (dedos flexionam até encostar e depois redistribuem a flexão — a proximal pode "flutuar" para a média/distal abraçarem o perfil, PIP ≥ ~0,7·MCP, nada de dedo deitado reto; polegar por busca em grade + descida de coordenadas a partir dos 6 melhores candidatos, sem cruzar para o dorso, com teto opcional `ceilY`; indicador busca a face do gatilho; ponto de passagem da junta do polegar). A mão de apoio na pistola abraça as cápsulas dos dedos REAIS da mão direita + o guarda-mato |
 | `anim.js` | molas, easing, trilhas de keyframes |
 
 ## Controles
@@ -51,7 +51,8 @@ Campos do contrato (sempre da arma ATIVA): `gun`, `muzzle`, `ammo`, `reserve`, `
 `current` (definição + munição), `weapons` (`[{ slot, id, name, icon, kind, ammo, reserve, magSize }]`),
 `grenades`, `tacticals`, `equipment`, `cooking` (s), `liveGrenades`, `state`, `sprint`, `recoil`,
 `fireRate`, `ejectPort`, `brassByVfx`; métodos `fire()`, `reload()`, `inspect()`, `equip(slot?)`,
-`next(dir)`, `melee()`, `throwGrenade(kind)`, `refill()`, `setGrenades(n)`, `tune()`, `debugPose()`,
+`next(dir)`, `melee()`, `throwGrenade(kind)`, `refill()`, `setGrenades(n)`, `setTacticals(n)` (0 trava a
+atordoante — usado pela progressão do HUD), `tune()`, `debugPose()`,
 `debugView()`.
 
 Eventos novos: `weapon:switch { slot, id, name, icon, kind, ammo, reserve, magSize, auto }` (no instante
@@ -63,12 +64,17 @@ explosion: true`), sempre com `source: 'player'` e `ballistic: true` (a vfx não
 
 ## Câmera
 
-Enquadramento de hip (`hip` de cada arma em `guns.js`): fuzil a ~40 cm, quase
-centrado e apontando para o centro da tela (ocupa ~1/4 do quadro); a mão de
-apoio pega o guarda-mão por cima, perto do receptor (dorso e nós para a câmera,
-dedos abraçando o trilho, polegar no flanco), com o cotovelo baixo — a manga
-não cobre a mão. Pistola à direita, girada para mostrar o flanco esquerdo e as
-duas mãos (polegares para a frente).
+Enquadramento de hip (`hip` de cada arma em `guns.js`): fuzil a ~40 cm, com o
+guarda-mão girado ~11° para a esquerda (a mão de apoio é vista de lado, não
+"de punho"); a mão de apoio pega o guarda-mão por cima, perto do receptor
+(dorso e nós para a câmera, dedos quase perpendiculares ao cano abraçando o
+trilho, polegar descendo pelo flanco esquerdo e apontando para a frente), com
+o cotovelo baixo — a manga não cobre a mão. Pistola baixa à direita, bem de
+flanco (yaw 0,6): os dois polegares deitam no flanco esquerdo da armação,
+ABAIXO do ferrolho (teto `ceilY` no resolvedor), apontando para o alvo; o
+indicador esquerdo passa por baixo do guarda-mato (que entra no SDF da mão de
+apoio); o antebraço esquerdo sai para a esquerda e o punho dobra (wrist 0,8)
+para o dorso da mão aparecer em vez do manguito.
 
 A câmera da viewmodel copia a rotação da câmera do mundo a cada frame, então o
 sol (mesma direção/cor/intensidade do `world.sun`) e o IBL do céu ficam no
@@ -82,6 +88,7 @@ mesmo referencial do mundo. Sol ocluído por raycast (sombra de prédios) e teto
 - `&wanim=reload:0.6` — congela uma ação (`reload`, `reloadEmpty`, `inspect`, `equip`, `holster`, `melee`, `nadeRaise`, `nadeThrow`, `flashRaise`, `flashThrow`) no instante t.
 - `&wcrop=x,y,w` — amplia um recorte do enquadramento REAL (x, y, largura em fração da tela) — QA das mãos.
 - `&wpr=dx,dy,dz,px,py,pz` / `&wpl=Fx,Fy,Fz,Dx,Dy,Dz,px,py,pz` — testa a pega direita/esquerda na pistola (dorso/dedos e ponto da palma).
+- `&wprt=tx,ty,tz,mx,my,mz,teto` / `&wplt=tx,ty,tz,teto` — alvos do polegar direito (ponta, junta MCP, teto Y) / esquerdo na pistola.
 - `&wview=yaw,pitch,dist[,x,y,z]` — gira a arma diante da câmera focando o ponto (x,y,z) da arma.
 - `&whand=yaw,pitch,pose[,dist]` — só as mãos, numa pose de `POSES` (`guard`/`trigger` = pegas resolvidas da arma ativa).
 - `&wgrip=phi,fwd,thumbUp[,z,over,thumbX]` — testa outra pega da mão de apoio (ver `grip.js`).

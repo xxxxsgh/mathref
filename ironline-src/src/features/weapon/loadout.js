@@ -143,6 +143,16 @@ export class Loadout {
     this[k]--;
     return true;
   }
+  /** Fixa a contagem de granadas de fragmentação (inteiro ≥ 0). */
+  setGrenades(n) {
+    this.grenades = Math.max(0, n | 0);
+    return this.grenades;
+  }
+  /** Fixa a contagem de táticas/atordoantes (inteiro ≥ 0; 0 = travada, ex.: progressão do HUD). */
+  setTacticals(n) {
+    this.tacticals = Math.max(0, n | 0);
+    return this.tacticals;
+  }
   /** Reabastece (respawn/caixa de munição). */
   refill() {
     for (const w of this.weapons) {

@@ -407,7 +407,7 @@ export function makePistol(M, handR, handL, params) {
     anims: { reload: pistolReload(false), reloadEmpty: pistolReload(true), inspect: pistolInspect(), equip: pistolEquip(), holster: makeHolster(0.26, 1.4) },
     occ, casing: buildCasing9(M),
     recoil: { z: 0.4, x: 1.25, xAds: 0.7, climb: 0.0055, climbAds: 0.0045, kick: 0.11, slide: true },
-    anchorL: V(-0.32, -0.6, -0.05), followL: 0.1, wristL: 0.4,
+    anchorL: V(-0.42, -0.55, -0.1), followL: 0.0, wristL: 0.8,
     anchorR: V(0.24, -0.55, -0.05),
   };
 }

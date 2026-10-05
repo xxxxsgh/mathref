@@ -289,7 +289,8 @@ export default {
       /** Detona uma granada do jogador no ponto (QA/roteiros): mesmo dano/efeito do arremesso. */
       explodeAt: (point, kind = 'frag') => self.throwables.detonate(kind, new THREE.Vector3(point.x, point.y, point.z)),
       refill: () => self.lo.refill(),
-      setGrenades: (n) => (self.lo.grenades = Math.max(0, n | 0)),
+      setGrenades: (n) => self.lo.setGrenades(n),
+      setTacticals: (n) => self.lo.setTacticals(n),
       debugPose: (n, t) => self.debugPose(n, t),
       debugView: (y, p, d) => self.debugView(y, p, d),
       get debugLight() { return { sunVis: st.sunVis, indoor: st.indoor }; },

@@ -146,10 +146,12 @@ function palmGeo(fb, tb) {
       // borda radial (tenar + membrana entre polegar e indicador) acompanha o
       // metacarpo do polegar: ao abrir o polegar a palma estica como pele,
       // em vez de o polegar sair da palma como um tubo solto
-      const wT = (0.75 - 0.25 * sm(-0.2, 0.6, s)) * gauss(x / capS + 0.027, 0.011) * gauss(u - 0.42, 0.24);
-      const wP = Math.max(0, 1 - wA - wB - wT);
+      const wT = (0.6 - 0.3 * sm(-0.2, 0.6, s)) * gauss(x / capS + 0.027, 0.014) * gauss(u - 0.42, 0.2) * sm(0.05, 0.3, u) * (1 - sm(0.7, 0.85, u));
+      // pesos somam 1 (soma > 1 estica a malha em lascas na borda radial)
+      const sumW = wA + wB + wT, kW = sumW > 1 ? 1 / sumW : 1;
+      const wP = Math.max(0, 1 - sumW * kW);
       skI.push(0, fb[a], fb[b], tb);
-      skW.push(wP, wA, wB, wT);
+      skW.push(wP, wA * kW, wB * kW, wT * kW);
     }
   }
   for (let iu = 0; iu < NU; iu++) {
@@ -257,6 +259,9 @@ function digitTube({ x, y, z, sj, len, rad, back = 0.014, bones, thumb = false }
       // ponta: dorso achatado (unha sob a luva), polpa mais cheia
       k *= 1 - 0.16 * up * up * dist;
       k *= cap;
+      // ponta de trás fechada (dentro da palma): ao abrir o polegar a borda do
+      // tubo não aparece como uma lasca solta
+      if (s < 0) k *= Math.pow(Math.max(0, 1 - (s / back) ** 2), 0.35);
       // polegar: falange distal larga e achatada (polpa espatulada), proximal
       // mais roliça — é o que separa o polegar de um "tubo"
       const ex = thumb ? 1.02 + 0.12 * dist : 1.0 + 0.04 * dist;
