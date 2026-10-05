@@ -3,7 +3,7 @@
  * Teste ponta a ponta do IRONLINE: joga uma partida curta de verdade (fora
  * do modo shot) num Chromium headless e falha se algo quebrar.
  *
- *   node tools/e2e.mjs [--q low|medium|high] [--size 640x360] [--timeout ms] [--shots dir]
+ *   node tools/e2e.mjs [--q low|medium|high] [--size 640x360] [--timeout ms] [--shots dir] [--extra "k=v&k2=v2"]
  *
  * Roteiro:
  *   1. carrega o jogo (`?waves=1,1&wi=1`: duas ondas de 1 soldado, intervalo
@@ -38,13 +38,14 @@ try {
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '/opt/pw-browsers';
 
 const argv = process.argv.slice(2);
-const opt = { q: 'low', size: '640x360', timeout: 600000, shots: '' };
+const opt = { q: 'low', size: '640x360', timeout: 600000, shots: '', extra: '' };
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === '--q') opt.q = argv[++i];
   else if (a === '--size') opt.size = argv[++i];
   else if (a === '--timeout') opt.timeout = Number(argv[++i]);
   else if (a === '--shots') opt.shots = argv[++i];
+  else if (a === '--extra') opt.extra = argv[++i]; // parâmetros de URL somados (ex.: "dynres=0")
   else {
     console.error('argumento desconhecido:', a);
     process.exit(2);
@@ -80,6 +81,11 @@ const browser = await chromium.launch({
 });
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
 const errors = [];
+// queda do processo da página (memória, GPU) — registra na hora, com o tempo
+page.on('crash', () => {
+  errors.push('page crash');
+  console.log('  [page crash]');
+});
 page.on('pageerror', (e) => {
   errors.push('pageerror: ' + e.message);
   console.log('  [pageerror]', e.message);
@@ -172,7 +178,7 @@ async function botTick() {
 
 try {
   log(`carregando (q=${opt.q}, ${W}x${H})`);
-  await page.goto(`${base}?q=${opt.q}&waves=1,1&wi=1&mt=900`, { waitUntil: 'load', timeout: opt.timeout });
+  await page.goto(`${base}?q=${opt.q}&waves=1,1&wi=1&mt=900${opt.extra ? '&' + opt.extra : ''}`, { waitUntil: 'load', timeout: opt.timeout });
   await page.waitForFunction(() => window.__ready === true, null, { timeout: opt.timeout, polling: 200 });
   // instrumentação: conta eventos do bus
   await ev(() => {
