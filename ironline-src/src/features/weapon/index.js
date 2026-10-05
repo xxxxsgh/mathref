@@ -277,6 +277,8 @@ export default {
       /** equip() saca de novo a arma ativa; equip(slot) troca para o slot (0 = primária, 1 = secundária). */
       equip: (slot) => (slot == null ? self.startAction('equip') : self.requestSlot(slot)),
       next: (dir = 1) => self.requestCycle(dir),
+      /** Alterna primária ↔ secundária (botão de troca do toque). */
+      swap: () => self.requestCycle(1),
       melee: () => self.startMelee(ctx),
       /** Arremesso pela API (bots/testes/toque): arma, puxa o pino e lança assim que levantar. */
       throwGrenade: (kind = 'frag') => {
