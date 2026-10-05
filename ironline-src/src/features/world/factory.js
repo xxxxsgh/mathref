@@ -447,10 +447,10 @@ function gable(W, z, dir, openings) {
     decal(B, 'bullets', [11.5, 1.8, za - 0.014], 'nz', [1.6, 1.4], bulletRect(1), 0.3);
     decal(B, 'chips', [-4.5, 2.0, za - 0.0125], 'nz', [1.2, 0.8], [0.5, 0, 1, 0.5], 0.2);
     // letreiro pintado (nome da fábrica, apagado) — placa de chapa
-    B.box(-6, 6.6, za - 0.06, 6, 7.7, za, 'metal', { color: [0.5, 0.5, 0.46], collide: false, uvRand: true });
+    B.box(-6, 10.0, za - 0.06, 6, 11.1, za, 'metal', { color: [0.5, 0.5, 0.46], collide: false, uvRand: true });
     const sg = new THREE.PlaneGeometry(11.6, 0.95);
     sg.rotateY(Math.PI);
-    B.add(sg, 'fsign', mat4([0, 7.15, za - 0.065]), { worldUV: false, color: [1, 1, 1] });
+    B.add(sg, 'fsign', mat4([0, 10.55, za - 0.065]), { worldUV: false, color: [1, 1, 1] });
   }
 }
 
@@ -1378,7 +1378,7 @@ export const FACTORY = {
     { position: [-12.5, 0, 16], yaw: 0 },
   ],
   shotPoses: {
-    street: { position: [-4.5, 0, -43.2], yaw: Math.PI - 0.13, pitch: 0.07 },
+    street: { position: [-2.2, 0, -43.3], yaw: Math.PI - 0.19, pitch: 0.09 },
     interior: { position: [-3.2, 0, 1.5], yaw: Math.PI - 0.12, pitch: 0.1 },
     viewmodel: { position: [-1.5, 0, -3], yaw: Math.PI + 0.25, pitch: -0.04 },
     ads: { position: [0, 0, -2], yaw: Math.PI, pitch: 0.0 },
