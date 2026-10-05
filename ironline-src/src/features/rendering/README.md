@@ -11,7 +11,7 @@ Iluminação global e compositor HDR do IRONLINE. Tudo procedural, sem assets.
 | `Shadows.js` | sombra do sol ajustada à câmera, snap de texel, bias por texel; `RawShadow` (depth cru da mesma vista, para o PCSS) |
 | `SkyOcclusion.js` | mapa de altura visto de cima → oclusão de céu (interiores) |
 | `SunView.js` | vistas ortográficas do sol: RSM (GI de 1 rebatimento) e cascata larga de sombra |
-| `LocalProbe.js` | cubemap HDR da cena na posição do jogador → PMREM → reflexos/IBL da viewmodel |
+| `LocalProbe.js` | cubemap HDR da cena na posição do jogador → saneamento (NaN/Inf → 0, radiância ≤ 4·10⁴) → PMREM → reflexos/IBL da viewmodel |
 | `Dust.js` | poeira em suspensão que só brilha dentro dos feixes de sol |
 | `LensDirt.js` | textura procedural de sujeira de lente |
 | `shaders.js` | AO, blur bilateral, volumétrico, combine, bloom, exposição, tonemap, final |

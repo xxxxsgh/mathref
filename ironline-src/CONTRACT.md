@@ -309,7 +309,7 @@ mire as capturas (`--size 720`, `?only=`) enquanto itera.
 `node tools/e2e.mjs [--q low] [--size 640x360] [--shots dir]` joga uma
 partida curta de verdade (menu → loadout → DEPLOY → anda/pula → mata o
 inimigo da onda 1 → recarrega → onda 2 → relatório pós-ação) e falha com
-qualquer pageerror/console.error/erro de feature. Leva ~8 min no SwiftShader.
+qualquer pageerror/console.error/erro de feature. `--extra "k=v"` soma parâmetros de URL (ex.: `dynres=0`); a espera da recarga é medida em tempo de jogo. Leva ~8 min no SwiftShader.
 
 `window.__hold = true` congela o loop (as ferramentas usam isso para
 capturar a tela sem esperar um frame novo do SwiftShader).

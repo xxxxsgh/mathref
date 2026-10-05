@@ -250,13 +250,20 @@ try {
       await wait(250);
       await ev(() => window.__ironline.input.simulate('reload', false));
       check(await until(() => (window.__ev['weapon:reload'] || 0) >= 1, null, 30000), `recarga iniciada (munição antes: ${before})`);
-      check(
-        await until(() => {
-          const w = window.__ironline.services.weapon;
-          return !w.reloading && w.ammo === w.magSize;
-        }, null, 120000),
-        'recarga concluída (carregador cheio)',
-      );
+      // espera em TEMPO DE JOGO (até 8 s simulados; teto real de 15 min): no
+      // SwiftShader um frame leva vários segundos e o jogo anda ~0,08 s/frame
+      const g0 = await ev(() => window.__ironline.time.now);
+      let done = false;
+      for (const end = Date.now() + 900000; Date.now() < end; ) {
+        const s = await ev(() => {
+          const c = window.__ironline, w = c.services.weapon;
+          return { ok: !w.reloading && w.ammo === w.magSize, t: c.time.now };
+        });
+        if (s.ok) { done = true; break; }
+        if (s.t - g0 > 8) break;
+        await wait(500);
+      }
+      check(done, 'recarga concluída (carregador cheio)');
       reloaded = true;
     }
     if (st.phase === 'end' || st.screen === 'end') break;
