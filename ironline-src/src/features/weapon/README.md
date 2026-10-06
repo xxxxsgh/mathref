@@ -169,3 +169,18 @@ ombro, boca queimada — saindo paralela ao cano e girando). O serviço publica 
 
 Ajuste fino de luz (QA): `services.weapon.tune({ env, hemi, rim, bounce, sun })` multiplica as
 luzes da viewmodel; `services.weapon.debugLight` → `{ sunVis, indoor }`; `services.weapon.materials`.
+
+## Custo (aparelhos fracos)
+
+- Na carga só o loadout (KR-9 + P-11, ou a `wweap`) é montado; as outras armas, as facas na mão e as
+  facas do golpe rápido são montadas na 1ª vez que forem pedidas (`ensureGun`/`knifeRig`/`setKnife`).
+  Cosméticos e acessórios pedidos antes disso ficam guardados e são aplicados ao montar.
+- `init` é assíncrono e cede frames com `ctx.bootProgress` entre materiais, mãos, cada arma e faca/granadas.
+- `quality.tier !== 'desktop'`: texturas de padrão de skin 128² (256² no desktop) e render target da luneta 256².
+  O render target só ganha tamanho na 1ª vez que alguém mira com luneta; a imagem ampliada só é renderizada mirando.
+- A holográfica do KR-9 continua fundida na malha principal: o loadout padrão custa exatamente o mesmo que antes
+  (viewmodel no preset `viewmodel`, só weapon+rendering: 90 draw calls / 246 553 triângulos, antes e depois).
+  A ótica 3x troca para uma malha sem a holográfica montada sob demanda.
+- Cada arma = uma malha por material (Kit); armas/facas novas usam a biblioteca de materiais (clones baratos só
+  dos materiais pintáveis, mesmo programa de shader). Medido em `tools/mobile.mjs --cpu 6`: init da weapon
+  20,5 s (todas as armas montadas na carga) → 11,9 s (carga preguiçosa).
