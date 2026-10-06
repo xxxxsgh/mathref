@@ -20,12 +20,8 @@ export const FOLIAGE_U = {
   uSunColF: { value: new THREE.Color(1.0, 0.86, 0.68) },
 };
 
-function canvas(w, h) {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  return [c, c.getContext('2d')];
-}
+// canvas na escala da camada do aparelho (decals.js → setCanvasScale)
+import { canvas } from './decals.js';
 function tex(c) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;

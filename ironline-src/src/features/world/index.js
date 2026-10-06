@@ -186,6 +186,7 @@ export default {
     mats.taillight = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.18, metalness: 0, emissive: 0x2a0402, vertexColors: true, envMapIntensity: 1.2 });
     // poça: água turva e lisa (espelho do céu), sem intemperismo
     mats.puddle = new THREE.MeshStandardMaterial({ color: 0x15120f, roughness: 0.02, metalness: 0, envMapIntensity: 1.4, vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
+    await phase('decalques', 0.43);
     mats.mesh = new THREE.MeshStandardMaterial({ map: meshTexture(), alphaTest: 0.35, side: THREE.DoubleSide, roughness: 0.45, metalness: 0.8, vertexColors: true });
     mats.fabricDS = mats.fabric.clone();
     mats.fabricDS.side = THREE.DoubleSide;
@@ -218,7 +219,7 @@ export default {
       LAYOUT.uWalk.value.set(6.0, 9.5);
     }
     this.mats = mats;
-    await phase('decalques', 0.45);
+    await phase('materiais', 0.45);
 
     // ── céu, névoa, luzes ──
     scene.background = ATMOS.horizon.clone();

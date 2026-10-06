@@ -333,7 +333,7 @@ export default {
       setPrimary: (id) => self.setSlotWeapon(0, id),
       setSecondary: (id) => self.setSlotWeapon(1, id),
       /** Facas: [{ id, name, style }] (a TK-7 é a padrão). */
-      get knives() { return KNIVES.map((k) => ({ id: k.id, name: k.name, style: k.style })); },
+      get knives() { return KNIVES.map((k) => ({ id: k.id, name: k.name, style: k.style, aliases: k.aliases.slice() })); },
       get knife() { return self.knifeSel; },
       get knifeOut() { return self.lo.knifeOut; },
       setKnife: (id) => self.setKnife(id),
@@ -1362,9 +1362,32 @@ export default {
     this.updateExtras(dt, ctx);
   },
 
+  /**
+   * Skin × camuflagem de progressão do HUD (camo.js injeta em receiver/tan
+   * da biblioteca, usados só pelo KR-9): com skin no KR-9 a camuflagem fica
+   * desligada (o HUD pode religá-la a qualquer momento — reaplicamos por
+   * quadro); sem skin, o estado que o HUD pediu volta.
+   */
+  camoGate() {
+    const on = !!this.skins.kr9;
+    for (const k of ['receiver', 'tan']) {
+      const ud = this.M[k]?.userData?.hudCamo;
+      if (!ud?.uni) continue;
+      if (on) {
+        if (ud.uni.uHudCamo.value !== 0) (ud.wantOn = ud.uni.uHudCamo.value), (ud.uni.uHudCamo.value = 0);
+        if (ud.color && !this.M[k].color.equals(ud.color)) (ud.wantColor = this.M[k].color.clone()), this.M[k].color.copy(ud.color);
+      } else if (ud.wantOn != null || ud.wantColor) {
+        if (ud.wantOn != null) ud.uni.uHudCamo.value = ud.wantOn;
+        if (ud.wantColor) this.M[k].color.copy(ud.wantColor);
+        ud.wantOn = null;
+        ud.wantColor = null;
+      }
+    }
+  },
   /** Chaveiro, laser, luneta (imagem ampliada) e brilho da objetiva. */
   updateExtras(dt, ctx) {
     const g = this.g;
+    this.camoGate();
     const st = this.st;
     const vmOn = ctx.vm.visible !== false;
     // chaveiro: aceleração do jogador entra como força inercial

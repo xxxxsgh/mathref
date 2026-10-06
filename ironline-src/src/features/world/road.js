@@ -10,16 +10,13 @@ import { cached, mat4 } from './geo.js';
 import { decal } from './shapes.js';
 import { slabGeo, chunkGeo } from './rubble.js';
 
-function canvas(w, h) {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  return [c, c.getContext('2d')];
-}
+// canvas na escala da camada do aparelho (decals.js → setCanvasScale)
+import { canvas } from './decals.js';
 
 /** Altura (canvas cinza) → DataTexture normal. */
 function heightNormal(c, strength) {
   const w = c.width, h = c.height;
+  strength *= c.__k || 1; // canvas reduzido pela camada do aparelho
   const src = c.getContext('2d').getImageData(0, 0, w, h).data;
   const out = new Uint8Array(w * h * 4);
   const H = (x, y) => src[(((y + h) % h) * w + ((x + w) % w)) * 4] / 255;

@@ -17,7 +17,8 @@ export function setCanvasScale(s) {
   SCALE = Math.max(0.25, Math.min(1, s || 1));
 }
 
-function canvas(w, h) {
+/** Canvas na escala da camada (também usado por vegetation.js e road.js). */
+export function canvas(w, h) {
   const c = document.createElement('canvas');
   // só encolhe as grandes; as de 128² (contato, pintura) usam ImageData fixo
   const k = SCALE < 1 && Math.min(w, h) >= 256 ? SCALE : 1;
