@@ -213,6 +213,15 @@ export default {
     addEventListener('keyup', this._keyUp, true);
     addEventListener('resize', (this._rs = () => this.layout()));
     this._offs.push(on('quality:change', () => this.applyLowFx()));
+    // FPS: a opção espelha o estado real do contador (F7 também alterna)
+    this.settings.fps = !!ctx.perf?.visible;
+    this._offs.push(on('perf:overlay', (vis) => {
+      this.settings.fps = !!vis;
+      if (this.screens.cur === 'settings') { const fi = this.screens.focusIdx; this.screens.show('settings'); this.screens.focus(fi); }
+    }));
+    // campos de qualidade que só valem na próxima carga (comparados com os da carga)
+    const q0 = ctx.quality || {};
+    this._bootQ = { renderScale: q0.renderScale, detail: q0.detail, textureSize: q0.textureSize };
     this.layout();
     await step('regras', 0.7);
     // remove a tela de carga do index.html quando o jogo começa
@@ -274,6 +283,12 @@ export default {
   applyLowFx() {
     const q = this.ctx.quality;
     this.root.classList.toggle('lowfx', q?.level === 'low' || q?.tier === 'lite' || q?.tier === 'mobile');
+  },
+  /** A qualidade escolhida mudou algo que só se aplica recarregando? */
+  needsReload() {
+    const q = this.ctx.quality, b = this._bootQ;
+    if (!q || !b || this.ctx.shot) return false;
+    return ['renderScale', 'detail', 'textureSize'].some((k) => b[k] !== undefined && q[k] !== undefined && b[k] !== q[k]);
   },
   /** escala da prancheta para a janela */
   layout() {
@@ -581,6 +596,8 @@ export default {
   },
   setOption(id, v) {
     this.settings[id] = v;
+    // contador de FPS do núcleo (ctx.perf); o estado volta por 'perf:overlay'
+    if (id === 'fps') { if (!this.ctx.shot) this.ctx.perf?.show?.(!!v); return; }
     if (this.ctx.shot) return;
     Settings.save(this.settings);
     Settings.apply(this.ctx, this.settings);

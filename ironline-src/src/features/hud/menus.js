@@ -74,6 +74,7 @@ const OPTS = {
   INTERFACE: [
     { id: 'crosshair', name: 'CROSSHAIR COLOR', type: 'seg', opts: Object.keys(CROSS_COLORS), help: 'Color of the hip-fire crosshair.' },
     { id: 'minimapRotate', name: 'ROTATE MINIMAP', type: 'bool', help: 'On: the minimap rotates with you (forward is always up). Off: north is always up.' },
+    { id: 'fps', name: 'FPS COUNTER', type: 'bool', help: 'Shows frame rate, frame time and internal resolution in the corner (also F7).' },
   ],
 };
 
@@ -516,6 +517,7 @@ export class Screens {
       </div>
       <div class="set-help panel sh">${T(help.name, { size: 16, weight: 1.4, tracking: 2.4 })}<div class="d">${help.help}</div>
         <div class="pv">${this.preview(help.id)}</div></div>
+      ${this.hud.needsReload?.() ? `<div class="reload-note panel sh">${T('RECARREGAR PARA APLICAR', { size: 13, weight: 1.6, tracking: 2.2 })}<span class="d">${mono('ESCALA DE RENDER, DETALHE E TEXTURAS SÓ MUDAM NA PRÓXIMA CARGA')}</span><div class="btn sm" data-reload="1">${T('RECARREGAR', { size: 13, weight: 1.6, tracking: 2.4 })}</div></div>` : ''}
       ${this.footer([['ESC', 'BACK'], ['TAB', 'NEXT TAB']])}`;
   }
   /** linhas da aba atual (as de toque só aparecem em `input.touchMode`) */
@@ -724,9 +726,10 @@ export class Screens {
     const hud = this.hud;
     if (name === 'arsenal') hud.arsenal?.bind(el);
     el.addEventListener('click', (ev) => {
-      const t = ev.target.closest('[data-go],[data-act],[data-tab],[data-att],[data-v],[data-lo],[data-mode],[data-map],[data-camo],[data-pick],[data-ks]');
+      const t = ev.target.closest('[data-go],[data-act],[data-tab],[data-att],[data-v],[data-lo],[data-mode],[data-map],[data-camo],[data-pick],[data-ks],[data-reload]');
       if (!t || t.closest('[data-a]')) return;
       if (t.dataset.tab2 && hud.arsenal) hud.arsenal.tab = t.dataset.tab2;
+      if (t.dataset.reload) { this.hud.saveProfile(); return location.reload(); }
       if (t.dataset.pick) return this.pickLoadout(t.dataset.pick, t.dataset.id);
       if (t.dataset.ks) {
         // seletor próprio da feature streaks; ao fechar, o slot é redesenhado

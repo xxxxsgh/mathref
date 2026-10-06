@@ -21,6 +21,7 @@
  */
 import * as THREE from 'three';
 import { createSkeleton, B, rayCapsule } from './rig.js';
+import { withDetail } from './geo.js';
 import { buildSoldierGeometry, VARIANTS, RIFLE, REGULAR_VARIANTS, BOSS_VARIANT } from './soldier.js';
 import { createSoldierMaterial, updateSoldierLighting, CAMO, setSoldierTextureSize } from './material.js';
 import { ContactShadows } from './contact.js';
@@ -543,6 +544,13 @@ class Enemy {
       if ((p.x - cam.x) * f.x + (p.z - cam.z) * f.z < 0) every = 4;
     }
     if (this.feature.animLoad > 8 && every < 2 && d2 > 12 * 12) every = 2;
+    // LOD de malha: além de ~25 m (com histerese) troca para a geometria leve
+    const low = this.feature.lowGeos[this.variant];
+    if (low && low !== this.feature.geos[this.variant]) {
+      const far = d2 > (this.mesh.geometry === low ? 22 * 22 : 26 * 26);
+      const want = far ? low : this.feature.geos[this.variant];
+      if (this.mesh.geometry !== want) this.mesh.geometry = want;
+    }
     if (this._skip % every) return;
     // screenshot: o corredor encenado congela no meio da passada depois do
     // aquecimento (como uma foto) — a pose não muda entre os frames de
@@ -602,11 +610,15 @@ export default {
     this.mobile = (ctx.quality?.tier ?? 'desktop') !== 'desktop';
     if (this.mobile) setSoldierTextureSize(256);
     this.geoOpts = this.mobile ? { aoVoxel: 0.02, aoDist: 0.1 } : undefined;
+    // aparelho fraco (celular/lite ou q=low): TODOS os soldados com o LOD de
+    // poucos polígonos e sem a população de fundo no menu (só o herói)
+    this.weak = this.mobile || ctx.quality?.level === 'low';
+    this.lowGeos = VARIANTS.map(() => null);
     // TODAS as variantes sob demanda (ensureVariant no spawn): só as que a
     // população inicial usa são geradas aqui, uma por vez cedendo um frame
     this.geos = VARIANTS.map(() => null);
     this.mats = VARIANTS.map(() => null);
-    const initial = ctx.shot ? [] : (ctx.services.world?.enemySpawns || []).map((sp, i) => sp.variant ?? (nextId + i) % REGULAR_VARIANTS);
+    const initial = ctx.shot || this.weak ? [] : (ctx.services.world?.enemySpawns || []).map((sp, i) => sp.variant ?? (nextId + i) % REGULAR_VARIANTS);
     const need = [...new Set(initial)];
     if (!need.length) need.push(0);
     for (let k = 0; k < need.length; k++) {
@@ -731,7 +743,7 @@ export default {
     const preset = ctx.shot?.preset;
     if (ctx.shot) {
       if (preset?.combat) this.spawnCombatScene(ctx, preset);
-    } else {
+    } else if (!this.weak) {
       for (const sp of world?.enemySpawns || []) spawn(sp);
     }
     // props explosivos (barris/botijões) perto das entradas e coberturas
@@ -930,11 +942,17 @@ export default {
     }
   },
 
+  /** LOD de poucos polígonos (segmentos ~45 %, caixas sem arredondar, AO grossa). */
+  buildLow(i) {
+    return withDetail(0.45, () => buildSoldierGeometry(VARIANTS[i], { aoVoxel: 0.022, aoDist: 0.1 }));
+  },
+
   /** Gera geometria/material de uma variante sob demanda (o chefe). */
   ensureVariant(i) {
     if (!this.geos[i]) {
       const t0 = performance.now();
-      this.geos[i] = buildSoldierGeometry(VARIANTS[i], this.geoOpts);
+      this.geos[i] = this.weak ? this.buildLow(i) : buildSoldierGeometry(VARIANTS[i], this.geoOpts);
+      if (this.weak) this.lowGeos[i] = this.geos[i];
       if (this.stats) (this.stats.lazyGeoMs ||= {})[VARIANTS[i].name] = Math.round(performance.now() - t0);
     }
     if (!this.mats[i]) this.mats[i] = createSoldierMaterial({ camo: CAMO[VARIANTS[i].camo] || CAMO.woodland });
@@ -997,6 +1015,11 @@ export default {
         this.warmRegT = 0.6;
         const i = this.geos.findIndex((g, k) => !g && k < REGULAR_VARIANTS);
         if (i >= 0) this.ensureVariant(i);
+        else {
+          // desktop: LOD distante (> 25 m) das variantes já em uso
+          const j = this.geos.findIndex((g, k) => g && !this.lowGeos[k] && k !== ROLE_VARIANT.operator);
+          if (j >= 0) this.lowGeos[j] = this.buildLow(j);
+        }
       }
     }
     // pré-aquece as variantes das classes especiais uma onda antes (sem engasgo)

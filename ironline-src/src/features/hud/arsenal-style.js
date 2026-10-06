@@ -6,6 +6,12 @@
  * finas, âmbar de destaque, fonte vetorial própria.
  */
 export const ARS_CSS = /* css */ `
+/* ── configurações: aviso de recarga ──────────────────────────────────── */
+#hud .reload-note { position: absolute; right: 96px; bottom: 120px; width: 600px; display: flex; align-items: center; gap: 16px; padding: 14px 18px; color: var(--amber); border-left: 3px solid var(--amber); }
+#hud .reload-note .d { flex: 1; color: var(--ink2); }
+#hud .reload-note .mono { font-size: 10.5px; }
+#hud .reload-note .btn { width: auto; margin: 0; height: 40px; padding: 0 16px; }
+
 /* ── qualidade baixa / celular / lite: sem backdrop-filter (caro na GPU) ── */
 #hud.lowfx *, #hud.lowfx .shade-full { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 #hud.lowfx .desat, #hud.lowfx .dof, #hud.lowfx .grain { display: none !important; }
