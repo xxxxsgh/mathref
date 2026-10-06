@@ -49,7 +49,12 @@ export function gunMaterials(M, { shareBase = false, noOcc = false, keys = Objec
 }
 
 const texCache = new Map();
-function patternTexture(pattern, palette, seed, N = 256) {
+let PATTERN_N = 256;
+/** Resolução das texturas de padrão (128 em aparelhos fracos). */
+export function setPatternSize(n) {
+  PATTERN_N = n;
+}
+function patternTexture(pattern, palette, seed, N = PATTERN_N) {
   const key = `${pattern}|${(palette || []).join(',')}|${seed}|${N}`;
   let t = texCache.get(key);
   if (t) {

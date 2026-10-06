@@ -235,6 +235,18 @@ export function makeRifle(M, handR, handL, params) {
     },
     opticRoot: R.optic,
     cosmetic: KR9_COSMETIC,
+    /**
+     * A holográfica é fundida na malha principal (draw calls de sempre); a
+     * ótica 3x troca para uma malha sem ela, montada só na 1ª vez.
+     */
+    setOpticMesh(withHolo) {
+      if (!withHolo && !this._noHolo) {
+        this._noHolo = buildRifle(M, { noOptic: true }).rifle;
+        R.root.add(this._noHolo);
+      }
+      R.rifle.visible = withHolo;
+      if (this._noHolo) this._noHolo.visible = !withHolo;
+    },
   };
 }
 

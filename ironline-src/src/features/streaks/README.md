@@ -145,3 +145,14 @@ profundidade própria + quad) — o compositor da feature rendering não muda.
   killstreaks no loadout (`setLoadout`/`openPicker`).
 - **Toque:** botões para `activate(0..3)` e para `finisher.execute()`.
 - **Movimento (C):** `ctx.player.sliding` / `player:slide` (já lidos).
+
+## Custo
+
+- Modelos (torreta, drone, UAV) criados só ao usar; peças rígidas juntadas
+  por material (`merge.js`): a torreta cai de ~70 peças para ~15 draw
+  calls, o drone para ~8 + rotores.
+- Torreta e drone: traçante em metade dos tiros; alvo reavaliado a cada
+  0,22–0,3 s (raycast de visada por inimigo só nessa hora).
+- Killcam: retrato a 30 Hz num anel fixo (sem crescer); modo foto só gasta
+  a passada de profundidade quando a câmera ou o foco mudam.
+- Sons: um laço de motor por drone/UAV, demais sons curtos e descartáveis.

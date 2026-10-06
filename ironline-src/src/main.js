@@ -12,6 +12,7 @@ import { makeRng, mulberry32 } from './core/Rng.js';
 import { FixedStep } from './core/FixedStep.js';
 import { createQuality, classifyDevice, probeDevice, rungIndex, rungSettings, AUTO_LADDER, deviceTier } from './core/Quality.js';
 import { BootScreen, yieldFrame } from './core/BootScreen.js';
+import { PerfOverlay } from './core/PerfOverlay.js';
 import { Governor } from './core/Governor.js';
 import { createRenderer, gpuCaps } from './core/Renderer.js';
 import { Input, prefersTouch } from './core/Input.js';
@@ -45,7 +46,9 @@ const device = shot ? classifyDevice({ gpu: 'shot' }) : classifyDevice(probeDevi
 // ver index.html) forçam o modo leve. ?lite=0 desliga a detecção.
 const liteParam = params.get('lite');
 const autoLite = !shot && liteParam !== '0' && !!window.__bootRetry;
-const tier = shot ? 'desktop' : deviceTier(device, { lite: liteParam === '1' || autoLite });
+let tier = shot ? 'desktop' : deviceTier(device, { lite: liteParam === '1' || autoLite });
+// PC fraco (camada macia 'low-desktop'): ?q=<preset> explícito a remove
+if (tier === 'low-desktop' && /^(low|medium|high|ultra)$/.test(params.get('q') || '')) tier = 'desktop';
 const quality = createQuality(params.get('q') || (shot ? 'high' : autoLite ? 'low' : 'auto'), bus, device, { tier });
 if (autoLite) bootScreen.note('modo leve automático — a carga anterior não terminou');
 const container = document.getElementById('app');
@@ -214,7 +217,11 @@ let govApplying = false;
 function resize() {
   const w = container.clientWidth || innerWidth;
   const h = container.clientHeight || innerHeight;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.dprCap) * governor.scale);
+  // resolução interna = DPR (≤ dprCap) × renderScale do preset (low 0,75) ×
+  // escala do governador, com piso de 0,45 — o canvas é esticado pelo CSS e
+  // o compositor aplica nitidez (CAS) quando renderScale < 1
+  const k = Math.max(0.45, (quality.renderScale ?? 1) * governor.scale);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.dprCap) * k);
   renderer.setSize(w, h, false);
   camera.aspect = vmCamera.aspect = w / h;
   camera.updateProjectionMatrix();
@@ -395,6 +402,7 @@ ctx.dynres = {
 };
 
 let last = performance.now();
+let perf = null;
 function tick(now) {
   requestAnimationFrame(tick);
   // __hold: ferramentas (shot.mjs/e2e) congelam o loop para capturar a tela
@@ -408,6 +416,7 @@ function tick(now) {
   last = now;
   updateGovernor(raw); // sem limite: o governador descarta picos > 250 ms sozinho
   frame(time.virtual ? STEP : real);
+  perf?.sample(raw);
 }
 
 async function boot() {
@@ -460,6 +469,14 @@ async function boot() {
     if (sp) player.setPose(sp);
     else player.setPose({ position: [0, 1, 0] });
   }
+  // contador de FPS opcional (?fps=show, F7, ctx.perf.show(bool))
+  if (!shot) {
+    perf = new PerfOverlay(ctx, { initial: params.get('fps') === 'show' || params.get('perf') === '1' });
+    ctx.perf = perf;
+  }
+  // carência inicial: picos de compilação/upload dos primeiros segundos não
+  // podem derrubar degraus pela queda rápida do governador
+  governor.hold(3);
   bus.emit('game:start', ctx);
   requestAnimationFrame((t) => {
     last = t;

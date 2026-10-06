@@ -399,16 +399,26 @@ export class PlayHud {
     const pulse = frac < 0.35 ? 0.1 * (0.5 + 0.5 * Math.sin(ctx.time.now * 6.5)) : 0;
     const vigA = clamp(Math.pow(miss, 0.8) * 0.8 + this.flashA * 0.22 + pulse, 0, 1);
     this.set('vig', vigA.toFixed(3), (v) => (this.vig.style.opacity = v));
-    this.set('desat', clamp(miss * 1.5 - 0.15 + this.flashA * 0.35, 0, 1).toFixed(2), (v) => (this.desat.style.opacity = v));
+    // desaturação usa backdrop-filter: fora do DOM quando invisível (e
+    // desligada em qualidade baixa/lite — classe .lowfx da raiz)
+    this.set('desat', clamp(miss * 1.5 - 0.15 + this.flashA * 0.35, 0, 1).toFixed(2), (v) => {
+      this.desat.style.opacity = v;
+      this.desat.style.display = +v > 0 ? '' : 'none';
+    });
     this.set('flash', this.flashA.toFixed(3), (v) => (this.flash.style.opacity = v));
 
     // bússola + minimapa
     for (let i = this.pings.length - 1; i >= 0; i--) if ((this.pings[i].t += rdt) > 3) this.pings.splice(i, 1);
     const pp = p.position;
     const fadeA = (t) => (t < 2 ? 1 : 1 - (t - 2));
-    this.compass.draw(heading, this.pings.map((q) => ({ bearing: bearing(q.x - pp.x, q.z - pp.z), a: fadeA(q.t) })));
-    this.minimap.rotate = st.minimapRotate;
-    this.minimap.draw(ctx, { yaw: p.yaw, pos: pp, pings: this.pings.map((q) => ({ x: q.x, z: q.z, a: fadeA(q.t) })) });
+    // redesenho dos canvas de navegação a ~20 Hz (não a cada quadro)
+    this.navT = (this.navT ?? 1) + rdt;
+    if (this.navT >= 0.05) {
+      this.navT = 0;
+      this.compass.draw(heading, this.pings.map((q) => ({ bearing: bearing(q.x - pp.x, q.z - pp.z), a: fadeA(q.t) })));
+      this.minimap.rotate = st.minimapRotate;
+      this.minimap.draw(ctx, { yaw: p.yaw, pos: pp, pings: this.pings.map((q) => ({ x: q.x, z: q.z, a: fadeA(q.t) })) });
+    }
 
     // placar
     const tl = Math.ceil(m.timeLeft);

@@ -534,7 +534,16 @@ class Enemy {
     const cam = this.ctx.camera.position;
     const d2 = cam.distanceToSquared(this.group.position);
     this._skip = (this._skip || 0) + 1;
-    if (d2 > 60 * 60 && this._skip % 2) return;
+    // LOD de animação: longe ou atrás da câmera anima menos vezes por segundo
+    // (o custo de CPU não cresce com o número/tipo de inimigos)
+    let every = d2 > 70 * 70 ? 3 : d2 > 30 * 30 ? 2 : 1;
+    if (every < 3 && d2 > 15 * 15) {
+      const f = this.ctx.camera.getWorldDirection(_w);
+      const p = this.group.position;
+      if ((p.x - cam.x) * f.x + (p.z - cam.z) * f.z < 0) every = 4;
+    }
+    if (this.feature.animLoad > 8 && every < 2 && d2 > 12 * 12) every = 2;
+    if (this._skip % every) return;
     // screenshot: o corredor encenado congela no meio da passada depois do
     // aquecimento (como uma foto) — a pose não muda entre os frames de
     // acumulação temporal e não deixa "fantasma" nas pernas/fuzil
@@ -621,6 +630,12 @@ export default {
     if (!ctx.shot) {
       try {
         this.nav = new NavGrid(ctx.collision, region, 0.5).build();
+        // orçamento de A* por passo (fatiamento de tempo): no máximo 3 buscas
+        // por passo fixo para TODO o esquadrão; quem estoura tenta de novo
+        // (undefined = "sem orçamento", tratado como "sem caminho agora")
+        const raw = this.nav.findPath.bind(this.nav);
+        this.pathBudget = 3;
+        this.nav.findPath = (a, b, max) => (this.pathBudget-- > 0 ? raw(a, b, max) : undefined);
       } catch (err) {
         console.warn('[enemies] grade de navegação falhou', err);
       }
@@ -968,6 +983,8 @@ export default {
 
   update(dt, ctx) {
     this.restoreGhosts();
+    this.pathBudget = 3;
+    this.animLoad = this.list.length;
     for (const e of this.list) e.update(dt);
     this.grenades.update(dt);
     this.props.update(dt);

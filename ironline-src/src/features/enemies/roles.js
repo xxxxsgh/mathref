@@ -153,8 +153,13 @@ export function combatRusher(br, dt, dist, threat) {
   br.repathT = (br.repathT ?? 0) - dt;
   if (br.repathT <= 0) {
     br.repathT = 0.8;
-    br.path = dist > stop ? (br.nav ? br.nav.findPath(pos, threat, 9000) : [threat.clone()]) : null;
-    br.pathI = 0;
+    const np = dist > stop ? (br.nav ? br.nav.findPath(pos, threat, 9000) : [threat.clone()]) : null;
+    // sem orçamento de A* neste passo: mantém o caminho e tenta logo
+    if (np === undefined) br.repathT = 0.05;
+    else {
+      br.path = np;
+      br.pathI = 0;
+    }
   }
   if (br.path && dist > stop) {
     br.followPath(dt, dist > 9 ? role.speed : 3.4);
@@ -246,8 +251,13 @@ export function combatShield(br, dt, dist, threat) {
   br.repathT = (br.repathT ?? 0) - dt;
   if (br.repathT <= 0) {
     br.repathT = 1.1;
-    br.path = dist > stop ? (br.nav ? br.nav.findPath(pos, threat, 9000) : [threat.clone()]) : null;
-    br.pathI = 0;
+    const np = dist > stop ? (br.nav ? br.nav.findPath(pos, threat, 9000) : [threat.clone()]) : null;
+    // sem orçamento de A* neste passo: mantém o caminho e tenta logo
+    if (np === undefined) br.repathT = 0.05;
+    else {
+      br.path = np;
+      br.pathI = 0;
+    }
   }
   if (br.path && dist > stop) br.followPath(dt, role.speed);
   else br.speedTarget = 0;

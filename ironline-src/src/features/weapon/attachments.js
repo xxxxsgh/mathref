@@ -94,6 +94,7 @@ export function applyAttachments(g, M, cfg, view) {
   // ótica
   const optic = cfg.optic === '3x' && mt.top ? '3x' : 'default';
   if (g.opticRoot) g.opticRoot.visible = optic === 'default';
+  g.setOpticMesh?.(optic === 'default');
   if (g.lensDefault === undefined) g.lensDefault = g.lens;
   if (optic === '3x') {
     const o = buildOptic3x(M, view);

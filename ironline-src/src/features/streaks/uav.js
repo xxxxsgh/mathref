@@ -16,6 +16,8 @@
  */
 import * as THREE from 'three';
 
+import { mergeChildren } from './merge.js';
+
 const PERIOD = 2.5;
 
 function buildUavModel() {
@@ -90,6 +92,9 @@ function buildUavModel() {
   dot(0x2aff5a, 8.2, 0.3, 0.1);
   g.userData.strobe = dot(0xffffff, 0, -0.5, -1.5);
   g.userData.lights = lights;
+  mergeChildren(g, { castShadow: false, receiveShadow: false });
+  mergeChildren(prop, { castShadow: false, receiveShadow: false });
+  for (const arm of prop.children) mergeChildren(arm, { castShadow: false, receiveShadow: false });
   g.traverse((o) => o.isMesh && (o.castShadow = false));
   return g;
 }

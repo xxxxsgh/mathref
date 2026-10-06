@@ -22,6 +22,8 @@
  */
 import * as THREE from 'three';
 
+import { mergeChildren } from './merge.js';
+
 const _v = new THREE.Vector3();
 const _w = new THREE.Vector3();
 
@@ -158,6 +160,9 @@ export function buildDroneModel(mode = 'gun') {
     muzzle.position.set(0, -0.09, 0.16);
   }
   tilt.add(muzzle);
+  // corpo rígido numa malha por material; rotores continuam separados
+  mergeChildren(tilt);
+  for (const r of rotors) mergeChildren(r);
   root.traverse((o) => {
     if (o.isMesh && o.material !== M.disc) o.castShadow = true;
   });
@@ -366,7 +371,7 @@ export class Drones {
     ctx.services.audio?.play?.('shot_enemy', { position: origin, rate: 1.6, volume: 0.6, reverb: 0.2, cap: 6, jitter: 0.05 });
     const hit = ctx.collision.raycast(origin, dir, 60, { filter: (c) => c.tag !== 'player' && c.tag !== 'sentry' && !c.data?.decoy });
     const to = hit ? hit.point : origin.clone().addScaledVector(dir, 60);
-    vfx?.tracer?.(origin, to, { speed: 380, length: 3 });
+    if (d.burst % 2 === 0) vfx?.tracer?.(origin, to, { speed: 380, length: 3 }); // metade dos tiros com traçante
     if (!hit) return;
     if (hit.collider?.data?.damage) {
       const dmg = 13 * (hit.part === 'head' ? 1.6 : 1);

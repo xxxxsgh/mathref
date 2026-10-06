@@ -921,7 +921,7 @@ export class Brain {
         const pa = r.next() * Math.PI * 2, pm = Math.sqrt(r.next()) * G.spread;
         const pd = dir.clone().addScaledVector(side, Math.cos(pa) * pm).addScaledVector(up2, Math.sin(pa) * pm).normalize();
         dirs.push(pd);
-        if (k % 2 === 0) ctx.services.vfx?.tracer?.(origin.clone().addScaledVector(pd, 0.4), origin.clone().addScaledVector(pd, Math.min(30, dist + 4)), { speed: 260, length: 2 });
+        if (k === 2 || k === 5) ctx.services.vfx?.tracer?.(origin.clone().addScaledVector(pd, 0.4), origin.clone().addScaledVector(pd, Math.min(30, dist + 4)), { speed: 260, length: 2 });
       }
     }
     if (focus) return this.shootFocus(origin, dirs, dist);

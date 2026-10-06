@@ -231,6 +231,10 @@ export class PhotoMode {
       v.textContent = k === 'fov' || k === 'roll' ? s[k].toFixed(0) + '°' : k === 'focus' ? s[k].toFixed(1) + ' m' : s[k].toFixed(2);
     }
     for (const i of this.panel.querySelectorAll('input[type=range]')) if (Number(i.value) !== s[i.dataset.k]) i.value = s[i.dataset.k];
+    const sel = this.panel.querySelector('select[data-k=filter]');
+    if (sel && sel.value !== s.filter) sel.value = s.filter;
+    const cb = this.panel.querySelector('input[data-k=bars]');
+    if (cb) cb.checked = !!s.bars;
     this.depthDirty = true;
   }
 

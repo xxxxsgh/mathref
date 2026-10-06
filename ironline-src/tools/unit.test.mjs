@@ -225,7 +225,8 @@ test('governador: resolução dinâmica desce rápido e sobe devagar', () => {
 
 test('governador: degrau só desce com a resolução no chão e respeita a carência', () => {
   const g = new Governor({ targetFps: 60, minScale: 0.6, rung: 1, ceiling: 0, floor: 6, grace: 3 });
-  const ds = feed(g, 40, 30);
+  // excesso moderado (20 ms ≈ 50 fps): primeiro a resolução, depois o degrau
+  const ds = feed(g, 20, 30);
   const rungs = ds.filter((d) => d.rung != null);
   assert.ok(rungs.length >= 1, 'desceu de degrau');
   // a primeira descida de degrau acontece depois da escala chegar ao piso
@@ -236,6 +237,21 @@ test('governador: degrau só desce com a resolução no chão e respeita a carê
   // nunca passa do chão
   feed(g, 80, 120);
   assert.equal(g.rung, 6);
+});
+
+test('governador: queda rápida abaixo de ~45 fps e dupla abaixo de 30', () => {
+  // 25 ms (40 fps): desce degrau já na 1ª janela, sem esperar a resolução
+  const g = new Governor({ targetFps: 60, minScale: 0.6, rung: 1, ceiling: 0, floor: 6 });
+  const d1 = feed(g, 25, 1.05);
+  assert.equal(d1[0].rung, 2);
+  assert.ok(d1[0].scale < 1);
+  // 40 ms (25 fps): de high (1) a low (5) em poucos segundos
+  const h = new Governor({ targetFps: 60, minScale: 0.6, rung: 1, ceiling: 0, floor: 6 });
+  feed(h, 40, 6);
+  assert.ok(h.rung >= 5, `degrau ${h.rung}`);
+  // manual (auto false): nunca troca degrau, só resolução
+  const m = new Governor({ targetFps: 60, minScale: 0.6, rung: 1, auto: false });
+  assert.ok(feed(m, 40, 6).every((d) => d.rung == null));
 });
 
 test('governador: sobe degrau preso no vsync e recua se a subida falhar', () => {

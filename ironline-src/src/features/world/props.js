@@ -25,7 +25,8 @@ const MINOR = /^(rchunk|rgrit|rbrick|rclus|rpeb|rshard|glassbit|leafbit)/;
 
 export class Instancer {
   /** @param detail 0..1 (`quality.detail`): fração do entulho miúdo mantida ≈ detail^1.5 */
-  constructor(detail = 1) {
+  constructor(detail = 1, { cell = 26 } = {}) {
+    this.cell = cell;
     this.sets = new Map();
     this.keep = detail >= 1 ? 1 : Math.max(0.05, Math.pow(Math.max(0, detail), 1.5));
     this.skipped = 0;
@@ -55,7 +56,7 @@ export class Instancer {
    */
   build(root, mats) {
     const out = [];
-    const CELL = 26;
+    const CELL = this.cell; // 26 m; 52 m nas camadas leves (metade das draw calls de entulho)
     const SPLIT = 160; // só vale partir conjuntos grandes (cada parte = 1 draw call)
     const _p = new THREE.Vector3();
     for (const [key, s] of this.sets) {

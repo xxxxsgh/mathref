@@ -32,6 +32,7 @@
  *   --dist dir                serve outra pasta de build (ex.: build sem minificar p/ perfil)
  *   --desktop                 sem emulação de celular (1280x720, DPR 1) — p/ comparar shots
  *   --frames N                frames extras depois do menu, antes da captura
+ *   --perf S                  mede S segundos depois do menu: fps, ms (média/p90), draw calls, triângulos, escala
  *   --profile                 perfil de CPU (CDP) da carga: top funções por tempo próprio
  *   --eval "js"               roda depois do menu (recebe ctx, pode usar await); imprime o retorno
  */
@@ -56,7 +57,7 @@ try {
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '/opt/pw-browsers';
 
 const argv = process.argv.slice(2);
-const opt = { device: 'android', cpu: 6, params: '', gpu: '', phonegl: false, out: '', json: '', timeout: 900000, size: '', dpr: 3, eval: '', profile: false, desktop: false, frames: 0 };
+const opt = { device: 'android', cpu: 6, params: '', gpu: '', phonegl: false, out: '', json: '', timeout: 900000, size: '', dpr: 3, eval: '', profile: false, desktop: false, frames: 0, perf: 0 };
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   const next = () => argv[++i];
@@ -74,6 +75,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--profile') opt.profile = true;
   else if (a === '--desktop') opt.desktop = true;
   else if (a === '--frames') opt.frames = Number(next());
+  else if (a === '--perf') opt.perf = Number(next());
   else if (a === '--dist') DIST = resolve(next());
   else {
     console.error('argumento desconhecido:', a);
@@ -314,6 +316,37 @@ try {
     longtasks: { count: lt.length, totalMs: lt.reduce((s, x) => s + x[1], 0), max: lt.reduce((m, x) => Math.max(m, x[1]), 0) },
   };
   delete report.probe?.longtasks;
+  if (opt.perf) {
+    report.perf = await page.evaluate(async (secs) => {
+      const ctx = window.__ironline;
+      const r = ctx.renderer;
+      const dts = [];
+      let calls = 0, tris = 0, n = 0;
+      await new Promise((res) => {
+        const t0 = performance.now();
+        let last = t0;
+        const f = (t) => {
+          dts.push(t - last);
+          last = t;
+          calls += r.info.render.calls;
+          tris += r.info.render.triangles;
+          n++;
+          if (t - t0 < secs * 1000) requestAnimationFrame(f);
+          else res();
+        };
+        requestAnimationFrame(f);
+      });
+      dts.shift();
+      const s = dts.slice().sort((a, b) => a - b);
+      const mean = s.reduce((a, b) => a + b, 0) / s.length;
+      return {
+        frames: s.length, fps: +(1000 / mean).toFixed(1), meanMs: +mean.toFixed(1), p90Ms: +s[Math.floor(s.length * 0.9)].toFixed(1),
+        calls: Math.round(calls / n), tris: Math.round(tris / n), pixelRatio: r.getPixelRatio(),
+        buffer: [r.domElement.width, r.domElement.height], level: ctx.quality.level, rung: ctx.quality.rung, tier: ctx.quality.tier,
+        govScale: ctx.governor?.scale, renderScale: ctx.quality.renderScale,
+      };
+    }, opt.perf).catch((e) => 'perf falhou: ' + e.message);
+  }
   if (opt.eval) {
     report.eval = await page.evaluate(async (src) => {
       const v = await new Function('ctx', `return (async () => { ${src} })()`)(window.__ironline);

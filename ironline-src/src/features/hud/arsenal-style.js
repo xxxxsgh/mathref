@@ -6,6 +6,10 @@
  * finas, âmbar de destaque, fonte vetorial própria.
  */
 export const ARS_CSS = /* css */ `
+/* ── qualidade baixa / celular / lite: sem backdrop-filter (caro na GPU) ── */
+#hud.lowfx *, #hud.lowfx .shade-full { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+#hud.lowfx .desat, #hud.lowfx .dof, #hud.lowfx .grain { display: none !important; }
+
 /* ── carteira (topo) ─────────────────────────────────────────────────── */
 #hud .topbar .wallet { display: flex; align-items: center; gap: 14px; margin-left: auto; margin-right: -28px; }
 #hud .wallet .wc { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; background: rgba(9,11,13,.6); border: 1px solid rgba(255,255,255,.1); cursor: pointer; }

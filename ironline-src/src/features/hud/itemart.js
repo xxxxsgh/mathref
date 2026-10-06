@@ -287,6 +287,9 @@ export function patternCanvas(spec, n = 512) {
 
 // ─── miniaturas ────────────────────────────────────────────────────────
 const _thumbs = new Map();
+/** Superamostragem das miniaturas/arte (2 no desktop, 1 em celular/lite). */
+let ART_S = 2;
+export const setArtDetail = (k) => { ART_S = k; };
 /**
  * Miniatura de um item (data URL PNG, fundo transparente). `def` vem do
  * catálogo; `it` traz wear/seed. Cache por definição + semente + faixa.
@@ -297,7 +300,7 @@ export function itemThumb(def, it = {}, w = 240, h = 132) {
   const key = [def.id, it.seed ?? 0, wearK, w, h].join('|');
   if (_thumbs.has(key)) return _thumbs.get(key);
   const cv = document.createElement('canvas');
-  const S = 2;
+  const S = ART_S;
   cv.width = w * S; cv.height = h * S;
   const g = cv.getContext('2d');
   g.scale(S, S);
@@ -457,7 +460,7 @@ export function caseArt(c, w = 520, h = 340) {
   const key = c.id + w + 'x' + h;
   if (_cases.has(key)) return _cases.get(key);
   const cv = document.createElement('canvas');
-  const S = 2;
+  const S = ART_S;
   cv.width = w * S; cv.height = h * S;
   const g = cv.getContext('2d');
   g.scale(S, S);

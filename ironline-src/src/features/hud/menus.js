@@ -88,11 +88,31 @@ export class Screens {
     this.setTab = 'CONTROLS';
     this.loTab = 'primary';
     this.focusIdx = 0;
-    this.grain = makeGrain();
+    // grão: criado fora do init (canvas 2D no meio da carga sincroniza com
+    // a GPU ocupada compilando shaders — custava >10 s em celular)
+    this.grain = '';
+    this.booting = !this.ctx.shot;
   }
 
   get open() {
     return this.cur;
+  }
+  /** Fim da carga: arte dos cartões, cartão do jogador e grão. */
+  finishBoot() {
+    if (!this.booting) return;
+    this.booting = false;
+    for (const k of new Set([...(this._artReq?.values() || [])].map((r) => r.key))) this.photoReady(k);
+    this.refreshTopbar();
+    this.ensureGrain();
+  }
+  /** Gera o ladrilho de grão (chamado nos primeiros quadros do menu). */
+  ensureGrain() {
+    if (this._grainReq) return;
+    this._grainReq = true;
+    makeGrain((u) => {
+      this.grain = u;
+      for (const e of this.root.querySelectorAll('.grain')) e.style.backgroundImage = `url(${u})`;
+    });
   }
 
   show(name) {
@@ -121,9 +141,12 @@ export class Screens {
    * elemento leva `data-photo` para ser trocado quando a foto chegar.
    */
   art(key, w, h, o = {}) {
-    const url = this.artUrl(key, w, h, o);
     const id = 'a' + (this._ai = (this._ai || 0) + 1);
     (this._artReq ||= new Map()).set(id, { key, w, h, o });
+    // durante a carga: sem arte (canvas 2D aqui travava a carga no celular);
+    // `finishBoot()` preenche nos primeiros quadros do menu
+    if (this.booting) return `data-photo="${key}" data-art="${id}"`;
+    const url = this.artUrl(key, w, h, o);
     return `data-photo="${key}" data-art="${id}" style="background-image:url(${url})"`;
   }
   artUrl(key, w, h, o = {}) {
@@ -213,9 +236,9 @@ export class Screens {
     const em = C?.EMBLEMS.find((e) => e.id === E?.emblem);
     this._pcCache ||= new Map();
     return {
-      card: cd ? (w, h) => {
+      card: cd && !this.booting ? (w, h) => {
         const k = cd.id + w + 'x' + h;
-        if (!this._pcCache.has(k)) this._pcCache.set(k, callingCard('', { seed: cd.seed, theme: cd.theme, w: w * 2, h: h * 2 }));
+        if (!this._pcCache.has(k)) { const sc = this.hud.tier === 'desktop' ? 2 : 1; this._pcCache.set(k, callingCard('', { seed: cd.seed, theme: cd.theme, w: w * sc, h: h * sc })); }
         return this._pcCache.get(k);
       } : null,
       emblem: (s) => (em ? emblemSVG(em.seed, s, em.tone) : emblemSVG('vance', s, 'gold')),
@@ -833,22 +856,30 @@ export class Screens {
   }
 }
 
-/** Grão de filme procedural (ladrilho PNG em data URL). */
-function makeGrain() {
-  const n = 256;
+/**
+ * Grão de filme procedural (ladrilho 128² de ruído). Gerado de forma
+ * assíncrona como blob URL (string curta no HTML das telas, sem PNG em data
+ * URL de centenas de KB a cada re-render); `onUrl` recebe a URL pronta.
+ */
+function makeGrain(onUrl) {
+  const n = 128;
   const cv = document.createElement('canvas');
   cv.width = cv.height = n;
   const g = cv.getContext('2d');
   const img = g.createImageData(n, n);
+  // `img.data` é um getter do DOM: lido uma vez (no laço custava segundos em CPU lenta)
+  const d = img.data;
   let s = 99991;
   for (let i = 0; i < n * n; i++) {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    s = (Math.imul(s, 1103515245) + 12345) & 0x7fffffff;
     const v = (s >> 16) & 255;
-    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
-    img.data[i * 4 + 3] = 255;
+    d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v;
+    d[i * 4 + 3] = 255;
   }
   g.putImageData(img, 0, 0);
-  return cv.toDataURL('image/png');
+  if (cv.toBlob) cv.toBlob((b) => b && onUrl(URL.createObjectURL(b)), 'image/png');
+  else onUrl(cv.toDataURL('image/png'));
+  return '';
 }
 
 export { vfovToH };
@@ -867,6 +898,7 @@ function makeTopo() {
   cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
   const img = g.createImageData(W, H);
+  const D = img.data;
   // grade de valores aleatórios + interpolação suave
   const G = 64, vals = new Float32Array(G * G);
   let s = 4242;
@@ -892,8 +924,8 @@ function makeTopo() {
       const index = Math.round(v) % 5 === 0; // curva mestra mais forte
       const a = Math.max(0, 1 - d / (index ? 0.9 : 0.6));
       const o = i * 4;
-      img.data[o] = img.data[o + 1] = img.data[o + 2] = 235;
-      img.data[o + 3] = a * (index ? 255 : 150);
+      D[o] = D[o + 1] = D[o + 2] = 235;
+      D[o + 3] = a * (index ? 255 : 150);
     }
   }
   g.putImageData(img, 0, 0);

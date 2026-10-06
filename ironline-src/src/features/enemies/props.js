@@ -138,7 +138,7 @@ function shared() {
     for (let k = 0; k < 4; k++) g.fillRect(w * 0.12, h * 0.48 + k * 12, w * 0.18, 4);
     grime(g, w, h, false);
   });
-  const charMap = paint('#16120f', 256, 128, (g, w, h) => {
+  const charMap = paint('#2b2520', 256, 128, (g, w, h) => {
     for (let i = 0; i < 900; i++) {
       g.fillStyle = `rgba(${rnd() < 0.3 ? '120,50,20' : '50,45,40'},${0.1 + rnd() * 0.3})`;
       g.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 5, 1 + rnd() * 3);
@@ -157,10 +157,19 @@ function shared() {
   const C = 0.155, CH = 0.95;
   const cprof = [[0, 0], [C - 0.01, 0], [C, 0.02], [C, CH - 0.12], [C * 0.92, CH - 0.06], [C * 0.6, CH - 0.02], [0.04, CH], [0, CH]].map(([x, y]) => new THREE.Vector2(x, y));
   const canGeo = new THREE.LatheGeometry(cprof, 24);
+  // peças pequenas compartilhadas (tampas, colar, válvula)
+  const parts = {
+    cap3: new THREE.CylinderGeometry(0.03, 0.03, 0.015, 12),
+    cap2: new THREE.CylinderGeometry(0.02, 0.02, 0.015, 12),
+    collar: new THREE.CylinderGeometry(0.09, 0.1, 0.12, 16, 1, true),
+    valve: new THREE.CylinderGeometry(0.022, 0.026, 0.07, 10),
+    knob: new THREE.CylinderGeometry(0.035, 0.035, 0.012, 14),
+    foot: new THREE.CylinderGeometry(C + 0.01, C + 0.01, 0.06, 20, 1, true),
+  };
   const steel = new THREE.MeshStandardMaterial({ color: 0x55585b, roughness: 0.35, metalness: 0.85 });
   const brass = new THREE.MeshStandardMaterial({ color: 0x9c7a3a, roughness: 0.3, metalness: 0.9 });
   SHARED = {
-    R, H, C, CH, barrelGeo, canGeo, steel, brass,
+    R, H, C, CH, barrelGeo, canGeo, steel, brass, parts,
     barrelMat: new THREE.MeshStandardMaterial({ map: barrelMap, roughness: 0.55, metalness: 0.4 }),
     canMat: new THREE.MeshStandardMaterial({ map: canMap, roughness: 0.42, metalness: 0.45 }),
     charMat: new THREE.MeshStandardMaterial({ map: charMap, roughness: 0.92, metalness: 0.2 }),
@@ -224,7 +233,7 @@ export class ExplosiveProps {
       body = new THREE.Mesh(S.barrelGeo, S.barrelMat);
       // bujões da tampa
       for (const [bx, r] of [[0.13, 0.03], [-0.15, 0.02]]) {
-        const cap = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.015, 12), S.steel);
+        const cap = new THREE.Mesh(r > 0.025 ? S.parts.cap3 : S.parts.cap2, S.steel);
         cap.position.set(bx, S.H - 0.004, 0.04);
         g.add(cap);
       }
@@ -233,24 +242,26 @@ export class ExplosiveProps {
     } else {
       body = new THREE.Mesh(S.canGeo, S.canMat);
       // colar com alças + válvula de latão
-      const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.12, 16, 1, true), S.steel);
+      const collar = new THREE.Mesh(S.parts.collar, S.steel);
       collar.position.y = S.CH + 0.03;
       collar.material = S.steel;
       g.add(collar);
-      const valve = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.07, 10), S.brass);
+      const valve = new THREE.Mesh(S.parts.valve, S.brass);
       valve.position.y = S.CH + 0.02;
       g.add(valve);
-      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.012, 14), S.steel);
+      const knob = new THREE.Mesh(S.parts.knob, S.steel);
       knob.position.y = S.CH + 0.06;
       g.add(knob);
-      const foot = new THREE.Mesh(new THREE.CylinderGeometry(S.C + 0.01, S.C + 0.01, 0.06, 20, 1, true), S.steel);
+      const foot = new THREE.Mesh(S.parts.foot, S.steel);
       foot.position.y = 0.03;
       g.add(foot);
     }
     g.add(body);
+    // só o corpo projeta sombra (peças pequenas não); sem sombra em q=low
+    const shadows = this.ctx.quality?.shadows !== false && this.ctx.quality?.level !== 'low';
     g.traverse((o) => {
       if (o.isMesh) {
-        o.castShadow = true;
+        o.castShadow = shadows && o === body;
         o.receiveShadow = true;
       }
     });
@@ -410,8 +421,10 @@ export class ExplosiveProps {
    * Espalha os props pelo mapa (determinístico com o rng do ctx):
    * perto das entradas inimigas e das coberturas da grade de navegação.
    */
-  populate(world, nav, rng, { count = 10 } = {}) {
+  populate(world, nav, rng, { count } = {}) {
     const ctx = this.ctx;
+    // aparelho fraco: menos props (cada um custa 2–5 draw calls)
+    count ??= ctx.quality?.tier && ctx.quality.tier !== 'desktop' ? 5 : ctx.quality?.level === 'low' ? 7 : 10;
     const col = ctx.collision;
     const spawns = world?.enemySpawns || [];
     const avoid = (world?.spawnPoints || []).map((s) => s.position);

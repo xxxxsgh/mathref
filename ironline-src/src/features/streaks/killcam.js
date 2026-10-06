@@ -78,7 +78,7 @@ export class Killcam {
   onDeath(info) {
     const ctx = this.ctx;
     const k = info?.enemy;
-    if (!k || ctx.shot || !this.frames.size) return;
+    if (!k || !this.frames.size) return;
     this.pending = { t: ctx.time.now + DELAY, death: ctx.time.now, killer: k, info };
   }
 

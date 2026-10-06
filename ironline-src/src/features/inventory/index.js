@@ -26,7 +26,7 @@ export default {
   name: 'inventory',
   order: 45,
 
-  init(ctx) {
+  async init(ctx) {
     this.ctx = ctx;
     const P = ctx.params;
     this.persist = !ctx.shot && P.get('invdemo') !== '1';
@@ -100,7 +100,10 @@ export default {
       apply: () => self.apply(),
       save: () => self.commit(),
     });
+    // aplicar skins pode gerar texturas na weapon: cede um quadro antes
+    await ctx.bootProgress?.('equipamento', 0.5);
     this.apply();
+    await ctx.bootProgress?.('equipamento', 1);
   },
 
   // ─── utilidades ──────────────────────────────────────────────────────

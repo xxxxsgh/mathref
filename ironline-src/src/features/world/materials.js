@@ -417,6 +417,13 @@ const FLOOR_FRAG = /* glsl */ `
  * Aplica o patch de intemperismo. opts: { macro, ground, streaks, dust,
  * baseY, protectRust, tb (quebra de repetição), road, floor } — 0..1.
  */
+// Camadas leves: sem "texture bombing" (W_TB amostra cada mapa 2× para
+// quebrar a repetição) — metade das leituras de textura nas superfícies grandes
+let LITE = false;
+export function setWeatherLite(v) {
+  LITE = !!v;
+}
+
 export function weather(mat, opts = {}) {
   const o = { macro: 0.6, ground: 0.7, streaks: 0.6, dust: 0.3, baseY: 0, protectRust: 0, tb: false, road: false, floor: false, paver: false, slab: false, tri: 0, ...opts };
   const uniforms = {
@@ -434,7 +441,7 @@ export function weather(mat, opts = {}) {
     uniforms.uTriBump = { value: o.triBump ?? 0.01 };
   }
   mat.userData.weather = uniforms;
-  const tb = !!o.tb && !!mat.map;
+  const tb = !LITE && !!o.tb && !!mat.map;
   const tri = !!o.tri && !!mat.map;
   const defs = (tb && !tri ? '#define W_TB\n' : '') + (o.road ? '#define W_ROAD\n' : '') + (o.floor ? '#define W_FLOOR\n' : '') + (o.paver ? '#define W_PAVER\n' : '') + (o.slab ? '#define W_SLAB\n' : '') + (tri ? '#define W_TRI\n' : '');
   mat.onBeforeCompile = (sh) => {

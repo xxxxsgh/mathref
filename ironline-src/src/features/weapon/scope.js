@@ -27,7 +27,10 @@ const RET = { mil: 0, chevron: 1, ring: 2 };
 
 export class ScopeView {
   constructor(size = 512) {
-    this.rt = new THREE.WebGLRenderTarget(size, size, { type: THREE.HalfFloatType, depthBuffer: true, samples: 0 });
+    // render target criado na 1ª vez que alguém mira com luneta (custo zero até lá);
+    // a textura existe desde já para as lentes apontarem para ela
+    this.size = size;
+    this.rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: true, samples: 0 });
     this.rt.texture.colorSpace = THREE.LinearSRGBColorSpace;
     this.cam = new THREE.PerspectiveCamera(5, 1, 0.1, 2000);
     this.active = false;
@@ -39,6 +42,7 @@ export class ScopeView {
    */
   render(ctx, fovDeg) {
     const r = ctx.renderer;
+    if (this.rt.width !== this.size) this.rt.setSize(this.size, this.size);
     const cam = ctx.camera;
     cam.updateMatrixWorld();
     cam.getWorldPosition(this.cam.position);

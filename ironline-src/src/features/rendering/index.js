@@ -430,6 +430,18 @@ const rendering = {
       tier.bloomLevels = Math.min(tier.bloomLevels, 5);
     }
     this.mobile = q.tier === 'mobile' || q.tier === 'lite';
+    // preset low / PC fraco: uma única cascata pequena (sem a cascata larga
+    // em pós), shadow map atualizado a cada 4 quadros
+    this.lowCost = this.mobile || q.level === 'low' || q.tier === 'low-desktop';
+    if (q.level === 'low' || q.tier === 'low-desktop') {
+      tier.far = 0;
+      tier.pcss = 0;
+      tier.gi = 0;
+      tier.dust = 0;
+    }
+    // resolução interna reduzida (renderScale < 1): nitidez CAS no passe final
+    // compensa a reamostragem do canvas esticado
+    if ((q.renderScale ?? 1) < 1) tier.sharpen = Math.max(tier.sharpen || 0, 0.45);
     this.tier = tier;
 
     this.shadowFit.configure(q);
@@ -708,7 +720,7 @@ const rendering = {
     // (câmera andou/sol girou) e, para objetos móveis (inimigos, portas), a
     // cada 2 quadros (3 no modo shot). O mapa de 4096² é o passe mais caro.
     renderer.shadowMap.autoUpdate = false;
-    const every = ctx.shot ? 3 : this.mobile ? 4 : 2;
+    const every = ctx.shot ? 3 : this.lowCost ? 4 : 2;
     renderer.shadowMap.needsUpdate = !!this.shadowDirty || this.frameIndex % every === 0 || !sun?.shadow?.map;
     this.shadowDirty = false;
     // PCSS: mapa cru com a mesma câmera, no mesmo ritmo do shadow map

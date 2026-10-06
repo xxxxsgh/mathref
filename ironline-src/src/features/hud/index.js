@@ -30,6 +30,8 @@ import { Hero } from './hero.js';
 import { Photos } from './photo.js';
 import { Arsenal } from './arsenal.js';
 import { ARS_CSS } from './arsenal-style.js';
+import { setArtDetail } from './itemart.js';
+import { setMinimapDetail } from './minimap.js';
 
 /**
  * Poses das "fotos de campo" (arte dos cartões): vistas do próprio mapa
@@ -56,6 +58,10 @@ function photoPoses(world) {
 }
 
 /** Descrições em inglês (a UI é em inglês) por id de mapa; reserva = a do mundo. */
+/** quadros do menu já rodaram (operador pode ser criado sem pesar no init) */
+const ctx_ready = (hud) => !!hud._deferDone || !!hud.ctx.shot;
+const htmlEl = (html) => { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstElementChild; };
+
 /** Medalhas que a partida (match.js) já concede — chegam também da feature streaks. */
 const DUP_MEDALS = { double: 1, triple: 1, head: 1, long: 1, payback: 1, streak: 1 };
 
@@ -68,7 +74,27 @@ export default {
   name: 'hud',
   order: 90,
 
-  init(ctx) {
+  /**
+   * init em blocos: entre os pesados `await ctx.bootProgress(...)` cede um
+   * quadro e move a barra da tela de carga (celular não trava). A silhueta
+   * 3D da arma e o operador do menu saem do init (feitos nos primeiros
+   * quadros do menu); no tier 'lite' não há operador nem fotos de campo.
+   */
+  async init(ctx) {
+    const bt = (this.bootTimes = []);
+    let _t = performance.now();
+    const step = async (label, f) => {
+      const n = performance.now();
+      bt.push([label, Math.round(n - _t)]);
+      _t = n;
+      await ctx.bootProgress?.(label, f);
+      _t = performance.now();
+    };
+    const mark = (label) => { const n = performance.now(); bt.push([label, Math.round(n - _t)]); _t = n; };
+    const tier = ctx.quality?.tier || 'desktop';
+    this.tier = tier;
+    setArtDetail(tier === 'desktop' ? 2 : 1);
+    setMinimapDetail(tier === 'desktop' ? 8 : 4);
     const world = ctx.services.world;
     this.mapName = world?.map?.name || 'MERIDIAN STREET';
     this.mapBlurb = MAP_BLURB;
@@ -102,23 +128,31 @@ export default {
       this.profile.camo = fix.camo;
     }
     this.profile.mode = MODE.id;
+    this.applyLowFx();
+    await step('estilo', 0.1);
     this.play = new PlayHud(ctx, this.stage, root.querySelector('.fx'));
-    const gun = ctx.services.weapon?.gun;
-    this.gunIcon = gun ? gunSilhouette(ctx.THREE, gun, { h: 140 }) : null;
-    this.play.setGunIcon(this.gunIcon);
+    // silhueta da arma (render 3D num contexto próprio): no modo shot já
+    // aqui; fora dele, adiada para os primeiros quadros do menu
+    this.gunIcon = null;
+    if (ctx.shot) this.refreshGunIcon();
     this.play.setProfile(this.profile, Settings.levelOf(this.profile.xp).level);
+    await step('hud de combate', 0.3);
     this.obj = new ObjectiveHud(ctx, this.play.root);
     // camuflagem salva na arma (materiais publicados pela feature weapon)
     this.setCamo(this.profile.camo, false);
+    await step('camuflagem', 0.45);
     this.screens = new Screens(this, this.stage);
+    mark('telas:screens');
     // ARSENAL (inventário/caixas/passe…): telas sobre services.inventory
     this.arsenal = ctx.services.inventory ? new Arsenal(this) : null;
     // fotos do mundo para os cartões (só onde há telas de frontend)
+    mark('telas:arsenal');
     this.photos = new Photos(ctx);
     this.photos.onReady((key) => this.screens.photoReady(key));
-    if (!ctx.shot || ctx.shot.preset?.menu || ctx.params.get('ui')) {
+    if ((!ctx.shot || ctx.shot.preset?.menu || ctx.params.get('ui')) && tier !== 'lite') {
       for (const [k, pose] of Object.entries(photoPoses(world))) this.photos.want(k, pose);
     }
+    await step('telas', 0.55);
     this.match = new Match(ctx, {
       feed: (e) => this.play.feed(e, this.profile.callsign),
       xp: (l, t) => this.play.xp(l, t),
@@ -178,7 +212,9 @@ export default {
     addEventListener('keydown', this._key, true);
     addEventListener('keyup', this._keyUp, true);
     addEventListener('resize', (this._rs = () => this.layout()));
+    this._offs.push(on('quality:change', () => this.applyLowFx()));
     this.layout();
+    await step('regras', 0.7);
     // remove a tela de carga do index.html quando o jogo começa
     const boot = document.getElementById('boot');
     if (boot) {
@@ -211,6 +247,8 @@ export default {
       if (uiParam) this.screens.show(uiParam);
     }
     this.inventoryQA(ctx.params);
+    await step('menu', 1);
+    if (ctx.params.get('bootlog') === '1') console.info('[hud] init por bloco (ms)', JSON.stringify(bt));
 
     ctx.provide('hud', {
       root,
@@ -227,6 +265,14 @@ export default {
     });
   },
 
+  /**
+   * Sem backdrop-filter (blur/saturação de fundo) em qualidade baixa ou no
+   * tier 'lite' — é um dos efeitos de composição mais caros em GPU fraca.
+   */
+  applyLowFx() {
+    const q = this.ctx.quality;
+    this.root.classList.toggle('lowfx', q?.level === 'low' || q?.tier === 'lite' || q?.tier === 'mobile');
+  },
   /** escala da prancheta para a janela */
   layout() {
     const w = this.root.clientWidth || innerWidth, h = this.root.clientHeight || innerHeight;
@@ -235,6 +281,9 @@ export default {
     this.stage.style.transform = `scale(${k})`;
     this.stage.style.width = w / k + 'px';
     this.stage.style.height = h / k + 'px';
+    // tamanho da prancheta guardado (nada de ler layout a cada quadro)
+    this.stageW = w / k;
+    this.stageH = h / k;
     this.k = k;
     this.play.resize(k * Math.min(2, devicePixelRatio || 1));
   },
@@ -255,7 +304,9 @@ export default {
       // re-render do menu (troca de modo): o operador continua, só a
       // máscara de profundidade de campo é nova
       if (this.hero) this.hero.dof = el.querySelector('.dof') || this.hero.dof;
-      if (host && !this.hero) {
+      if (host && !this.hero && this.tier === 'lite') host.remove();
+      else if (host && !this.hero && !ctx_ready(this)) this._heroPending = true;
+      else if (host && !this.hero) {
         try {
           this.hero = new Hero(this.ctx, host);
           this.hero.render(1 / 60);
@@ -684,6 +735,16 @@ export default {
 
   frame(dt, ctx) {
     this.photos.pump();
+    // trabalho adiado do init: silhueta da arma e operador do menu
+    if (!ctx.shot && !this._deferDone && (this._df = (this._df || 0) + 1) > 2) {
+      this._deferDone = true;
+      this.screens.finishBoot();
+      if (!this.gunIcon) {
+        this.refreshGunIcon();
+        if (this.screens.cur === 'main') this.screens.el?.querySelector('.tile.wk')?.replaceWith(htmlEl(this.screens.weaponTile()));
+      }
+      if (this._heroPending && this.screens.cur === 'main') { this._heroPending = false; this.onScreen('main', this.screens.el); }
+    }
     // tempo real (as telas animam mesmo com a simulação pausada)
     const now = performance.now();
     const rdt = ctx.shot ? 1 / 60 : Math.min(0.05, (now - (this._lt || now)) / 1000);
@@ -722,7 +783,7 @@ export default {
     if (showPlay) {
       if (this.inMatch && (this._kst = (this._kst || 0) + rdt) > 0.25) { this._kst = 0; this.syncStreaks(); }
       this.play.frame(dt, ctx, this.match, st);
-      this.obj.frame(rdt, this.match, MODE, this.stage.offsetWidth || 1920, this.stage.offsetHeight || 1080);
+      this.obj.frame(rdt, this.match, MODE, this.stageW || 1920, this.stageH || 1080);
     } else if (this.obj.ring) this.obj.ring.update(this.match.zs, ctx.time.now);
     if (this.gs) this.gs.render(rdt);
     if (this.hero) this.hero.render(rdt);

@@ -143,6 +143,8 @@ export default {
         strike: (pos) => self.air.fire(new THREE.Vector3(pos[0], pos[1], pos[2])),
         uav: () => self.uav.start(STREAKS.uav.duration),
         medal: (id) => self.award(id),
+        /** Limpa killstreaks em andamento (torretas, drones, UAV, morteiro). */
+        clear: () => self.reset(),
       },
     });
   },

@@ -39,7 +39,7 @@ import { makeSR7 } from './dmr.js';
 import { KNIFE_MODELS, makeKnifeRig, knifeSwing } from './knives.js';
 import { AuxRig, meleeTracks, nadeRaiseTracks, nadeThrowTracks } from './aux.js';
 import { Loadout, WEAPON_DEFS, EQUIP_DEFS, ALL_WEAPONS, KNIVES, knifeId, weaponDef } from './loadout.js';
-import { gunMaterials, applySkin, modelBounds, normSkin } from './skin.js';
+import { gunMaterials, applySkin, modelBounds, normSkin, setPatternSize } from './skin.js';
 import { KillCounterView, applyStickers, Charm } from './cosmetics.js';
 import { KillCounters } from './cosmetic-logic.js';
 import { ATTACHMENTS, DEFAULT_ATT, normAttachments, applyAttachments, LaserBeam } from './attachments.js';
@@ -63,6 +63,7 @@ const _dir = new THREE.Vector3();
 const _org = new THREE.Vector3();
 const ONE = new THREE.Vector3(1, 1, 1);
 const SWITCH_ACTIONS = ['swap', 'switch', 'switchWeapon', 'weaponSwap', 'nextWeapon'];
+const MAKERS = { kr9: makeRifle, p11: makePistol, mx9: makeMX9, br12: makeBR12, lr50: makeLR50, hm60: makeHM60, sr7: makeSR7 };
 
 /** Malhas fixas da arma que recebem adesivos (não as peças móveis nem acessórios). */
 function stickerTargets(g) {
@@ -71,7 +72,7 @@ function stickerTargets(g) {
   const painted = new Set(Object.values(g.mats?.painted || {}));
   const out = [];
   const walk = (o) => {
-    if (skip.has(o) || o.isSkinnedMesh || o.name === 'stickers' || o.name === 'charm' || o.name === 'killCounter' || o.name === 'handL' || o.name === 'handR') return;
+    if (skip.has(o) || !o.visible || o.isSkinnedMesh || o.name === 'stickers' || o.name === 'charm' || o.name === 'killCounter' || o.name === 'handL' || o.name === 'handR') return;
     if (o.isMesh && painted.has(o.material)) out.push(o);
     for (const c of o.children) walk(c);
   };
@@ -83,10 +84,22 @@ export default {
   name: 'weapon',
   order: 40,
 
-  init(ctx) {
+  async init(ctx) {
     const { vm, bus, input, quality, params } = ctx;
     this.ctx = ctx;
+    // carga em fatias: cede um frame entre blocos pesados (celular não trava)
+    const boot = async (label, f) => {
+      try {
+        await ctx.bootProgress?.(label, f);
+      } catch {
+        /* fora da carga */
+      }
+    };
+    // aparelhos fracos: texturas procedurais e render target da luneta menores
+    this.lowTier = (ctx.quality?.tier || ctx.tier || 'desktop') !== 'desktop';
+    setPatternSize(this.lowTier ? 128 : 256);
     const M = (this.M = makeMaterials());
+    await boot('weapon: materiais', 0.1);
 
     // ─── rig: câmera da viewmodel → rig → pivô animado → arma ─────────────
     vm.camera.fov = 50;
@@ -105,34 +118,31 @@ export default {
     this.sleeveL = buildSleeve(M, { left: true, watch: true });
     rig.add(this.sleeveR, this.sleeveL);
 
-    // ─── armas (todas as 7; as pegas são resolvidas contra cada modelo) ───
-    // cada arma tem os próprios materiais pintáveis (skins independentes); o
-    // KR-9 mantém receiver/tan da biblioteca (camuflagem de progressão do HUD)
-    this.view = new ScopeView(quality.level === 'low' ? 384 : 512);
-    const MAKERS = { kr9: makeRifle, p11: makePistol, mx9: makeMX9, br12: makeBR12, lr50: makeLR50, hm60: makeHM60, sr7: makeSR7 };
+    await boot('weapon: mãos', 0.25);
+
+    // ─── armas: só as do loadout são montadas na carga; as outras na 1ª vez
+    // que forem pedidas (setPrimary, prévia de inventário…). Cada arma tem os
+    // próprios materiais pintáveis (skins independentes); o KR-9 mantém
+    // receiver/tan da biblioteca (camuflagem de progressão do HUD).
+    this.view = new ScopeView(this.lowTier || quality.level === 'low' ? 256 : 512);
     this.gunById = {};
     this.guns = [];
-    for (const def of ALL_WEAPONS) {
-      const mk = MAKERS[def.id];
-      if (!mk) continue;
-      const mats = gunMaterials(M, { shareBase: def.id === 'kr9' });
-      let g = null;
-      try {
-        g = mk(mats.M, this.handR, this.handL, params, { view: this.view });
-      } catch (e) {
-        console.warn('[weapon] falhou ao montar', def.id, e);
-      }
-      if (g) this.prepGun(g, def, mats);
-    }
-    // facas na mão (tecla 3): uma montagem por modelo, criada sob demanda
-    this.knifeRigs = {};
-    this.knifeSel = 'tk7';
     this.counters = new KillCounters();
     this.skins = {};
     this.charms = {};
     this.stickers = {};
     this.attCfg = {};
+    const ww0 = params.get('wweap');
+    const boot0 = ['kr9', 'p11', ...(ww0 && weaponDef(ww0) ? [ww0] : [])];
+    for (let i = 0; i < boot0.length; i++) {
+      this.ensureGun(boot0[i]);
+      await boot('weapon: ' + boot0[i], 0.3 + (0.45 * (i + 1)) / boot0.length);
+    }
+    // facas na mão (tecla 3): uma montagem por modelo, criada sob demanda
+    this.knifeRigs = {};
+    this.knifeSel = 'tk7';
     this.aux = new AuxRig(M, rig);
+    await boot('weapon: faca e granadas', 0.85);
     this.throwables = new Throwables(ctx);
 
     // ─── loadout ─────────────────────────────────────────────────────────
@@ -140,7 +150,7 @@ export default {
     // ?wweap=<id> põe a arma na primária (QA); ?wknife=<id> escolhe a faca;
     // ?wgun=1 começa com a pistola; ?wgun=2 com a faca na mão
     const ww = params.get('wweap');
-    if (ww && weaponDef(ww) && this.gunById[ww]) lo.setSlot(weaponDef(ww).slot === 'secondary' && ww === 'p11' ? 1 : 0, weaponDef(ww));
+    if (ww && weaponDef(ww) && this.ensureGun(ww)) lo.setSlot(weaponDef(ww).slot === 'secondary' && ww === 'p11' ? 1 : 0, weaponDef(ww));
     const wk = knifeId(params.get('wknife'));
     if (wk) this.knifeSel = wk;
     const startSlot = clamp(Number(params.get('wgun')) || (ww === 'p11' ? 1 : 0), 0, lo.weapons.length);
@@ -286,7 +296,8 @@ export default {
     }
 
     // faca padrão no golpe rápido (materiais próprios: a skin da faca vale nos dois)
-    this.setKnife(this.knifeSel);
+    // (a TK-7 padrão usa o modelo da AuxRig; outra faca/skin troca sob demanda)
+    if (this.knifeSel !== 'tk7') this.setKnife(this.knifeSel);
     this.applyQaParams(params);
 
     const self = this;
@@ -328,7 +339,7 @@ export default {
       /** Definição da arma ativa: { id, name, icon, kind, magSize, rpm, auto, … }. */
       get current() { return { ...def(), ammo: st.ammo, reserve: st.reserve, slot: self.lo.index }; },
       /** Todas as armas do jogo: [{ slot, id, name, icon, kind, equipped, ammo, reserve, magSize, … }]. */
-      get weapons() { return ALL_WEAPONS.filter((d) => self.gunById[d.id]).map(weaponInfo); },
+      get weapons() { return ALL_WEAPONS.filter((d) => MAKERS[d.id]).map(weaponInfo); },
       /** Ids do loadout atual: [primária, secundária]. */
       get loadoutIds() { return self.lo.weapons.map((w) => w.def.id); },
       setPrimary: (id) => self.setSlotWeapon(0, id),
@@ -347,7 +358,7 @@ export default {
       setKillCounter: (id, n) => self.setKillCounter(id, n),
       killCount: (id) => self.counters.get(knifeId(id) || id),
       /** Acessórios montados por arma: { [id]: { muzzle, grip, laser, optic } }. */
-      get attachments() { return Object.fromEntries(Object.keys(self.gunById).map((id) => [id, { ...(self.attCfg[id] || DEFAULT_ATT) }])); },
+      get attachments() { return Object.fromEntries(ALL_WEAPONS.map((d) => [d.id, { ...(self.attCfg[d.id] || DEFAULT_ATT) }])); },
       /** O que cada arma aceita: { [id]: { muzzle:[…], grip:[…], laser:[…], optic:[…] } }. */
       attachmentOptions: ATTACHMENTS,
       setAttachments: (id, cfg) => self.setAttachments(id, cfg),
@@ -442,7 +453,7 @@ export default {
     vm.camera.add(grp);
     const ws = params.get('wskin');
     let skin = null;
-    if (ws) skin = this.skins[this.lo.def.id] || this.skins[this.knifeSel] || null;
+    if (ws) skin = this.skins[knifeId(kind) || kind] || this.skins[this.lo.def.id] || this.skins[this.knifeSel] || null;
     const list = kind === 'guns' ? ALL_WEAPONS.map((d) => ({ type: 'weapon', baseId: d.id })) : kind === 'knives' ? KNIVES.map((k) => ({ type: 'knife', baseId: k.id })) : [{ type: knifeId(kind) ? 'knife' : 'weapon', baseId: kind }];
     const items = [];
     for (const it of list) {
@@ -471,6 +482,37 @@ export default {
   },
 
   // ─── troca de arma ───────────────────────────────────────────────────
+  /**
+   * Monta a arma `id` se ainda não existe (carga preguiçosa) e reaplica os
+   * cosméticos/acessórios pedidos antes dela existir. Devolve o objeto ou null.
+   */
+  ensureGun(id) {
+    if (this.gunById[id]) return this.gunById[id];
+    const def = weaponDef(id);
+    const mk = MAKERS[id];
+    if (!def || !mk) return null;
+    const mats = gunMaterials(this.M, { shareBase: id === 'kr9' });
+    let g = null;
+    try {
+      g = mk(mats.M, this.handR, this.handL, this.ctx.params, { view: this.view });
+    } catch (e) {
+      console.warn('[weapon] falhou ao montar', id, e);
+      return null;
+    }
+    // a mão direita foi reparentada pelo resolvedor: volta para a arma ativa
+    if (this.g && this.g !== g) {
+      this.g.root.add(this.handR.root, this.handL.root);
+      this.handR.root.position.copy(this.g.handR.pos);
+      this.handR.root.quaternion.copy(this.g.handR.quat);
+    }
+    this.prepGun(g, def, mats);
+    if (this.attCfg[id]) this.setAttachments(id, this.attCfg[id]);
+    if (this.skins[id]) applySkin(mats.painted, this.skins[id], g.bounds);
+    if (this.counters.has(id)) this.refreshCounter(id);
+    if (this.charms[id]) this.setCharm(id, this.charms[id]);
+    if (this.stickers[id]?.length) this.setStickers(id, this.stickers[id]);
+    return g;
+  },
   /** Prepara uma arma recém-montada: estado visual, cápsulas, acessórios. */
   prepGun(g, def, mats) {
     const { vm } = this.ctx;
@@ -503,7 +545,7 @@ export default {
   gunFor(i) {
     const lo = this.lo;
     if (i >= lo.weapons.length) return this.knifeRig(this.knifeSel);
-    return this.gunById[lo.weapons[i].def.id] || this.guns[0];
+    return this.ensureGun(lo.weapons[i].def.id) || this.guns[0];
   },
   /** Montagem da faca na mão (criada na primeira vez). */
   knifeRig(id) {
@@ -588,7 +630,7 @@ export default {
   /** Troca a arma do slot (0 = primária, 1 = secundária) pelo id. */
   setSlotWeapon(slot, id) {
     const def = weaponDef(id);
-    if (!def || !this.gunById[id]) return false;
+    if (!def || !MAKERS[id]) return false;
     const lo = this.lo;
     const before = lo.weapons.map((w) => w.def.id).join();
     if (!lo.setSlot(slot, def)) return lo.weapons[slot].def.id === id;
@@ -630,8 +672,10 @@ export default {
       const mats = this.knifeMats(kid);
       return { kind: 'knife', id: kid, mats, bounds: KNIFE_MODELS[kid]?.bounds || { zRear: 0.13, len: 0.3 }, g: this.knifeRigs[kid] || null };
     }
-    const g = this.gunById[id];
-    return g ? { kind: 'gun', id, g, mats: g.mats, bounds: g.bounds } : null;
+    if (!MAKERS[id]) return null;
+    // arma ainda não montada: guarda o pedido; ensureGun aplica ao montar
+    const g = this.gunById[id] || null;
+    return { kind: 'gun', id, g, mats: g?.mats || null, bounds: g?.bounds };
   },
   setSkin(id, skin) {
     const T = this.cosTarget(id);
@@ -639,7 +683,9 @@ export default {
     const s = skin ? normSkin(skin) : null;
     if (s) this.skins[T.id] = s;
     else delete this.skins[T.id];
-    applySkin(T.mats.painted, s, T.bounds);
+    if (T.mats) applySkin(T.mats.painted, s, T.bounds);
+    // faca selecionada: o golpe rápido passa a usar o modelo com a skin
+    if (T.kind === 'knife' && T.id === this.knifeSel && s) this.setKnife(T.id);
     return true;
   },
   setKillCounter(id, n) {
@@ -689,18 +735,20 @@ export default {
   },
   setStickers(id, list) {
     const T = this.cosTarget(id);
-    if (!T?.g || T.kind !== 'gun') return false;
+    if (!T || T.kind !== 'gun') return false;
     const g = T.g;
     const L = (Array.isArray(list) ? list : []).filter(Boolean).slice(0, 4);
     this.stickers[id] = L;
+    if (!g) return true;
     applyStickers(g.root, stickerTargets(g), g.cosmetic?.stickers, L);
     return true;
   },
   setAttachments(id, cfg = {}) {
-    const g = this.gunById[id];
-    if (!g || !ATTACHMENTS[id]) return null;
+    if (!ATTACHMENTS[id]) return null;
     const n = normAttachments(id, cfg, this.attCfg[id] || DEFAULT_ATT);
     this.attCfg[id] = n;
+    const g = this.gunById[id];
+    if (!g) return { ...n };
     applyAttachments(g, g.mats.M, n, this.view);
     this.fitForegrip(g);
     if (this.g === g) {

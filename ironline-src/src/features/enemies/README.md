@@ -161,3 +161,25 @@ normal — morrer no chão continua no mesmo ragdoll), depois levanta em
 0,9 s misturando a pose do chão com a animada (joelhos → em pé) e volta ao
 combate. Escudeiro solta o escudo e o recupera. Chefe e quem está em
 execução não caem. Evento `enemy:knockdown { enemy, phase: 'down'|'up' }`.
+
+## Custo (PCs fracos e celular)
+
+- **Carga**: `init` é assíncrono e cede frames (`ctx.bootProgress`) entre
+  as variantes; só as variantes da população inicial são geradas na carga —
+  as demais comuns em segundo plano (uma a cada 0,6 s de jogo), as das
+  classes especiais uma onda antes de poderem entrar (só se a partida tiver
+  essa onda) e o chefe/operador quando usados. Fora do desktop
+  (`quality.tier !== 'desktop'`): texturas do soldado 256² (em vez de 512²)
+  e AO assada em voxels de 2 cm.
+- **IA fatiada**: no máximo 3 buscas A* por passo fixo para o esquadrão
+  inteiro (`nav.findPath` devolve `undefined` sem orçamento; arrombador e
+  escudeiro tentam de novo no passo seguinte), percepção a cada 0,12 s,
+  decisões a cada 0,35–0,6 s, socorrista procura corpos a cada 0,6 s.
+- **Animação com LOD**: a cada 2 frames além de 30 m, 3 além de 70 m e 4
+  atrás da câmera (> 15 m); com mais de 8 soldados, a cada 2 além de 12 m.
+- **Equipamento**: escudo é clone do mesmo modelo (geometrias/materiais
+  compartilhados); laser faz raycast a cada 3 frames; escopeta desenha 2
+  traçantes por disparo.
+- **Props**: geometrias e materiais compartilhados, só o corpo projeta
+  sombra (nenhum em q=low), 10 por partida no desktop, 7 em q=low, 5 em
+  celular.

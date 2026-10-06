@@ -98,7 +98,14 @@ function shieldMaterial() {
  * Escudo balístico: centro na origem, +Z = frente (para fora), +Y = cima.
  * Curvo em torno do eixo vertical (o centro avança ~4 cm).
  */
+let SHIELD = null;
+/** Clone do modelo (geometrias e materiais compartilhados entre escudos). */
 export function buildShield() {
+  if (!SHIELD) SHIELD = makeShield();
+  return SHIELD.clone();
+}
+
+function makeShield() {
   const grp = new THREE.Group();
   grp.name = 'riot-shield';
   const w = SHIELD_HALF.x * 2 - 0.02, h = SHIELD_HALF.y * 2 - 0.02, t = 0.03;

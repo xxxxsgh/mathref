@@ -28,6 +28,7 @@
  */
 import * as THREE from 'three';
 import { pickTurretTarget, turnToward } from './logic.js';
+import { mergeChildren } from './merge.js';
 
 const RANGE = 42;
 const _v = new THREE.Vector3();
@@ -191,13 +192,18 @@ export function buildSentryModel() {
   led.scale.setScalar(0.06);
   led.position.set(-0.05, 0.05, -0.06);
   sensor.add(led);
+  // peças rígidas → uma malha por material em cada parte que anima
+  // (~70 peças viram ~15 draw calls)
+  for (const L of legs) mergeChildren(L.leg);
+  for (const n of [root, head, cradle, sh]) mergeChildren(n);
+  const lensMesh = mergeChildren(sensor).get(M.lens) || lensM;
   root.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = true;
       o.receiveShadow = true;
     }
   });
-  return { root, legs, head, cradle, barrel, barrelMat, muzzle, sensor, led, lens: lensM };
+  return { root, legs, head, cradle, barrel, barrelMat, muzzle, sensor, led, lens: lensMesh };
 }
 
 export class Sentry {

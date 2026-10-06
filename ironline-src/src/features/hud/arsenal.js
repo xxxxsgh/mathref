@@ -371,7 +371,7 @@ export class Arsenal {
     const C = this.C;
     const d = C.DEFS[it.def];
     try {
-      const k = (this.hud.k || 1) * Math.min(2, devicePixelRatio || 1);
+      const k = (this.hud.k || 1) * Math.min(this.hud.tier === 'desktop' ? 2 : 1, devicePixelRatio || 1);
       const v = (this.viewer = new ItemViewer(this.ctx.THREE, host, { w, h, k, color: C.RARITY[d.rarity].color }));
       const qa = this.ctx.params.get('ivview');
       if (qa) { const [y, p, dd] = qa.split(',').map(Number); v.view(y, p, dd); }

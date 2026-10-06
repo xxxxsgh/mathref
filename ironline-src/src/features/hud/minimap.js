@@ -16,7 +16,9 @@ import { drawText } from './font.js';
 
 const S = 280; // tamanho na prancheta
 const R = 122; // raio da área do mapa
-const PPM = 8; // pixels por metro na planta rasterizada
+let PPM = 8; // pixels por metro na planta rasterizada (4 fora do desktop)
+/** Detalhe da planta: celular/lite usam 4 px/m (canvas 4× menor). */
+export const setMinimapDetail = (ppm) => { PPM = ppm; };
 const VIEW = 3.4; // pixels da prancheta por metro (raio ≈ 36 m)
 
 /**
@@ -67,7 +69,8 @@ export class Minimap {
     if (!isFinite(minX)) { minX = -50; maxX = 50; minZ = -50; maxZ = 50; }
     const pad = 40;
     minX -= pad; minZ -= pad; maxX += pad; maxZ += pad;
-    const w = Math.min(4096, Math.ceil((maxX - minX) * PPM)), h = Math.min(4096, Math.ceil((maxZ - minZ) * PPM));
+    const cap = PPM < 8 ? 2048 : 4096;
+    const w = Math.min(cap, Math.ceil((maxX - minX) * PPM)), h = Math.min(cap, Math.ceil((maxZ - minZ) * PPM));
     const cv = document.createElement('canvas');
     cv.width = w; cv.height = h;
     const g = cv.getContext('2d');

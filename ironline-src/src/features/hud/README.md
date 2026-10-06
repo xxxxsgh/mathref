@@ -84,6 +84,25 @@ contrato preenchido; `&ivview=yaw,pitch,dist` ângulo do visualizador;
 `&ks=1` no preset combat encena a barra de killstreaks + medalha externa. No
 modo shot o inventário é o de demonstração (determinístico).
 
+## Custo (carga e por quadro)
+
+- `init` assíncrono em blocos com `await ctx.bootProgress(...)` (estilo, HUD
+  de combate, camuflagem, telas, regras, menu); tempos por bloco em
+  `hud.__s.bootTimes` (`?bootlog=1` também loga). A silhueta 3D da arma
+  (contexto WebGL próprio) e o operador do menu saem do init: são feitos nos
+  primeiros quadros do menu, junto com o grão de filme e a arte dos cartões
+  (`screens.finishBoot()`): canvas 2D no meio da carga sincroniza com a GPU
+  ocupada compilando shaders e travava >10 s no celular. No tier `lite` não
+  há operador nem fotos de campo; fora do desktop as fotos saem com 480 px.
+- Arte do ARSENAL (miniaturas, caixas, cartões) é preguiçosa (só ao abrir a
+  aba) e com superamostragem 1× fora do desktop; o visualizador 3D usa DPR 1
+  fora do desktop. Planta do minimapa a 4 px/m (teto 2048) fora do desktop.
+- Por quadro: bússola e minimapa redesenhados a ~20 Hz; DOM só muda quando
+  o valor muda (`set`); nenhuma leitura de layout no quadro (tamanho da
+  prancheta guardado em `layout()`); a camada de desaturação sai do DOM quando
+  invisível; `.lowfx` (qualidade baixa, celular, lite) desliga todo
+  `backdrop-filter` (desfoques de fundo, profundidade de campo do menu).
+
 ## Modos (menu principal → cartões de modo; `?mode=waves|hardpoint|survival`)
 
 O modo escolhido fica no perfil (sobrevive à recarga ao trocar de mapa).

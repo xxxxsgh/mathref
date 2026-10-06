@@ -337,8 +337,10 @@ export function buildRifle(M, opts = {}) {
   flLens.rotation.y = Math.PI;
   root.add(flLens);
 
-  // ─── mira holográfica (kit próprio: a ótica 3x pode substituí-la) ──
-  const KO = new Kit();
+  // ─── mira holográfica: fundida no kit principal (mesmo nº de draw calls de
+  // antes); com opts.noOptic vai para um kit descartado — a ótica 3x troca a
+  // malha principal por essa versão sem a holográfica ──
+  const KO = opts.noOptic ? new Kit() : K;
   const optic = new THREE.Group();
   optic.name = 'holo';
   // ───────────────────────────────────────────────
@@ -422,8 +424,8 @@ export function buildRifle(M, opts = {}) {
     }
   }
 
-  optic.add(KO.build(M, 'holo'));
   root.add(optic);
+  if (opts.noOptic) optic.visible = false;
   const rifle = K.build(M, 'rifle');
   root.add(rifle);
 
