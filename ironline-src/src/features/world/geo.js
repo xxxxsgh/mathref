@@ -28,6 +28,44 @@ const _e = new THREE.Euler();
 const _s = new THREE.Vector3();
 const _box = new THREE.Box3();
 
+/**
+ * Vetor Float32 que cresce sozinho. Os baldes do Builder guardavam
+ * posições/normais/UV/cores em Arrays JS (8 bytes por número + folga de
+ * crescimento): ~1 M triângulos viravam um pico de ~500 MB de heap na carga
+ * — o bastante para o iOS derrubar a aba. Aqui são 4 bytes por número.
+ */
+class F32 {
+  constructor(n = 768) {
+    this.a = new Float32Array(n);
+    this.length = 0;
+  }
+  _grow(k) {
+    if (this.length + k <= this.a.length) return;
+    const b = new Float32Array(Math.max(this.a.length * 2, this.length + k));
+    b.set(this.a.subarray(0, this.length));
+    this.a = b;
+  }
+  push3(x, y, z) {
+    this._grow(3);
+    const a = this.a, i = this.length;
+    a[i] = x; a[i + 1] = y; a[i + 2] = z;
+    this.length = i + 3;
+  }
+  push2(x, y) {
+    this._grow(2);
+    const a = this.a, i = this.length;
+    a[i] = x; a[i + 1] = y;
+    this.length = i + 2;
+  }
+  /** Cópia do tamanho exato (o buffer com folga vira lixo). */
+  take() {
+    const out = this.a.slice(0, this.length);
+    this.a = new Float32Array(0);
+    this.length = 0;
+    return out;
+  }
+}
+
 export class Builder {
   constructor(collision, { chunk = 40 } = {}) {
     this.collision = collision;
@@ -76,7 +114,7 @@ export class Builder {
     const key = `${mat}|${cx}|${cz}|${cast ? 1 : 0}`;
     let b = this.buckets.get(key);
     if (!b) {
-      b = { mat, cast, pos: [], nor: [], uv: [], col: [] };
+      b = { mat, cast, pos: new F32(), nor: new F32(), uv: new F32(512), col: new F32() };
       this.buckets.set(key, b);
     }
     return b;
@@ -135,24 +173,24 @@ export class Builder {
       const ax = Math.abs(fn.x), ay = Math.abs(fn.y), az = Math.abs(fn.z);
       for (let k = 0; k < 3; k++) {
         const p = tri[k];
-        b.pos.push(p.x, p.y, p.z);
-        b.nor.push(nrm[k].x, nrm[k].y, nrm[k].z);
+        b.pos.push3(p.x, p.y, p.z);
+        b.nor.push3(nrm[k].x, nrm[k].y, nrm[k].z);
         if (worldUV) {
           let u, v;
           if (ax >= ay && ax >= az) { u = fn.x > 0 ? -p.z : p.z; v = p.y; }
           else if (ay >= az) { u = p.x; v = fn.y > 0 ? -p.z : p.z; }
           else { u = fn.z > 0 ? p.x : -p.x; v = p.y; }
-          b.uv.push(u * us + uo[0], v * us + uo[1]);
+          b.uv.push2(u * us + uo[0], v * us + uo[1]);
         } else if (U) {
-          b.uv.push(U.getX(i + k) * us + uo[0], U.getY(i + k) * us + uo[1]);
-        } else b.uv.push(0, 0);
+          b.uv.push2(U.getX(i + k) * us + uo[0], U.getY(i + k) * us + uo[1]);
+        } else b.uv.push2(0, 0);
         let kf = 1;
         if (ao) kf = ao[2] + (1 - ao[2]) * Math.min(1, Math.max(0, (p.y - ao[0]) / (ao[1] - ao[0])));
         const c = typeof col === 'function' ? col(p) : col;
         // vcolor: multiplica pela cor de vértice da própria geometria (AO de copa…)
         const vc = opts.vcolor && VC ? [VC.getX(i + k), VC.getY(i + k), VC.getZ(i + k)] : null;
-        if (vc) b.col.push(c[0] * kf * vc[0], c[1] * kf * vc[1], c[2] * kf * vc[2]);
-        else b.col.push(c[0] * kf, c[1] * kf, c[2] * kf);
+        if (vc) b.col.push3(c[0] * kf * vc[0], c[1] * kf * vc[1], c[2] * kf * vc[2]);
+        else b.col.push3(c[0] * kf, c[1] * kf, c[2] * kf);
       }
       this.tris++;
     }
@@ -205,10 +243,10 @@ export class Builder {
     for (const b of this.buckets.values()) {
       if (!b.pos.length) continue;
       const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
-      g.setAttribute('normal', new THREE.Float32BufferAttribute(b.nor, 3));
-      g.setAttribute('uv', new THREE.Float32BufferAttribute(b.uv, 2));
-      g.setAttribute('color', new THREE.Float32BufferAttribute(b.col, 3));
+      g.setAttribute('position', new THREE.BufferAttribute(b.pos.take(), 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(b.nor.take(), 3));
+      g.setAttribute('uv', new THREE.BufferAttribute(b.uv.take(), 2));
+      g.setAttribute('color', new THREE.BufferAttribute(b.col.take(), 3));
       g.computeBoundingSphere();
       g.computeBoundingBox();
       const mat = mats[b.mat];

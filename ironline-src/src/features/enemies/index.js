@@ -35,6 +35,7 @@ import { GUNS } from './rolegear.js';
 import { buildShield, SHIELD_HALF, Glint, Laser, Pulse } from './gear.js';
 import { EnemyGrenades } from './grenades.js';
 import { ExplosiveProps } from './props.js';
+import { startKnockdown, stepKnockdown, frameKnockdown } from './knockdown.js';
 import { createPuppet, canExecute, startExecution, stepExecution, puppetExecution, EXEC } from './execution.js';
 
 const _v = new THREE.Vector3();
@@ -274,6 +275,8 @@ class Enemy {
     this.anim.hit(local, part, Math.min(this.boss ? 0.35 : 1.5, dmg / (this.boss ? 90 : 30)));
     this.brain.onHit(dmg);
     if (this.health <= 0) this.die(info, dir);
+    // slide kick (feature movement): derrubada de verdade + levantar
+    else if (info.knockdown) startKnockdown(this, info);
   }
 
   /** Bala no escudo: o colisor vira 'metal' só para este impacto (vfx/áudio). */
@@ -360,9 +363,14 @@ class Enemy {
     this.collider.blocksPlayer = false;
     this.brain.state = 'dead';
     this.brain.releaseCover();
-    // atualiza a pose atual antes de converter em partículas
-    this.anim.update(0);
-    this.ragdoll = new Ragdoll(this.anim, this.group, ctx.collision, this.velocity);
+    // atualiza a pose atual antes de converter em partículas (se já estava
+    // no chão derrubado, o mesmo ragdoll continua)
+    const wasDown = this.down?.phase === 'down' && this.ragdoll;
+    this.down = null;
+    if (!wasDown) {
+      this.anim.update(0);
+      this.ragdoll = new Ragdoll(this.anim, this.group, ctx.collision, this.velocity);
+    }
     const part = info?.part || 'torso';
     const pt = info?.point || this.joint(B.chest, new THREE.Vector3());
     const strength = part === 'head' ? 3.2 : part === 'leg' ? 1.6 : 2.4;
@@ -411,6 +419,12 @@ class Enemy {
     }
     const br = this.brain;
     const p = this.anim.p;
+    // derrubado (slide kick): ragdoll e depois levanta
+    if (this.down) {
+      stepKnockdown(this, dt);
+      this.speed = 0;
+      return;
+    }
     // execução: a vítima segue a coreografia (sem IA, sem andar)
     if (this.exec) {
       stepExecution(this, dt, this.ctx);
@@ -500,6 +514,7 @@ class Enemy {
 
   /** por frame de render: animação/ragdoll → ossos */
   frame(dt) {
+    if (this.down) return frameKnockdown(this, Math.min(dt, 1 / 20));
     if (this.ragdoll) {
       this.ragdoll.pose();
       return;

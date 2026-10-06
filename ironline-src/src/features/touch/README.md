@@ -20,7 +20,16 @@ aberta. Nada no modo shot.
 | ATIRAR (grande, direita) / ATIRAR (esquerda) | `fire` (segurar) |
 | ADS | `ads` alternado (solta sozinho ao correr) |
 | RELOAD · JUMP · FRAG · MELEE | `reload` · `jump` · `grenade` · `melee` (segura enquanto o dedo está no botão) |
-| CROUCH | `crouch` — toque agacha/levanta, em sprint vira slide, segurar deita (mesma semântica da tecla C) |
+| CROUCH | `crouch` — toque agacha/levanta, em sprint vira slide, de novo no slide = slide-cancel, segurar deita (mesma semântica da tecla C) |
+| DIVE (acima do SWAP) | `prone` — deita/levanta; em sprint ou slide = dolphin dive |
+| LEAN ◂ / LEAN ▸ (par no alto à direita) | `leanLeft` / `leanRight` (segurar), limitado por parede |
+
+Os três botões de movimento vêm de `services.movement.touchHints` (só
+aparecem com a feature movement carregada). Gestos de movimento sem botão
+novo: slide-jump = JUMP no slide; slide kick = MELEE no slide; vault → slide
+= CROUCH durante o vault; pendurar = joystick contra a borda alta + JUMP
+(JUMP de novo sobe); sprint tático = soltar e empurrar o joystick até o fim
+de novo em ≤ 0,32 s.
 | SWAP | `services.weapon.swap()` se existir; senão alterna `weapon2`/`weapon1` |
 | ☰ (placar) | repassa `Tab` (keydown/keyup) para a HUD |
 | ‖ (pausa) | `input.exitLock()` → `input:lock` false → a HUD abre a pausa |

@@ -27,6 +27,7 @@ cobertura. Tudo gerado em código — nenhum asset externo.
 | `grenades.js` | granadas dos inimigos (arremesso em parábola, quiques, explosão pelo bus e dano pelo caminho normal) |
 | `props.js` | barris explosivos e botijões de gás destrutíveis com reação em cadeia (`blastDamage`, `chainOrder` puras) |
 | `execution.js` | execução (vítima + atacante) e marionetes do OPERADOR em 3ª pessoa (execução e killcam) |
+| `knockdown.js` | derrubada do slide kick (`info.knockdown`/`knockback`): ragdoll vivo ~1,3 s e levantar (pose do chão misturada com a animada de joelhos → em pé) |
 | `enemies.test.mjs` | testes da lógica pura (importados por `tools/unit.test.mjs`) |
 
 ## Mapas
@@ -150,3 +151,13 @@ Eventos novos: `enemy:revive { enemy, medic, phase }`, `enemy:shieldHit`,
 `enemy:grenade { enemy, position, target, fuse }`, `enemy:grenadeLand`,
 `prop:explode`. `enemy:fire` ganhou `gun` e `pellets`; `player.damage` do
 inimigo leva `gun` (e `grenade: true` na granada).
+
+## Derrubada (slide kick)
+
+`damage()` com `info.knockdown` (o slide kick da feature movement manda
+`knockdown: true` e `knockback` em m/s): se sobrevive, o soldado vira
+ragdoll VIVO empurrado pelo chute (~1,3 s; colisor segue o corpo, dano
+normal — morrer no chão continua no mesmo ragdoll), depois levanta em
+0,9 s misturando a pose do chão com a animada (joelhos → em pé) e volta ao
+combate. Escudeiro solta o escudo e o recupera. Chefe e quem está em
+execução não caem. Evento `enemy:knockdown { enemy, phase: 'down'|'up' }`.

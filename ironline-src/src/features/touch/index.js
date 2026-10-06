@@ -107,6 +107,17 @@ export default {
       pause: btn('t-util t-pause', 'pause', 'PAUSE'),
       score: btn('t-util t-score', 'score', 'SCORE'),
     };
+    // ações de movimento sem botão próprio: lidas de services.movement.touchHints
+    // (prone = DIVE em sprint/slide, lean Q/E). Sem a feature movement, nada.
+    const MOVE_BTN = { prone: ['t-prone', 'prone'], leanLeft: ['t-leanL', 'leanL'], leanRight: ['t-leanR', 'leanR'] };
+    this.moveBtns = [];
+    for (const h of ctx.service('movement')?.touchHints || []) {
+      const m = MOVE_BTN[h.action];
+      if (!m) continue;
+      const b = btn(m[0], m[1], h.label === 'Q' ? 'LEAN' : h.label === 'E' ? 'LEAN' : h.label);
+      b.setAttribute('aria-label', h.hint || h.action);
+      this.moveBtns.push([b, h.action]);
+    }
     ctx.ui.appendChild(el);
 
     // aviso de orientação (celular em retrato)
@@ -371,6 +382,7 @@ export default {
     key(B.crouch, 'crouch'); // toque = agacha/levanta; em sprint = slide; segurar = deita
     key(B.grenade, 'grenade');
     key(B.melee, 'melee');
+    for (const [b, action] of this.moveBtns || []) key(b, action); // segurar = lean / toque = deitar/dive
     on(B.swap, () => {
       const w = this.ctx.service('weapon');
       if (typeof w?.swap === 'function') w.swap();

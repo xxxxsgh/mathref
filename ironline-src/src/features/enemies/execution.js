@@ -41,7 +41,7 @@ const sstep = (a, b, x) => {
  * `e` precisa de { alive, boss, exec, group.position, yaw, brain{state,canSee,awareness} }.
  */
 export function canExecute(e, pp) {
-  if (!e?.alive || e.boss || e.exec || e.scripted) return -1;
+  if (!e?.alive || e.boss || e.exec || e.down || e.scripted) return -1;
   const br = e.brain;
   // desatento: não enxerga o jogador (e, em combate, já o perdeu de vista)
   if (!br || br.canSee || (br.state === 'combat' && (br.lostFor ?? 0) < 1.2)) return -1;

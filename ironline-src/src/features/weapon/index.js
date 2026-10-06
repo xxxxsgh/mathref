@@ -210,7 +210,7 @@ export default {
       shots: 0, lastShot: -9, triggerHeld: false, burstCount: 0,
       sunVis: 1, indoor: 0, sunTimer: 0,
       bobPhase: 0, bobAmt: 0, prevYaw: null, prevPitch: null, landing: 0,
-      flashT: 0, slideLock: false, nade: null, lunge: null,
+      flashT: 0, slideLock: false, nade: null, lunge: null, tac: 0, lowLin: 0, cycleAt: null,
     });
     // munição/cadência da arma ATIVA (delegam ao loadout: trocar não perde o carregador)
     Object.defineProperties(st, {
@@ -357,6 +357,8 @@ export default {
       get breath() { return self.breath.stamina; },
       get scopeGlint() { return self.g.zoom >= 4 && st.ads > 0.5 ? 1 : 0; },
       get zoom() { return self.g.zoom || 1; },
+      /** Quanto desfocar a viewmodel no ADS (0 com luneta: a imagem ampliada fica nítida). */
+      get dofScale() { return self.g.zoom > 1 ? 0.12 : 1; },
       get grenades() { return self.lo.grenades; },
       get tacticals() { return self.lo.tacticals; },
       get equipment() { return { frag: { ...EQUIP_DEFS.frag, count: self.lo.grenades }, flash: { ...EQUIP_DEFS.flash, count: self.lo.tacticals }, knife: { ...EQUIP_DEFS.knife } }; },
@@ -510,7 +512,7 @@ export default {
       k = makeKnifeRig(mats.M, this.handR, id);
       k.mats = mats;
       k.def = { id, kind: 'knife' };
-      k.bounds = modelBounds(k.knife);
+      k.bounds = modelBounds(k.R.knife);
       k.casings = [];
       k.cos = { counter: null, charm: null };
       k.root.visible = false;
@@ -767,7 +769,10 @@ export default {
     const a = st.ads;
     const S = this.spr;
     const rc = g.recoil;
-    const kV = mods.recoilV ?? 1, kH = mods.recoilH ?? 1;
+    // ganchos da movement: recuo no slide / apoiado (mount)
+    const pr = ctx.player;
+    const kMove = (pr.slideRecoil ?? 1) * (pr.mountRecoil ?? 1);
+    const kV = (mods.recoilV ?? 1) * kMove, kH = (mods.recoilH ?? 1) * kMove;
     // ─ recuo visual da arma (molas) ─
     const k = lerp(1, 0.45, a);
     S.recZ.impulse(rc.z * k + 0.1);
@@ -789,7 +794,7 @@ export default {
     camera.getWorldDirection(_dir);
     const moving = ctx.player.state?.speed || 0;
     const hipS = d.spread[0] * (mods.hipSpread ?? 1);
-    const spread = lerp(hipS, d.spread[1], a) + Math.min(d.moveSpread, moving * 0.003) * (1 - a * 0.7);
+    const spread = (lerp(hipS, d.spread[1], a) + Math.min(d.moveSpread, moving * 0.003) * (1 - a * 0.7)) * (ctx.player.slideSpread ?? 1);
     const ang = rng.next() * Math.PI * 2, rad = Math.sqrt(rng.next()) * spread;
     _v.set(Math.cos(ang) * rad, Math.sin(ang) * rad, 0).applyQuaternion(camera.quaternion);
     _dir.add(_v).normalize();
@@ -953,6 +958,10 @@ export default {
     const preset = ctx.shot?.preset;
     const sprinting = !!player.state?.sprinting && !preset;
     st.sprintLin = clamp(st.sprintLin + (sprinting ? dt / 0.28 : -dt / 0.2), 0, 1);
+    // ganchos da movement: sprint tático (arma erguida) e pendurado (arma baixa)
+    st.tac = clamp((st.tac || 0) + (player.tacSprint && !preset ? dt / 0.2 : -dt / 0.2), 0, 1);
+    const hanging = !!player.hanging && !preset;
+    st.lowLin = clamp((st.lowLin || 0) + (hanging ? dt / 0.25 : -dt / 0.3), 0, 1);
 
     // ação em andamento
     if (st.action && !this.debug?.anim) {
@@ -1021,7 +1030,7 @@ export default {
     const knifeOut = lo.knifeOut;
 
     // mira
-    st.adsTarget = preset ? !!preset.ads && !knifeOut : input.action('ads') && (!busy || st.action.allowAds) && st.sprintLin < 0.5 && !knifeOut;
+    st.adsTarget = preset ? !!preset.ads && !knifeOut : input.action('ads') && (!busy || st.action.allowAds) && st.sprintLin < 0.5 && !knifeOut && !player.hanging;
     if (st.adsTarget && st.action?.name === 'inspect') st.action = null;
     st.adsLin = clamp(st.adsLin + (st.adsTarget ? dt / lo.def.adsTime : -dt / (lo.def.adsTime * 0.85)), 0, 1);
     st.ads = ease.inOut(st.adsLin);
@@ -1062,12 +1071,12 @@ export default {
     }
     // faca na mão: o gatilho golpeia (segurar repete)
     if (knifeOut) {
-      if (trig && !st.action && !lo.switching && st.sprintLin < 0.5) this.startKnifeSwing(ctx);
+      if (trig && !st.action && !lo.switching && st.sprintLin < 0.5 && st.lowLin < 0.1) this.startKnifeSwing(ctx);
       st.triggerHeld = trig;
       this.throwables.update(dt);
       return;
     }
-    const canFire = !busy && !lo.switching && st.sprintLin < 0.15 && st.cooldown <= 0;
+    const canFire = !busy && !lo.switching && st.sprintLin < 0.15 && st.cooldown <= 0 && st.lowLin < 0.1;
     if (trig && canFire && (auto || edge)) {
       if (st.action?.name === 'inspect') st.action = null;
       if (st.ammo > 0) this.fire(ctx);
@@ -1125,7 +1134,7 @@ export default {
     if (Math.abs(dy) > 1 || ctx.shot) dy = 0;
     if (Math.abs(dp) > 1 || ctx.shot) dp = 0;
     const inv = dt > 0 ? 1 / dt : 0;
-    const swayK = lerp(1, 0.25, st.ads);
+    const swayK = lerp(1, 0.25, st.ads) * (player.mountSway ?? 1);
     S.swayY.target = clamp(dy * inv * 0.022, -0.09, 0.09) * swayK;
     S.swayX.target = clamp(-dp * inv * 0.02, -0.07, 0.07) * swayK;
     S.swayPX.target = clamp(-dy * inv * 0.006, -0.02, 0.02) * swayK;
@@ -1148,10 +1157,25 @@ export default {
     const arc = Math.sin(Math.PI * st.adsLin);
     pos.y -= arc * 0.012;
     rz += arc * 0.06 * (st.adsTarget ? 1 : -0.5);
-    pos.addScaledVector(SPRINT.pos, sp);
-    rx += SPRINT.rot.x * sp;
-    ry += SPRINT.rot.y * sp;
-    rz += SPRINT.rot.z * sp;
+    // sprint tático (movement: player.tacSprint): arma ERGUIDA junto ao peito,
+    // cano para cima, em vez da pose de corrida baixa
+    const tac = st.tac;
+    pos.addScaledVector(SPRINT.pos, sp * (1 - tac));
+    rx += SPRINT.rot.x * sp * (1 - tac);
+    ry += SPRINT.rot.y * sp * (1 - tac);
+    rz += SPRINT.rot.z * sp * (1 - tac);
+    pos.x += -0.05 * sp * tac;
+    pos.y += 0.035 * sp * tac;
+    pos.z += 0.07 * sp * tac;
+    rx += 0.95 * sp * tac;
+    ry += 0.35 * sp * tac;
+    rz += 0.5 * sp * tac;
+    // pendurado na borda (movement: player.hanging): arma baixa, fora do quadro
+    const low = ease.inOut(st.lowLin);
+    pos.y -= 0.3 * low;
+    pos.z += 0.08 * low;
+    rx -= 0.9 * low;
+    rz += 0.4 * low;
 
     // respiração (ciclo lento + micro tremor)
     const br = lerp(1, 0.35, a) * (1 - sp);
@@ -1322,7 +1346,7 @@ export default {
     // balanço da luneta/ótica ampliada mirando (fôlego segura/cansa)
     let swP = 0, swY = 0;
     if (g.zoom > 1 && a > 0.05) {
-      const sw = scopeSway(tnow, 0.0042 * this.swayMult * a * (player.state?.crouching ? 0.65 : 1));
+      const sw = scopeSway(tnow, 0.0042 * this.swayMult * a * (player.state?.crouching ? 0.65 : 1) * (player.mountSway ?? 1));
       swP = sw.y;
       swY = sw.x;
     }

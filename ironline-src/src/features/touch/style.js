@@ -46,6 +46,13 @@ html.il-touch, html.il-touch body, html.il-touch #app canvas {
 #il-touch .t-reload { --s: 52px; right: calc(210px * var(--ts) + env(safe-area-inset-right)); bottom: calc(var(--hb) + 2px * var(--ts)); }
 #il-touch .t-gren { --s: 46px; right: calc(150px * var(--ts) + env(safe-area-inset-right)); bottom: calc(var(--hb) + 114px * var(--ts)); }
 #il-touch .t-melee { --s: 46px; right: calc(90px * var(--ts) + env(safe-area-inset-right)); bottom: calc(var(--hb) + 124px * var(--ts)); }
+/* ações de movimento extras (services.movement.touchHints): DIVE/deitar acima
+   do SWAP na coluna da direita; lean Q/E em par no alto à direita, fora da
+   coluna e longe do tiro (o polegar sobe para "espiar" sem largar a mira) */
+#il-touch .t-prone { --s: 46px; right: calc(23px + env(safe-area-inset-right)); bottom: calc(var(--hb) + 199px * var(--ts)); }
+#il-touch .t-leanL, #il-touch .t-leanR { --s: 42px; border-radius: 12px; top: calc(12px + env(safe-area-inset-top)); }
+#il-touch .t-leanR { right: calc(76px * var(--ts) + env(safe-area-inset-right)); }
+#il-touch .t-leanL { right: calc(128px * var(--ts) + env(safe-area-inset-right)); }
 #il-touch .t-util { --s: 40px; border-radius: 9px; top: calc(10px + env(safe-area-inset-top)); }
 #il-touch .t-pause { left: calc(50% + 150px); }
 #il-touch .t-score { left: calc(50% - 190px); }
@@ -70,6 +77,9 @@ export const ICONS = {
   swap: '<svg viewBox="0 0 24 24"><path d="M4 8h14l-3.5-3.5M20 16H6l3.5 3.5"/></svg>',
   grenade: '<svg viewBox="0 0 24 24"><ellipse cx="11" cy="14.5" rx="5.5" ry="6.5"/><path d="M9 8V5.5h4V8M13 6.5h3.5l1.5 2M8 12.5h6M8 16.5h6"/></svg>',
   melee: '<svg viewBox="0 0 24 24"><path d="M4 20l3-3M6 15l3 3M8.5 15.5L19 5l.5 2.5L10 17z"/></svg>',
+  prone: '<svg viewBox="0 0 24 24"><path d="M12 4v9M8 9.5l4 4 4-4M4 19h16"/></svg>',
+  leanL: '<svg viewBox="0 0 24 24"><path d="M14 20V11a4 4 0 0 0-4-4H5M8 4L5 7l3 3"/></svg>',
+  leanR: '<svg viewBox="0 0 24 24"><path d="M10 20V11a4 4 0 0 1 4-4h5M16 4l3 3-3 3"/></svg>',
   pause: '<svg viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></svg>',
   score: '<svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></svg>',
   rotate: '<svg viewBox="0 0 48 48"><rect x="15" y="6" width="18" height="36" rx="3"/><path d="M21 37h6"/></svg>',

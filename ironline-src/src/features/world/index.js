@@ -116,7 +116,9 @@ export default {
     let tp = t0;
     const phase = async (label, f) => {
       const now = performance.now();
-      phases.push([label, Math.round(now - tp)]);
+      // heap JS (só Chrome) após a fase: acha picos de memória na carga
+      const heap = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : undefined;
+      phases.push([label, Math.round(now - tp), heap]);
       await ctx.bootProgress?.(label, f);
       tp = performance.now();
     };

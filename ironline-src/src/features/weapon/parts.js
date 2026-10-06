@@ -268,8 +268,11 @@ export function buildScope(M, { len = 0.32, tube = 0.015, obj = 0.026, eye = 0.0
   const S = 40;
   // ocular: sino + anel de dioptria serrilhado
   const eyeL = 0.075, objL = 0.085;
-  K.add('scope', cylZ(eye, 0, -0.012, { seg: S }));
-  K.add('rubber', cylZ(eye + 0.0012, -0.003, -0.01, { seg: S }));
+  // ocular aberta (sem tampa na frente da lente) + anel escuro em volta da lente
+  K.add('scope', cylZ(eye, 0, -0.012, { seg: S, open: true }));
+  K.add('rubber', cylZ(eye + 0.0012, -0.003, -0.01, { seg: S, open: true }));
+  K.add('cavity', new THREE.RingGeometry(eye * 0.8, eye * 1.001, S).translate(0, 0, -0.0062));
+  K.add('rubber', new THREE.RingGeometry(eye * 0.97, eye + 0.0013, S).translate(0, 0, 0.0001));
   for (let i = 0; i < 28; i++) {
     const a = (i / 28) * Math.PI * 2;
     K.add('scope', rbox(0.0016, 0.0016, 0.007, 0.0005, Math.cos(a) * (eye + 0.0016), Math.sin(a) * (eye + 0.0016), -0.0065, 1));
@@ -332,7 +335,7 @@ export function buildScope(M, { len = 0.32, tube = 0.015, obj = 0.026, eye = 0.0
   root.add(K.build(M, 'scope'));
   // lente da ocular (imagem ampliada) e da objetiva (vidro escuro)
   const lens = makeScopeLens({ radius: eye * 0.82, zoom, reticle, view, color });
-  lens.position.set(0, 0, -0.004);
+  lens.position.set(0, 0, -0.006);
   root.add(lens);
   const objLens = new THREE.Mesh(new THREE.CircleGeometry(obj * 0.93, 40), new THREE.MeshPhysicalMaterial({
     color: 0x0a1418, roughness: 0.05, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.03, iridescence: 0.6, iridescenceIOR: 1.6,
@@ -376,8 +379,10 @@ export function buildOptic3x(M, view) {
   const len = 0.105, r = 0.0135;
   // corpo prismático (caixa arredondada) + ocular redonda + objetiva
   K.add('scope', rbox(0.034, 0.03, 0.05, 0.007, 0, 0.002, -0.05, 3));
-  K.add('scope', cylZ(r * 1.25, 0, -0.026, { seg: 36, r1: r * 1.05 }));
-  K.add('rubber', cylZ(r * 1.32, -0.002, -0.012, { seg: 36 }));
+  K.add('scope', cylZ(r * 1.25, 0, -0.026, { seg: 36, r1: r * 1.05, open: true }));
+  K.add('rubber', cylZ(r * 1.32, -0.002, -0.012, { seg: 36, open: true }));
+  K.add('cavity', new THREE.RingGeometry(r * 1.02, r * 1.26, 36).translate(0, 0, -0.0062));
+  K.add('rubber', new THREE.RingGeometry(r * 1.2, r * 1.33, 36).translate(0, 0, -0.0019));
   K.add('scope', cylZ(r * 1.05, -0.074, -len, { seg: 36, r1: r * 1.3 }));
   K.add('cavity', cylZ(r * 1.2, -len + 0.0004, -len - 0.0002, { seg: 36 }));
   // torre e botão de iluminação
@@ -388,7 +393,7 @@ export function buildOptic3x(M, view) {
   K.add('steel', rbox(0.004, 0.006, 0.03, 0.0015, -0.015, -0.019, -0.05));
   root.add(K.build(M, 'optic3x'));
   const lens = makeScopeLens({ radius: r * 1.05, zoom: 3, reticle: 'ring', view, color: [1, 0.25, 0.05] });
-  lens.position.set(0, 0, -0.004);
+  lens.position.set(0, 0, -0.006);
   root.add(lens);
   const glint = makeGlint(0.05);
   glint.position.set(0, 0, -len - 0.003);

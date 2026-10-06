@@ -285,7 +285,8 @@ async function loadFeatures() {
       if (CRITICAL.has(e.name)) bootScreen.fail(`Falha ao carregar ${NAMES[e.name] || e.name}.`, err?.message || err);
     }
     const ms = Math.round(performance.now() - t);
-    bootLog.features.push({ name: e.name, ms, ok: e.ok });
+    const heapMB = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : undefined;
+    bootLog.features.push({ name: e.name, ms, ok: e.ok, heapMB });
     if (bootLogOn) console.info(`[ironline] init ${e.name}: ${ms} ms${e.ok ? '' : ' (FALHOU)'}`);
     ctx.features.push(e);
     acc += w;

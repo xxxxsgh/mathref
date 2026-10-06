@@ -283,7 +283,7 @@ export class Screens {
             <div><span class="k">${t11('WINS')}</span>${N(P.wins, 26)}</div>
           </div></div>
       </div>
-      ${this.footer([['ENTER', 'DEPLOY'], ['< >', 'MODE'], ['M', 'MAP'], ['L', 'LOADOUT'], ['O', 'SETTINGS']])}`;
+      ${this.footer([['ENTER', 'DEPLOY'], ['< >', 'MODE'], ['M', 'MAP'], ['L', 'LOADOUT'], ['I', 'ARSENAL'], ['O', 'SETTINGS']])}`;
   }
   /** "Arma da operação" (tile de destaque) com a camuflagem atual. */
   weaponTile() {
