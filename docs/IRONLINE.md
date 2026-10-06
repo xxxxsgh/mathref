@@ -267,6 +267,7 @@ Parâmetros de URL úteis (lista completa no `CONTRACT.md`):
 | `?waves=1,1&wi=1&mt=300` | partida curta (ondas, intervalo, tempo); `&hold=s` (posse do HARDPOINT), `&lives=n` (SURVIVAL) |
 | `?dynres=0` | desliga o governador de desempenho (resolução dinâmica + degraus) |
 | `?lite=1\|0` | força o modo leve (celular fraco) / desliga a detecção automática |
+| `?fps=show` | contador de FPS/ms/draw calls (também F7) |
 | `?bootlog=1` | tempo de carga por feature no console (`window.__bootlog`) |
 | `?shot=<preset>` | modo screenshot determinístico (abaixo) |
 
@@ -326,6 +327,32 @@ derrubava a aba e recarregava — a tela de carga "infinita".
   heap JS, memória estimada de texturas/geometria e triângulos.
   `--phonegl` simula GPU de celular (MAX_TEXTURE_SIZE 4096, sem
   extensões de cor float).
+
+### PC fraco, preset low e contador de FPS
+
+- **Detecção** (`classifyDevice` em `core/Quality.js`): GPU integrada ou
+  antiga pelo `WEBGL_debug_renderer_info` — Intel HD/UHD/Iris Plus, AMD
+  "Radeon Graphics"/Vega (APU), GeForce MX/GT, software (SwiftShader,
+  llvmpipe, Basic Render Driver) —, 4 núcleos com ≤ 4 GB, ou
+  `MAX_TEXTURE_SIZE` < 8192 → `device.weak` → camada **`low-desktop`**
+  (começa em `low`, teto do automático `medium-`). É uma camada MACIA:
+  escolher um preset manual nas configurações (`quality.set('high')`) ou
+  `?q=high` na URL a remove; voltar para `auto` a restaura.
+- **Preset `low` leve de verdade**: resolução interna 75 % (`renderScale`;
+  `low-` do automático 65 %) com nitidez CAS no passe final; uma cascata
+  de sombra 1024 atualizada a cada 4 quadros (sem cascata larga, PCSS, GI,
+  poeira, SSAO, sonda, volumétrico, TAA); materiais sem "texture bombing"
+  (metade das leituras de textura nas superfícies grandes); geometria
+  estática mesclada em blocos de 128 m e entulho em células de 52 m (menos
+  draw calls); vfx com atlas 1024, menos partículas/marcas/destroços e uma
+  só luz de clarão.
+- **Governador** (`core/Governor.js`): além da resolução, desce degrau NA
+  HORA quando a média passa de 1,33× o orçamento (60 fps → abaixo de
+  ~45 fps) e dois degraus abaixo de 30 fps, com carência curta (1,5 s); os
+  3 s iniciais não contam (compilação/upload).
+- **Contador de FPS**: `?fps=show` (ou `?perf=1`), **F7** ou
+  `ctx.perf.show(true)` — FPS, ms (média/p90), draw calls, triângulos,
+  resolução interna, escala e preset·degrau·camada. A escolha fica salva.
 
 No GitHub Pages, o workflow `.github/workflows/pages.yml` roda `npm ci`,
 `npm test` e `npm run build` em `ironline-src/` e confere que

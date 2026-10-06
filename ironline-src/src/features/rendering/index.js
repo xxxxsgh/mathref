@@ -904,7 +904,8 @@ const rendering = {
       u.uVolStrength.value = volTex === rt.zero.texture ? 0 : P.vol.strength;
       u.uPhaseG.value = P.vol.phaseG;
       const ads = ctx.service('weapon')?.ads || 0;
-      u.uVmBlur.value = ads * P.adsDof;
+      // luneta montada: a weapon reduz o desfoque (dofScale 0,12) para não borrar a borda da ótica
+      u.uVmBlur.value = ads * P.adsDof * (ctx.services.weapon?.dofScale ?? 1);
       u.uRes.value.set(w, h);
       // oclusão de céu + sombra do sol na superfície
       if (occOn) {

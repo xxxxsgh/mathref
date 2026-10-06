@@ -331,7 +331,8 @@ try {
           calls += r.info.render.calls;
           tris += r.info.render.triangles;
           n++;
-          if (t - t0 < secs * 1000) requestAnimationFrame(f);
+          // pelo menos 8 frames (SwiftShader pode levar segundos por frame)
+          if (t - t0 < secs * 1000 || n < 9) requestAnimationFrame(f);
           else res();
         };
         requestAnimationFrame(f);
@@ -340,7 +341,7 @@ try {
       const s = dts.slice().sort((a, b) => a - b);
       const mean = s.reduce((a, b) => a + b, 0) / s.length;
       return {
-        frames: s.length, fps: +(1000 / mean).toFixed(1), meanMs: +mean.toFixed(1), p90Ms: +s[Math.floor(s.length * 0.9)].toFixed(1),
+        frames: s.length, fps: +(1000 / mean).toFixed(1), meanMs: +mean.toFixed(1), p90Ms: +s[Math.min(s.length - 1, Math.floor(s.length * 0.9))].toFixed(1),
         calls: Math.round(calls / n), tris: Math.round(tris / n), pixelRatio: r.getPixelRatio(),
         buffer: [r.domElement.width, r.domElement.height], level: ctx.quality.level, rung: ctx.quality.rung, tier: ctx.quality.tier,
         govScale: ctx.governor?.scale, renderScale: ctx.quality.renderScale,

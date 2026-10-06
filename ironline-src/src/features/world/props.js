@@ -25,14 +25,21 @@ const MINOR = /^(rchunk|rgrit|rbrick|rclus|rpeb|rshard|glassbit|leafbit)/;
 
 export class Instancer {
   /** @param detail 0..1 (`quality.detail`): fração do entulho miúdo mantida ≈ detail^1.5 */
-  constructor(detail = 1, { cell = 26 } = {}) {
+  constructor(detail = 1, { cell = 26, variants = false } = {}) {
     this.cell = cell;
+    // variants: entulho miúdo com menos variantes de forma (rchunk0..7 → 2,
+    // rbrick/rgrit/rclus → 1): cada variante × célula era uma draw call
+    this.fewVariants = variants;
     this.sets = new Map();
     this.keep = detail >= 1 ? 1 : Math.max(0.05, Math.pow(Math.max(0, detail), 1.5));
     this.skipped = 0;
   }
   /** Registra uma instância de `geoKey` (geometria) com material `mat`. */
   add(geoKey, geo, mat, matrix, color = [1, 1, 1], opts = {}) {
+    if (this.fewVariants) {
+      const m = /^(rchunk|rbrick|rgrit|rclus)(\d+)$/.exec(geoKey);
+      if (m) geoKey = m[1] + (m[1] === 'rchunk' ? Number(m[2]) % 2 : 0);
+    }
     const key = `${geoKey}|${mat}|${opts.shadow === false ? 0 : 1}`;
     let s = this.sets.get(key);
     if (!s) {
@@ -47,6 +54,33 @@ export class Instancer {
     s.mats.push(matrix.clone());
     s.cols.push(color);
   }
+  /**
+   * Camadas leves: conjuntos PEQUENOS (≤ maxInstances, poucos triângulos no
+   * total) viram geometria estática mesclada no Builder — cada conjunto era
+   * uma draw call própria (centenas no mapa). Mantém cor por instância
+   * (vertex color) e UV da peça; o Builder agrupa por material/bloco.
+   */
+  bakeInto(B, { maxInstances = 32, maxTris = 40000 } = {}) {
+    let baked = 0;
+    const prevCast = B.cast;
+    for (const [key, s] of this.sets) {
+      if (!s.mats.length || s.mats.length > maxInstances || !s.geo.attributes.normal) continue;
+      const g = s.geo;
+      const tri = (g.index ? g.index.count : g.attributes.position.count) / 3;
+      if (tri * s.mats.length > maxTris) continue;
+      B.cast = s.shadow;
+      const _p = new THREE.Vector3();
+      s.mats.forEach((M, i) => {
+        _p.setFromMatrixPosition(M);
+        B.add(g, s.mat, M, { color: s.cols[i], worldUV: false, vcolor: true, at: [_p.x, _p.z] });
+      });
+      baked += s.mats.length;
+      this.sets.delete(key);
+    }
+    B.cast = prevCast;
+    return baked;
+  }
+
   /**
    * Cria os InstancedMesh. Conjuntos grandes (entulho espalhado pelo mapa
    * inteiro) são PARTIDOS em células de `CELL` m ao longo da rua: a esfera

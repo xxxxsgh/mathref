@@ -205,6 +205,45 @@ test('camada do aparelho: celular/leve são teto; desktop não muda', async () =
   assert.ok(l.drawDistance <= QUALITY_PRESETS.low.drawDistance);
 });
 
+test('PC fraco → camada low-desktop (macia), nunca começa em high', async () => {
+  const { deviceTier } = await import('../src/core/Quality.js');
+  const weak = [
+    'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)',
+    'ANGLE (Intel, Intel(R) HD Graphics 4000 Direct3D11)',
+    'ANGLE (AMD, AMD Radeon(TM) Vega 8 Graphics Direct3D11)',
+    'ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11)',
+    'ANGLE (NVIDIA, NVIDIA GeForce MX250 Direct3D11)',
+    'ANGLE (NVIDIA, NVIDIA GeForce GT 1030 Direct3D11)',
+    'llvmpipe (LLVM 15.0.7, 256 bits)',
+    'ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11)',
+  ];
+  for (const gpu of weak) {
+    const d = classifyDevice({ gpu, cores: 8, memory: 8 });
+    assert.equal(d.weak, true, gpu);
+    assert.equal(d.preset, 'low', gpu);
+    assert.equal(deviceTier(d), 'low-desktop', gpu);
+  }
+  // 4 núcleos e 4 GB, ou textura máxima pequena, também
+  assert.equal(classifyDevice({ gpu: 'NVIDIA GeForce GTX 1060', cores: 4, memory: 4 }).weak, true);
+  assert.equal(classifyDevice({ gpu: 'NVIDIA GeForce GTX 1060', cores: 8, memory: 16, maxTexture: 4096 }).weak, true);
+  // GPUs boas continuam desktop
+  const good = classifyDevice({ gpu: 'NVIDIA GeForce RTX 3070', cores: 12, memory: 16 });
+  assert.equal(good.weak, false);
+  assert.equal(deviceTier(good), 'desktop');
+  assert.equal(classifyDevice({ gpu: 'AMD Radeon 780M Graphics', cores: 8, memory: 16 }).weak, false);
+  // camada macia: o jogador escolhe high → sai; auto → volta
+  const d = classifyDevice({ gpu: weak[0], cores: 8, memory: 8 });
+  const q = createQuality('auto', null, d, { tier: 'low-desktop' });
+  assert.equal(q.level, 'low');
+  assert.equal(q.renderScale, 0.75);
+  q.set('high');
+  assert.equal(q.tier, 'desktop');
+  for (const [k, v] of Object.entries(QUALITY_PRESETS.high)) assert.equal(q[k], v, k);
+  q.set('auto');
+  assert.equal(q.tier, 'low-desktop');
+  assert.equal(q.ssao, false);
+});
+
 test('governador: resolução dinâmica desce rápido e sobe devagar', () => {
   const g = new Governor({ targetFps: 60, minScale: 0.6, auto: false });
   // 25 ms (40 fps): a escala cai em poucas janelas até o piso, nunca abaixo

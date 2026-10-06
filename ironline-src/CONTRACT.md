@@ -89,7 +89,8 @@ pipeline(ctx, dt)              → render (padrão: cena + viewmodel)
 | `features` / `errors` | estado de carregamento `{ name, order, ok, error }` e erros registrados |
 | `bootProgress(rótulo, f)` | durante o `init`: atualiza a tela de carga (f = 0..1 dentro da fatia da feature) e **cede um frame** — `await` entre blocos pesados para o celular não travar a página. Fora da carga só cede |
 | `gpu` | `{ webgl2, maxTexture, halfFloatRT }` (core/Renderer.js `gpuCaps`); sem `halfFloatRT` o núcleo põe `quality.hdr = false` |
-| `tier` | camada do aparelho: `'desktop' \| 'mobile' \| 'lite'` (= `quality.tier`) |
+| `tier` | camada do aparelho: `'desktop' \| 'low-desktop' \| 'mobile' \| 'lite'` (= `quality.tier`) |
+| `perf` | contador de FPS (core/PerfOverlay.js): `show(bool)`, `visible`; evento `perf:overlay` (bool). `?fps=show`, F7 |
 
 `window.__ironline` = `ctx`. `window.__ready = true` após o 3º frame
 renderizado (features iniciadas e aquecimento do preset feito).
@@ -192,12 +193,16 @@ São dicas: cada feature decide como honrá-las.
   aplicam patches (`motionBlur/volumetrics` off, `shadowScale 0.5`, `ssao/bloom`
   off, `foliage`/`particleBudget` menores). O modo shot fica em `high` fixo.
 - **Camada do aparelho** (`quality.tier`, `TIER_PATCHES` em core/Quality.js):
-  `desktop` (sem patch), `mobile` (celular/tablet) e `lite` (`?lite=1`,
+  `desktop` (sem patch), `low-desktop` (PC fraco detectado; camada MACIA —
+  `quality.set('<preset>')` manual a remove, `set('auto')` a restaura),
+  `mobile` (celular/tablet) e `lite` (`?lite=1`,
   botão "Tentar modo leve", ou carga anterior que não terminou). A camada é
   um TETO aplicado por cima de qualquer preset/degrau (números no mínimo,
   booleanos só desligam). Campos extras: `detail` (0..1, detalhe
   geométrico/texturas do mundo; 1 = completo), `hdr` (false → compositor
   LDR, sem alvos float nem PMREM), `probes` (false → sem sondas/cubemaps).
+- `renderScale` (0,45..1): resolução interna do preset (low 0,75; `low-`
+  0,65), multiplicada pela escala do governador no núcleo.
 - `shadowScale` (0,125..1): multiplicador da resolução do shadow map do sol
   (o compositor honra; potência de 2, ≥ 512). `contactAO` (bool): AO barata de
   contato quando `ssao` está desligado.
@@ -269,7 +274,7 @@ documento.
 | `?skip=a,b` | carrega todas menos essas |
 | `?q=auto\|low\|medium\|high\|ultra` | qualidade (padrão `auto`; `high` no modo shot) |
 | `?touch=1\|0` | força/desliga os controles de toque |
-| `?fps=N` | alvo do governador (padrão 60; 30 em celular) |
+| `?fps=N` | alvo do governador (padrão 60; 30 em celular); `?fps=show` liga o contador de FPS |
 | `?govlog=1` | loga as decisões do governador no console |
 | `?shot=<preset>` | modo screenshot (abaixo) |
 | `&seed=N` | semente do modo shot (padrão 1337) |

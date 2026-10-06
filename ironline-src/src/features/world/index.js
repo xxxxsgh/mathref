@@ -136,7 +136,8 @@ export default {
     // ── camada do aparelho (core/Quality.js → TIER_PATCHES) ──
     // detail < 1 (celular/modo leve): texturas de canvas pela metade,
     // entulho miúdo rarefeito, corte de distância mais curto
-    const detail = quality.detail ?? 1;
+    // preset low (na carga) também rarefaz entulho e encurta o corte dele
+    const detail = Math.min(quality.detail ?? 1, quality.level === 'low' ? 0.6 : 1);
     const light = detail < 1 || quality.level === 'low' || quality.tier !== 'desktop';
     setCanvasScale(detail < 1 ? 0.5 : 1);
     setWeatherLite(light);
@@ -251,9 +252,11 @@ export default {
     // ── geometria do mapa ──
     const W = {
       // camadas leves (preset low na carga, PC fraco, celular): blocos de
-      // mesclagem maiores = bem menos draw calls (o culling fica mais grosso)
-      B: new Builder(collision, { chunk: light ? 128 : 64 }),
-      I: new Instancer(detail, { cell: light ? 52 : 26 }),
+      // mesclagem de 192 m centrados (~2 blocos por material na rua inteira) e
+      // entulho com menos variantes em células de 78 m: de ~600 para poucas
+      // centenas de draw calls (no menu/rua quase tudo já estava no frustum)
+      B: new Builder(collision, light ? { chunk: 192, centered: true } : { chunk: 64 }),
+      I: new Instancer(detail, light ? { cell: 78, variants: true } : {}),
       tick: (label, f) => ctx.bootProgress?.(label, 0.47 + 0.28 * f),
       win: new WindowBatch(),
       rng: makeRng(20251),
@@ -269,6 +272,8 @@ export default {
     await phase('geometria', 0.75);
     const tris = W.B.tris;
     const decals = new Set(['streaks', 'soot', 'cracks', 'bullets', 'bulletsM', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs', 'contact']);
+    // camadas leves: props pequenos instanciados entram na malha mesclada
+    const bakedProps = light ? W.I.bakeInto(W.B) : 0;
     const meshes = W.B.build(root, mats, { noShadow: new Set([...decals, 'room', 'fglass', 'fsign', 'puddle']) });
     const inst = W.I.build(root, mats);
     // entulho miúdo partido em células (props.js): some além de uma
@@ -314,6 +319,7 @@ export default {
       phases,
       detail,
       skippedDebris: W.I.skipped,
+      bakedProps,
     };
 
     const shotPoses = JSON.parse(JSON.stringify(MAP.shotPoses));

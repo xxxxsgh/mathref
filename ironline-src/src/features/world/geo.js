@@ -67,9 +67,10 @@ class F32 {
 }
 
 export class Builder {
-  constructor(collision, { chunk = 40 } = {}) {
+  constructor(collision, { chunk = 40, centered = false } = {}) {
     this.collision = collision;
     this.chunk = chunk;
+    this.centered = centered;
     this.buckets = new Map();
     this.tris = 0;
     /** Peças adicionadas com cast=false não projetam sombra (o proxy cobre). */
@@ -109,7 +110,10 @@ export class Builder {
   }
 
   _bucket(mat, x, z) {
-    const cx = Math.floor(x / this.chunk), cz = Math.floor(z / this.chunk);
+    // centered: blocos centrados na origem (camadas leves, blocos grandes —
+    // a rua inteira cabe em 2 blocos em vez de 4–8)
+    const o = this.centered ? this.chunk / 2 : 0;
+    const cx = Math.floor((x + o) / this.chunk), cz = Math.floor((z + o) / this.chunk);
     const cast = this.cast || (this.realShadows && !this.noCastZone);
     const key = `${mat}|${cx}|${cz}|${cast ? 1 : 0}`;
     let b = this.buckets.get(key);
