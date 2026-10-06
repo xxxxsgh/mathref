@@ -323,7 +323,13 @@ try {
   if (opt.out) {
     mkdirSync(dirname(resolve(opt.out)), { recursive: true });
     await page.evaluate(() => (window.__hold = true)).catch(() => {});
-    await page.screenshot({ path: resolve(opt.out), timeout: 120000 }).catch((e) => console.log('screenshot falhou', e.message));
+    await page.screenshot({ path: resolve(opt.out), timeout: 120000 }).catch(async (e) => {
+      // SwiftShader sob carga: a captura do compositor pode estourar o tempo —
+      // lê o canvas direto (exige preserve=1 para não sair vazio)
+      console.log('screenshot falhou, usando o canvas:', e.message.split('\n')[0]);
+      const url = await page.evaluate(() => window.__ironline?.renderer.domElement.toDataURL('image/png')).catch(() => null);
+      if (url) writeFileSync(resolve(opt.out), Buffer.from(url.split(',')[1], 'base64'));
+    });
   }
 } catch (e) {
   report.evalError = e.message;

@@ -157,6 +157,16 @@ export default {
     return lo;
   },
 
+  /**
+   * A HUD (agente B) desenha barra de killstreaks e medalhas a partir dos
+   * eventos: com a HUD carregada a reserva daqui fica escondida, a menos
+   * que ela declare `handlesStreaks/handlesMedals = false`.
+   */
+  hudHandles(what) {
+    const hud = this.ctx.services.hud;
+    return !!hud && hud['handles' + what] !== false;
+  },
+
   def(id) {
     return STREAKS[id];
   },
@@ -330,7 +340,7 @@ export default {
     const m = MEDALS[id];
     if (!m) return;
     this.ctx.bus.emit('medal:award', { id, name: m.name, xp: m.xp, icon: m.icon });
-    if (!this.ctx.services.hud?.handlesMedals) this.toast('MEDAL', m.name, `+${m.xp} XP`, 'medal');
+    if (!this.hudHandles('Medals')) this.toast('MEDAL', m.name, `+${m.xp} XP`, 'medal');
   },
 
   onDeath(info) {
@@ -345,8 +355,7 @@ export default {
 
   // ─── DOM de reserva ────────────────────────────────────────────────────
   toast(a, b, c, kind) {
-    const hud = this.ctx.services.hud;
-    if (kind !== 'medal' && hud?.handlesStreaks) return;
+    if (kind !== 'medal' && this.hudHandles('Streaks')) return;
     if (this.ctx.shot) return;
     const t = this.toastEl;
     t.innerHTML = `<div class="a">${a}</div><div class="b">${b}</div>${c ? `<div class="c">${c}</div>` : ''}`;
@@ -370,7 +379,7 @@ export default {
   drawBar() {
     const ctx = this.ctx;
     const hud = ctx.services.hud;
-    const show = !hud?.handlesStreaks && !this.busy && !ctx.shot && (hud?.match?.phase === 'play' || hud?.match?.phase === 'dead' || !hud);
+    const show = !this.hudHandles('Streaks') && !this.busy && !ctx.shot && (hud?.match?.phase === 'play' || hud?.match?.phase === 'dead' || !hud);
     this.bar.classList.toggle('stk-hide', !show);
     if (!show) return;
     const key = this.tracker.slots().map((s) => `${s.id}:${s.ready}:${s.progress.toFixed(2)}`).join('|');

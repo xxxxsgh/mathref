@@ -59,7 +59,7 @@ A feature `rendering` assume o render inteiro pelo gancho
 | 20 | `rendering` | compositor HDR: céu físico, sombras PCSS, GI de 1 rebatimento (RSM), AO, volumétrico, bloom, TAA, exposição automática, tonemap e gradação |
 | 25 | `audio` | áudio 100% sintetizado (WebAudio): tiro em camadas, HRTF, estalo supersônico, passos por superfície, reverb por convolução, ambiente |
 | 30 | `movement` | locomoção: sprint, sprint tático (duplo toque, estamina), slide (cancel, slide-jump, slide kick, rampa, sob obstáculo, para cobertura, tiro deslizando), dolphin dive, mantle/vault (→ slide), pendurar/subir, montar arma, lean; bob, faíscas/poeira/som por superfície e corpo visível com IK |
-| 40 | `weapon` | loadout na viewmodel (design original): fuzil KR-9, pistola P-11, faca TK-7, granadas de fragmentação e atordoante; hitscan, recuo, ADS, recargas, troca com guarda/saque, golpe com investida, granadas com física e dano em área; mãos enluvadas anatômicas com skinning |
+| 40 | `weapon` | loadout na viewmodel (design original): 7 armas (KR-9, P-11, MX-9, BR-12, LR-50, HM-60, SR-7), 7 facas, skins/adesivos/chaveiros/contador, acessórios, lunetas com imagem ampliada, granadas de fragmentação e atordoante; hitscan, recuo, ADS, recargas, troca com guarda/saque, golpe com investida, granadas com física e dano em área; mãos enluvadas anatômicas com skinning |
 | 45 | `inventory` | créditos, 3 caixas com chances publicadas (só chaves/créditos ganhos jogando), inventário, equipamento de skins/faca/chaveiros/adesivos, contrato de troca, sucata, diário, passe gratuito, maestria, coleção, cartões e emblemas (telas na `hud`, aba ARSENAL) |
 | 50 | `enemies` | soldados procedurais (4 variantes), animação procedural, ragdoll Verlet, IA de esquadrão com cobertura e A*; classes especiais (arrombador, atirador de elite, escudeiro, socorrista), reações (supressão, sobressalto, granadas, callouts), barris/botijões explosivos e execução |
 | 55 | `streaks` | killstreaks (UAV, morteiro com designador, torreta, drone armado/kamikaze), 25 medalhas, execução em 3ª pessoa, killcam e modo foto |
@@ -95,15 +95,27 @@ A feature `rendering` assume o render inteiro pelo gancho
     ponte rolante, passarelas a 4,5 m, ponte sobre o galpão, escritórios de
     dois pisos com vidraça quebrada e pátio de carga com doca, carreta e
     contêineres.
-- **Loadout**: fuzil KR-9 (automático, 760 rpm, holográfica sem paralaxe) e
-  pistola P-11 (semiautomática, ferrolho que trava aberto vazio, miras de 3
-  pontos) com troca animada (1/2, roda, X), recuo com molas, recarga
-  tática/vazia por arma, inspeção; faca de combate (V) com investida no
-  inimigo à frente; granada de fragmentação (G — segurar cozinha, soltar
-  arremessa; quica no cenário, dano em área com linha de visão) e
-  atordoante (T). Mãos enluvadas anatômicas (5 dedos articulados com
-  skinning, painéis, costuras e protetor de nós) encaixadas na geometria de
-  cada arma.
+- **Armas** (detalhes em `ironline-src/src/features/weapon/README.md`):
+  primária e secundária escolhidas entre 7 armas procedurais originais —
+  fuzil KR-9 (automático, 760 rpm, holográfica sem paralaxe), pistola P-11
+  (ferrolho que trava aberto vazio), submetralhadora MX-9 (940 rpm, alcance
+  curto), escopeta de bomba BR-12 (9 chumbos em padrão, bomba animada com a
+  mão de apoio, recarga cartucho a cartucho), fuzil de ferrolho LR-50
+  (luneta 8x com imagem ampliada de verdade, balanço e segurar a respiração
+  com Shift, ciclo do ferrolho com a mão), metralhadora HM-60 (caixa de 100
+  com fita visível, tampa articulada, ADS lento) e fuzil designado SR-7
+  (semiautomático, luneta 4x). Troca animada (1/2, roda, X), recuo com
+  molas, recargas e inspeção por arma; acessórios (supressor com som
+  abafado, empunhadura vertical, laser com feixe e ponto, ótica 3x). Faca:
+  TK-7 padrão + karambit, balisong, tanto, baioneta, kukri e cutelo, cada
+  uma com pega, golpes e inspeção próprios (V = golpe rápido; 3 = faca na
+  mão). Skins renderizadas (12 padrões tileáveis gerados por seed, desgaste
+  0–1 que tira tinta das quinas, acabamento metálico/fosco), contador de
+  abates laranja, chaveiros com física e até 4 adesivos decalcados.
+  Granada de fragmentação (G — segurar cozinha, soltar arremessa; quica no
+  cenário, dano em área com linha de visão) e atordoante (T). Mãos
+  enluvadas anatômicas (5 dedos articulados com skinning, painéis, costuras
+  e protetor de nós) encaixadas na geometria de cada arma e faca.
 - **Movimento** (detalhes em `ironline-src/src/features/movement/README.md`):
   sprint e **sprint tático** (duplo toque no Shift: mais rápido, arma
   erguida, 3,6 s de estamina com recarga); **slide** com **slide-cancel**
@@ -297,6 +309,15 @@ derrubava a aba e recarregava — a tela de carga "infinita".
 - **Compatibilidade iOS**: o build mira `safari15` (os blocos `static {}`
   do three só existem no Safari 16.4+ e quebravam o chunk inteiro em
   iPhones mais antigos) e o núcleo tem `structuredClone` de reserva.
+- **Medidas** (Chromium/SwiftShader emulando celular, CPU 6× mais lenta,
+  máquina carregada — valem as proporções, não os segundos): pico de heap
+  JS ~558 MB → ~130–140 MB (o Builder guardava a geometria em Arrays JS:
+  ~560 MB só na fase de geometria; agora `Float32Array`); texturas ~269 MB
+  → ~100 MB; triângulos por quadro ~13 M → ~3,6–4,8 M; draw calls 2 676 →
+  1 000–1 400; texturas de canvas do mundo 4,2 s + 5,5 s → 0,6 s + 0,1 s
+  (CPU 1×, mapas de altura em canvas de CPU). Antes: uma tarefa de 187 s
+  sem ceder o thread e nenhum progresso na tela; depois: a tela de carga
+  avança por ~40 passos reais até o menu.
 - **Diagnóstico**: `npm run build && node tools/mobile.mjs --device
   android|iphone --cpu 6 [--phonegl] [--gpu "Adreno (TM) 640"] [--params
   "lite=1"] --out x.png --json x.json` serve a pasta publicada, emula o

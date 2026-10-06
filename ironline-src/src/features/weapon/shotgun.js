@@ -239,7 +239,7 @@ function shellReload(n, empty) {
   const S = 0.46; // por cartucho
   const IN = 0.34, OUT = empty ? 0.62 : 0.32;
   const D = IN + n2 * S + OUT;
-  const tilt = [-0.04, 0.06, -0.02, 0.18, 0.18, -0.62];
+  const tilt = [-0.07, 0.085, -0.03, 0.22, 0.12, -1.25];
   const gunK = [{ t: 0, v: Z6 }, { t: IN, v: tilt, e: 'inOut' }];
   const magK = [{ t: 0, v: [-0.05, -0.2, 0.06, 0.6, 0.2, 0.3] }];
   const handK = [{ t: 0, v: [1, 0, 0, 0] }, { t: IN * 0.8, v: [0, 1, 0, 0], e: 'inOut' }];
@@ -280,7 +280,7 @@ function reloadExit() {
   const D = 0.26;
   return {
     name: 'reloadExit', duration: D, busy: true,
-    gun: new Track([{ t: 0, v: [-0.04, 0.06, -0.02, 0.18, 0.18, -0.62] }, { t: D, v: Z6, e: 'inOut' }]),
+    gun: new Track([{ t: 0, v: [-0.07, 0.085, -0.03, 0.22, 0.12, -1.25] }, { t: D, v: Z6, e: 'inOut' }]),
     hand: new Track([{ t: 0, v: [0, 1, 0, 0] }, { t: D * 0.8, v: [1, 0, 0, 0], e: 'inOut' }]),
   };
 }

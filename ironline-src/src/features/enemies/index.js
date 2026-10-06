@@ -684,7 +684,10 @@ export default {
         if ((b.speed ?? 0) < 1.5) best.v.set(0, 0, 0);
       }
     });
-    ctx.bus.on('match:wave', (w) => (this.wave = w?.wave || this.wave));
+    ctx.bus.on('match:wave', (w) => {
+      this.wave = w?.wave || this.wave;
+      this.waveOf = w?.of ?? Infinity;
+    });
     ctx.bus.on('match:start', () => {
       this.wave = 0;
       this.grenades.clear();
@@ -956,7 +959,8 @@ export default {
     this.props.update(dt);
     if (this.playerNades.length) this.updatePlayerNades(dt, ctx);
     // pré-aquece as variantes das classes especiais uma onda antes (sem engasgo)
-    if (!ctx.shot && (this.wave >= ROLE_MIX.from - 1 || ctx.params.get('roles'))) {
+    // (só se a partida tiver ondas onde elas entram: ?waves=1,1 nunca gera)
+    if (!ctx.shot && ((this.wave >= ROLE_MIX.from - 1 && (this.waveOf ?? Infinity) >= ROLE_MIX.from) || ctx.params.get('roles'))) {
       this.warmT = (this.warmT ?? 0) - dt;
       if (this.warmT <= 0) {
         this.warmT = 0.8;

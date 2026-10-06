@@ -217,7 +217,7 @@ export class Glint {
     this.k += (target - this.k) * (1 - Math.exp(-dt * 10));
     // pisca de leve (cintilação do ar)
     const flick = 0.85 + 0.15 * Math.sin(performance.now() * 0.023 + dist);
-    const size = (0.18 + this.k * 0.9) * Math.max(1, dist / 18) * flick;
+    const size = (0.06 + this.k * 0.42) * Math.max(1, dist / 14) * flick;
     sp.scale.set(size, size, 1);
     sp.material.opacity = Math.min(1, this.k * 1.4);
     sp.material.color.setScalar(1 + this.k * 3);

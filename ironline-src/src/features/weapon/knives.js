@@ -430,7 +430,7 @@ export function knifeSwing(id, kind = 'swing') {
       : [{ t: 0, v: Z6 }, { t: 0.16, v: [-0.02, 0.16, 0.06, 1.2, 0.1, -0.2], e: 'out' }, { t: 0.28, v: [-0.04, -0.14, -0.14, -0.8, 0.0, 0.1], e: 'in' }, { t: 0.36, v: [-0.04, -0.18, -0.1, -0.95, 0.0, 0.1], e: 'out' }, { t: D, v: Z6, e: 'inOut5' }];
   }
   const hitAt = style === 'chop' ? 0.25 : style === 'thrust' ? 0.17 : 0.17;
-  return { name: kind, duration: D, gun: T(keys), hitAt, busy: true, foley: [[0.06, 'knife_swing']] };
+  return { name: kind, duration: D, gun: T(keys), hitAt, busy: true };
 }
 
 /** Golpe rápido (V) com a arma na mão: trilha da mão auxiliar por estilo. */
@@ -471,7 +471,7 @@ function quickMelee(style) {
     { t: 0.38, v: [-0.06, -0.28, 0.08, -0.75, -0.25, -0.35] },
     { t: Tm, v: Z6, e: 'inOut5' },
   ]);
-  return { name: 'melee', duration: Tm, gun, aux, item: 'knife', hitAt: style === 'chop' ? 0.22 : 0.19, busy: true, auxVis: [0.0, 0.47], foley: [[0.08, 'knife_swing']] };
+  return { name: 'melee', duration: Tm, gun, aux, item: 'knife', hitAt: style === 'chop' ? 0.22 : 0.19, busy: true, auxVis: [0.0, 0.47] };
 }
 
 /**
@@ -502,9 +502,9 @@ function knifeInspect(id) {
     // karambit: gira duas voltas em torno do dedo na argola
     const D = 2.8;
     out.duration = D;
-    out.gun = T([{ t: 0, v: Z6 }, { t: 0.4, v: [-0.04, 0.05, 0.04, 0.2, 0.4, -0.2], e: 'inOut5' }, { t: 2.3, v: [-0.04, 0.05, 0.04, 0.25, 0.5, -0.25] }, { t: D, v: Z6, e: 'inOut5' }]);
+    out.gun = T([{ t: 0, v: Z6 }, { t: 0.4, v: [-0.02, 0.03, -0.02, 0.15, 0.3, -0.1], e: 'inOut5' }, { t: 2.3, v: [-0.02, 0.03, -0.02, 0.18, 0.35, -0.12] }, { t: D, v: Z6, e: 'inOut5' }]);
     out.knife = T([{ t: 0, v: Z6 }, { t: 0.5, v: Z6 }, { t: 1.2, v: [0, 0, 0, Math.PI * 2, 0, 0], e: 'inOut' }, { t: 1.9, v: [0, 0, 0, Math.PI * 4, 0, 0], e: 'inOut' }, { t: D, v: [0, 0, 0, Math.PI * 4, 0, 0] }]);
-    out.open = T([{ t: 0, v: [0] }, { t: 0.5, v: [0] }, { t: 0.6, v: [0.6] }, { t: 1.85, v: [0.6] }, { t: 2.0, v: [0] }]);
+    out.open = T([{ t: 0, v: [0] }, { t: 0.5, v: [0] }, { t: 0.6, v: [0.3] }, { t: 1.85, v: [0.3] }, { t: 2.0, v: [0] }]);
     out.pivot = 'ring';
     out.foley = [[0.6, 'knife_flip'], [1.3, 'knife_flip']];
   } else if (kind === 'toss') {
@@ -512,7 +512,7 @@ function knifeInspect(id) {
     const D = 2.6;
     out.duration = D;
     out.gun = T([{ t: 0, v: Z6 }, { t: 0.35, v: [-0.02, 0.0, 0.03, 0.25, 0.3, -0.2], e: 'inOut' }, { t: 0.55, v: [-0.02, 0.06, 0.02, 0.1, 0.3, -0.2], e: 'out' }, { t: 1.5, v: [-0.02, 0.0, 0.02, 0.2, 0.3, -0.2], e: 'inOut' }, { t: 1.62, v: [-0.02, -0.03, 0.02, 0.28, 0.3, -0.2], e: 'out' }, { t: D, v: Z6, e: 'inOut5' }]);
-    out.knife = T([{ t: 0, v: Z6 }, { t: 0.5, v: Z6 }, { t: 1.0, v: [0, 0.16, -0.02, -Math.PI * 1.5, 0, 0.2], e: 'out' }, { t: 1.5, v: [0, 0, 0, -Math.PI * 4, 0, 0], e: 'in' }, { t: D, v: [0, 0, 0, -Math.PI * 4, 0, 0] }]);
+    out.knife = T([{ t: 0, v: Z6 }, { t: 0.5, v: Z6 }, { t: 1.0, v: [0, 0.085, -0.01, -Math.PI * 1.5, 0, 0.2], e: 'out' }, { t: 1.5, v: [0, 0, 0, -Math.PI * 4, 0, 0], e: 'in' }, { t: D, v: [0, 0, 0, -Math.PI * 4, 0, 0] }]);
     out.open = T([{ t: 0, v: [0] }, { t: 0.5, v: [0] }, { t: 0.56, v: [1] }, { t: 1.45, v: [1] }, { t: 1.52, v: [0] }]);
     out.foley = [[0.5, 'cloth'], [1.5, 'knife_catch']];
   } else if (kind === 'spin') {
@@ -604,7 +604,7 @@ export function makeKnifeRig(M, handR, id) {
   const pose6 = (p, r) => ({ pos: V(...p), rot: new THREE.Euler(...r) });
   const rev = !!spec.reverse;
   // espera: baixa à direita, lâmina para a frente/cima (reversa: para baixo/dentro)
-  const hip = rev ? pose6([0.11, -0.05, -0.3], [-0.21, 0.32, -0.71]) : pose6([0.1, -0.1, -0.3], [0.58, 0.3, -1.58]);
+  const hip = rev ? pose6([0.11, -0.05, -0.3], [-0.21, 0.32, -0.71]) : pose6([0.085, -0.088, -0.28], [0.58, 0.3, -1.58]);
   const ads = pose6(hip.pos.toArray(), [hip.rot.x, hip.rot.y, hip.rot.z]);
   const sprint = pose6([0.0, -0.06, 0.06], [-0.4, 0.3, 0.2]);
   const relaxed = clonePose(POSES.relaxed);

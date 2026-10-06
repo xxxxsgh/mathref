@@ -440,6 +440,8 @@ async function boot() {
       dummy?.dispose();
     }
     bootLog.steps.push(['shaders', Math.round(performance.now() - tc)]);
+    // o 1º quadro ainda sobe texturas/geometria para a GPU (pode demorar)
+    await bootScreen.step('primeiro quadro', 0.99);
   }
 
   if (shot) {

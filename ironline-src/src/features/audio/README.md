@@ -28,3 +28,16 @@ Tudo sintetizado: nenhuma amostra gravada. `dsp.js` + `sounds.js` são JS puro
   sirene/entulho ao longe; abafado dentro de prédios.
 - **Master**: compressor + limiter; explosão perto = concussão (passa-baixa
   geral + zumbido).
+
+## Armas v3 (feature weapon)
+
+- **Tiro por arma** (`weapon:fire.id`): `shot_player` (KR-9, interno `shot_player_in`), `shot_pistol` (P-11),
+  `shot_smg` (MX-9: mais agudo e curto), `shot_shotgun` (BR-12: grave e longo), `shot_sniper` (LR-50: o mais
+  pesado), `shot_lmg` (HM-60), `shot_dmr` (SR-7). Armas pesadas puxam a cauda de rua mais alta e grave.
+- **Supressor** (`weapon:fire.suppressed`): `shot_supp` / `shot_supp_heavy` — "tump" grave filtrado, chiado de
+  gás e a mecânica do ferrolho bem audível; quase sem cauda de rua.
+- **Foley exato** (`weapon:foley`): `pump_back`/`pump_fwd` (bomba), `shell_in` (cartucho no tubo),
+  `bolt_up`/`bolt_back`/`bolt_fwd`/`bolt_down` (ferrolho), `cover_open`/`cover_close` + `belt` (tampa e fita da
+  HM-60), `knife_flip`/`knife_catch` (inspeções), `bolt_release` (= `bolt`).
+- **Faca**: `knife_swing` (corte no ar) a cada `weapon:melee`.
+- **Fôlego da luneta** (`weapon:breath`): inspira ao segurar, solta ao largar, arfa mais forte quando o fôlego acaba.

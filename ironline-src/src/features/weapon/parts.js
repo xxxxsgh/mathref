@@ -393,6 +393,7 @@ export function buildOptic3x(M, view) {
   K.add('steel', rbox(0.004, 0.006, 0.03, 0.0015, -0.015, -0.019, -0.05));
   root.add(K.build(M, 'optic3x'));
   const lens = makeScopeLens({ radius: r * 1.05, zoom: 3, reticle: 'ring', view, color: [1, 0.25, 0.05] });
+  lens.material.uniforms.uRetScale.value = 2.2;
   lens.position.set(0, 0, -0.006);
   root.add(lens);
   const glint = makeGlint(0.05);

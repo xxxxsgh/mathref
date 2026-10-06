@@ -666,6 +666,79 @@ function rubble(sr, rng) {
   return normalize(x, 0.8);
 }
 
+// ─── armas v3: supressor, bomba, ferrolho, fita, faca ────────────────────
+/**
+ * Tiro SUPRIMIDO: sem onda N nem estalo de boca — um "tump" grave filtrado
+ * pelo supressor, um chiado curto de gás e a mecânica bem mais audível
+ * (no tiro aberto ela fica mascarada).
+ */
+function suppressedShot(sr, rng, o = {}) {
+  const cal = o.cal ?? 1;
+  const dur = 0.42;
+  const ch = [buf(sr, dur), buf(sr, dur)];
+  const thump = burst(sr, 0.14, rng, { type: [['lp', 950 / Math.sqrt(cal)], ['hp', 70]], env: ad(0.0006, 0.022 * cal) });
+  const pop = burst(sr, 0.02, rng, { type: 'bp', f: 2300, q: 0.8, env: ad(0.0002, 0.004) });
+  const body = sweep(sr, 0.16, (t) => 75 / cal + 55 * Math.exp(-t / 0.01), ad(0.0008, 0.03 * cal));
+  const hiss = burst(sr, 0.1, rng, { type: 'hp', f: 3200, env: ad(0.003, 0.03) });
+  for (let c = 0; c < 2; c++) {
+    mix(ch[c], thump, sr, 0, 1);
+    mix(ch[c], pop, sr, 0, 0.3);
+    mix(ch[c], body, sr, 0.0005, 0.6);
+    mix(ch[c], hiss, sr, 0.004, 0.14);
+    mix(ch[c], metalClick(sr, rng, 2400, 0.02), sr, R(rng, 0.005, 0.008), c ? 0.55 : 0.4);
+    mix(ch[c], metalClick(sr, rng, 2050, 0.03), sr, R(rng, 0.042, 0.05), c ? 0.6 : 0.45);
+  }
+  for (const d of ch) fade(d, sr, 0, 0.06);
+  const m = Math.max(...ch.map((d) => d.reduce((a, v) => Math.max(a, Math.abs(v)), 0)));
+  for (const d of ch) gain(d, 0.9 / m);
+  return ch;
+}
+/** Arrasto metálico curto (telha/ferrolho deslizando) + batida no fim. */
+function slideClack(sr, rng, { len = 0.09, f = 1900, hit = 1300, hitA = 0.8, heavy = 0.5 } = {}) {
+  const x = buf(sr, len + 0.25);
+  mix(x, burst(sr, len, rng, { type: 'bp', f: f * R(rng, 0.92, 1.08), q: 1.1, env: (t) => Math.min(1, t / 0.015) * (0.6 + 0.4 * Math.sin(t * 90)) }), sr, 0, 0.4);
+  mix(x, modal(sr, 0.2, [hit, hit * 1.7, hit * 2.6, hit * 3.9].map((ff, i) => ({ f: ff * R(rng, 0.96, 1.04), tau: R(rng, 0.02, 0.06) / (1 + i * 0.3), a: [1, 0.8, 0.5, 0.3][i], ph: rng.next() * TAU }))), sr, len, hitA);
+  mix(x, sweep(sr, 0.1, (t) => 150 + 60 * Math.exp(-t / 0.01), ad(0.0005, 0.02)), sr, len, heavy);
+  mix(x, burst(sr, 0.02, rng, { type: 'hp', f: 1800, env: ad(0.0001, 0.003) }), sr, len, 0.7);
+  fade(x, sr, 0, 0.03);
+  return normalize(x, 0.9);
+}
+function shellIn(sr, rng) {
+  const x = buf(sr, 0.3);
+  mix(x, burst(sr, 0.06, rng, { type: 'bp', f: 1500, q: 1, env: (t) => Math.min(1, t / 0.02) }), sr, 0, 0.3); // casca entrando
+  mix(x, metalClick(sr, rng, 3300, 0.006), sr, 0.055, 0.7); // aro no elevador
+  mix(x, modal(sr, 0.12, [820, 1730, 2900].map((f) => ({ f: f * R(rng, 0.95, 1.05), tau: R(rng, 0.01, 0.03), a: 1 }))), sr, 0.06, 0.5);
+  mix(x, metalClick(sr, rng, 4100, 0.004), sr, 0.08, 0.35); // mola do tubo
+  fade(x, sr, 0, 0.02);
+  return normalize(x, 0.85);
+}
+function linkRattle(sr, rng) {
+  const x = grains(sr, 0.5, rng, { count: 34, span: [0, 0.38], fLo: 2500, fHi: 6500, len: [0.002, 0.008], amp: [0.1, 0.6], decayOver: 0.4 });
+  mix(x, cloth(sr, rng, 0.3), sr, 0, 0.3);
+  fade(x, sr, 0, 0.04);
+  return normalize(x, 0.8);
+}
+function whoosh(sr, rng) {
+  const len = R(rng, 0.2, 0.28);
+  const x = white(Math.ceil(sr * len), rng);
+  biquadSweep(x, sr, 'bp', (t) => 700 + 2600 * Math.sin(Math.PI * Math.min(1, t / len)), 1.6);
+  shape(x, sr, (t) => Math.pow(Math.sin(Math.PI * Math.min(1, t / len)), 2));
+  return normalize(x, 0.7);
+}
+function knifeFlip(sr, rng) {
+  const x = buf(sr, 0.2);
+  mix(x, metalClick(sr, rng, 3800, 0.012), sr, 0, 0.8);
+  mix(x, metalClick(sr, rng, 4600, 0.008), sr, R(rng, 0.03, 0.05), 0.6);
+  mix(x, whoosh(sr, rng).slice(0, Math.ceil(sr * 0.1)), sr, 0, 0.15);
+  return normalize(x, 0.7);
+}
+function knifeCatch(sr, rng) {
+  const x = buf(sr, 0.2);
+  mix(x, burst(sr, 0.05, rng, { type: [['lp', 1600], ['hp', 120]], env: ad(0.0005, 0.012) }), sr, 0, 0.9);
+  mix(x, metalClick(sr, rng, 3000, 0.01), sr, 0.004, 0.3);
+  return normalize(x, 0.7);
+}
+
 // ─── registro ────────────────────────────────────────────────────────────
 const MATS = ['concrete', 'asphalt', 'brick', 'metal', 'wood', 'dirt', 'glass', 'rubber'];
 
@@ -732,6 +805,28 @@ function breath(sr, rng, inhale) {
 export const SOUNDS = {
   shot_player: { variants: 5, make: (sr, rng) => gunshot(sr, rng, { cal: 1, mech: 1 }) },
   shot_player_in: { variants: 3, make: (sr, rng) => gunshot(sr, rng, { cal: 1, mech: 1, indoor: true }) },
+  // tiros do jogador por arma (cal: timbre/corpo; mech: mecânica)
+  shot_pistol: { variants: 4, make: (sr, rng) => gunshot(sr, rng, { cal: 0.85, mech: 0.8, dur: 0.55 }) },
+  shot_smg: { variants: 5, make: (sr, rng) => gunshot(sr, rng, { cal: 0.78, mech: 0.75, dur: 0.5 }) },
+  shot_shotgun: { variants: 3, make: (sr, rng) => gunshot(sr, rng, { cal: 1.75, mech: 0.3, dur: 0.95 }) },
+  shot_sniper: { variants: 3, make: (sr, rng) => gunshot(sr, rng, { cal: 1.95, mech: 0.2, dur: 1.1 }) },
+  shot_lmg: { variants: 5, make: (sr, rng) => gunshot(sr, rng, { cal: 1.28, mech: 0.9, dur: 0.7 }) },
+  shot_dmr: { variants: 4, make: (sr, rng) => gunshot(sr, rng, { cal: 1.35, mech: 0.8, dur: 0.8 }) },
+  shot_supp: { variants: 4, make: (sr, rng) => suppressedShot(sr, rng, { cal: 1 }) },
+  shot_supp_heavy: { variants: 3, make: (sr, rng) => suppressedShot(sr, rng, { cal: 1.6 }) },
+  pump_back: { variants: 2, make: (sr, rng) => slideClack(sr, rng, { len: 0.08, f: 1700, hit: 1150, hitA: 0.7 }) },
+  pump_fwd: { variants: 2, make: (sr, rng) => slideClack(sr, rng, { len: 0.07, f: 2000, hit: 1350, hitA: 1, heavy: 0.8 }) },
+  shell_in: { variants: 4, make: shellIn },
+  bolt_up: { variants: 2, make: (sr, rng) => normalize(metalClick(sr, rng, 2700, 0.015), 0.7) },
+  bolt_back: { variants: 2, make: (sr, rng) => slideClack(sr, rng, { len: 0.11, f: 2300, hit: 1700, hitA: 0.6, heavy: 0.3 }) },
+  bolt_fwd: { variants: 2, make: (sr, rng) => slideClack(sr, rng, { len: 0.1, f: 2100, hit: 1450, hitA: 0.9, heavy: 0.6 }) },
+  bolt_down: { variants: 2, make: (sr, rng) => normalize(metalClick(sr, rng, 3100, 0.012), 0.75) },
+  cover_open: { variants: 1, make: (sr, rng) => slideClack(sr, rng, { len: 0.05, f: 1200, hit: 900, hitA: 0.6, heavy: 0.2 }) },
+  cover_close: { variants: 1, make: (sr, rng) => slideClack(sr, rng, { len: 0.03, f: 1400, hit: 1000, hitA: 1, heavy: 1 }) },
+  belt: { variants: 2, make: linkRattle },
+  knife_swing: { variants: 4, make: whoosh },
+  knife_flip: { variants: 3, make: knifeFlip },
+  knife_catch: { variants: 2, make: knifeCatch },
   shot_enemy: { variants: 4, make: (sr, rng) => gunshot(sr, rng, { cal: 1.3, mech: 0.25, dur: 0.6 }) },
   shot_far: { variants: 4, make: (sr, rng) => gunshotFar(sr, rng) },
   shot_vfar: { variants: 3, make: (sr, rng) => gunshotFar(sr, rng, { lp: 520 }) },

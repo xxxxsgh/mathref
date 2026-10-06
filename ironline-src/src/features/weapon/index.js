@@ -29,7 +29,8 @@
 import * as THREE from 'three';
 import { makeMaterials, OCC, OCC_MAX } from './materials.js';
 import { POSES, clonePose, blendPoses, buildSleeve, Hand } from './arms.js';
-import { makeRifle, makePistol } from './guns.js';
+import { makeRifle, makePistol, basisFD } from './guns.js';
+import { fitHand, sdCapsule } from './grip.js';
 import { makeMX9 } from './smg.js';
 import { makeBR12 } from './shotgun.js';
 import { makeLR50 } from './sniper.js';
@@ -605,10 +606,11 @@ export default {
   setKnife(id) {
     const k = knifeId(id);
     if (!k) return false;
+    const changed = k !== this.knifeSel || !this.aux.knifeCache?.[k];
     this.knifeSel = k;
     this.aux.setKnifeModel(k, this.knifeMats(k).M);
     this.extraAnims.melee = knifeSwing(k, 'quick') || meleeTracks(EQUIP_DEFS.knife.time);
-    if (this.lo.knifeOut) {
+    if (this.lo.knifeOut && changed && this.g?.knifeId !== k) {
       this.st.action = null;
       this.setGun(this.lo.index, true);
       if (!this.ctx.shot) this.startAction('equip');
@@ -700,10 +702,48 @@ export default {
     const n = normAttachments(id, cfg, this.attCfg[id] || DEFAULT_ATT);
     this.attCfg[id] = n;
     applyAttachments(g, g.mats.M, n, this.view);
-    if (this.g === g) this.lens = g.lens;
+    this.fitForegrip(g);
+    if (this.g === g) {
+      this.lens = g.lens;
+      this.occ = g.occ(this.handL, this.handR).slice(0, OCC_MAX);
+    }
     // cosméticos e cápsulas de oclusão valem para a nova geometria
     if (this.stickers[id]?.length) applyStickers(g.root, stickerTargets(g), g.cosmetic?.stickers, this.stickers[id]);
     return { ...n };
+  },
+  /**
+   * Empunhadura vertical montada: a mão de apoio passa a segurá-la (palma no
+   * flanco esquerdo/traseiro, dedos abraçando pela frente), resolvida contra a
+   * cápsula da empunhadura; sem ela, volta a pega de fábrica.
+   */
+  fitForegrip(g) {
+    if (!g.gripL0) (g.gripL0 = g.gripL), (g.gripLAds0 = g.gripLAds);
+    const fg = g.att?.parts?.foregrip;
+    if (!fg) {
+      g.gripL = g.gripL0;
+      g.gripLAds = g.gripLAds0;
+      return;
+    }
+    const hl = this.handL;
+    const prev = hl.root.parent;
+    g.root.add(hl.root);
+    const fy = fg.position.y, fz = fg.position.z;
+    const b = basisFD([0.2, -0.35, -1], [-1, 0.15, 0.1], [0, 0, 0]);
+    const off = new THREE.Vector3(0, -0.0195, -0.05).applyQuaternion(b.quat);
+    b.pos.set(-0.0175, fy - 0.05, fz + 0.006).sub(off);
+    hl.root.position.copy(b.pos);
+    hl.root.quaternion.copy(b.quat);
+    const a = { x: 0, y: fy - 0.012, z: fz }, c = { x: 0, y: fy - 0.092, z: fz + 0.004 };
+    const fit = fitHand(hl, g.root, {
+      sdf: (p) => sdCapsule(p, a, c, 0.0145),
+      gap: 0.0008,
+      spread: [0.04, 0.0, -0.04, -0.09],
+      minFlex: [0.25, 0.3, 0.2],
+      thumb: { target: new THREE.Vector3(-0.008, fy - 0.006, fz - 0.014), weight: 30 },
+    });
+    g.gripL = { pos: b.pos.clone(), quat: b.quat.clone(), pose: fit.pose };
+    g.gripLAds = g.gripL;
+    if (prev) prev.add(hl.root);
   },
   /** Abate do jogador → 'weapon:kill' + contador. */
   onEnemyDeath(e) {
@@ -1606,5 +1646,8 @@ export default {
     ctx.vm.camera.remove(this.rig, this.rim, this.rim.target, this.bounce, this.bounce.target, ...cas);
     ctx.vm.scene.remove(this.sun, this.sun.target, this.hemi);
     this.throwables.clear();
+    this.laser?.dispose();
+    this.view?.dispose();
+    if (this.lineupGroup) ctx.vm.camera.remove(this.lineupGroup);
   },
 };

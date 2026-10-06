@@ -133,9 +133,13 @@ profundidade própria + quad) — o compositor da feature rendering não muda.
 
 ## Ganchos pedidos a outras features
 
-- **HUD (B):** ler `services.streaks.slots()`/eventos para a barra e
-  `revealed`/`uav` para o minimapa; declarar `services.hud.handlesStreaks`,
-  `handlesMedals`, `handlesReveal` (= true) para esconder a reserva daqui;
+- **HUD (B) — feito:** barra de killstreaks (`slots()` com `key`; `key`
+  também vai no `streak:ready`) e toasts de medalha a partir dos eventos,
+  sem duplicar as que a partida já dá (a versão daqui vence). Com a HUD
+  carregada, a barra/toast de reserva daqui ficam escondidos
+  (`services.hud.handlesStreaks/handlesMedals = false` reativa).
+- **HUD (B) — pendente:** ler `revealed`/`uav` no minimapa e declarar
+  `services.hud.handlesReveal = true` (até lá aparece o radar de reserva);
   adiar o renascimento enquanto `services.streaks.killcam.active`; botão
   PHOTO MODE na pausa chamando `services.streaks.photo.enter()`; seletor de
   killstreaks no loadout (`setLoadout`/`openPicker`).
