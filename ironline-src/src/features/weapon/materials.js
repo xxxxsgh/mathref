@@ -75,12 +75,30 @@ vec4 wTri(sampler2D t, vec3 p, vec3 bw) {
 }
 `;
 
+// Painéis da luva (atributo `glove` = [couro, costura] por vértice):
+// tecido com trama em relevo forte × couro sintético de grão fino e liso;
+// costuras pespontadas (pontos de ~2,5 mm em relevo, linha um tom mais clara)
+const GLOVE_GLSL = /* glsl */ `
+    float gLea = clamp(vGlove.x, 0.0, 1.0);
+    float gSeam = smoothstep(0.25, 0.75, vGlove.y);
+    // couro: grão fino (poros) em vez da trama
+    float grain = wTri(tDetail, vWObj * uScale * 0.37, bw).g;
+    wH = mix(wH, grain * 0.35 + wD.b * 0.15, gLea);
+    // pesponto: traços ao longo da costura (coordenada = soma dos eixos locais)
+    float ph = fract((vWObj.x * 0.6 + vWObj.y * 0.3 + vWObj.z) * 400.0);
+    gStitch = gSeam * smoothstep(0.15, 0.3, ph) * smoothstep(0.85, 0.7, ph);
+    wH += gStitch * 1.4 - gSeam * 0.5;
+    diffuseColor.rgb *= 1.0 + gStitch * 0.9;
+    diffuseColor.rgb *= mix(1.0, 0.92 + 0.12 * wD.b, gLea);
+`;
+
 /**
  * Aplica o detalhe procedural a um material padrão/físico.
  * opts.kind: 'hard' | 'fabric' | 'camo'
  */
 export function withDetail(mat, opts = {}) {
   const kind = opts.kind || 'hard';
+  const panels = !!opts.panels;
   const u = {
     tDetail: { value: kind === 'hard' ? grimeTexture() : fabricTexture() },
     tCamo: { value: kind === 'camo' ? camoTexture() : null },
@@ -105,8 +123,8 @@ export function withDetail(mat, opts = {}) {
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWObj;\nvarying vec3 vWObjN;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWObj = position;\nvWObjN = normal;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWObj;\nvarying vec3 vWObjN;' + (panels ? '\nattribute vec2 glove;\nvarying vec2 vGlove;' : ''))
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWObj = position;\nvWObjN = normal;' + (panels ? '\nvGlove = glove;' : ''));
     const pars = `#include <common>
 varying vec3 vWObj;
 varying vec3 vWObjN;
@@ -121,8 +139,10 @@ uniform float uIblSat;
 float wStreak = 0.5;
 uniform vec3 uWearColor, uDustColor;
 uniform vec2 uEdge;
+${panels ? 'varying vec2 vGlove;' : ''}
 float wMask = 0.0;
 float wH = 0.0;
+float gStitch = 0.0;
 vec4 wD = vec4(0.5);
 ${PERTURB}`;
     let detail;
@@ -160,6 +180,7 @@ ${PERTURB}`;
     wMask = wD.a * uWear;
     diffuseColor.rgb = mix(diffuseColor.rgb, uWearColor, wMask * 0.35);
     wH = wD.r + wD.g * 0.25;
+    ${panels ? GLOVE_GLSL : ''}
   }`;
     }
     sh.fragmentShader = sh.fragmentShader
@@ -169,6 +190,7 @@ ${PERTURB}`;
         '#include <metalnessmap_fragment>',
         `#include <metalnessmap_fragment>
   roughnessFactor = clamp(roughnessFactor + (wStreak - 0.5) * uStreak + (wD.r - 0.5) * uRoughVar + wD.b * uGrime * 0.12 - wMask * ${kind === 'hard' ? '0.16' : '-0.1'}, 0.05, 1.0);
+  ${panels ? '// couro sintético: mais liso e acetinado que o tecido\n  roughnessFactor = clamp(roughnessFactor - vGlove.x * 0.3 + gStitch * 0.15, 0.05, 1.0);' : ''}
   // digitais/óleo: manchas grandes mais lisas (brilho irregular no anodizado)
   roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.55, uSmudge * smoothstep(0.55, 0.8, wD.b) * (1.0 - wMask));
   // AA especular geométrico (Kaplanyan/Tokuyoshi): variância da normal na
@@ -188,7 +210,7 @@ ${PERTURB}`;
       )
       .replace('#include <aomap_fragment>', '#include <aomap_fragment>' + OCC_GLSL);
   };
-  mat.customProgramCacheKey = () => 'wdetail2-' + kind;
+  mat.customProgramCacheKey = () => 'wdetail2-' + kind + (panels ? '-panels' : '');
   return mat;
 }
 
@@ -232,6 +254,12 @@ export function makeMaterials() {
     new THREE.MeshPhysicalMaterial({ color: 0x272624, roughness: 0.82, metalness: 0, sheen: 0.35, sheenRoughness: 0.6, sheenColor: new THREE.Color(0x45433d) }),
     { kind: 'fabric', scale: 140, wear: 0.4, wearColor: 0x5f5b52, grime: 0.6, bump: 0.6 },
   );
+  // luva anatômica (arms.js): albedo dos painéis vem das cores de vértice
+  // (tecido coyote no dorso, couro sintético na palma/pontas, TPU nos nós)
+  M.gloveV = withDetail(
+    new THREE.MeshPhysicalMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.8, metalness: 0, sheen: 0.4, sheenRoughness: 0.55, sheenColor: new THREE.Color(0x4d473d) }),
+    { kind: 'fabric', scale: 150, wear: 0.35, wearColor: 0x6a6253, grime: 0.5, bump: 0.55, panels: true },
+  );
   M.gloveLeather = withDetail(
     new THREE.MeshPhysicalMaterial({ color: 0x23201d, roughness: 0.62, metalness: 0, sheen: 0.2, sheenRoughness: 0.6, sheenColor: new THREE.Color(0x3a3028) }),
     { kind: 'fabric', scale: 18, wear: 0.5, wearColor: 0x5e5244, grime: 0.6, bump: 0.5 },
@@ -247,5 +275,23 @@ export function makeMaterials() {
     new THREE.MeshPhysicalMaterial({ color: 0x3a372f, roughness: 0.8, metalness: 0, sheen: 0.6, sheenColor: new THREE.Color(0x5a564a) }),
     { kind: 'fabric', scale: 90, wear: 0.3, grime: 0.4, bump: 1.2 },
   );
+  // ─── pistola P-11 ───────────────────────────────────────────────────
+  // ferrolho de aço nitretado (preto-grafite, acetinado; quinas gastas claras)
+  M.slide = std({ color: 0x2b2b2a, roughness: 0.4, metalness: 0.7 }, { wear: 0.95, wearColor: 0x9c9a95, wearBoost: 1, wearMetal: 1, scratch: 0.45, grime: 0.32, roughVar: 0.28, dust: 0.15, smudge: 0.65, streak: 0.25, edge: [60, 260] });
+  // armação de polímero cor terra (FDE), fosca com textura fina
+  M.frame = std({ color: 0x5b5042, roughness: 0.74, metalness: 0.0 }, { wear: 0.45, wearColor: 0x756b5b, wearMetal: 0.0, scratch: 0.25, grime: 0.42, roughVar: 0.22, bump: 0.9, smudge: 0.7, scale: 9, dust: 0.2 });
+  // pontilhado do punho: mesmo polímero, relevo forte e mais áspero
+  M.stipple = std({ color: 0x544a3d, roughness: 0.88, metalness: 0.0 }, { wear: 0.3, wearColor: 0x6e6555, wearMetal: 0.0, scratch: 0.1, grime: 0.5, roughVar: 0.3, bump: 3.2, scale: 38, dust: 0.25 });
+  // pontos das miras (tinta clara fotoluminescente) e anel laranja da dianteira
+  M.dot = new THREE.MeshStandardMaterial({ color: 0xd9d8cc, roughness: 0.45, emissive: new THREE.Color(0.05, 0.06, 0.045) });
+  M.sightRing = new THREE.MeshStandardMaterial({ color: 0xe0601a, roughness: 0.4, emissive: new THREE.Color(0.12, 0.03, 0.0) });
+  // ─── faca e granadas ────────────────────────────────────────────────
+  // lâmina com revestimento escuro (DLC) e fio afiado (aço vivo escovado)
+  M.blade = std({ color: 0x262626, roughness: 0.38, metalness: 0.8 }, { wear: 0.9, wearColor: 0xa4a29c, wearMetal: 1, scratch: 0.6, grime: 0.25, streak: 0.4, edge: [50, 220] });
+  M.edge = std({ color: 0xb4b4b0, roughness: 0.22, metalness: 1.0 }, { wear: 0.1, scratch: 0.5, grime: 0.15, streak: 0.6 });
+  // granada: tinta verde-oliva semibrilho sobre aço; faixa amarela
+  M.nade = std({ color: 0x3f4430, roughness: 0.55, metalness: 0.15 }, { wear: 0.85, wearColor: 0x8a877d, wearMetal: 0.9, scratch: 0.5, grime: 0.45, dust: 0.2, edge: [40, 200] });
+  M.nadeMetal = std({ color: 0x4a4c45, roughness: 0.45, metalness: 0.6 }, { wear: 0.7, wearColor: 0x9a978f, scratch: 0.5, grime: 0.4 });
+  M.band = std({ color: 0xb08a1c, roughness: 0.5, metalness: 0.05 }, { wear: 0.6, wearColor: 0x8a877d, wearMetal: 0.8, scratch: 0.5, grime: 0.4 });
   return M;
 }

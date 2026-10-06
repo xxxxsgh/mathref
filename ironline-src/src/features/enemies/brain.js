@@ -24,6 +24,13 @@ const _v = new THREE.Vector3();
 const _w = new THREE.Vector3();
 const _o = new THREE.Vector3();
 const _d = new THREE.Vector3();
+const _g = new THREE.Vector3();
+
+/**
+ * Chefe (juggernaut): vida, velocidade de marcha, caixa de munição,
+ * recarga, cadência (rpm) e dano por tiro no jogador.
+ */
+export const BOSS = { health: 1600, speed: 1.7, mag: 100, reload: 4.6, rpm: 720, damage: 9, name: 'JUGGERNAUT' };
 
 export const CALLOUTS = {
   contact: ['Contato! À frente!', 'Inimigo avistado!', 'Contato, doze horas!'],
@@ -48,6 +55,7 @@ export class Squad {
     this.lastCallout = -1e9;
     this.kindTime = {};
     this.claims = new Map(); // célula de cobertura → inimigo
+    this.objective = null; // HARDPOINT: { x, y, z, radius } (services.enemies.setObjective)
   }
 
   callout(enemy, kind, now, force = false) {
@@ -104,6 +112,33 @@ export class Brain {
     this.moveTarget = null;
     this.heardT = -1;
     this.heardPos = new THREE.Vector3();
+    // chefe: metralhadora com caixa de 100, reação mais calma, mira firme
+    this.boss = !!enemy.boss;
+    this.magSize = this.boss ? BOSS.mag : 30;
+    this.ammo = this.magSize;
+    if (this.boss) {
+      this.skill = 1.15;
+      this.reaction = 0.45;
+    }
+    this.sustain = 0; // tiros seguidos na rajada atual (abre o cone)
+    this.assaulter = false; // HARDPOINT: vai para a zona e luta de dentro
+    this.toObjective = false;
+  }
+
+  /**
+   * Entra em combate já sabendo para onde ir (ondas). `assaulter` = parte
+   * do grupo de assalto do objetivo (HARDPOINT), se houver objetivo.
+   */
+  assault({ assaulter = true } = {}) {
+    this.assaulter = !!assaulter;
+    if (this.state === 'idle' || this.state === 'alert') {
+      this.state = 'combat';
+      this.mode = null;
+      this.reactT = this.reaction;
+      this.squad.alert = true;
+    }
+    this.awareness = Math.max(this.awareness, 0.8);
+    this.thinkT = 0;
   }
 
   get now() {
@@ -171,15 +206,17 @@ export class Brain {
 
   /** Bala do jogador passou perto / acertou perto. */
   suppress(amount) {
+    if (this.boss) amount *= 0.15;
     this.suppression = Math.min(1.5, this.suppression + amount);
     if (this.state === 'idle') this.enterCombat();
     if (this.suppression > 0.9) this.squad.callout(this.e, 'suppressed', this.now);
   }
 
   onHit(amount) {
-    this.flinch = 0.35;
-    this.suppression = Math.min(1.5, this.suppression + 0.6);
-    this.onTarget *= 0.3;
+    // o chefe blindado mal sente o impacto (não perde a mira)
+    this.flinch = this.boss ? 0.03 : 0.35;
+    this.suppression = Math.min(1.5, this.suppression + (this.boss ? 0.05 : 0.6));
+    this.onTarget *= this.boss ? 0.9 : 0.3;
     if (this.state === 'idle') this.enterCombat();
     this.awareness = 1;
     this.squad.lastKnown.copy(this.ctx.player.position);
@@ -265,15 +302,16 @@ export class Brain {
 
     // recarga
     if (this.reloadT >= 0) {
-      this.reloadT += dt / 2.4;
+      this.reloadT += dt / (this.boss ? BOSS.reload : 2.4);
       e.anim.p.reload = this.reloadT;
       if (this.reloadT >= 1) {
         this.reloadT = -1;
         e.anim.p.reload = -1;
-        this.ammo = 30;
+        this.ammo = this.magSize;
       }
     }
     if (this.ammo <= 0 && this.reloadT < 0) this.startReload();
+    if (this.boss) return this.bossCombat(dt, dist, threat);
 
     this.thinkT -= dt;
     if (this.thinkT <= 0 || !this.mode) {
@@ -289,7 +327,10 @@ export class Brain {
       const arrived = this.followPath(dt, this.runSpeed());
       if (this.canSee && dist < 30 && this.desiredAim > 0.5) this.aimAndFire(dt, dist, 0.6);
       else this.faceMove(dt);
-      if (arrived) this.setMode(this.cover ? 'hide' : 'open');
+      if (arrived) {
+        this.toObjective = false;
+        this.setMode(this.cover ? 'hide' : 'open');
+      }
     } else if (m === 'hide') {
       this.steerTo(this.cover?.pos, 1.6);
       this.desiredCrouch = this.cover?.low ? 1 : 0.3;
@@ -352,6 +393,9 @@ export class Brain {
     const e = this.e;
     const pl = ctx.player;
     this.modeStart = this.now;
+    // objetivo do esquadrão (HARDPOINT): o grupo de assalto — e quem não
+    // enxerga o jogador — vai para a zona e luta de dentro dela
+    if (squad.objective && this.objectiveThink(threat)) return;
     // perdeu o jogador por muito tempo → busca
     if (this.lostFor > 7 && this.mode !== 'search' && this.mode !== 'move') {
       const path = this.nav?.findPath(e.group.position, squad.lastKnown);
@@ -389,6 +433,71 @@ export class Brain {
     if (this.mode !== 'open') this.setMode('open');
   }
 
+  /** HARDPOINT: decide ir/ficar na zona. true = decidiu (think termina). */
+  objectiveThink(threat) {
+    const obj = this.squad.objective;
+    const p = this.e.group.position;
+    const inside = Math.hypot(p.x - obj.x, p.z - obj.z) < obj.radius * 0.85;
+    const go = this.assaulter || !this.canSee || this.lostFor > 2;
+    if (go && !inside) {
+      if (this.mode === 'move' && this.toObjective && this.path) return true;
+      return this.goToObjective();
+    }
+    if (inside && this.assaulter) {
+      // já dentro: cobertura só se ficar DENTRO da zona; senão em campo aberto
+      if (this.cover && this.mode !== 'move' && !this.coverExposed(this.cover, threat)) return true;
+      if (this.mode === 'open' && this.modeT < 2.5) return true;
+      if (this.pickCover(threat, { within: obj })) return true;
+      if (this.mode !== 'open') this.setMode('open');
+      return true;
+    }
+    return false;
+  }
+
+  goToObjective() {
+    const obj = this.squad.objective;
+    const r = this.ctx.rng;
+    const a = r.next() * Math.PI * 2, m = Math.sqrt(r.next()) * obj.radius * 0.6;
+    const goal = _g.set(obj.x + Math.cos(a) * m, obj.y || 0, obj.z + Math.sin(a) * m);
+    const path = this.nav ? this.nav.findPath(this.e.group.position, goal, 14000) : [goal.clone()];
+    if (!path) return false;
+    this.releaseCover();
+    this.path = path;
+    this.pathI = 0;
+    this.toObjective = true;
+    this.setMode('move');
+    this.squad.callout(this.e, 'moving', this.now);
+    return true;
+  }
+
+  /**
+   * CHEFE: não procura cobertura — marcha devagar na direção do jogador
+   * (ou do objetivo, se não o vê) até ~12 m e despeja rajadas longas de
+   * metralhadora. Recarga longa é a janela para flanquear.
+   */
+  bossCombat(dt, dist, threat) {
+    const e = this.e;
+    const pos = e.group.position;
+    this.desiredCrouch = 0;
+    this.leanTarget = 0;
+    this.desiredAim = this.reloadT >= 0 ? 0.5 : 1;
+    const obj = this.squad.objective;
+    const goal = !this.canSee && obj ? _g.set(obj.x, obj.y || 0, obj.z) : threat;
+    const stop = this.canSee ? 11 : 2.5;
+    const gd = Math.hypot(goal.x - pos.x, goal.z - pos.z);
+    this.repathT = (this.repathT ?? 0) - dt;
+    if (this.repathT <= 0) {
+      this.repathT = 1.4;
+      this.path = gd > stop ? (this.nav ? this.nav.findPath(pos, goal, 14000) : [goal.clone()]) : null;
+      this.pathI = 0;
+    }
+    if (this.path && gd > stop) this.followPath(dt, BOSS.speed);
+    else this.speedTarget = 0;
+    if (this.canSee) this.aimAndFire(dt, dist, 1);
+    else if (this.speedTarget > 0.3) this.faceMove(dt);
+    else this.faceTowards(goal, dt, 2.5);
+  }
+
   coverExposed(cover, threat) {
     const c = this.ctx.collision;
     const filt = { filter: (x) => x.tag !== 'enemy' && x.tag !== 'player' && !x.data?.enemy };
@@ -397,7 +506,7 @@ export class Brain {
     return c.lineOfSight(head, t, filt) && !cover.lean;
   }
 
-  pickCover(threat, { flank = false, advance = false } = {}) {
+  pickCover(threat, { flank = false, advance = false, within = null } = {}) {
     const nav = this.nav;
     if (!nav) return false;
     const e = this.e;
@@ -409,6 +518,10 @@ export class Brain {
     const myD = pos.distanceTo(threat);
     for (const c of cands) {
       const dT = Math.hypot(c.pos.x - threat.x, c.pos.z - threat.z);
+      if (within && Math.hypot(c.pos.x - within.x, c.pos.z - within.z) > within.radius * 0.9) {
+        c.s = 1e9;
+        continue;
+      }
       let s = c.d * 0.55 + Math.abs(dT - 17) * 0.35;
       if (dT < 6) s += 30;
       if (advance) s += (dT - myD) * 0.8;
@@ -431,6 +544,7 @@ export class Brain {
     const target = _w.copy(threat).setY(threat.y + 1.5);
     for (let k = 0; k < Math.min(8, cands.length); k++) {
       const cv = cands[k];
+      if (cv.s >= 1e9) break;
       // protege o tronco agachado? (barreira jersey tem ~0.8 m)
       const low = _v.copy(cv.pos).setY(cv.pos.y + 0.75);
       if (c.lineOfSight(low, target, filt)) continue;
@@ -537,6 +651,9 @@ export class Brain {
       const ahead = this.nav.cellOf(pos.x + this.moveDir.x * 0.8, pos.z + this.moveDir.z * 0.8);
       if (ahead < 0 || !this.nav.walk[ahead]) this.strafeDir *= -1;
     }
+    // HARDPOINT: o assalto não sai da zona fazendo strafe
+    const obj = this.squad.objective;
+    if (obj && this.assaulter && Math.hypot(pos.x + this.moveDir.x * 0.8 - obj.x, pos.z + this.moveDir.z * 0.8 - obj.z) > obj.radius * 0.85) this.strafeDir *= -1;
     this.speedTarget = this.strafeDir ? 1.6 : 0;
     this.faceTowards(threat, dt, 5);
   }
@@ -574,13 +691,16 @@ export class Brain {
     if (this.burst <= 0) {
       if (this.burstPause > 0) {
         this.burstPause -= dt;
+        this.sustain = 0;
         return;
       }
-      this.burst = 3 + Math.floor(ctx.rng.next() * 5);
-      this.burstPause = (0.35 + ctx.rng.next() * 0.7) / fireRate;
+      // metralhadora do chefe: rajadas longas e sustentadas
+      this.burst = this.boss ? 14 + Math.floor(ctx.rng.next() * 14) : 3 + Math.floor(ctx.rng.next() * 5);
+      this.burstPause = this.boss ? 0.45 + ctx.rng.next() * 0.5 : (0.35 + ctx.rng.next() * 0.7) / fireRate;
     }
     this.burst--;
-    this.shotT = 0.095;
+    this.sustain++;
+    this.shotT = this.boss ? 60 / BOSS.rpm : 0.095;
     this.fireShot(dist);
   }
 
@@ -603,7 +723,9 @@ export class Brain {
     const moving = e.speed > 0.5 ? 0.025 : 0;
     const plMoving = (pl.state?.speed || 0) > 1 ? 0.012 : 0;
     const settle = Math.max(0, 0.08 - this.onTarget * 0.04);
-    const err = (0.014 + dist * 0.0005 + this.suppression * 0.035 + moving + plMoving + settle) / this.skill;
+    // rajada longa abre o cone (o cano "sobe"): até +0,03 rad no chefe
+    const climb = this.boss ? Math.min(0.03, this.sustain * 0.0016) : 0;
+    const err = (0.014 + dist * 0.0005 + this.suppression * 0.035 + moving + plMoving + settle + climb) / this.skill;
     const r = ctx.rng;
     const a = r.next() * Math.PI * 2, m = Math.sqrt(r.next()) * err;
     const up = new THREE.Vector3(0, 1, 0);
@@ -612,8 +734,10 @@ export class Brain {
     dir.addScaledVector(side, Math.cos(a) * m).addScaledVector(up2, Math.sin(a) * m).normalize();
     this.ammo--;
     e.anim.fire();
-    ctx.bus.emit('enemy:fire', { enemy: e, origin: origin.clone(), dir: dir.clone() });
-    ctx.services.audio?.play?.('enemy_shot', { position: origin, volume: 1 });
+    ctx.bus.emit('enemy:fire', { enemy: e, origin: origin.clone(), dir: dir.clone(), heavy: this.boss });
+    // chefe: camada grave da metralhadora (mesmo som sintetizado, mais lento)
+    if (this.boss) ctx.services.audio?.play?.('shot_enemy', { position: origin, rate: 0.72, volume: 1.15, reverb: 0.35, cap: 10, jitter: 0.03 });
+    else ctx.services.audio?.play?.('enemy_shot', { position: origin, volume: 1 });
     if (ctx.shot || !pl.alive) return;
     // acerto: aproximação raio × segmento do corpo do jogador
     const a0 = _v.copy(pl.position).setY(pl.position.y + 0.25);
@@ -622,7 +746,8 @@ export class Brain {
     if (t.dist < 0.3 && t.t > 0) {
       const block = ctx.collision.raycast(origin, dir, t.t, { filter: (c) => c.tag !== 'enemy' && c.tag !== 'player' && !c.data?.enemy && c.owner !== e.group });
       if (!block) {
-        const dmg = (dist < 15 ? 10 : dist < 35 ? 8 : 6) * (t.h > 0.82 ? 1.4 : 1);
+        const base = this.boss ? BOSS.damage : 10;
+        const dmg = base * (dist < 15 ? 1 : dist < 35 ? 0.8 : 0.6) * (t.h > 0.82 ? 1.4 : 1);
         pl.damage(dmg, { source: 'enemy', from: origin.clone(), enemy: e, dir: dir.clone() });
       }
     }
@@ -641,9 +766,12 @@ export class Brain {
     if (sc.face !== false) this.faceTowards(tgt, dt, 6);
     else this.faceMove(dt);
     e.aimAt(tgt, dt);
-    if (sc.fire) {
+    // `shots`: limite de disparos (o clarão "preso" do modo shot fica com o
+    // último atirador — o chefe dispara a rajada no aquecimento e para)
+    if (sc.fire && (sc.shots == null || (this._scShots = this._scShots || 0) < sc.shots)) {
       this.shotT -= dt;
       if (this.shotT <= 0) {
+        if (sc.shots != null) this._scShots++;
         this.shotT = sc.interval || 0.1;
         this.fireShot(e.group.position.distanceTo(tgt));
       }

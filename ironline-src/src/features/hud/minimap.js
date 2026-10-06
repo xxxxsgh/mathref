@@ -19,6 +19,22 @@ const R = 122; // raio da área do mapa
 const PPM = 8; // pixels por metro na planta rasterizada
 const VIEW = 3.4; // pixels da prancheta por metro (raio ≈ 36 m)
 
+/**
+ * Render por software? (classe do aparelho do núcleo; no modo shot a classe
+ * é fixa, então também lê o RENDERER do próprio contexto WebGL.)
+ */
+export function softwareGL(ctx) {
+  if (ctx.quality?.device?.gpuClass === 'software') return true;
+  try {
+    const gl = ctx.renderer?.getContext?.();
+    const ext = gl?.getExtension('WEBGL_debug_renderer_info');
+    const name = String((ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || gl?.getParameter(gl.RENDERER) || '');
+    return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name);
+  } catch {
+    return false;
+  }
+}
+
 export class Minimap {
   constructor(parent) {
     this.el = document.createElement('div');
@@ -167,8 +183,15 @@ export class Minimap {
     }
     this.plan = cv;
     this.boxes = { tall, low, road, w, h };
+    // foto aérea: GPU de verdade → canvas inteiro (custa um frame); render
+    // por software (SwiftShader/llvmpipe) → pulada (bloqueava 60–80 s), a
+    // planta vetorial já é o minimapa. `?mmaerial=1` força mesmo em
+    // software, em 1/4 da área do canvas (metade de cada lado).
+    const soft = softwareGL(ctx);
+    const force = ctx.params?.get?.('mmaerial');
+    if (force === '0' || (soft && force !== '1')) return;
     try {
-      this.aerial(ctx, { minX, maxX, minZ, maxZ, ppm, w, h });
+      this.aerial(ctx, { minX, maxX, minZ, maxZ, ppm, w, h, scale: soft ? 0.5 : 1 });
     } catch (err) {
       console.warn('[hud] foto aérea do minimapa indisponível', err);
     }
@@ -182,13 +205,14 @@ export class Minimap {
    * de satélite) e sobrepõe contornos finos dos prédios por legibilidade.
    * Eixo longo do mapa (Z) vai na horizontal da tela para usar a resolução.
    */
-  aerial(ctx, { minX, maxX, minZ, maxZ, ppm, w, h }) {
+  aerial(ctx, { minX, maxX, minZ, maxZ, ppm, w, h, scale = 1 }) {
     const THREE = ctx.THREE, r = ctx.renderer, scene = ctx.scene;
     if (!THREE || !r || !scene) return;
     const pr = r.getPixelRatio();
     const cw = r.domElement.width, ch = r.domElement.height;
     const Lx = maxX - minX, Lz = maxZ - minZ;
-    const k = Math.min(cw / Lz, ch / Lx);
+    // `scale` < 1: viewport (e a cópia) menores — custo ∝ pixels
+    const k = Math.min(cw / Lz, ch / Lx) * Math.min(1, Math.max(0.1, scale));
     const vw = Math.floor(Lz * k), vh = Math.floor(Lx * k);
     if (vw < 64 || vh < 64) return;
     const cam = new THREE.OrthographicCamera(-Lz / 2, Lz / 2, Lx / 2, -Lx / 2, 1, 400);

@@ -204,8 +204,10 @@ const sphereGeo = () => cached('sph18', () => new THREE.SphereGeometry(1, 18, 10
 // Blocos distantes com fachada de janelas, cobertura com caixas d'água,
 // antenas e casinhas; alguns com topo desmoronado em degraus; torres
 // altas, minaretes e cúpulas, guindaste parado, prédio em esqueleto.
-function skyline(W) {
+/** Horizonte. opts.near = false pula os anéis colados à avenida (outros mapas). */
+export function skyline(W, opts = {}) {
   const { B, rng } = W;
+  const near = opts.near !== false;
   const tints = [[0.9, 0.86, 0.78], [0.82, 0.8, 0.76], [0.92, 0.82, 0.68], [0.78, 0.8, 0.82], [0.86, 0.78, 0.7], [0.72, 0.7, 0.66]];
   const roofJunk = (x0, z0, w, d, h) => {
     const n = rng.int(1, 4);
@@ -269,7 +271,7 @@ function skyline(W) {
     }
   };
   // anéis atrás das fileiras principais
-  for (const s of [-1, 1]) {
+  for (const s of near ? [-1, 1] : []) {
     for (let z = Z_S - 10; z < Z_N + 10; z += rng.range(14, 22)) {
       if (z > CROSS[0] - 22 && z < CROSS[1] + 18) continue;
       const x0 = s < 0 ? -WALK - DEPTH - rng.range(16, 26) : WALK + DEPTH + rng.range(2, 10);
@@ -469,9 +471,9 @@ function dressStreet(W) {
   P.palm(W, 19, -58, { h: 11 });
 
   // caçambas, pneus, paletes, caixotes
-  P.dumpster(W, 8.4, 19, 0.05);
-  P.dumpster(W, -8.3, -36.2, Math.PI + 0.1);
-  P.dumpster(W, -16.5, -40.5, 0.3);
+  P.dumpster(W, 8.4, 19, 0.05, { y: 0.15 });
+  P.dumpster(W, -8.3, -36.2, Math.PI + 0.1, { y: 0.15 });
+  P.dumpster(W, -16.5, -40.5, 0.3, { y: 0.02 });
   for (const [x, z] of [[-5.2, 23], [-6.3, -44], [5.5, -60], [-4.8, -104], [2.8, -136]]) P.tire(W, x, z);
   // pilha de pneus queimando na calçada (fogo + fumaça preta em index.js)
   for (let k = 0; k < 3; k++) P.tire(W, 6.6 + rng.range(-0.08, 0.08), 2.0 + rng.range(-0.08, 0.08), { flat: true, y: 0.15 + k * 0.2, tilt: rng.range(-0.08, 0.08) });

@@ -58,11 +58,13 @@ import {
 
 /** Configuração por nível de qualidade (o que cada preset liga e quanto custa). */
 const TIERS = {
-  low: { msaa: 0, ao: false, aoSamples: 6, vol: false, volSteps: 12, bloomLevels: 5, motion: false, dust: 0, fxaa: true, sharpen: 0.0, dirt: false, gi: 0, taa: false, contact: false, far: 1024, pcss: 0 },
-  medium: { msaa: 4, ao: true, aoSamples: 10, vol: false, volSteps: 14, bloomLevels: 6, motion: false, dust: 0, fxaa: false, sharpen: 0.3, dirt: true, gi: 12, taa: false, contact: true, far: 1024, pcss: 1024 },
+  // low: AO "barata" (¼ de res., só anéis curto + contato, 6 amostras) — o
+  // aterramento dos objetos não some no preset mais leve
+  low: { msaa: 0, ao: false, aoCheap: true, aoSamples: 6, vol: false, volSteps: 12, bloomLevels: 5, motion: false, dust: 0, fxaa: true, sharpen: 0.0, dirt: false, gi: 0, taa: false, contact: false, far: 1024, pcss: 0 },
+  medium: { msaa: 4, ao: true, aoSamples: 12, vol: false, volSteps: 14, bloomLevels: 6, motion: false, dust: 0, fxaa: false, sharpen: 0.3, dirt: true, gi: 12, taa: false, contact: true, far: 1024, pcss: 1024 },
   // high/ultra: TAA substitui o MSAA (high) — resolve fios finos, brilho especular e o ruído de AO/GI/volumétrico
-  high: { msaa: 0, ao: true, aoSamples: 14, vol: true, volSteps: 20, bloomLevels: 6, motion: true, dust: 700, fxaa: false, sharpen: 0.42, dirt: true, gi: 20, taa: true, contact: true, far: 2048, pcss: 2048 },
-  ultra: { msaa: 4, ao: true, aoSamples: 18, vol: true, volSteps: 28, bloomLevels: 7, motion: true, dust: 1100, fxaa: false, sharpen: 0.38, dirt: true, gi: 24, taa: true, contact: true, far: 2048, pcss: 4096 },
+  high: { msaa: 0, ao: true, aoSamples: 18, vol: true, volSteps: 20, bloomLevels: 6, motion: true, dust: 700, fxaa: false, sharpen: 0.42, dirt: true, gi: 20, taa: true, contact: true, far: 2048, pcss: 2048 },
+  ultra: { msaa: 4, ao: true, aoSamples: 24, vol: true, volSteps: 28, bloomLevels: 7, motion: true, dust: 1100, fxaa: false, sharpen: 0.38, dirt: true, gi: 24, taa: true, contact: true, far: 2048, pcss: 4096 },
 };
 
 /** Parâmetros artísticos padrão (todos ajustáveis pelo serviço). */
@@ -83,7 +85,10 @@ function defaultParams() {
     // PCSS: tan do semi-ângulo efetivo do sol (0,0047 = disco real; mais
     // largo simula o espalhamento do céu perto do sol e suaviza o serrilhado)
     shadow: { lightSize: 0.02 },
-    ao: { radius: 0.9, intensity: 3.6, bias: 0.6, strength: 1.0 }, // raio maior: escurece a junção objeto–chão (props não "flutuam")
+    // raio maior: escurece a junção objeto–chão (props não "flutuam");
+    // contact = peso do anel de contato (~8 cm); direct = quanto dele entra
+    // na luz direta do sol (micro-sombra na junção, endurece no contato)
+    ao: { radius: 0.9, intensity: 3.6, bias: 0.6, strength: 1.0, contact: 3.0, direct: 0.85 },
     // tinta levemente quente/acinzentada: a perspectiva aérea pura do LUT
     // puxa para ciano perto do horizonte e "lava" o fundo da rua
     fog: { density: 0.0007, falloff: 0.045, base: 0.0, start: 22, max: 0.8, tint: new THREE.Color(0.93, 0.92, 0.88), sun: 0.12 },
@@ -286,7 +291,7 @@ const rendering = {
     this.mats = {
       ao: postMaterial('ao', AO_FRAG, {
         ...common(), tDepth: U(null), uFullTexel: U(new THREE.Vector2()), uAoRes: U(new THREE.Vector2()),
-        uRadius: U(1), uIntensity: U(1), uBias: U(0.5), uProjScale: U(500), uFrame: U(0),
+        uRadius: U(1), uIntensity: U(1), uBias: U(0.5), uProjScale: U(500), uFrame: U(0), uContactK: U(1.6),
       }, { AO_SAMPLES: 12 }),
       blur: postMaterial('blur', BLUR_FRAG, { ...common(), tSrc: U(null), tDepth: U(null), uDir: U(new THREE.Vector2()), uDepthSharp: U(8) }),
       vol: postMaterial('vol', VOLUMETRIC_FRAG, {
@@ -299,7 +304,7 @@ const rendering = {
         ...common(), tScene: U(null), tDepth: U(null), tAo: U(null), tVol: U(null), tVm: U(null), tLut: U(this.atmo.lut.texture), tGi: U(null),
         uViewInv: U(new THREE.Matrix4()), uProj: U(new THREE.Matrix4()), uPrevViewProj: U(new THREE.Matrix4()), uCamPos: U(new THREE.Vector3()),
         uSunDir: U(this.sunDir), uSunDirView: U(new THREE.Vector3()), uSunRadiance: U(new THREE.Color()), uSunIrr: U(new THREE.Color()),
-        uAmbient: U(new THREE.Color()), uCoveredAmb: U(0.4), uSkyScale: U(1), uAoStrength: U(0), uGiStrength: U(0), uContact: U(0),
+        uAmbient: U(new THREE.Color()), uCoveredAmb: U(0.4), uSkyScale: U(1), uAoStrength: U(0), uAoDirect: U(0), uGiStrength: U(0), uContact: U(0),
         uFogDensity: U(0), uFogFalloff: U(0.05), uFogBase: U(0), uFogStart: U(10), uFogMax: U(0.9), uFogTint: U(new THREE.Color(1, 1, 1)), uFogSun: U(0),
         uVolStrength: U(0), uPhaseG: U(0.6), uMotion: U(0), uVmBlur: U(0), uVmOn: U(1), uRes: U(new THREE.Vector2()), uFrame: U(0),
         tSkyOcc: U(null), uSkyOccMatrix: U(new THREE.Matrix4()), uSkyOccOn: U(0), uIndoor: U(0.4), uIndoorTint: U(new THREE.Color(1, 1, 1)), uDebug: U(0),
@@ -352,7 +357,13 @@ const rendering = {
     const q = this.ctx.quality;
     const tier = { ...(TIERS[q.level] || TIERS.high) };
     if (!q.msaa) tier.msaa = 0;
-    if (!q.ssao) tier.ao = false;
+    if (!q.ssao) {
+      // sem SSAO (low, ou o governador cortou): cai para a AO barata de contato
+      if (tier.ao) tier.aoSamples = 6;
+      tier.aoCheap = q.contactAO !== false;
+      tier.ao = false;
+    } else tier.aoCheap = false;
+    if (q.contactAO === false) tier.aoCheap = false;
     if (!q.volumetrics) tier.vol = false;
     if (!q.motionBlur) tier.motion = false;
     if (q.taa === false) tier.taa = false;
@@ -370,6 +381,11 @@ const rendering = {
       }
     };
     setDef(this.mats.ao, 'AO_SAMPLES', tier.aoSamples);
+    if (!!this.mats.ao.defines.AO_CHEAP !== !!tier.aoCheap) {
+      if (tier.aoCheap) this.mats.ao.defines.AO_CHEAP = 1;
+      else delete this.mats.ao.defines.AO_CHEAP;
+      this.mats.ao.needsUpdate = true;
+    }
     setDef(this.mats.vol, 'VOL_STEPS', tier.volSteps);
     if (tier.gi) setDef(this.mats.gi, 'GI_SAMPLES', tier.gi);
     if (this.farView && (!tier.far || this.farView.size !== tier.far)) {
@@ -379,7 +395,8 @@ const rendering = {
     if (tier.far && !this.farView) this.farView = new SunView({ size: tier.far, radius: 190, color: false, forward: 0.55, depthRange: 700 });
     this.taaFrames = 0;
     // cópia crua do shadow map para o PCSS
-    const pcssSize = q.shadows === false ? 0 : tier.pcss;
+    const pcssK = Math.max(0.25, Math.min(1, q.shadowScale ?? 1));
+    const pcssSize = q.shadows === false || !tier.pcss ? 0 : Math.max(512, Math.round(tier.pcss * pcssK));
     if (this.rawShadow && this.rawShadow.size !== pcssSize) {
       this.rawShadow.dispose();
       this.rawShadow = null;
@@ -454,8 +471,9 @@ const rendering = {
     this.rt = {
       scene: sceneRT,
       vm: vmRT,
-      ao: makeTarget(hw, hh, { type: THREE.UnsignedByteType }),
-      ao2: makeTarget(hw, hh, { type: THREE.UnsignedByteType }),
+      // AO barata em ¼ de resolução; a completa em ½
+      ao: makeTarget(t.aoCheap ? Math.ceil(w / 4) : hw, t.aoCheap ? Math.ceil(h / 4) : hh, { type: THREE.UnsignedByteType }),
+      ao2: makeTarget(t.aoCheap ? Math.ceil(w / 4) : hw, t.aoCheap ? Math.ceil(h / 4) : hh, { type: THREE.UnsignedByteType }),
       vol: makeTarget(hw, hh),
       vol2: makeTarget(hw, hh),
       combine: makeTarget(w, h),
@@ -696,7 +714,8 @@ const rendering = {
 
     // 3) AO
     let aoTex = rt.white.texture;
-    if (tier.ao) {
+    const aoOn = tier.ao || tier.aoCheap;
+    if (aoOn) {
       const u = M.ao.uniforms;
       u.tDepth.value = depth;
       u.uFullTexel.value.set(1 / w, 1 / h);
@@ -704,10 +723,11 @@ const rendering = {
       u.uRadius.value = P.ao.radius;
       u.uIntensity.value = P.ao.intensity;
       u.uBias.value = P.ao.bias;
+      u.uContactK.value = P.ao.contact ?? 3.0;
       u.uProjScale.value = rt.ao.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
       u.uFrame.value = noiseFrame;
       draw(M.ao, rt.ao);
-      this.blur(rt.ao, rt.ao2, depth, 10, draw);
+      this.blur(rt.ao, rt.ao2, depth, tier.aoCheap ? 6 : 10, draw);
       aoTex = rt.ao.texture;
     }
 
@@ -800,7 +820,9 @@ const rendering = {
         u.uFarTexel.value.set(1 / this.farView.size, 1 / this.farView.size);
       }
       u.uSkyScale.value = this.atmo.uniforms.uSkyScale.value;
-      u.uAoStrength.value = tier.ao ? P.ao.strength : 0;
+      // AO barata: um pouco mais contida (menos amostras → mais ruído)
+      u.uAoStrength.value = tier.ao ? P.ao.strength : tier.aoCheap ? P.ao.strength * 0.85 : 0;
+      u.uAoDirect.value = P.ao.direct ?? 0.85;
       u.uFogDensity.value = P.fog.density;
       u.uFogFalloff.value = P.fog.falloff;
       u.uFogBase.value = P.fog.base;

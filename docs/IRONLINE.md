@@ -55,29 +55,65 @@ A feature `rendering` assume o render inteiro pelo gancho
 
 | Ordem | Feature | Responsabilidade |
 |---|---|---|
-| 10 | `world` | mapa MERIDIAN STREET ("Distrito Velho" no código): avenida destruída, prédios paramétricos, interior jogável, carros, barreiras/HESCO, entulho, fogo, fumaça, vegetação, céu, materiais PBR procedurais e colisores |
+| 10 | `world` | mapas (`?map=street\|factory`): MERIDIAN STREET ("Distrito Velho" no código — avenida destruída, prédios paramétricos, interior jogável) e FOUNDRY 9 (fundição abandonada em vários níveis); props modelados de perto (carros com interior, mobília, caçambas, caixas, sacos, entulho em camadas), fogo, fumaça, vegetação, céu, materiais PBR procedurais e colisores |
 | 20 | `rendering` | compositor HDR: céu físico, sombras PCSS, GI de 1 rebatimento (RSM), AO, volumétrico, bloom, TAA, exposição automática, tonemap e gradação |
 | 25 | `audio` | áudio 100% sintetizado (WebAudio): tiro em camadas, HRTF, estalo supersônico, passos por superfície, reverb por convolução, ambiente |
 | 30 | `movement` | locomoção: sprint, sprint tático, slide, agachar/deitar, dive, mantle/vault, lean; bob e corpo visível com IK |
-| 40 | `weapon` | fuzil KR-9 (design original) na viewmodel: hitscan, recuo, ADS com holográfica, recarga, inspeção, mãos com skinning |
+| 40 | `weapon` | loadout na viewmodel (design original): fuzil KR-9, pistola P-11, faca TK-7, granadas de fragmentação e atordoante; hitscan, recuo, ADS, recargas, troca com guarda/saque, golpe com investida, granadas com física e dano em área; mãos enluvadas anatômicas com skinning |
 | 50 | `enemies` | soldados procedurais (4 variantes), animação procedural, ragdoll Verlet, IA de esquadrão com cobertura e A* |
 | 60 | `vfx` | partículas na GPU, impactos por material, clarões, traçantes, cápsulas, marcas de tiro, explosões |
 | 90 | `hud` | HUD de combate, bússola, minimapa, menus (principal, loadout, configurações, pausa, placar, relatório pós-ação), regras da partida |
+| 95 | `touch` | controles de toque (celular/tablet): joystick, mira por arrasto, botões de ação, tela cheia e aviso de paisagem |
 
 ## Funcionalidades
 
-- **Modo FRONTLINE**: 5 ondas (4-5-6-7-8 = 30 hostis) em 10 minutos.
-  Limpar a última onda vence; o relógio zerar perde. Renascimento em 4 s no
-  ponto mais seguro, regeneração de vida, XP, medalhas e relatório pós-ação
-  com estatísticas; perfil salvo em `localStorage`.
-- **Mapa urbano** (MERIDIAN STREET) com rua, cruzamento, ruela, posto de controle e o térreo
-  jogável do prédio R4.
-- **Arma**: tiro automático (760 rpm), recuo com molas, ADS com retículo
-  holográfico sem paralaxe, recarga tática/vazia, inspeção.
+- **Três modos** (cartões no menu principal; `?mode=`):
+  - **FRONTLINE** (eliminação): 5 ondas (4-5-6-7-8 = 30 hostis) em 10
+    minutos. Limpar a última onda vence; o relógio zerar perde.
+  - **HARDPOINT** (defesa): tomar e segurar uma zona marcada no chão (anel
+    no mundo, marcador na tela, barras de captura e posse) contra ondas sem
+    fim que convergem para ela. 90 s de posse vencem; hostis tomando a zona
+    (ou 7 minutos) perdem.
+  - **SURVIVAL**: ondas crescentes com 3 vidas; a última traz o
+    **JUGGERNAUT** — soldado blindado (placas, viseira, metralhadora leve,
+    1600 de vida, lento) com barra de chefe. Limpar a onda do chefe vence.
+  Renascimento em 4 s no ponto mais seguro, regeneração de vida, XP,
+  medalhas e relatório pós-ação com estatísticas por modo.
+- **Progressão**: perfil em `localStorage` — XP de abates, headshots,
+  medalhas e objetivos; 55 níveis; desbloqueios por nível (atordoante,
+  acessórios, camuflagens procedurais da arma, armas extras publicadas pela
+  feature weapon) com cadeados no loadout, toast de LEVEL UP e lista de
+  desbloqueios no relatório.
+- **Seletor de mapa** no menu (cartões com planta, nome e descrição; o mapa
+  atual em destaque) — troca recarregando com `?map=`.
+- **Dois mapas** (seleção por `?map=`, ver [Mapas](#mapas)):
+  - **MERIDIAN STREET** (`street`, padrão): rua, cruzamento, ruela, posto
+    de controle e o térreo jogável do prédio R4.
+  - **FOUNDRY 9** (`factory`): fundição abandonada — galpão de máquinas com
+    ponte rolante, passarelas a 4,5 m, ponte sobre o galpão, escritórios de
+    dois pisos com vidraça quebrada e pátio de carga com doca, carreta e
+    contêineres.
+- **Loadout**: fuzil KR-9 (automático, 760 rpm, holográfica sem paralaxe) e
+  pistola P-11 (semiautomática, ferrolho que trava aberto vazio, miras de 3
+  pontos) com troca animada (1/2, roda, X), recuo com molas, recarga
+  tática/vazia por arma, inspeção; faca de combate (V) com investida no
+  inimigo à frente; granada de fragmentação (G — segurar cozinha, soltar
+  arremessa; quica no cenário, dano em área com linha de visão) e
+  atordoante (T). Mãos enluvadas anatômicas (5 dedos articulados com
+  skinning, painéis, costuras e protetor de nós) encaixadas na geometria de
+  cada arma.
 - **Inimigos** com hitboxes por osso (headshot), percepção por visão e
-  audição, supressão, flanco, callouts e ragdoll.
-- **Qualidade** ajustável (`?q=low|medium|high|ultra` ou no menu de
-  configurações) e resolução dinâmica fora do modo screenshot.
+  audição, supressão, flanco, callouts e ragdoll — em qualquer mapa (tudo
+  lido de `services.world`); chefe juggernaut no modo SURVIVAL.
+- **Qualidade automática** (padrão): a classe do aparelho (GPU, celular,
+  núcleos, memória) escolhe o preset inicial e um governador de desempenho
+  ajusta resolução dinâmica e degraus de qualidade com histerese para manter
+  ~60 fps (30 em celular). Presets fixos com `?q=low|medium|high|ultra` ou
+  no menu de configurações.
+- **Toque**: em celular/tablet, joystick virtual (empurrar até o fim =
+  sprint), arrastar para mirar e botões de tiro, ADS, recarga, pulo,
+  agachar/slide, granada, corpo a corpo, troca de arma e pausa; tela cheia em
+  paisagem ao entrar na partida.
 - **Configurações**: sensibilidade (e multiplicador em ADS), inverter Y,
   FOV, volume, cor da mira, minimapa girando.
 
@@ -95,13 +131,18 @@ A feature `rendering` assume o render inteiro pelo gancho
 | mirar (ADS) | botão direito do mouse |
 | recarregar | R |
 | inspecionar arma | I |
-| sacar de novo | 1 |
+| fuzil / pistola | 1 / 2 (roda do mouse ou X alterna) |
+| faca (corpo a corpo) | V |
+| granada (segurar = cozinhar) | G |
+| atordoante | T |
 | placar | Tab (segurar) |
 | pausa | Esc ou P |
 | menu: DEPLOY / loadout / configurações | Enter / L / O |
 
 Clicar em **DEPLOY** no menu inicia a partida e captura o mouse (pointer
-lock). Perder o pointer lock abre a pausa.
+lock). Perder o pointer lock abre a pausa. No toque, DEPLOY mostra os
+controles na tela (detalhes em `ironline-src/src/features/touch/README.md`)
+e o botão ‖ pausa.
 
 ## Como rodar
 
@@ -119,15 +160,55 @@ Parâmetros de URL úteis (lista completa no `CONTRACT.md`):
 
 | Parâmetro | Efeito |
 |---|---|
-| `?q=low\|medium\|high\|ultra` | preset de qualidade (padrão `high`) |
+| `?map=street\|factory` | mapa (padrão `street`; trocar = recarregar a página) |
+| `?q=auto\|low\|medium\|high\|ultra` | qualidade (padrão `auto`) |
+| `?touch=1\|0` | força/desliga os controles de toque |
 | `?only=a,b` / `?skip=a,b` | carrega só / todas menos essas features |
-| `?waves=1,1&wi=1&mt=300` | partida curta (ondas, intervalo, tempo) |
-| `?dynres=0` | desliga a resolução dinâmica |
+| `?mode=waves\|hardpoint\|survival` | modo de jogo (padrão: o último escolhido no menu) |
+| `?waves=1,1&wi=1&mt=300` | partida curta (ondas, intervalo, tempo); `&hold=s` (posse do HARDPOINT), `&lives=n` (SURVIVAL) |
+| `?dynres=0` | desliga o governador de desempenho (resolução dinâmica + degraus) |
 | `?shot=<preset>` | modo screenshot determinístico (abaixo) |
 
 No GitHub Pages, o workflow `.github/workflows/pages.yml` roda `npm ci`,
 `npm test` e `npm run build` em `ironline-src/` e confere que
 `ironline/index.html` referencia `/mathref/ironline/assets/`.
+
+## Mapas
+
+A feature `world` monta um mapa por carga de página, escolhido por
+`?map=<id>` (desconhecido → `street`, com aviso no console). Trocar de mapa
+é **recarregar a página** com outro parâmetro — não há descarga/recarga a
+quente. Para a HUD montar um seletor de mapa:
+
+```js
+const w = ctx.services.world;
+w.maps;          // [{ id, name, description }] — street, factory
+w.mapId;         // id do mapa carregado ('street' | 'factory')
+w.map;           // { id, name, description } do mapa atual
+w.mapUrl(id);    // URL desta página com ?map=id (preserva os outros parâmetros)
+w.setMap(id);    // navega para mapUrl(id); false se id inválido ou já carregado
+```
+
+Os dois mapas publicam **os mesmos campos** de `services.world` (contrato do
+`CONTRACT.md` + extras): `root`, `sun`, `hemi`, `sky`, `environment`,
+`atmosphere`, `bounds` (Box3 — região jogável; a HUD rasteriza o minimapa e
+`enemies` recorta a grade de navegação por ela), `spawnPoints`,
+`enemySpawns`, `shotPoses` (todos os presets), `materialAt(hit)`,
+`surfaces`, `stats`, `interior` (sala R4 em `street`, `null` em `factory`).
+Os colisores ficam em `ctx.collision` como antes (estáticos, com
+`material`), então minimapa, navegação, passos e impactos funcionam nos dois.
+
+| Mapa | `bounds` (x, z) | Jogador nasce | Inimigos entram |
+|---|---|---|---|
+| `street` | x ±23,5, z −150…60 | avenida, z ≈ 20, olhando −z | fundo da avenida (−z) |
+| `factory` | x ±22,5, z −44,5…44,5 | pátio sul, olhando +z (o galpão) | fundo norte do galpão, escritórios, beco leste |
+
+FOUNDRY 9 em números: galpão de 36 × 48 m (pé-direito 10,5 m, cumeeira
+13,5 m), pórticos a cada 6 m, passarela oeste e ponte a 4,5 m, mezanino dos
+escritórios a 4,5 m, doca de 1,2 m no pátio. A navegação dos inimigos é toda
+no piso (y = 0); passarelas, mezanino e doca são rotas do jogador.
+Capturas do mapa: `?map=factory&shot=street|interior|menu|…` (as poses de
+cada preset vêm de `services.world.shotPoses`).
 
 ## Ferramentas de screenshot e crítica visual
 
@@ -190,17 +271,23 @@ Joga uma partida curta de verdade (`?waves=1,1&wi=1`): menu → loadout →
 DEPLOY → anda/sprint/pulo → um bot no navegador mira e mata o inimigo da
 onda 1 → recarrega → onda 2 → relatório pós-ação com vitória. Falha com
 qualquer `pageerror`, `console.error` ou erro de feature. Opções:
-`--q low`, `--size 640x360`, `--timeout ms`, `--shots dir` (salva
+`--q low`, `--size 640x360`, `--timeout ms`, `--mode hardpoint|survival`,
+`--map factory` (o bot do HARDPOINT segura a zona e confere captura e
+vitória pela posse), `--shots dir` (salva
 `1-menu`, `2-loadout`, `3-combat`, `4-end`). No SwiftShader leva ~10
 minutos; `shot.mjs` em 1080p no preset `high` leva ~6–9 min por imagem
 (o `--timeout` padrão é 600 s).
 
 ## Limitações conhecidas
 
-- Só uma arma (KR-9); as ações de granada, corpo a corpo, interação e
-  segunda arma estão mapeadas no núcleo, mas não implementadas.
+- A ação de interação está mapeada no núcleo, mas não implementada; a
+  atordoante ainda não cega/atordoa a IA (emite `weapon:flashbang` para quem
+  quiser reagir).
+- A atordoante trancada por nível só aparece trancada na UI até a feature
+  weapon publicar `setTacticals(n)` (a HUD já chama o gancho).
 - Partida apenas contra IA (sem multiplayer).
-- Pesado em GPUs fracas no preset `high`; use `?q=low` ou `medium`.
+- Pesado em GPUs fracas no preset `high` — o modo automático (padrão)
+  desce sozinho; `?q=low` força o mais leve.
 - Em ambiente headless (SwiftShader) o jogo roda a poucos FPS — as
   ferramentas usam tempo virtual por isso; medidas de desempenho lá não
   representam uma GPU real.

@@ -48,6 +48,7 @@ uniform float uIntensity;
 uniform float uBias;
 uniform float uProjScale;
 uniform float uFrame;
+uniform float uContactK;
 
 vec3 vpos(vec2 uv) { return viewPosAt(uv, texture(tDepth, uv).r); }
 
@@ -65,20 +66,38 @@ void main() {
   vec3 n = normalize(cross(dx, dy));
   if (dot(n, P) > 0.0) n = -n;
 
-  // duas escalas: anel largo (oclusão de cantos/paredes) + anel curto
-  // (contato: pé de barreira, rodapé, fresta) — amostras alternadas
-  float rL = uRadius, rS = uRadius * 0.28;
+  // três escalas, amostras alternadas (SAO/Alchemy com espiral):
+  //   L — anel largo (cantos de parede, debaixo de carro/marquise)
+  //   S — anel curto ~0,25 m (pé de barreira, rodapé, fresta)
+  //   C — anel de CONTATO ~8 cm: a junção objeto–chão/parede. Com raio tão
+  //       curto o termo f²/(v·v) só pega oclusores colados → escurecimento
+  //       que endurece no contato e some em poucos centímetros (o que faz um
+  //       caixote/barril/meio-fio "pousar" em vez de flutuar)
+  // Saída: R = AO do ambiente (L·S·C); G = oclusão de contato (S·C) — o
+  // combine usa G também na luz DIRETA (micro-sombra da junção).
+  float rL = uRadius, rS = uRadius * 0.28, rC = max(0.06, uRadius * 0.13);
   float rPxL = clamp(uProjScale * rL / -P.z, 2.0, 110.0);
   float rPxS = clamp(uProjScale * rS / -P.z, 1.5, 40.0);
+  float rPxC = clamp(uProjScale * rC / -P.z, 1.0, 16.0);
   float phi = ign(gl_FragCoord.xy + uFrame * 7.0) * 2.0 * PI;
-  float sumL = 0.0, sumS = 0.0;
+  float sumL = 0.0, sumS = 0.0, sumC = 0.0;
+  float nL = 0.0, nS = 0.0, nC = 0.0;
   for (int i = 0; i < AO_SAMPLES; i++) {
-    bool small = (i & 1) == 1;
-    float r = small ? rS : rL;
+    #ifdef AO_CHEAP
+    int sc = 1 + (i & 1);         // barato: só curto + contato
+    float per = float((AO_SAMPLES + 1) / 2);
+    float k = float(i / 2);
+    #else
+    int sc = i - (i / 3) * 3;
+    float per = float((AO_SAMPLES + 2) / 3);
+    float k = float(i / 3);
+    #endif
+    float r = sc == 0 ? rL : sc == 1 ? rS : rC;
+    float rPx = sc == 0 ? rPxL : sc == 1 ? rPxS : rPxC;
     float r2 = r * r;
-    float a = (float(i) + 0.5) / float(AO_SAMPLES);
-    float h = (small ? rPxS : rPxL) * a;
-    float ang = a * 7.0 * 2.0 * PI + phi;
+    float t = (k + 0.5) / per;
+    float h = rPx * t;
+    float ang = t * 7.0 * 2.0 * PI + phi + float(sc) * 2.1;
     vec2 uv = vUv + vec2(cos(ang), sin(ang)) * h / uAoRes;
     if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) continue;
     vec3 Q = vpos(uv);
@@ -86,16 +105,25 @@ void main() {
     float vv = dot(v, v);
     float vn = dot(v, n);
     float f = max(r2 - vv, 0.0) / r2;
-    float o = f * f * max((vn - uBias * -P.z * 0.025) / (vv + 0.02 * r2), 0.0);
-    if (small) sumS += o * 2.0 * rS; else sumL += o * 2.0 * rL;
+    // bias proporcional à distância (precisão do depth) e ao raio do anel
+    // (no anel de contato o bias tem piso fixo: o chão em ângulo rasante
+    // longe não pode se auto-ocluir em faixas)
+    float o = f * f * max((vn - uBias * (sc == 2 ? max(-P.z * 0.02, 0.02) : -P.z * 0.025)) / (vv + 0.02 * r2), 0.0);
+    if (sc == 0) { sumL += o * 2.0 * rL; nL += 1.0; }
+    else if (sc == 1) { sumS += o * 2.0 * rS; nS += 1.0; }
+    else { sumC += o * 2.0 * rC; nC += 1.0; }
   }
-  float n2 = float(AO_SAMPLES) * 0.5;
-  float aoL = max(0.0, 1.0 - sumL * uIntensity / n2);
-  float aoS = max(0.0, 1.0 - sumS * uIntensity * 1.15 / n2);
-  float ao = aoL * aoS;
+  float aoL = nL > 0.0 ? max(0.0, 1.0 - sumL * uIntensity / nL) : 1.0;
+  float aoS = nS > 0.0 ? max(0.0, 1.0 - sumS * uIntensity * 1.15 / nS) : 1.0;
+  float aoC = nC > 0.0 ? max(0.0, 1.0 - sumC * uIntensity * uContactK / nC) : 1.0;
+  // o anel de contato só vale perto (longe vira ruído de precisão)
+  aoC = mix(aoC, 1.0, smoothstep(12.0, 24.0, -P.z));
+  float ao = aoL * aoS * aoC;
   // fade com a distância (AO de tela some longe, onde vira ruído)
-  ao = mix(ao, 1.0, smoothstep(60.0, 140.0, -P.z));
-  outColor = vec4(ao, ao, ao, 1.0);
+  float fade = smoothstep(60.0, 140.0, -P.z);
+  ao = mix(ao, 1.0, fade);
+  float contact = mix(aoS * aoC, 1.0, fade);
+  outColor = vec4(ao, contact, ao, 1.0);
 }`;
 
 export const BLUR_FRAG = /* glsl */ `
@@ -200,6 +228,7 @@ uniform vec3 uAmbient;       // radiância ambiente equivalente (IBL + hemisfér
 uniform float uCoveredAmb;   // ambiente que a cena já tem sob teto (world)
 uniform float uSkyScale;
 uniform float uAoStrength;
+uniform float uAoDirect;     // quanto da oclusão de CONTATO entra na luz direta (micro-sombra)
 uniform float uGiStrength;
 uniform float uContact;
 uniform float uFogDensity;
@@ -411,10 +440,20 @@ void main() {
     vec3 albedo = clamp(col / max(ambScene + sunE * visScene, vec3(1e-4)), 0.0, 0.95);
 
     // ── recomposição da luz (só nas diferenças; especular/emissivo intactos) ──
-    float ao = texture(tAo, vUv).r;
+    vec2 aoT = texture(tAo, vUv).rg;
+    float ao = aoT.r;
     float aoAmb = mix(1.0, ao, uAoStrength);
+    // multi-rebatimento (Jimenez 2016, ajuste do GTAO): superfícies claras
+    // recebem de volta parte da luz que o canto "roubou" — a AO escurece
+    // sem acinzentar e ganha a cor do próprio material nas frestas
+    vec3 aoA = 2.0404 * albedo - 0.3324, aoB = -4.7951 * albedo + 0.6417, aoCc = 2.7552 * albedo + 0.6903;
+    vec3 aoMB = max(vec3(aoAmb), ((aoA * aoAmb + aoB) * aoAmb + aoCc) * aoAmb);
+    // micro-sombra de contato na luz DIRETA: a junção caixote–chão,
+    // pneu–asfalto, meio-fio, rodapé recebe menos sol mesmo fora da sombra
+    // (o shadow map não resolve centímetros) — endurece no contato
+    float aoDir = mix(1.0, aoT.g * aoT.g, uAoDirect * uAoStrength);
     // sob teto, a luz indireta vem do chão/fachadas lá fora (mais quente que o céu)
-    vec3 ambNew = ambScene * mix(vec3(1.0), uIndoor * uIndoorTint, occ) * aoAmb;
+    vec3 ambNew = ambScene * mix(vec3(1.0), uIndoor * uIndoorTint, occ) * aoMB;
     vec3 gi = texture(tGi, vUv).rgb * (uGiStrength / PI) * mix(1.0, ao, 0.6 * uAoStrength);
     // o RSM vê só o chão ensolarado (sol quente × asfalto quente) → laranja
     // demais; a luz real que entra é misturada com céu/fachadas: dessatura
@@ -432,7 +471,7 @@ void main() {
       // inteiro fica laranja. Luz rebatida real é quase neutra (céu + fachadas)
       bleed = mix(vec3(luma(bleed)), bleed, 0.45);
     }
-    vec3 delta = (ambNew - ambScene) + sunE * (visTrue - visScene) + gi + bleed;
+    vec3 delta = (ambNew - ambScene) + sunE * (visTrue * aoDir - visScene) + gi + bleed;
     col = max(col + albedo * delta, col * 0.04);
 
     if (uDebug > 0.5) {

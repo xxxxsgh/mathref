@@ -10,35 +10,38 @@
  */
 const CALLSIGNS = ['KESTREL', 'VOLKOV', 'RAZOR', 'NOMAD', 'HALVARD', 'SPECTER', 'DRAGAN', 'ORLOV', 'CINDER', 'MAKAROV', 'TALON', 'BRASK', 'VIPER', 'KORSAK', 'GRIMM', 'STRYDE'];
 
-/**
- * Modo FRONTLINE: o jogador segura a rua contra ONDAS do esquadrão hostil.
- * Cada onda entra pelo fundo da rua (pontos de `world.enemySpawns` longe do
- * jogador), com no máximo `maxAlive` vivos ao mesmo tempo; limpar a última
- * onda vence, o relógio zerar perde. `target` = total de abates (soma).
- * `?waves=2,3` encurta a partida (testes e2e); `?mt=segundos` muda o tempo;
- * `?wi=segundos` muda o intervalo entre ondas.
- */
-export const MODE = { id: 'waves', name: 'FRONTLINE', map: 'MERIDIAN STREET', waves: [4, 5, 6, 7, 8], target: 30, maxAlive: 5, time: 600, intermission: 7 };
+import { buildMode, MODES, zoneState, zoneStep, zoneResult, hardpointWave, isBossWave, inZone, pickZone, spiral } from './modes.js';
+import { XP, HOLD_TICK } from './progression.js';
 
-/** Aplica overrides de URL ao modo (antes de montar o HUD). */
-export function configureMode(params) {
-  const w = params?.get?.('waves');
-  if (w) {
-    const list = w.split(',').map((n) => Math.max(1, Math.min(20, Number(n) | 0))).filter(Boolean);
-    if (list.length) MODE.waves = list;
-  }
-  const mt = Number(params?.get?.('mt'));
-  if (mt > 0) MODE.time = mt;
-  const wi = Number(params?.get?.('wi'));
-  if (wi > 0) MODE.intermission = wi;
-  MODE.target = MODE.waves.reduce((a, b) => a + b, 0);
+/**
+ * Modo ATIVO (objeto compartilhado: HUD, menus e placar leem daqui). Os três
+ * modos (FRONTLINE, HARDPOINT, SURVIVAL — definições em modes.js) usam o
+ * mesmo motor de ondas: cada onda entra pelos `world.enemySpawns` longe do
+ * jogador, com no máximo `maxAlive` vivos. Muda com `setMode()` (menu) ou
+ * `?mode=`; `?waves=2,3`, `?mt=s`, `?wi=s`, `?hold=s`, `?lives=n` encurtam
+ * a partida (testes e2e / capturas).
+ */
+export const MODE = buildMode('waves', null);
+let _params = null;
+
+/** Troca o modo ativo (fora da partida). */
+export function setMode(id, mapName = MODE.map) {
+  const m = buildMode(MODES[id] ? id : 'waves', _params, mapName);
+  for (const k of Object.keys(MODE)) delete MODE[k];
+  Object.assign(MODE, m);
   return MODE;
 }
 
-// XP por evento
-export const XP = { kill: 100, head: 50, long: 50, double: 50, triple: 100, streak5: 150, payback: 50, assist: 25, revenge: 50 };
+/** Aplica overrides de URL ao modo (antes de montar o HUD). */
+export function configureMode(params, id = params?.get?.('mode') || 'waves', mapName = '') {
+  _params = params;
+  return setMode(id, mapName);
+}
+
+export { XP };
 
 export class Match {
+  static serial = 0;
   constructor(ctx, hooks) {
     this.ctx = ctx;
     this.hooks = hooks; // { feed, xp, medal, hit, damage, death, respawn, end }
@@ -74,6 +77,26 @@ export class Match {
     this.spawnCd = 0;
     this.waveT = 0; // intervalo antes da próxima onda (s)
     this.waveAlive = new Set();
+    // objetivos / modos
+    this.mode = MODE.id;
+    this.objectiveXP = 0;
+    this.medalXP = 0;
+    this.lives = MODE.lives || 0; // SURVIVAL: vidas restantes (0 = ilimitado)
+    this.zone = null; // HARDPOINT: { x, y, z, radius }
+    this.zs = zoneState();
+    this.holdAcc = 0;
+    this.boss = null; // SURVIVAL: o chefe em campo
+    this.bossKilled = false;
+    this.bossSpawned = false;
+    this.endReason = '';
+  }
+
+  /** XP de objetivo (toast + soma no placar). */
+  award(label, xp, toast = true) {
+    this.objectiveXP += xp;
+    this.score += xp;
+    this.xpEarned += xp;
+    if (toast) this.hooks.xp?.([[label, xp]], xp);
   }
 
   nameOf(enemy) {
@@ -159,7 +182,18 @@ export class Match {
     }
     if (!medal && head) medal = ['head', 'HEADSHOT'];
     if (!medal && dist > 32) medal = ['long', 'LONGSHOT'];
-    if (medal) this.medals[medal[1]] = { kind: medal[0], n: (this.medals[medal[1]]?.n || 0) + 1 };
+    if (enemy?.boss) {
+      // chefe abatido: bônus grande + medalha própria
+      this.bossKilled = true;
+      lines.push(['JUGGERNAUT DOWN', XP.bossKill]);
+      medal = ['streak', 'GIANT SLAYER'];
+      this.objectiveXP += XP.bossKill;
+      this.hooks.objective?.('bossDown', { enemy });
+    }
+    if (medal) {
+      this.medals[medal[1]] = { kind: medal[0], n: (this.medals[medal[1]]?.n || 0) + 1 };
+      this.medalXP += 50;
+    }
     const total = lines.reduce((a, l) => a + l[1], 0);
     this.score += total;
     this.xpEarned += total;
@@ -185,11 +219,21 @@ export class Match {
     this.phase = 'dead';
     this.deadT = 0;
     this.hooks.death(name);
+    // SURVIVAL: cada morte gasta uma vida; sem vidas, fim
+    if (MODE.lives) {
+      this.lives = Math.max(0, this.lives - 1);
+      if (this.lives <= 0) {
+        this.endReason = 'NO LIVES LEFT';
+        this.finish(false);
+      }
+    }
   }
 
   start() {
     this.reset();
     this.phase = 'play';
+    // identidade desta partida (o perfil registra cada uma uma única vez)
+    this.startedAt = ++Match.serial;
     const en = this.ctx.services.enemies;
     if (en) {
       // a partida conduz a população: some com quem estava na rua
@@ -197,19 +241,66 @@ export class Match {
       en.clear?.();
     }
     this.waveT = 2.5; // respiro antes da 1ª onda
+    if (MODE.id === 'hardpoint') {
+      this.zone = this.resolveZone();
+      en?.setObjective?.(this.zone);
+    } else en?.setObjective?.(null);
+    if (MODE.id === 'survival') en?.prepareBoss?.();
+  }
+
+  /**
+   * Zona do HARDPOINT: do mapa (`world.hardpoints`/`world.zones`, se
+   * publicar) ou calculada entre o nascimento do jogador e as entradas
+   * inimigas (modes.pickZone), deslocada até um ponto livre e andável.
+   */
+  resolveZone(near = null) {
+    const ctx = this.ctx;
+    const w = ctx.services.world;
+    const r = MODE.radius || 4.5;
+    const pub = w?.hardpoints?.[0] || w?.zones?.[0];
+    if (pub && !near) {
+      const p = pub.position || [pub.x, pub.y, pub.z];
+      return { x: p[0], y: p[1] || 0, z: p[2], radius: pub.radius || r };
+    }
+    const c = near || pickZone(w?.spawnPoints?.[0], w?.enemySpawns || [], w?.bounds || null, 0.42);
+    const nav = ctx.services.enemies?.nav;
+    const col = ctx.collision;
+    // ponto livre: chão no nível 0, sem colisor na cápsula e andável
+    // pela grade dos inimigos (quando existe), preferindo ter área aberta
+    let best = null, bs = Infinity;
+    for (const q of spiral(c.x, c.z, 1.5, 8)) {
+      const gy = col?.groundHeight?.(q.x, q.z, 2.4, 4);
+      if (gy == null || Math.abs(gy - (c.y || 0)) > 0.5) continue;
+      if (col.overlapSphere({ x: q.x, y: gy + 1, z: q.z }, 0.6, (o) => o.blocksPlayer !== false && !o.trigger && !o.dynamic).length) continue;
+      let open = 0;
+      if (nav) {
+        const i = nav.cellOf(q.x, q.z);
+        if (i < 0 || !nav.walk[i]) continue;
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * Math.PI * 2, j = nav.cellOf(q.x + Math.cos(a) * r * 0.8, q.z + Math.sin(a) * r * 0.8);
+          if (j >= 0 && nav.walk[j]) open++;
+        }
+      }
+      const sc = Math.hypot(q.x - c.x, q.z - c.z) * 0.35 + (8 - open) * 1.2;
+      if (sc < bs) { bs = sc; best = { x: q.x, y: gy, z: q.z }; }
+    }
+    const p = best || c;
+    return { x: p.x, y: p.y || 0, z: p.z, radius: r };
   }
 
   /** Começa a onda n (1-based). */
   beginWave(n) {
     this.wave = n;
-    this.toSpawn = MODE.waves[n - 1] || 0;
+    this.toSpawn = MODE.id === 'hardpoint' ? hardpointWave(MODE, n) : MODE.waves[n - 1] || 0;
     this.spawnCd = 0;
     this.waveAlive.clear();
-    this.hooks.wave?.(n, MODE.waves.length, this.toSpawn);
+    // SURVIVAL: a última onda abre com o chefe (+ escolta)
+    this.bossPending = isBossWave(MODE, n);
+    this.hooks.wave?.(n, MODE.id === 'hardpoint' ? 0 : MODE.waves.length, this.toSpawn, this.bossPending);
   }
 
   /** Um soldado da onda entra pelo fundo da rua, longe do jogador. */
-  spawnOne() {
+  spawnOne(boss = false) {
     const ctx = this.ctx;
     const en = ctx.services.enemies;
     const spawns = ctx.services.world?.enemySpawns || [];
@@ -231,13 +322,25 @@ export class Match {
         break;
       }
     }
-    const e = en.spawn({ position: P, yaw: sp.yaw ?? Math.PI, variant: Math.floor(ctx.rng.next() * (en.variants || 4)) });
-    // a onda chega sabendo onde a linha está: entra em combate procurando
+    const e = en.spawn({ position: P, yaw: sp.yaw ?? Math.PI, variant: Math.floor(ctx.rng.next() * (en.variants || 4)), boss });
     if (e?.brain) {
-      e.brain.awareness = Math.max(e.brain.awareness || 0, 0.6);
-      e.brain.hear?.(ctx.player.position.clone?.() || pl, 0.5);
+      if (MODE.id === 'hardpoint' && e.brain.assault) {
+        // HARDPOINT: ~2/3 da onda é o grupo de assalto da zona
+        e.brain.assault({ assaulter: ctx.rng.next() < 0.68 });
+      } else if (boss && e.brain.assault) {
+        e.brain.assault({ assaulter: false });
+      } else {
+        // a onda chega sabendo onde a linha está: entra em combate procurando
+        e.brain.awareness = Math.max(e.brain.awareness || 0, 0.6);
+        e.brain.hear?.(ctx.player.position.clone?.() || pl, 0.5);
+      }
     }
     if (e) this.waveAlive.add(e);
+    if (e && boss) {
+      this.boss = e;
+      this.bossSpawned = true;
+      this.hooks.objective?.('bossIn', { enemy: e });
+    }
     return !!e;
   }
 
@@ -246,6 +349,9 @@ export class Match {
   }
 
   finish(win) {
+    if (this.phase === 'end') return;
+    if (!this.endReason) this.endReason = win ? (MODE.id === 'hardpoint' ? 'ZONE SECURED' : MODE.id === 'survival' ? 'JUGGERNAUT NEUTRALIZED' : 'HOSTILE CELL NEUTRALIZED') : 'TIME EXPIRED';
+    this.ctx.services.enemies?.setObjective?.(null);
     this.phase = 'end';
     this.win = win;
     this.hooks.end(win);
@@ -258,18 +364,23 @@ export class Match {
     if (this.phase === 'play') {
       this.playTime += dt;
       this.timeLeft = Math.max(0, this.timeLeft - dt);
-      if (this.timeLeft <= 0) this.finish(false);
+      if (this.timeLeft <= 0) {
+        this.endReason = 'TIME EXPIRED';
+        this.finish(false);
+      }
       // regeneração
       if (p.alive && p.health < p.maxHealth && ctx.time.now - this.lastDamage > 4.2) {
         p.health = Math.min(p.maxHealth, p.health + 38 * dt);
       }
       for (const e of ctx.services.enemies?.list || []) if (e.alive) this.rowOf(this.nameOf(e)).alive = true;
       this.updateWaves(dt);
+      this.updateZone(dt);
     } else if (this.phase === 'dead') {
       this.deadT += dt;
       // a onda continua chegando enquanto o jogador espera para renascer
       this.updateWaves(dt);
-      if (this.deadT > 4) this.respawn();
+      this.updateZone(dt);
+      if (this.deadT > 4 && this.phase === 'dead') this.respawn();
     }
   }
 
@@ -284,16 +395,61 @@ export class Match {
     if (!this.wave) return;
     this.spawnCd -= dt;
     if (this.toSpawn > 0 && this.waveAlive.size < MODE.maxAlive && this.spawnCd <= 0) {
-      if (this.spawnOne()) this.toSpawn--;
-      this.spawnCd = 1.1 + this.ctx.rng.next() * 1.4;
+      const boss = !!this.bossPending;
+      if (this.spawnOne(boss)) {
+        this.toSpawn--;
+        if (boss) this.bossPending = false;
+      }
+      this.spawnCd = boss ? 2.6 : 1.1 + this.ctx.rng.next() * 1.4;
     }
     if (this.toSpawn <= 0 && this.waveAlive.size === 0) {
+      this.award('WAVE CLEARED', XP.waveClear, false); // o banner da onda já anuncia
+      // HARDPOINT: ondas sem fim (a vitória vem da posse da zona)
+      if (MODE.id === 'hardpoint') {
+        this.waveT = MODE.intermission;
+        this.hooks.waveClear?.(this.wave, 0);
+        return;
+      }
       if (this.wave >= MODE.waves.length) {
         if (this.phase === 'play' || this.phase === 'dead') this.finish(true);
       } else {
         this.waveT = MODE.intermission;
         this.hooks.waveClear?.(this.wave, MODE.waves.length);
       }
+    }
+  }
+
+  /** HARDPOINT: captura/posse da zona (modes.zoneStep) e fim de partida. */
+  updateZone(dt) {
+    if (!this.zone || this.phase === 'end') return;
+    const ctx = this.ctx;
+    const p = ctx.player;
+    const z = this.zone;
+    const inside = this.phase === 'play' && p.alive && inZone(z, p.position.x, p.position.y, p.position.z);
+    let foes = 0;
+    for (const e of ctx.services.enemies?.list || []) if (e.alive && inZone(z, e.group.position.x, e.group.position.y, e.group.position.z)) foes++;
+    this.zoneIn = inside;
+    this.zoneFoes = foes;
+    const ev = zoneStep(this.zs, { inside, foes, dt }, MODE);
+    if (ev.captured) {
+      this.award('ZONE CAPTURED', XP.capture);
+      this.hooks.objective?.('captured', this.zs);
+    }
+    if (ev.lost) this.hooks.objective?.('lost', this.zs);
+    if (ev.taken) this.hooks.objective?.('taken', this.zs);
+    // posse: XP a cada HOLD_TICK s segurando
+    if (this.zs.owner === 'us' && !this.zs.contested) {
+      this.holdAcc += dt;
+      if (this.holdAcc >= HOLD_TICK) {
+        this.holdAcc -= HOLD_TICK;
+        this.award('HOLDING', XP.holdTick);
+      }
+    }
+    const res = zoneResult(this.zs, MODE);
+    if (res === 'win') this.finish(true);
+    else if (res === 'loss') {
+      this.endReason = 'ZONE OVERRUN';
+      this.finish(false);
     }
   }
 
@@ -312,6 +468,8 @@ export class Match {
     p.health = p.maxHealth;
     p.alive = true;
     this.phase = 'play';
+    // a arma reabastece no renascimento (feature weapon escuta)
+    ctx.bus.emit('player:respawn', { position: best.position });
     this.hooks.respawn();
   }
 }

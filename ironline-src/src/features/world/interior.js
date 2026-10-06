@@ -16,6 +16,7 @@
  * Ponto de vista do preset `interior`: (17.2, 0.17, -4.3) olhando para -X.
  */
 import * as THREE from 'three';
+import { woodTable, woodChair, fileCabinet } from './furniture.js';
 import { cylinder, cylBetween, cable, rebar, decal, contact } from './shapes.js';
 import { rubblePile, scatterBricks, crate, ammoCan, radiator, sandbagWall, trash, barrel } from './props.js';
 import { mat4, cached } from './geo.js';
@@ -398,22 +399,11 @@ export function buildInterior(W, tint) {
 
   // ── mobília revirada ──
   const UNIT = cached('unitbox', () => new THREE.BoxGeometry(1, 1, 1));
-  // mesa virada (barricada improvisada)
-  {
-    const M = mat4([18.6, F + 0.38, -9.4], [Math.PI / 2 - 0.05, 0.6, 0]);
-    B.add(UNIT, 'wood', M.clone().multiply(mat4([0, 0, 0], [0, 0, 0], [1.6, 0.05, 0.9])), { color: [0.55, 0.4, 0.28] });
-    for (const a of [-0.7, 0.7]) for (const b of [-0.38, 0.38]) B.add(UNIT, 'wood', M.clone().multiply(mat4([a, 0.38, b], [0, 0, 0], [0.06, 0.72, 0.06])), { color: [0.45, 0.32, 0.22] });
-    B.collider([17.8, F, -10.0], [19.4, F + 0.9, -8.8], 'wood');
-    contact(B, 18.6, F, -9.4, 1.9, 1.0, 0.6, 2);
-  }
-  // cadeiras
-  for (const [cx, cz, yaw, fallen] of [[20.5, -7.5, 0.4, false], [15.2, -11.5, 2.2, true], [21.5, -11.8, -0.8, false]]) {
-    const M = fallen ? mat4([cx, F + 0.22, cz], [Math.PI / 2, yaw, 0]) : mat4([cx, F, cz], [0, yaw, 0]);
-    B.add(UNIT, 'wood', M.clone().multiply(mat4([0, 0.45, 0], [0, 0, 0], [0.45, 0.04, 0.45])), { color: [0.5, 0.36, 0.25] });
-    B.add(UNIT, 'wood', M.clone().multiply(mat4([0, 0.75, -0.21], [0, 0, 0], [0.45, 0.6, 0.04])), { color: [0.5, 0.36, 0.25] });
-    for (const a of [-0.2, 0.2]) for (const b of [-0.2, 0.2]) B.add(UNIT, 'wood', M.clone().multiply(mat4([a, 0.22, b], [0, 0, 0], [0.04, 0.45, 0.04])), { color: [0.42, 0.3, 0.2] });
-    contact(B, cx, F, cz, 0.75, 0.75, yaw, 1);
-  }
+  // mesa virada (barricada improvisada) e cadeiras — modeladas (furniture.js)
+  woodTable(W, 18.6, F, -9.4, 0.6, { pose: 'barricade' });
+  woodChair(W, 20.5, F, -7.5, 0.4);
+  woodChair(W, 15.2, F, -11.5, 2.2, { pose: 'side' });
+  woodChair(W, 21.5, F, -11.8, -0.8, { pose: 'back' });
   // sofá contra o fundo (assento afundado, braços arredondados)
   {
     const t = [0.42, 0.28, 0.24];
@@ -441,16 +431,7 @@ export function buildInterior(W, tint) {
   B.obox([ix1 - 0.055, 2.0, -7.6], [0.01, 0.5, 0.75], [0.08, 0, 0], 'plasterIn', { color: [0.5, 0.6, 0.65] });
 
   // armário de arquivo tombado perto da porta
-  {
-    const M = mat4([13.4, F + 0.24, -6.6], [0, 0.35, Math.PI / 2 - 0.04]);
-    B.add(UNIT, 'metal', M.clone().multiply(mat4([0, 0, 0], [0, 0, 0], [0.48, 1.3, 0.6])), { color: [0.33, 0.37, 0.33], uvRand: true });
-    for (let k = 0; k < 4; k++) {
-      B.add(UNIT, 'metal', M.clone().multiply(mat4([0, -0.48 + k * 0.32, 0.31], [0, 0, 0], [0.44, 0.28, 0.02])), { color: [0.38, 0.42, 0.37], uvRand: true });
-      B.add(UNIT, 'chrome', M.clone().multiply(mat4([0, -0.42 + k * 0.32, 0.33], [0, 0, 0], [0.14, 0.03, 0.03])), { color: [0.5, 0.5, 0.5] });
-    }
-    B.collider([12.6, F, -7.4], [14.2, F + 0.5, -5.8], 'metal');
-    contact(B, 13.4, F, -6.6, 1.6, 0.85, 0.35, 2);
-  }
+  fileCabinet(W, 13.4, F, -6.6, 0.35, { pose: 'side', open: 2 });
   // placas de forro caídas, entulho
   B.obox([15.6, F + 0.12, -8.6], [1.2, 0.03, 1.2], [0.22, 0.6, 0.1], 'plasterIn', { color: [0.9, 0.88, 0.84] });
   B.obox([19.8, F + 0.03, -3.0], [0.9, 0.02, 0.7], [0, 1.1, 0], 'plasterIn', { color: [0.85, 0.83, 0.8] });

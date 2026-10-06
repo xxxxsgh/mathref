@@ -118,3 +118,137 @@ test('qualidade e presets de screenshot', () => {
   assert.equal(s.seed, 9);
   assert.equal(parseShot(new URLSearchParams('')), null);
 });
+
+// ─── plataforma: classe do aparelho, governador, joystick de toque ─────────
+import { classifyDevice, AUTO_LADDER, rungIndex, rungSettings } from '../src/core/Quality.js';
+import { Governor } from '../src/core/Governor.js';
+import { joyState } from '../src/features/touch/joy.js';
+
+/** Alimenta `secs` segundos de frames de `ms` e devolve as decisões. */
+function feed(g, ms, secs) {
+  const out = [];
+  for (let t = 0; t < secs; t += ms / 1000) {
+    const d = g.sample(ms / 1000);
+    if (d) out.push(d);
+  }
+  return out;
+}
+
+test('classe do aparelho → preset inicial e teto do automático', () => {
+  const rtx = classifyDevice({ gpu: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0)', cores: 12, memory: 8 });
+  assert.equal(rtx.preset, 'high');
+  assert.equal(rtx.ceiling, 'ultra');
+  assert.equal(rtx.targetFps, 60);
+  const uhd = classifyDevice({ gpu: 'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11)', cores: 4, memory: 8 });
+  assert.equal(uhd.preset, 'low');
+  const iris = classifyDevice({ gpu: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11)', cores: 8, memory: 16 });
+  assert.equal(iris.preset, 'medium');
+  const sw = classifyDevice({ gpu: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)))' });
+  assert.equal(sw.preset, 'low');
+  const phone = classifyDevice({ gpu: 'Adreno (TM) 740', mobile: true, cores: 8, memory: 8 });
+  assert.equal(phone.mobile, true);
+  assert.equal(phone.targetFps, 30);
+  assert.equal(phone.preset, 'medium-');
+  const oldPhone = classifyDevice({ gpu: 'Mali-G52', mobile: true, cores: 8, memory: 3 });
+  assert.equal(oldPhone.preset, 'low');
+  // celular nunca passa de medium, mesmo com GPU forte
+  assert.ok(rungIndex(classifyDevice({ gpu: 'Apple GPU', mobile: true }).ceiling) >= rungIndex('medium'));
+  // GPU mascarada: decide por CPU/memória; pouca memória derruba tudo
+  assert.equal(classifyDevice({ gpu: '', cores: 16, memory: 16 }).preset, 'high');
+  assert.equal(classifyDevice({ gpu: 'NVIDIA GeForce RTX 4090', cores: 2, memory: 2 }).preset, 'low');
+  // 4K começa um degrau abaixo
+  assert.equal(classifyDevice({ gpu: 'NVIDIA GeForce RTX 3060', cores: 8, memory: 16, width: 3840, height: 2160, dpr: 1 }).preset, 'high-');
+});
+
+test('qualidade automática: degraus, modo e preset manual', () => {
+  const dev = classifyDevice({ gpu: 'Intel Iris Xe', cores: 8, memory: 16 });
+  const q = createQuality('auto', null, dev);
+  assert.equal(q.mode, 'auto');
+  assert.equal(q.level, 'medium');
+  assert.equal(q.setting, 'auto');
+  q.set('ultra');
+  assert.equal(q.mode, 'manual');
+  assert.equal(q.setting, 'ultra');
+  q.set('auto');
+  assert.equal(q.mode, 'auto');
+  assert.equal(q.level, 'medium');
+  // os degraus vão do mais caro ao mais barato e `level` é sempre um preset
+  for (let i = 0; i < AUTO_LADDER.length; i++) assert.ok(QUALITY_PRESETS[rungSettings(i).level]);
+  assert.equal(rungSettings(rungIndex('high-')).volumetrics, false);
+  assert.equal(rungSettings(rungIndex('medium-')).ssao, false);
+  assert.equal(rungSettings(rungIndex('medium-')).contactAO, true);
+});
+
+test('governador: resolução dinâmica desce rápido e sobe devagar', () => {
+  const g = new Governor({ targetFps: 60, minScale: 0.6, auto: false });
+  // 25 ms (40 fps): a escala cai em poucas janelas até o piso, nunca abaixo
+  const down = feed(g, 25, 8);
+  assert.ok(down.length >= 2);
+  assert.ok(g.scale < 0.75);
+  assert.ok(g.scale >= 0.6 - 1e-9);
+  // sem auto, nunca troca de degrau
+  assert.ok(down.every((d) => d.rung == null));
+  // 8 ms (folga numa tela de 120 Hz): sobe de volta até 1, sem passar
+  feed(g, 8, 60);
+  assert.equal(g.scale, 1);
+  // dentro da faixa de histerese (16,7–18,6 ms): não mexe
+  const s0 = g.scale;
+  assert.equal(feed(g, 18, 10).length, 0);
+  assert.equal(g.scale, s0);
+});
+
+test('governador: degrau só desce com a resolução no chão e respeita a carência', () => {
+  const g = new Governor({ targetFps: 60, minScale: 0.6, rung: 1, ceiling: 0, floor: 6, grace: 3 });
+  const ds = feed(g, 40, 30);
+  const rungs = ds.filter((d) => d.rung != null);
+  assert.ok(rungs.length >= 1, 'desceu de degrau');
+  // a primeira descida de degrau acontece depois da escala chegar ao piso
+  const firstRung = ds.findIndex((d) => d.rung != null);
+  assert.ok(ds.slice(0, firstRung).some((d) => d.scale <= 0.6 + 1e-9));
+  // carência: entre duas descidas de degrau passam ≥ grace + downHold janelas
+  assert.ok(g.rung > 1 && g.rung <= 6);
+  // nunca passa do chão
+  feed(g, 80, 120);
+  assert.equal(g.rung, 6);
+});
+
+test('governador: sobe degrau preso no vsync e recua se a subida falhar', () => {
+  const g = new Governor({ targetFps: 60, minScale: 0.6, rung: 3, ceiling: 0, floor: 6, upHold: 4, grace: 1, backoffBase: 30 });
+  // 16,7 ms estáveis numa tela de 60 Hz = folga → sobe um degrau
+  let ds = feed(g, 1000 / 60, 12);
+  assert.ok(ds.some((d) => d.rung === 2), 'subiu');
+  // o degrau novo estoura logo → desce e bloqueia novas subidas por um tempo
+  ds = feed(g, 30, 12);
+  assert.ok(ds.some((d) => d.rung === 3), 'desceu de novo');
+  assert.ok(g.blockedUntil > g.clock, 'subidas bloqueadas (recuo)');
+  const blocked = g.blockedUntil;
+  ds = feed(g, 1000 / 60, 10);
+  assert.ok(!ds.some((d) => d.rung != null && d.rung < 3), 'não sobe durante o recuo');
+  assert.ok(blocked - g.clock > 0 || g.rung <= 3);
+  // picos isolados (> 250 ms: aba voltou, GC) não contam
+  const g2 = new Governor({ targetFps: 60 });
+  for (let i = 0; i < 20; i++) assert.equal(g2.sample(0.5), null);
+  assert.equal(g2.scale, 1);
+});
+
+test('joystick de toque: zona morta, teclas digitais e sprint', () => {
+  assert.equal(joyState(0.05, -0.05).forward, false);
+  assert.equal(joyState(0.05, -0.05).x, 0);
+  const fwd = joyState(0, -0.6);
+  assert.ok(fwd.forward && !fwd.back && !fwd.sprint);
+  assert.ok(fwd.y > 0.4 && fwd.y < 0.6);
+  const full = joyState(0.05, -1);
+  assert.ok(full.sprint && full.forward);
+  assert.ok(full.mag <= 1);
+  // empurrar até o fim de lado não corre
+  const side = joyState(1, 0);
+  assert.ok(side.right && !side.sprint && !side.forward);
+  const diag = joyState(-0.7, 0.7);
+  assert.ok(diag.left && diag.back);
+});
+
+// testes da feature weapon (loadout, granada) — arquivo próprio da feature
+import '../src/features/weapon/weapon.test.mjs';
+
+// testes da feature hud (progressão, modos, captura do hardpoint) — arquivo próprio da feature
+import '../src/features/hud/hud.test.mjs';

@@ -19,7 +19,11 @@
 import { CSS } from './style.js';
 import { PlayHud } from './play.js';
 import { Screens } from './menus.js';
-import { Match, MODE, configureMode } from './match.js';
+import { Match, MODE, configureMode, setMode } from './match.js';
+import { MODES, fill } from './modes.js';
+import { unlockTable, newUnlocks, sanitizeLoadout, levelOf as lvOf, XP as PXP } from './progression.js';
+import { ObjectiveHud, OBJ_CSS } from './objective.js';
+import { applyCamo } from './camo.js';
 import * as Settings from './settings.js';
 import { Gunsmith, gunSilhouette } from './gunsmith.js';
 import { Hero } from './hero.js';
@@ -34,16 +38,40 @@ const PHOTO_POSES = {
   card: { position: [-2.5, 0, 8], yaw: -0.5, pitch: 0.2, fov: 42 },
   bp: { position: [1.5, 0, -30], yaw: Math.PI - 0.12, pitch: 0.04, fov: 36 },
 };
+/**
+ * Poses das fotos no mapa atual: as afinadas acima são da rua; outros
+ * mapas usam `world.photoPoses` (se publicar) ou as poses de screenshot do
+ * próprio mapa (`world.shotPoses`), com a lente de cada cartão.
+ */
+function photoPoses(world) {
+  if (!world || (world.mapId ?? 'street') === 'street') return PHOTO_POSES;
+  if (world.photoPoses) return world.photoPoses;
+  const sp = world.shotPoses || {};
+  const from = (k, fov) => (sp[k] ? { position: [...sp[k].position], yaw: sp[k].yaw || 0, pitch: sp[k].pitch || 0, fov } : null);
+  const out = { event: from('street', 30), card: from('interior', 42), bp: from('viewmodel', 36) };
+  for (const k of Object.keys(out)) if (!out[k]) delete out[k];
+  return out;
+}
+
+/** Descrições em inglês (a UI é em inglês) por id de mapa; reserva = a do mundo. */
+export const MAP_BLURB = {
+  street: 'Ruined avenue in an old urban district — shattered facades, a crossroads, an alley, a checkpoint and the playable ground floor of block R4.',
+  factory: 'Abandoned foundry — machine hall with an overhead crane, catwalks, two-story offices with blown-out glazing and a loading yard with dock, trailer and containers.',
+};
 
 export default {
   name: 'hud',
   order: 90,
 
   init(ctx) {
-    configureMode(ctx.params);
+    const world = ctx.services.world;
+    this.mapName = world?.map?.name || 'MERIDIAN STREET';
+    this.mapBlurb = MAP_BLURB;
+    const savedMode = ctx.shot ? null : Settings.loadProfile().mode;
+    configureMode(ctx.params, ctx.params.get('mode') || savedMode || 'waves', this.mapName);
     const root = document.createElement('div');
     root.id = 'hud';
-    root.innerHTML = `<style>${CSS}</style><div class="fx"></div><div class="stage"></div>`;
+    root.innerHTML = `<style>${CSS}${OBJ_CSS}</style><div class="fx"></div><div class="stage"></div>`;
     ctx.ui.appendChild(root);
     this.root = root;
     if (ctx.shot) root.classList.add('shot');
@@ -56,18 +84,33 @@ export default {
       this.settings = { ...Settings.DEFAULTS };
       this.profile = JSON.parse(JSON.stringify(Settings.PROFILE_DEFAULTS));
       this.profile.kills = 412; this.profile.headshots = 97; this.profile.matches = 38; this.profile.wins = 21;
+      // nível de demonstração: parte dos desbloqueios aberta, parte trancada
+      this.profile.xp = Number(ctx.params.get('pxp')) || 26000;
+      this.profile.mode = MODE.id;
+      this.profile.loadout = { primary: 0, optic: 1, muzzle: 1, grip: 1, lethal: 0, tactical: 1 };
+      this.profile.camo = ctx.params.get('camo') || 'none';
     }
+    // escolhas que o nível não permite voltam ao padrão (perfil antigo/editado)
+    {
+      const fix = sanitizeLoadout(this.profile.loadout, this.profile.camo, lvOf(this.profile.xp).level);
+      this.profile.loadout = { ...this.profile.loadout, ...fix.loadout };
+      this.profile.camo = fix.camo;
+    }
+    this.profile.mode = MODE.id;
     this.play = new PlayHud(ctx, this.stage, root.querySelector('.fx'));
     const gun = ctx.services.weapon?.gun;
     this.gunIcon = gun ? gunSilhouette(ctx.THREE, gun, { h: 140 }) : null;
     this.play.setGunIcon(this.gunIcon);
     this.play.setProfile(this.profile, Settings.levelOf(this.profile.xp).level);
+    this.obj = new ObjectiveHud(ctx, this.play.root);
+    // camuflagem salva na arma (materiais publicados pela feature weapon)
+    this.setCamo(this.profile.camo, false);
     this.screens = new Screens(this, this.stage);
     // fotos do mundo para os cartões (só onde há telas de frontend)
     this.photos = new Photos(ctx);
     this.photos.onReady((key) => this.screens.photoReady(key));
     if (!ctx.shot || ctx.shot.preset?.menu || ctx.params.get('ui')) {
-      for (const [k, pose] of Object.entries(PHOTO_POSES)) this.photos.want(k, pose);
+      for (const [k, pose] of Object.entries(photoPoses(world))) this.photos.want(k, pose);
     }
     this.match = new Match(ctx, {
       feed: (e) => this.play.feed(e, this.profile.callsign),
@@ -79,14 +122,16 @@ export default {
       death: (killer) => this.onDeath(killer),
       respawn: () => this.onRespawn(),
       end: (win) => this.onEnd(win),
-      wave: (n, of, count) => {
-        this.play.banner(`WAVE ${n}`, `${count} HOSTILES INBOUND  ·  ${n} / ${of}`);
-        ctx.bus.emit('match:wave', { wave: n, of, count });
+      wave: (n, of, count, boss) => {
+        if (boss) this.play.banner('FINAL WAVE', `JUGGERNAUT INBOUND  ·  ${count - 1} ESCORTS  ·  AIM FOR THE VISOR`);
+        else this.play.banner(`WAVE ${n}`, of ? `${count} HOSTILES INBOUND  ·  ${n} / ${of}` : `${count} HOSTILES CONVERGING ON THE ZONE`);
+        ctx.bus.emit('match:wave', { wave: n, of, count, boss: !!boss, mode: MODE.id });
       },
       waveClear: (n, of) => {
-        this.play.banner(`WAVE ${n} CLEARED`, `NEXT WAVE IN ${MODE.intermission} S  ·  RELOAD AND REPOSITION`);
-        ctx.bus.emit('match:waveClear', { wave: n, of });
+        this.play.banner(`WAVE ${n} CLEARED`, `+${PXP.waveClear} XP  ·  NEXT WAVE IN ${MODE.intermission} S  ·  RELOAD AND REPOSITION`);
+        ctx.bus.emit('match:waveClear', { wave: n, of, mode: MODE.id });
       },
+      objective: (kind, data) => this.onObjective(kind, data),
     });
     this.showHud = true;
     this.inMatch = false;
@@ -188,6 +233,9 @@ export default {
     if (name !== 'main' && this.hero) { this.hero.dispose(); this.hero = null; }
     if (name === 'main') {
       const host = el.querySelector('.hero-host');
+      // re-render do menu (troca de modo): o operador continua, só a
+      // máscara de profundidade de campo é nova
+      if (this.hero) this.hero.dof = el.querySelector('.dof') || this.hero.dof;
       if (host && !this.hero) {
         try {
           this.hero = new Hero(this.ctx, host);
@@ -217,6 +265,8 @@ export default {
     const ctx = this.ctx;
     this.inMatch = false;
     this.match.reset();
+    this.obj?.setZone(null);
+    ctx.services.enemies?.setObjective?.(null);
     this.screens.show('main');
     ctx.input.enabled = false;
     ctx.input.wantsLock = false;
@@ -236,8 +286,12 @@ export default {
         if (sp) ctx.player.setPose(sp);
         ctx.player.health = ctx.player.maxHealth;
         ctx.player.alive = true;
-        this.play.banner(MODE.name, `HOLD THE STREET  ·  ${MODE.waves.length} WAVES  ·  ${MODE.map}`);
+        this.obj.setZone(this.match.zone);
+        const sub = MODE.id === 'hardpoint' ? `CAPTURE AND HOLD THE ZONE FOR ${MODE.holdGoal} S` : MODE.id === 'survival' ? `${MODE.waves.length} WAVES  ·  ${MODE.lives} LIVES  ·  BOSS ON THE FINAL WAVE` : `HOLD THE LINE  ·  ${MODE.waves.length} WAVES`;
+        this.play.banner(MODE.name, `${sub}  ·  ${MODE.map}`);
         ctx.bus.emit('match:start', { mode: MODE });
+        // equipamento trancado pelo nível (gancho da weapon, se existir)
+        this.applyEquipmentLocks();
       }
       this.resume();
     } else if (a === 'resume') this.resume();
@@ -270,6 +324,7 @@ export default {
   },
   onRespawn() {
     this.play.death(false);
+    this.applyEquipmentLocks();
   },
   onEnd(win) {
     const ctx = this.ctx;
@@ -282,18 +337,72 @@ export default {
     this.play.death(false);
     this.screens.show('end');
   },
+  /**
+   * Fim (ou abandono) de partida: soma XP/estatísticas no perfil, calcula
+   * nível antes/depois e os desbloqueios novos (`this.lastProgress`, lido
+   * pelo relatório e pelo toast de subida de nível).
+   */
   recordProfile(win) {
     const m = this.match;
-    if (this._recorded === m || !m.playTime) return;
-    this._recorded = m;
+    if (this._recorded === m.startedAt || !m.playTime) return;
+    this._recorded = m.startedAt;
     const P = this.profile;
-    P.xp += m.xpEarned + (win ? 1500 : 300);
-    m.xpEarned += win ? 1500 : 300;
+    const before = lvOf(P.xp).level;
+    const bonus = win ? PXP.win : PXP.loss;
+    P.xp += m.xpEarned + bonus;
+    m.xpEarned += bonus;
     P.kills += m.kills;
     P.headshots += m.headshots;
     P.matches++;
     if (win) P.wins++;
+    if (m.bossKilled) P.bosses = (P.bosses || 0) + 1;
+    if (m.zs?.captured) P.captures = (P.captures || 0) + m.zs.captured;
+    const after = lvOf(P.xp).level;
+    this.lastProgress = { before, after, bonus, unlocks: newUnlocks(this.unlocks(), before, after) };
+    if (after > before) this.play.setProfile(P, after);
     this.saveProfile();
+  },
+  /** Tabela de desbloqueios com as armas publicadas pela weapon. */
+  unlocks() {
+    return unlockTable(this.ctx.services.weapon?.weapons || [], this.screens?.attNames?.() || {});
+  },
+  /** Camuflagem da primária (perfil + materiais da weapon). */
+  setCamo(id, save = true) {
+    this.profile.camo = id;
+    this.camoMode = applyCamo(this.ctx.THREE, this.ctx.services.weapon, id);
+    if (save) this.saveProfile();
+  },
+  /**
+   * Atordoante trancada até o nível dela: precisa de `weapon.setTacticals(n)`
+   * (gancho pedido à feature weapon — ver README). Sem o gancho, só a UI
+   * mostra o cadeado.
+   */
+  applyEquipmentLocks() {
+    const w = this.ctx.services.weapon;
+    const lv = lvOf(this.profile.xp).level;
+    const flash = this.unlocks().find((u) => u.key === 'equipment:flash');
+    if (flash && flash.level > lv) w?.setTacticals?.(0);
+  },
+  /** Troca o modo no menu (persistido no perfil — sobrevive à troca de mapa). */
+  selectMode(id) {
+    if (this.inMatch || !MODES[id]) return;
+    setMode(id, this.mapName);
+    this.profile.mode = id;
+    this.saveProfile();
+    this.match.reset();
+  },
+  /** Eventos de objetivo da partida → banners. */
+  onObjective(kind, data) {
+    const P = this.play;
+    if (kind === 'captured') P.banner('ZONE CAPTURED', `+${PXP.capture} XP  ·  HOLD IT FOR ${MODE.holdGoal} S`);
+    else if (kind === 'lost') P.banner('ZONE LOST', 'GET BACK INTO THE ZONE');
+    else if (kind === 'taken') P.banner('ZONE OVERRUN', 'HOSTILES HAVE TAKEN THE ZONE');
+    else if (kind === 'bossIn') {
+      // entrada do chefe: estrondo grave distante (áudio público) + evento
+      this.ctx.services.audio?.play?.('explosion_far', { volume: 0.9, rate: 0.55, reverb: 0.5 });
+      this.ctx.bus.emit('match:boss', { enemy: data?.enemy });
+    }
+    else if (kind === 'bossDown') P.banner('JUGGERNAUT DOWN', `+${PXP.bossKill} XP  ·  FINISH THE ESCORT`);
   },
   saveProfile() {
     if (!this.ctx.shot) Settings.saveProfile(this.profile);
@@ -361,6 +470,44 @@ export default {
       m.medals = { HEADSHOT: { kind: 'head', n: 11 }, 'DOUBLE KILL': { kind: 'double', n: 3 }, 'TRIPLE KILL': { kind: 'triple', n: 1 }, LONGSHOT: { kind: 'long', n: 2 }, BLOODTHIRSTY: { kind: 'streak', n: 1 } };
       const fin = [[2, 7], [1, 6], [2, 6], [0, 5], [1, 6]];
       names.forEach((n, i) => m.hostile.set(n, { name: n, kills: fin[i][0], deaths: fin[i][1], score: fin[i][0] * 100 + fin[i][1] * 25 + 150, alive: true }));
+    }
+    // modos: estado de objetivo para a captura
+    if (MODE.id === 'hardpoint') {
+      const pose = this.ctx.shotPose(preset?.name || 'combat');
+      let near = null;
+      if (pose && preset?.hud) {
+        // zona à frente da câmera (a captura precisa mostrar o anel)
+        const f = 8.5, y = pose.yaw || 0;
+        near = { x: pose.position[0] - Math.sin(y) * f, y: pose.position[1] || 0, z: pose.position[2] - Math.cos(y) * f };
+      }
+      m.zone = m.resolveZone(near);
+      this.obj.setZone(m.zone);
+      Object.assign(m.zs, { cap: 0.64, owner: null, hold: 37, status: 'capturing', contested: false, captured: 1 });
+      m.zoneIn = false;
+      m.zoneFoes = 0;
+      m.wave = 4;
+      m.objectiveXP = 525;
+    } else if (MODE.id === 'survival') {
+      m.wave = MODE.waves.length;
+      m.lives = Math.max(1, (MODE.lives || 3) - 1);
+      m.boss = this.ctx.services.enemies?.list?.find((e) => e.boss) || null;
+      m.bossSpawned = !!m.boss;
+    }
+    if (this.ctx.params.get('ui') === 'end') {
+      if (MODE.id === 'hardpoint') { m.zs.hold = MODE.holdGoal; m.zs.owner = 'us'; m.zs.captured = 3; m.objectiveXP = 1300; }
+      if (MODE.id === 'survival') { m.bossKilled = true; m.objectiveXP = 1000 + 150 * MODE.waves.length; }
+      m.endReason = MODE.id === 'hardpoint' ? 'ZONE SECURED' : MODE.id === 'survival' ? 'JUGGERNAUT NEUTRALIZED' : 'HOSTILE CELL NEUTRALIZED';
+      // subida de nível de demonstração (relatório + toast)
+      const lv = lvOf(this.profile.xp).level;
+      if (this.ctx.params.get('lvup') !== '0') this.lastProgress = { before: lv - 1, after: lv, bonus: PXP.win, unlocks: newUnlocks(this.unlocks(), lv - 1, lv) };
+    }
+    // captura do chefe: sem hitmarker/toast no centro (o juggernaut é o assunto)
+    if (preset?.combat && this.ctx.params.get('boss') === '1') {
+      const cs = this.profile.callsign;
+      this.play.feed({ killer: 'self', victim: 'NOMAD', head: false, weapon: 'frag' }, cs);
+      this.play.feed({ killer: 'JUGGERNAUT', victim: 'self', head: false, weapon: 'hostile' }, cs);
+      [...this.play.el.feed.children].forEach((r, i) => { r.style.animation = 'none'; r._t = [0.9, 3.6][i] ?? 5; });
+      return;
     }
     if (preset?.combat) {
       const cs = this.profile.callsign;
@@ -432,7 +579,10 @@ export default {
       this._cc = cc;
       this.root.style.setProperty('--cross', cc);
     }
-    if (showPlay) this.play.frame(dt, ctx, this.match, st);
+    if (showPlay) {
+      this.play.frame(dt, ctx, this.match, st);
+      this.obj.frame(rdt, this.match, MODE, this.stage.offsetWidth || 1920, this.stage.offsetHeight || 1080);
+    } else if (this.obj.ring) this.obj.ring.update(this.match.zs, ctx.time.now);
     if (this.gs) this.gs.render(rdt);
     if (this.hero) this.hero.render(rdt);
     if (this.match.phase === 'dead') {
@@ -447,6 +597,7 @@ export default {
     removeEventListener('keydown', this._key, true);
     removeEventListener('keyup', this._keyUp, true);
     removeEventListener('resize', this._rs);
+    this.obj?.dispose();
     this.root.remove();
   },
 };

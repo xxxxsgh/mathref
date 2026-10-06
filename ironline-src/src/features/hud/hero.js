@@ -32,7 +32,8 @@ export class Hero {
     const rx = Math.cos(yaw), rz = -Math.sin(yaw); // direita
     const cx = pose.position[0], cz = pose.position[2];
     let x = cx + fx * dist + rx * side, z = cz + fz * dist + rz * side;
-    const gy = ctx.collision?.groundHeight?.(x, z, 3) ?? pose.position[1] ?? 0;
+    // chão a partir da altura da câmera (o menu da FOUNDRY 9 fica numa passarela)
+    const gy = ctx.collision?.groundHeight?.(x, z, (pose.position[1] || 0) + 3) ?? pose.position[1] ?? 0;
     const y = Number.isFinite(gy) ? gy : 0;
 
     const e = en.spawn({ position: [x, y, z], yaw: 0, variant: 2 });

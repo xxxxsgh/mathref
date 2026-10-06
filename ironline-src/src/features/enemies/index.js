@@ -21,13 +21,14 @@
  */
 import * as THREE from 'three';
 import { createSkeleton, B, rayCapsule } from './rig.js';
-import { buildSoldierGeometry, VARIANTS, RIFLE } from './soldier.js';
+import { buildSoldierGeometry, VARIANTS, RIFLE, REGULAR_VARIANTS, BOSS_VARIANT } from './soldier.js';
 import { createSoldierMaterial, updateSoldierLighting, CAMO } from './material.js';
 import { ContactShadows } from './contact.js';
 import { Animator } from './anim.js';
 import { Ragdoll } from './ragdoll.js';
 import { NavGrid } from './nav.js';
-import { Brain, Squad } from './brain.js';
+import { Brain, Squad, BOSS } from './brain.js';
+import { stagingSlots } from './staging.js';
 
 const _v = new THREE.Vector3();
 const _w = new THREE.Vector3();
@@ -50,6 +51,36 @@ const HITBOXES = [
   ['shin.R', 'foot.R', 0.066, 'leg'],
 ].map(([a, b, r, part, off]) => ({ a: B[a], b: b ? B[b] : -1, r, part, off }));
 const PART_MULT = { head: 1, neck: 1.25, torso: 1, arm: 0.8, leg: 0.75 };
+/**
+ * Chefe (juggernaut): blindagem pesada no tronco/membros; a viseira é o
+ * ponto fraco. Explosões e faca perdem parte do efeito.
+ */
+const BOSS_MULT = { head: 1, neck: 0.8, torso: 0.55, arm: 0.45, leg: 0.5 };
+
+/**
+ * Região da grade de navegação, só a partir do serviço `world`:
+ * `world.navBounds` (se o mapa publicar) ou `world.bounds` recortado à
+ * área onde a ação acontece (pontos de nascimento do jogador e de entrada
+ * inimiga + 50 m) — mapas longos (a avenida tem 210 m) não pagam a grade
+ * inteira. Sem mundo: área padrão de 48 × 166 m.
+ */
+export function navRegion(world, pad = 50) {
+  const b = world?.navBounds || world?.bounds;
+  if (!b) return new THREE.Box3(new THREE.Vector3(-24, -1, -110), new THREE.Vector3(24, 10, 56));
+  const r = new THREE.Box3(new THREE.Vector3(b.min.x, -1, b.min.z), new THREE.Vector3(b.max.x, 10, b.max.z));
+  if (world.navBounds) return r;
+  const pts = [...(world.spawnPoints || []), ...(world.enemySpawns || [])].map((s) => s.position);
+  if (pts.length) {
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const p of pts) {
+      x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]);
+      z0 = Math.min(z0, p[2]); z1 = Math.max(z1, p[2]);
+    }
+    r.min.x = Math.max(r.min.x, x0 - pad); r.max.x = Math.min(r.max.x, x1 + pad);
+    r.min.z = Math.max(r.min.z, z0 - pad); r.max.z = Math.min(r.max.z, z1 + pad);
+  }
+  return r;
+}
 
 let nextId = 1;
 
@@ -58,12 +89,15 @@ class Enemy {
     this.feature = feature;
     this.ctx = ctx;
     this.id = nextId++;
-    const variant = pose.variant ?? this.id % VARIANTS.length;
+    const boss = !!pose.boss || !!VARIANTS[pose.variant]?.boss;
+    const variant = boss ? BOSS_VARIANT : pose.variant ?? this.id % REGULAR_VARIANTS;
     this.variant = variant;
+    this.boss = boss;
+    feature.ensureVariant(variant);
     const group = new THREE.Group();
     group.name = 'enemy-' + this.id;
     const { bones, skeleton, roots } = createSkeleton();
-    const mesh = new THREE.SkinnedMesh(geos[variant], mats[variant % mats.length]);
+    const mesh = new THREE.SkinnedMesh(geos[variant], mats[variant]);
     for (const r of roots) mesh.add(r);
     mesh.bind(skeleton, new THREE.Matrix4());
     mesh.castShadow = true;
@@ -77,7 +111,8 @@ class Enemy {
     this.bones = bones;
     this.anim = new Animator(bones, this.id * 0.71);
     this.home = pose;
-    this.health = 100;
+    this.maxHealth = boss ? BOSS.health : 100;
+    this.health = this.maxHealth;
     this.alive = true;
     this.velocity = new THREE.Vector3();
     this.speed = 0;
@@ -175,7 +210,8 @@ class Enemy {
   damage(amount, info = {}) {
     const ctx = this.ctx;
     const part = info.part || 'torso';
-    const dmg = amount * (PART_MULT[part] ?? 1);
+    let dmg = amount * ((this.boss ? BOSS_MULT : PART_MULT)[part] ?? 1);
+    if (this.boss && (info.explosion || info.melee)) dmg *= 0.7;
     const dir = info.dir ? info.dir.clone().normalize() : new THREE.Vector3(0, 0, -1);
     if (!this.alive) {
       // corpo: só um tranco local (bala de fuzil não "arrasta" um corpo de
@@ -188,7 +224,8 @@ class Enemy {
     // `silent`: encenação de screenshot (corpo já caído) — sem eventos de HUD/áudio
     if (!info.silent) ctx.bus.emit('enemy:damage', { enemy: this, amount: dmg, info });
     const local = dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -this.yaw);
-    this.anim.hit(local, part, Math.min(1.5, dmg / 30));
+    // o chefe quase não cambaleia
+    this.anim.hit(local, part, Math.min(this.boss ? 0.35 : 1.5, dmg / (this.boss ? 90 : 30)));
     this.brain.onHit(dmg);
     if (this.health <= 0) this.die(info, dir);
   }
@@ -285,7 +322,11 @@ class Enemy {
     const ph = this.anim.phase;
     if (this.speed > 0.6 && !this.scripted) {
       const prev = this._ph ?? ph;
-      if ((prev < 0.5 && ph >= 0.5) || ph < prev) this.ctx.bus.emit('enemy:footstep', { enemy: this, position: this.group.position.clone(), speed: this.speed });
+      if ((prev < 0.5 && ph >= 0.5) || ph < prev) {
+        this.ctx.bus.emit('enemy:footstep', { enemy: this, position: this.group.position.clone(), speed: this.speed, heavy: this.boss });
+        // passo pesado do chefe: baque grave da blindagem (áudio público)
+        if (this.boss && !this.ctx.shot) this.ctx.services.audio?.play?.('land_concrete', { position: this.group.position.clone(), rate: 0.62, volume: 0.9, cap: 2, jitter: 0.05 });
+      }
     }
     this._ph = ph;
   }
@@ -324,21 +365,18 @@ export default {
     const t0 = performance.now();
     this.ctx = ctx;
     this.list = [];
-    this.geos = VARIANTS.map((v) => buildSoldierGeometry(v));
+    // variantes comuns na inicialização; a do chefe só quando for usada
+    this.geos = VARIANTS.map((v) => (v.boss ? null : buildSoldierGeometry(v)));
     const tGeo = performance.now() - t0;
-    this.mats = VARIANTS.map((v) => createSoldierMaterial({ camo: CAMO[v.camo] || CAMO.woodland }));
+    this.mats = VARIANTS.map((v) => (v.boss ? null : createSoldierMaterial({ camo: CAMO[v.camo] || CAMO.woodland })));
+    // chefe no preset de combate (captura do modo sobrevivência)
+    if (ctx.shot?.preset?.combat && ctx.params.get('boss') === '1') this.ensureVariant(BOSS_VARIANT);
     this.squad = new Squad(ctx);
     this.contact = new ContactShadows(ctx.scene);
 
     // grade de navegação na região jogável
     const world = ctx.services.world;
-    const region = new THREE.Box3(new THREE.Vector3(-24, -1, -110), new THREE.Vector3(24, 10, 56));
-    if (world?.bounds) {
-      region.min.x = Math.max(region.min.x, world.bounds.min.x);
-      region.max.x = Math.min(region.max.x, world.bounds.max.x);
-      region.min.z = Math.max(region.min.z, world.bounds.min.z);
-      region.max.z = Math.min(region.max.z, world.bounds.max.z);
-    }
+    const region = navRegion(world);
     this.nav = null;
     if (!ctx.shot) {
       try {
@@ -409,8 +447,34 @@ export default {
       squad: this.squad,
       stats: () => this.stats,
       hitboxes: HITBOXES,
-      variants: VARIANTS.length,
+      /** nº de variantes do sorteio comum (o chefe é pedido com `spawn({ boss: true })`). */
+      variants: REGULAR_VARIANTS,
+      bossVariant: BOSS_VARIANT,
+      boss: BOSS,
+      /** Chefes vivos. */
+      bosses: () => this.list.filter((e) => e.alive && e.boss),
+      /** Gera a geometria do chefe antes da hora (evita engasgo ao entrar). */
+      prepareBoss: () => this.ensureVariant(BOSS_VARIANT),
+      /**
+       * Objetivo do esquadrão (modo HARDPOINT): `{ x, y, z, radius }` ou null.
+       * Com objetivo, os soldados de assalto (e quem não vê o jogador) vão
+       * para a zona e lutam de dentro dela.
+       */
+      setObjective: (o) => (this.squad.objective = o ? { x: o.x, y: o.y ?? 0, z: o.z, radius: o.radius ?? 4.5 } : null),
+      get objective() { return self.squad.objective; },
+      /** Manda um soldado para o objetivo/jogador já em combate (ondas). */
+      assault: (e, opts) => e?.brain?.assault?.(opts),
     });
+  },
+
+  /** Gera geometria/material de uma variante sob demanda (o chefe). */
+  ensureVariant(i) {
+    if (!this.geos[i]) {
+      const t0 = performance.now();
+      this.geos[i] = buildSoldierGeometry(VARIANTS[i]);
+      if (this.stats) this.stats.bossGeoMs = Math.round(performance.now() - t0);
+    }
+    if (!this.mats[i]) this.mats[i] = createSoldierMaterial({ camo: CAMO[VARIANTS[i].camo] || CAMO.woodland });
   },
 
   /**
@@ -431,29 +495,26 @@ export default {
       e.brain.canSee = true;
       return e;
     };
-    const P = preset.enemy?.position || [1.5, 0, 4];
-    // quina da van (x≈3.8..5.7, z≈3.6..8.4): espiada pela direita
-    // (o clarão "preso" do modo combat fica no ÚLTIMO a atirar: o da jersey,
-    // mais longe — o da van mira sem atirar e continua legível)
-    const main = mk([P[0] + 2.6, 0, P[2] - 1.0], 0, { aim: 1, lean: -0.9, crouch: 0.38 });
-    // atrás da jersey central, atirando por cima
-    mk([-0.9, 0, -3.75], 1, { fire: true, aim: 1, crouch: 0.45, interval: 0.21 });
-    // flanqueando pela calçada esquerda, corrida agachada
-    mk([-4.4, 0, 3.6], 3, { speed: 4.5, dir: [0.22, 0, 0.97], aim: 0.25, crouch: 0.2, face: false }, 0.22);
-    // escondido atrás da jersey do fundo (recarregando)
-    const hid = mk([3.35, 0, -7.25], 2, { aim: 0.4, crouch: 1 });
-    hid.anim.p.reload = 0.4;
-    // corpo na pista
-    const dead = mk([1.7, 0, 9.4], 1, { aim: 1 });
+    const slots = stagingSlots(ctx, pl, ctx.params.get('boss') === '1');
+    let main = null, dead = null;
+    for (const sl of slots) {
+      const e = mk(sl.position, sl.variant, sl.sc, sl.yaw);
+      if (sl.boss) e.health = e.maxHealth * 0.62; // barra do chefe já gasta na captura
+      if (sl.reload != null) e.anim.p.reload = sl.reload;
+      if (sl.key === 'main') main = e;
+      if (sl.dead) dead = e;
+    }
     for (const e of this.list) for (let i = 0; i < 40; i++) {
       e.update(1 / 60);
       e.frame(1 / 60);
     }
     const T = THREE;
-    this.list.find((e) => e === dead) &&
+    dead &&
       dead.damage(1e4, { part: 'torso', silent: true, point: dead.joint(B.chest, new T.Vector3()), dir: new T.Vector3(0.25, 0, -1).normalize() });
-    for (let i = 0; i < 560; i++) dead.update(1 / 60);
-    dead.frame(1 / 60);
+    if (dead) {
+      for (let i = 0; i < 560; i++) dead.update(1 / 60);
+      dead.frame(1 / 60);
+    }
     this.main = main;
   },
 

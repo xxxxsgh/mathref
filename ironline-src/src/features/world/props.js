@@ -12,6 +12,8 @@ import * as THREE from 'three';
 import { mat4, jitterGeometry, cached } from './geo.js';
 import { cyl, cylBetween, cylinder, cable, rebar, decal, sphere, torus, contact } from './shapes.js';
 import * as RB from './rubble.js';
+import { mulberry } from './noise.js';
+import { bevelBox, bevelCyl, atlasBox, vary, part, CRATE_RECT, treadTire } from './propkit.js';
 
 // ─── instanciamento ────────────────────────────────────────────────────
 export class Instancer {
@@ -223,25 +225,39 @@ export { tree, palm, grassTufts } from './vegetation.js';
 
 // ─── miudezas ──────────────────────────────────────────────────────────
 export function crate(W, x, z, yaw, s = 1, opts = {}) {
-  const { B } = W;
+  const { B, rng } = W;
   const y = opts.y || 0;
   const w = 0.95 * s, h = 0.5 * s, d = 0.55 * s;
   const M = mat4([x, y + h / 2, z], [0, yaw, opts.tilt || 0]);
-  const L = (p, sc, r = [0, 0, 0]) => M.clone().multiply(mat4(p, r, sc));
-  const UNIT = cached('unitbox', () => new THREE.BoxGeometry(1, 1, 1));
-  const tint = opts.tint ? opts.tint.map((c) => Math.min(1, c * 1.6)) : [1, 1, 1];
-  // corpo com textura própria (UV por face: estêncil legível)
-  B.add(UNIT, 'crate', L([0, 0, 0], [w, h, d]), { worldUV: false, color: tint, ao: [y, y + h * 0.5, 0.75] });
-  // sarrafos de reforço nas pontas e cantoneiras metálicas
+  // tom por caixa: lote de tinta, sol e sujeira diferentes
+  const tint = vary(rng, opts.tint ? opts.tint.map((c) => Math.min(1, c * 1.6)) : [1, 1, 1], { tone: 0.1, fade: 0.3, dirt: 0.25 });
+  // faces do atlas: lateral com estêncil A/B, cabeceiras e tampa SEM texto
+  const swap = rng.chance(0.5);
+  const R = { pz: swap ? CRATE_RECT.sideB : CRATE_RECT.sideA, nz: swap ? CRATE_RECT.sideA : CRATE_RECT.sideB, px: CRATE_RECT.end, nx: CRATE_RECT.end, py: CRATE_RECT.lid, ny: CRATE_RECT.end };
+  B.add(atlasBox(w, h, d, 0.012 * s, R, swap ? 'cB' : 'cA'), 'crate', M, { worldUV: false, vcolor: true, color: tint });
+  // tampa: tábua sobreposta 1,5 cm com bisel, levemente desalinhada
+  const lid = M.clone().multiply(mat4([rng.range(-0.01, 0.01), h / 2 + 0.008, 0], [0, rng.range(-0.015, 0.015), 0]));
+  B.add(atlasBox(w + 0.01, 0.018, d + 0.012, 0.006, { pz: CRATE_RECT.end, nz: CRATE_RECT.end, px: CRATE_RECT.end, nx: CRATE_RECT.end, py: CRATE_RECT.lid, ny: CRATE_RECT.lid }, 'cL'), 'crate', lid, { worldUV: false, vcolor: true, color: tint.map((c) => c * 0.97) });
+  // sarrafos de reforço nas cabeceiras (madeira, UV do atlas de cabeceira)
   for (const k of [-1, 1]) {
-    B.add(UNIT, 'crate', L([k * (w / 2 - 0.035 * s), 0, 0], [0.07 * s, h + 0.02, d + 0.03]), { worldUV: false, uvScale: 0.25, color: tint.map((c) => c * 0.85) });
-    for (const j of [-1, 1]) B.add(UNIT, 'metal', L([k * (w / 2 + 0.005), j * (h / 2 - 0.02 * s), 0], [0.012, 0.05 * s, d + 0.035]), { color: [0.3, 0.3, 0.28] });
+    const cl = M.clone().multiply(mat4([k * (w / 2 - 0.04 * s), 0, 0]));
+    B.add(atlasBox(0.075 * s, h + 0.022, d + 0.032, 0.008, { pz: CRATE_RECT.end, nz: CRATE_RECT.end, px: CRATE_RECT.end, nx: CRATE_RECT.end, py: CRATE_RECT.end, ny: CRATE_RECT.end }, 'cS'), 'crate', cl, { worldUV: false, vcolor: true, color: tint.map((c) => c * 0.9) });
+    // cantoneiras de aço dobradas com rebites
+    for (const j of [-1, 1]) {
+      part(B, M, bevelBox(0.014, 0.055 * s, d + 0.04, 0.004, { wear: 0.6 }), 'metal', [k * (w / 2 + 0.004), j * (h / 2 - 0.022 * s), 0], [0, 0, 0], [0.32, 0.31, 0.27]);
+      for (const zz of [-0.4, 0, 0.4]) part(B, M, bevelCyl(0.007, 0.007, 0.006, 6), 'chrome', [k * (w / 2 + 0.012), j * (h / 2 - 0.022 * s), zz * d], [0, 0, Math.PI / 2], [0.4, 0.38, 0.33]);
+    }
+    // fecho de mola (lingueta) na frente
+    part(B, M, bevelBox(0.05, 0.07, 0.012, 0.003), 'metal', [k * w * 0.28, h / 2 - 0.04, d / 2 + 0.008], [0, 0, 0], [0.3, 0.3, 0.27]);
   }
-  // alças de corda
-  for (const k of [-1, 1]) B.add(torus(0.18, 10), 'fabric', L([k * (w / 2 + 0.03), h * 0.15, 0], [0.06 * s, 0.06 * s, 0.06 * s], [0, Math.PI / 2, 0]), { color: [0.6, 0.55, 0.42] });
+  // alças de corda (toro achatado) presas por grampos
+  for (const k of [-1, 1]) {
+    B.add(torus(0.16, 12), 'fabric', M.clone().multiply(mat4([k * (w / 2 + 0.045), h * 0.12, 0], [0, Math.PI / 2, 0], [0.065 * s, 0.05 * s, 0.065 * s])), { color: vary(rng, [0.58, 0.52, 0.4], { dirt: 0.4 }) });
+  }
   const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(w, h, d)).applyMatrix4(M);
   if (opts.collide !== false) B.collider(box.min.toArray(), box.max.toArray(), 'wood');
-  if (!opts.stacked && y < 0.3) contact(B, x, y, z, w + 0.35, d + 0.35, yaw, 2);
+  if (!opts.stacked && y < 0.3) contact(B, x, y, z, w + 0.3, d + 0.3, yaw, 2);
+  else if (!opts.stacked) contact(B, x, y, z, w + 0.25, d + 0.25, yaw, 2);
 }
 
 /** Lata de munição metálica (verde-oliva, alça e tampa com nervura). */
@@ -293,44 +309,7 @@ export function barrel(W, x, z, opts = {}) {
   else B.collider([x - 0.3, y0, z - 0.3], [x + 0.3, y0 + 0.88, z + 0.3], 'metal');
 }
 
-/**
- * Pneu de verdade (torno): perfil com flanco abaulado, ombro arredondado,
- * talão e banda de rodagem com BLOCOS (sulcos em V e canal central) —
- * deslocamento radial por ângulo × posição lateral. Eixo = Y (deitado).
- */
-const tireGeo = (v = 0) =>
-  cached('tire3_' + v, () => {
-    const R = 0.33, Ri = 0.21, Wd = 0.2;
-    const prof = [];
-    // de dentro (talão, embaixo) → flanco → banda → flanco → talão (em cima)
-    const n = 22;
-    for (let i = 0; i <= n; i++) {
-      const t = i / n, a = -Math.PI / 2 + t * Math.PI;
-      // superelipse: banda larga e quase plana, ombro arredondado
-      const c = Math.cos(a), s2 = Math.sin(a);
-      const rr = Ri + (R - Ri) * Math.pow(Math.abs(c), 0.35);
-      prof.push(new THREE.Vector2(rr, Math.sign(s2) * Math.pow(Math.abs(s2), 0.55) * Wd / 2));
-    }
-    const g = new THREE.LatheGeometry(prof, 72);
-    const P = g.attributes.position;
-    const seg = 36 + v * 4;
-    for (let i = 0; i < P.count; i++) {
-      const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
-      const r = Math.hypot(x, z);
-      if (r < R - 0.035) continue;
-      const a = Math.atan2(z, x);
-      const lat = y / (Wd / 2); // -1..1
-      // sulcos em V alternados nas duas metades + canal central
-      const ph = a * seg + Math.abs(lat) * 2.2 * (lat > 0 ? 1 : -1);
-      const block = Math.sin(ph) > -0.35 ? 1 : 0;
-      const groove = Math.abs(lat) < 0.12 ? 0 : block;
-      const d = (1 - groove) * 0.012 * Math.min(1, (r - (R - 0.035)) / 0.02);
-      const k = (r - d) / r;
-      P.setXYZ(i, x * k, y, z * k);
-    }
-    g.computeVertexNormals();
-    return g;
-  });
+const tireGeo = treadTire;
 
 export function tire(W, x, z, opts = {}) {
   const { B, I, rng } = W;
@@ -344,39 +323,97 @@ export function tire(W, x, z, opts = {}) {
   if (flat) contact(B, x, opts.y || 0, z, 0.95, 0.95, 0, 1);
 }
 
-export function dumpster(W, x, z, yaw) {
-  const { B } = W;
-  const M = mat4([x, 0, z], [0, yaw, 0]);
-  const L = (p, sc, r = [0, 0, 0]) => M.clone().multiply(mat4(p, r, sc));
-  const UNIT = cached('unitbox', () => new THREE.BoxGeometry(1, 1, 1));
-  // caçamba de verdade: corpo em tronco de pirâmide (boca mais larga),
-  // chapa com bisel, aba dobrada na boca, nervuras verticais, bolsos de
-  // içamento nas laterais, tampas de plástico (uma aberta, empenada)
-  const body = cached('dumpsterBody', () => {
-    const sh = new THREE.Shape([new THREE.Vector2(-0.47, 0.2), new THREE.Vector2(0.47, 0.2), new THREE.Vector2(0.57, 1.32), new THREE.Vector2(-0.57, 1.32)]);
-    const g = new THREE.ExtrudeGeometry(sh, { depth: 1.86, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.025, bevelSegments: 2, curveSegments: 1 });
-    g.translate(0, 0, -0.93);
+/**
+ * Contêiner de lixo de carga frontal (1,9 m³), modelado como chapa de
+ * verdade: casco OCO (paredes de 3 mm com bisel, fundo, frente inclinada),
+ * borda superior em tubo dobrado, nervuras em U, bolsos de garfo com boca
+ * escura, travessas de base, rodízios giratórios e tampas plásticas com
+ * espessura e nervuras moldadas (uma aberta para trás, revelando lixo).
+ * Tinta verde desbotada pelo sol com quinas gastas, ferrugem só onde a
+ * tinta lascou (atlas da textura de metal com deslocamento por peça).
+ */
+export function dumpster(W, x, z, yaw, opts = {}) {
+  const { B, rng } = W;
+  const y0 = opts.y ?? 0;
+  const M = mat4([x, y0, z], [0, yaw, 0]);
+  const green = vary(rng, opts.tint || [0.25, 0.33, 0.27], { tone: 0.08, fade: 0.45, dirt: 0.2 });
+  const inner = green.map((c) => c * 0.45);
+  const L = 1.86, Hb = 0.2, Ht = 1.3; // comprimento, base e topo do casco
+  const zB = 0.46, zT = 0.58; // meia-profundidade embaixo/em cima (boca mais larga)
+  const tWall = 0.03;
+  const slope = Math.atan2(zT - zB, Ht - Hb);
+  const wallH = Math.hypot(Ht - Hb, zT - zB);
+  // frente e fundo inclinados (casco oco)
+  for (const sd of [-1, 1]) {
+    part(B, M, bevelBox(L, wallH, tWall, 0.012, { wear: 0.5 }), 'metal', [0, (Hb + Ht) / 2, sd * (zB + zT) / 2], [sd * -slope, 0, 0], green, { ao: [y0, y0 + 0.7, 0.55] });
+    // face interna escura (sujeira, sombra do casco)
+    part(B, M, bevelBox(L - 0.06, wallH - 0.04, 0.004, 0.002), 'metal', [0, (Hb + Ht) / 2 + 0.01, sd * ((zB + zT) / 2 - tWall * 0.6)], [sd * -slope, 0, 0], inner);
+  }
+  // laterais trapezoidais (chapa extrudada de 3 cm com bisel)
+  const side = cached('dumpSide3', () => {
+    const sh = new THREE.Shape([new THREE.Vector2(-zB, Hb), new THREE.Vector2(zB, Hb), new THREE.Vector2(zT, Ht), new THREE.Vector2(-zT, Ht)]);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: tWall, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 2, curveSegments: 1 });
+    g.translate(0, 0, -tWall / 2);
     g.rotateY(Math.PI / 2);
+    g.deleteAttribute('uv');
     return g;
   });
-  const green = [0.27, 0.33, 0.28]; // verde desbotado pelo sol
-  B.add(body, 'metal', M, { color: green, ao: [0.15, 0.8, 0.55] });
-  // aba da boca
-  for (const s of [-1, 1]) B.add(UNIT, 'metal', L([0, 1.31, s * 0.585], [1.96, 0.06, 0.05]), { color: green });
-  for (const s of [-1, 1]) B.add(UNIT, 'metal', L([s * 0.985, 1.31, 0], [0.05, 0.06, 1.2]), { color: green });
-  // nervuras verticais (seguem a inclinação da parede)
-  for (const s of [-1, 1]) for (const u of [-0.62, 0, 0.62]) B.add(UNIT, 'metal', L([u, 0.76, s * 0.535], [0.07, 1.12, 0.05], [s * -0.09, 0, 0]), { color: green.map((c) => c * 0.92) });
-  // bolsos de içamento
-  for (const s of [-1, 1]) B.add(UNIT, 'metal', L([s * 1.0, 0.95, 0], [0.12, 0.16, 0.5]), { color: [0.2, 0.2, 0.19] });
-  // base/chassi escuro
-  B.add(UNIT, 'metal', L([0, 0.17, 0], [1.8, 0.08, 0.9]), { color: [0.12, 0.12, 0.11] });
-  // tampas: uma fechada, outra aberta para trás
-  B.add(UNIT, 'plastic', L([-0.48, 1.38, 0.0], [0.94, 0.05, 1.18], [0.04, 0, 0.02]), { color: [0.2, 0.2, 0.19] });
-  B.add(UNIT, 'plastic', L([0.48, 1.62, -0.72], [0.94, 0.05, 0.62], [-1.15, 0, 0]), { color: [0.2, 0.2, 0.19] });
-  for (const s of [-0.8, 0.8]) for (const t of [-0.45, 0.45]) B.add(cyl(8), 'rubber', L([s, 0.1, t], [0.1, 0.06, 0.1], [Math.PI / 2, 0, 0]), { color: [1, 1, 1] });
-  const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, 0.7, 0), new THREE.Vector3(1.9, 1.4, 1.1)).applyMatrix4(M);
+  for (const sd of [-1, 1]) B.add(side, 'metal', M.clone().multiply(mat4([sd * (L / 2 - tWall / 2), 0, 0])), { color: green, uvRand: true, ao: [y0, y0 + 0.7, 0.55] });
+  // fundo
+  part(B, M, bevelBox(L - 0.02, 0.03, zB * 2, 0.01), 'metal', [0, Hb + 0.015, 0], [0, 0, 0], inner);
+  // borda superior: tubo dobrado em volta da boca
+  for (const sd of [-1, 1]) {
+    B.add(cyl(10), 'metal', M.clone().multiply(mat4([0, Ht + 0.01, sd * (zT + 0.012)], [0, 0, Math.PI / 2], [0.028, L + 0.04, 0.028])), { color: green.map((c) => c * 1.05), uvRand: true });
+    B.add(cyl(10), 'metal', M.clone().multiply(mat4([sd * (L / 2 + 0.012), Ht + 0.01, 0], [Math.PI / 2, 0, 0], [0.028, zT * 2 + 0.04, 0.028])), { color: green.map((c) => c * 1.05), uvRand: true });
+  }
+  // nervuras em U (frente/fundo), acompanhando a inclinação
+  for (const sd of [-1, 1]) for (const u of [-0.62, 0, 0.62]) {
+    const zz = sd * ((zB + zT) / 2 + 0.03);
+    part(B, M, bevelBox(0.09, wallH - 0.1, 0.035, 0.01, { wear: 0.7 }), 'metal', [u, (Hb + Ht) / 2 - 0.02, zz], [sd * -slope, 0, 0], green.map((c) => c * 0.94));
+  }
+  // bolsos de garfo (tubo retangular) com boca escura
+  for (const sd of [-1, 1]) {
+    part(B, M, bevelBox(0.16, 0.16, 0.6, 0.012, { wear: 0.8 }), 'metal', [sd * (L / 2 + 0.08), 0.98, 0], [0, 0, 0], [0.16, 0.16, 0.15]);
+    part(B, M, bevelBox(0.004, 0.11, 0.52, 0.001), 'black', [sd * (L / 2 + 0.162), 0.98, 0], [0, 0, 0], [1, 1, 1]);
+  }
+  // travessas de base e rodízios giratórios (garfo + roda de borracha)
+  for (const sd of [-1, 1]) part(B, M, bevelBox(L - 0.1, 0.07, 0.07, 0.01), 'metal', [0, Hb - 0.03, sd * (zB - 0.08)], [0, 0, 0], [0.13, 0.13, 0.12]);
+  for (const sx of [-0.78, 0.78]) for (const sz of [-0.38, 0.38]) {
+    const sw = rng.range(0, 6.28);
+    part(B, M, bevelBox(0.08, 0.04, 0.08, 0.01), 'metal', [sx, Hb - 0.08, sz], [0, sw, 0], [0.2, 0.2, 0.19]);
+    const fork = M.clone().multiply(mat4([sx, 0.08, sz], [0, sw, 0]));
+    for (const k of [-1, 1]) part(B, fork, bevelBox(0.008, 0.1, 0.05, 0.002), 'metal', [k * 0.035, 0.0, 0.0], [0, 0, 0], [0.22, 0.22, 0.2]);
+    B.add(cyl(14), 'rubber', fork.clone().multiply(mat4([0, -0.005, 0], [0, 0, Math.PI / 2], [0.07, 0.05, 0.07])), { color: [0.9, 0.9, 0.9] });
+  }
+  // tampas plásticas (5 cm, nervuras e alça moldada): uma fechada, outra aberta
+  const lidC = vary(rng, [0.17, 0.18, 0.17], { tone: 0.1, fade: 0.5, dirt: 0.1 });
+  const lidGeo = bevelBox(0.93, 0.04, zT * 2 + 0.1, 0.015, { wear: 0.35 });
+  const ribGeo = bevelBox(0.05, 0.03, zT * 2 + 0.04, 0.01);
+  const lidAt = (Ml) => {
+    B.add(lidGeo, 'plastic', Ml, { worldUV: false, vcolor: true, color: lidC, uvRand: true });
+    for (const u of [-0.3, 0, 0.3]) B.add(ribGeo, 'plastic', Ml.clone().multiply(mat4([u, 0.03, 0])), { worldUV: false, vcolor: true, color: lidC.map((c) => c * 0.92) });
+    B.add(bevelBox(0.22, 0.03, 0.05, 0.01), 'plastic', Ml.clone().multiply(mat4([0, 0.025, zT + 0.02])), { worldUV: false, vcolor: true, color: lidC.map((c) => c * 0.85) });
+  };
+  // fechada: apoiada na borda, levemente empenada
+  lidAt(M.clone().multiply(mat4([-0.475, Ht + 0.055, 0.0], [0.03, 0, rng.range(-0.02, 0.02)])));
+  // aberta: girada na dobradiça de trás, encostada para trás
+  const hinge = M.clone().multiply(mat4([0.475, Ht + 0.04, -(zT + 0.04)], [-(Math.PI / 2 + rng.range(0.25, 0.45)), 0, 0]));
+  lidAt(hinge.clone().multiply(mat4([0, 0.02, zT + 0.05])));
+  // dobradiças
+  for (const u of [-0.75, -0.2, 0.2, 0.75]) part(B, M, bevelBox(0.06, 0.05, 0.05, 0.008), 'metal', [u, Ht + 0.02, -(zT + 0.04)], [0, 0, 0], [0.15, 0.15, 0.14]);
+  // lixo dentro (visto pela tampa aberta): sacos instanciados
+  for (let i = 0; i < 4; i++) {
+    const v = rng.int(0, 2);
+    const s0 = rng.range(0.24, 0.32);
+    const p = new THREE.Vector3(rng.range(0.1, 0.8), Ht - 0.12 + rng.range(-0.05, 0.08), rng.range(-0.3, 0.3)).applyMatrix4(M);
+    W.I.add('trashbag' + v, bagGeo(v), 'bag', mat4(p.toArray(), [rng.range(-0.5, 0.5), rng.range(0, 6), rng.range(-0.5, 0.5)], [s0 * 1.1, s0, s0]), rng.pick(BAG_T));
+  }
+  const box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, 0.7, 0), new THREE.Vector3(2.1, 1.4, 1.25)).applyMatrix4(M);
   B.collider(box.min.toArray(), box.max.toArray(), 'metal');
-  contact(B, x, 0, z, 2.6, 1.8, yaw, 2);
+  // AO de contato: mancha larga + núcleo escuro sob o casco
+  contact(B, x, y0, z, 2.5, 1.6, yaw, 2);
+  contact(B, x, y0, z, 1.9, 0.95, yaw, 1);
+  decal(B, 'stains', [x, y0 + 0.016, z], 'py', [3.0, 2.4], [0, 0, 0.5, 0.5], rng.range(0, 6), [0.85, 0.82, 0.78]);
   // lixo transbordando em volta
   W.trashSpots.push([x, z, 1.8]);
 }
@@ -402,46 +439,169 @@ export function dish(W, p, n) {
   cylBetween(B, p, [p[0] + n[0] * 0.4, p[1] - 0.1, p[2] + n[1] * 0.4], 0.015, 'metal', { color: [0.5, 0.5, 0.5] });
 }
 
-/** Saco de lixo plástico (instanciado): corpo assentado com vincos de plástico, nó com orelhas. */
+/**
+ * Saco de lixo de polietileno (instanciado). Forma de saco CHEIO de
+ * verdade: corpo mais alto que largo, fundo assentado e espalhado no chão,
+ * volumes do conteúdo (caixas, garrafas) esticando o plástico em quinas
+ * suaves, PREGAS radiais convergindo e apertando para o gargalo torcido,
+ * nó com duas orelhas. AO assada na cor de vértice (pregas e base escuras).
+ */
 const bagGeo = (v) =>
-  cached('trashbag2_' + v, () => {
-    const g = new THREE.SphereGeometry(1, 44, 30);
+  cached('trashbag3_' + v, () => {
+    const g = new THREE.SphereGeometry(1, 30, 20);
     const P = g.attributes.position;
+    const rr = mulberry(400 + v * 17);
+    // volumes do conteúdo: 4 "caroços" que esticam o plástico
+    const lumps = Array.from({ length: 4 }, () => [new THREE.Vector3(rr() - 0.5, rr() * 0.8 - 0.5, rr() - 0.5).normalize(), 0.08 + rr() * 0.1, 0.5 + rr() * 0.4]);
     const ph = v * 1.7;
+    const ao = new Float32Array(P.count);
+    const t = new THREE.Vector3();
     for (let i = 0; i < P.count; i++) {
       let x = P.getX(i), y = P.getY(i), z = P.getZ(i);
+      t.set(x, y, z);
       const a = Math.atan2(z, x);
-      // vincos: dobras em crista (|sin|) radiais convergindo para o nó + amassados
-      const crease = Math.abs(Math.sin(a * 6 + y * 2.5 + ph)) * 0.09 + Math.abs(Math.sin(a * 11 - y * 4 + ph * 2)) * 0.05;
-      const dent = Math.sin(x * 4 + ph) * Math.sin(z * 5 - ph) * 0.06;
-      // rugas finas do plástico fino esticado sobre o conteúdo (caixas, garrafas)
-      const wr = Math.abs(Math.sin(a * 23 + y * 9 + ph * 3)) * 0.022 + Math.max(0, Math.sin(x * 7.3 - z * 6.1 + y * 5 + ph)) * 0.05;
-      let k = 1 - crease + dent - wr;
-      // apoiado no chão: fundo achatado e "derramado" para os lados
-      if (y < -0.25) {
-        const t = (-0.25 - y) / 0.75;
-        y = -0.25 - t * 0.38;
-        k *= 1 + t * 0.18;
+      let k = 1;
+      for (const [d, amp, w] of lumps) k += amp * Math.max(0, t.dot(d) - (1 - w)) / w;
+      // pregas: crescem para o gargalo (y → 1); entre elas o plástico afunda
+      const up = Math.max(0, y + 0.1) / 1.1;
+      const pleat = Math.pow(Math.abs(Math.sin(a * 5 + ph + y * 1.5)), 0.6);
+      const fold = (1 - pleat) * 0.16 * Math.pow(up, 1.6) + Math.abs(Math.sin(a * 11 + y * 4 + ph)) * 0.025 * up;
+      // vincos finos do filme esticado (rugas diagonais)
+      const wr = Math.max(0, Math.sin(x * 9.3 - z * 7.1 + y * 6 + ph)) * 0.028 * (1 - up * 0.5);
+      k = k - fold - wr;
+      // gargalo apertado
+      if (y > 0.5) k *= 1 - Math.pow((y - 0.5) / 0.5, 1.3) * 0.88;
+      // fundo assentado: achata e espalha
+      if (y < -0.35) {
+        const tt = (-0.35 - y) / 0.65;
+        y = -0.35 - tt * 0.3;
+        k *= 1 + tt * 0.22;
       }
-      // pescoço afunilando até o nó
-      if (y > 0.55) k *= 1 - Math.pow((y - 0.55) / 0.45, 1.5) * 0.82;
-      P.setXYZ(i, x * k * (1 + 0.08 * Math.sin(ph)), y * (y > 0 ? 0.92 : 1), z * k);
+      P.setXYZ(i, x * k * 0.92, y * 1.12, z * k * 0.86);
+      // AO: nos vales das pregas, no gargalo e no pé
+      ao[i] = Math.max(0.35, (1 - fold * 3.2) * (y < -0.3 ? 0.55 + 0.45 * (1 + (y + 0.65) / 0.35) * 0.5 : 1));
     }
-    const body = jitterGeometry(g, 0.018, 300 + v * 7);
-    // nó com duas orelhas de plástico torcido
-    const knot = new THREE.ConeGeometry(0.1, 0.32, 7, 2);
-    knot.translate(0, 1.0, 0);
-    const ears = [];
-    for (const s of [-1, 1]) {
-      const e = new THREE.ConeGeometry(0.07, 0.3, 5, 1);
-      e.rotateZ(s * 1.1 + v * 0.2);
-      e.translate(s * 0.13, 1.12, 0.02 * s);
-      ears.push(e);
+    const body = jitterGeometry(g, 0.012, 300 + v * 7);
+    const col = new Float32Array(P.count * 3);
+    for (let i = 0; i < P.count; i++) col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = ao[i];
+    // jitterGeometry clona: a ordem dos vértices é a mesma
+    body.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    // gargalo torcido + nó + orelhas
+    const parts = [body];
+    const neck = new THREE.CylinderGeometry(0.035, 0.07, 0.22, 8, 3);
+    {
+      const N = neck.attributes.position;
+      for (let i = 0; i < N.count; i++) {
+        const yy = N.getY(i), a = yy * 9;
+        const x = N.getX(i), z = N.getZ(i);
+        N.setXYZ(i, x * Math.cos(a) - z * Math.sin(a), yy, x * Math.sin(a) + z * Math.cos(a));
+      }
     }
-    // normais calculadas por peça ANTES de mesclar (corpo liso, sem facetas)
-    for (const e of [knot, ...ears]) e.computeVertexNormals();
-    return mergeSimple([body, knot, ...ears]);
+    neck.translate(0, 1.18, 0);
+    parts.push(neck);
+    const knot = new THREE.SphereGeometry(0.07, 8, 6);
+    knot.scale(1.2, 0.8, 1);
+    knot.translate(0, 1.3, 0);
+    parts.push(knot);
+    for (const sd of [-1, 1]) {
+      const e = new THREE.ConeGeometry(0.06, 0.28, 5, 1);
+      e.scale(1, 1, 0.35);
+      e.rotateZ(sd * (1.0 + v * 0.15));
+      e.translate(sd * 0.13, 1.36, 0.02 * sd);
+      parts.push(e);
+    }
+    for (const e of parts.slice(1)) {
+      e.computeVertexNormals();
+      const n = e.attributes.position.count;
+      e.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(n * 3).fill(0.8), 3));
+    }
+    body.computeVertexNormals();
+    return mergeColored(parts);
   });
+
+/** Cores de saco: preto, cinza-escuro, verde-escuro, azul (municipal), branco encardido. */
+const BAG_T = [[0.05, 0.05, 0.05], [0.07, 0.07, 0.068], [0.05, 0.07, 0.05], [0.07, 0.1, 0.16], [0.3, 0.29, 0.27], [0.045, 0.045, 0.05]];
+
+function mergeColored(geos) {
+  const pos = [], nor = [], uv = [], col = [];
+  for (const g0 of geos) {
+    const g = g0.index ? g0.toNonIndexed() : g0;
+    pos.push(...g.attributes.position.array);
+    nor.push(...g.attributes.normal.array);
+    uv.push(...(g.attributes.uv ? g.attributes.uv.array : new Float32Array(g.attributes.position.count * 2)));
+    col.push(...(g.attributes.color ? g.attributes.color.array : new Float32Array(g.attributes.position.count * 3).fill(1)));
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return g;
+}
+
+/**
+ * Caixa de papelão: bisel, abas da tampa (abertas, dobradas ou fechadas
+ * com fita), amassada (cisalhada) e às vezes desmontada no chão.
+ */
+function cardboardBox(W, px, y, pz, opts = {}) {
+  const { B, rng } = W;
+  const w = rng.range(0.32, 0.6), h = rng.range(0.22, 0.45), d = rng.range(0.26, 0.45);
+  const yaw = rng.range(0, 6.28);
+  const col = vary(rng, [0.68, 0.52, 0.36], { tone: 0.12, fade: 0.35, dirt: 0.35 });
+  if (rng.chance(0.2)) {
+    // desmontada/achatada no chão
+    B.add(bevelBox(w * 1.6, 0.012, d * 1.4, 0.004), 'cardboard', mat4([px, y + 0.008, pz], [rng.range(-0.04, 0.04), yaw, rng.range(-0.04, 0.04)]), { worldUV: false, vcolor: true, color: col, uvRand: true });
+    return;
+  }
+  const crush = rng.range(-0.08, 0.08);
+  const M = mat4([px, y, pz], [rng.range(-0.04, 0.04), yaw, rng.range(-0.05, 0.05)]);
+  // cisalhamento (caixa amassada para um lado)
+  M.multiply(new THREE.Matrix4().set(1, crush, 0, 0, 0, 1, 0, 0, 0, crush * 0.5, 1, 0, 0, 0, 0, 1));
+  part(B, M, bevelBox(w, h, d, 0.012, { wear: 0.2 }), 'cardboard', [0, h / 2, 0], [0, 0, 0], col);
+  const open = rng.next();
+  if (open < 0.45) {
+    // abas abertas: duas longas caídas para fora, duas curtas em pé
+    for (const sd of [-1, 1]) {
+      part(B, M, bevelBox(w - 0.01, 0.006, d / 2, 0.002), 'cardboard', [0, h + Math.sin(0.9) * d / 4 - 0.01, sd * (d / 2 + Math.cos(0.9) * d / 4)], [sd * (0.9 + rng.range(-0.3, 0.4)), 0, 0], col.map((c) => c * 1.05));
+      part(B, M, bevelBox(0.006, d * 0.45, d - 0.02, 0.002), 'cardboard', [sd * (w / 2 - 0.004), h + d * 0.18, 0], [0, 0, sd * rng.range(0.2, 0.6)], col);
+    }
+    // interior escuro
+    part(B, M, bevelBox(w - 0.02, 0.004, d - 0.02, 0.001), 'black', [0, h - 0.004, 0], [0, 0, 0], [0.6, 0.55, 0.5]);
+  } else {
+    // fita adesiva na emenda da tampa
+    part(B, M, bevelBox(0.05, 0.003, d + 0.01, 0.001), 'plasticW', [0, h + 0.002, 0], [0, 0, 0], rng.chance(0.6) ? [0.62, 0.5, 0.3] : [0.75, 0.73, 0.68]);
+    part(B, M, bevelBox(w + 0.005, 0.004, 0.003, 0.001), 'black', [0, h + 0.001, 0], [0, 0, 0], [0.5, 0.45, 0.4]);
+  }
+  contact(B, px, y, pz, w + 0.2, d + 0.2, -yaw, 1);
+}
+
+/**
+ * Cadeira monobloco de plástico (injetada): assento côncavo, encosto com
+ * fendas verticais, braços contínuos, pernas cônicas abertas. Plástico
+ * branco encardido (ou verde/bege), sujeira nas reentrâncias.
+ */
+function plasticChair(W, px, y, pz, opts = {}) {
+  const { B, rng } = W;
+  const col = vary(rng, rng.pick([[0.66, 0.65, 0.6], [0.6, 0.58, 0.52], [0.26, 0.34, 0.27], [0.6, 0.55, 0.45]]), { tone: 0.06, fade: 0.1, dirt: 0.45 });
+  const yaw = rng.range(0, 6.28);
+  const fallen = opts.fallen ?? rng.chance(0.6);
+  const M = fallen ? mat4([px, y + 0.27, pz], [0, yaw, Math.PI / 2 + 0.12]).multiply(mat4([0, -0.4, 0])) : mat4([px, y, pz], [0, yaw, 0]);
+  const SH = 0.42;
+  // assento: placa boleada levemente côncava (duas metades inclinadas)
+  for (const sd of [-1, 1]) part(B, M, bevelBox(0.22, 0.025, 0.42, 0.01), 'plasticW', [sd * 0.105, SH, 0.01], [0, 0, sd * 0.06], col);
+  // pernas cônicas abertas (seção em L → bevelBox fino)
+  for (const a of [-1, 1]) for (const b of [-1, 1]) part(B, M, bevelBox(0.045, SH + 0.02, 0.06, 0.015), 'plasticW', [a * 0.21, SH / 2, b * 0.19], [b * 0.12, 0, -a * 0.12], col.map((c) => c * 0.96));
+  // encosto: moldura + ripas verticais (fendas abertas entre elas)
+  const back = M.clone().multiply(mat4([0, SH + 0.02, -0.2], [-0.2, 0, 0]));
+  part(B, back, bevelBox(0.42, 0.06, 0.025, 0.012), 'plasticW', [0, 0.38, 0], [0, 0, 0], col);
+  for (let k = -2; k <= 2; k++) part(B, back, bevelBox(0.055, 0.34, 0.02, 0.01), 'plasticW', [k * 0.085, 0.19, -Math.abs(k) * 0.01], [0, k * 0.08, 0], col);
+  // braços contínuos (do encosto à frente)
+  for (const a of [-1, 1]) {
+    part(B, M, bevelBox(0.05, 0.025, 0.42, 0.01), 'plasticW', [a * 0.23, SH + 0.2, -0.02], [-0.08, 0, 0], col);
+    part(B, M, bevelBox(0.04, 0.2, 0.04, 0.012), 'plasticW', [a * 0.23, SH + 0.1, 0.16], [0, 0, 0], col);
+  }
+  contact(B, px, y, pz, fallen ? 0.9 : 0.65, 0.65, -yaw, 1);
+}
 
 /**
  * Entulho doméstico: sacos de lixo, caixas de papelão, engradados de
@@ -450,32 +610,38 @@ const bagGeo = (v) =>
 export function clutter(W, x, z, r, n = 6, opts = {}) {
   const { B, I, rng } = W;
   const y = opts.y || 0;
-  const UNIT = cached('unitbox', () => new THREE.BoxGeometry(1, 1, 1));
   for (let i = 0; i < n; i++) {
     const a = rng.range(0, Math.PI * 2), d = Math.sqrt(rng.next()) * r;
     const px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
     const k = rng.next();
-    if (k < 0.45) {
-      const s = rng.range(0.22, 0.34);
-      const v = rng.int(0, 2);
-      I.add('trashbag' + v, bagGeo(v), 'bag', mat4([px, y + s * 0.6, pz], [rng.range(-0.3, 0.3), rng.range(0, 6), rng.range(-0.3, 0.3)], [s * 1.1, s, s]), rng.pick([[0.06, 0.06, 0.06], [0.08, 0.08, 0.075], [0.07, 0.09, 0.07], [0.1, 0.12, 0.16], [0.32, 0.31, 0.29]]));
-    } else if (k < 0.7) {
-      // caixa de papelão (às vezes aberta/amassada)
-      const w = rng.range(0.3, 0.6), h = rng.range(0.2, 0.45), dd = rng.range(0.25, 0.45);
-      B.obox([px, y + h / 2, pz], [w, h, dd], [rng.range(-0.08, 0.08), rng.range(0, 6), rng.range(-0.1, 0.1)], 'wood', { color: [0.78, 0.6, 0.42], uvRand: true });
-    } else if (k < 0.85) {
-      // engradado de bebidas
-      const col = rng.pick([[0.7, 0.12, 0.1], [0.12, 0.3, 0.6], [0.85, 0.7, 0.15], [0.2, 0.5, 0.25]]);
-      const M = mat4([px, y + 0.15, pz], [rng.chance(0.3) ? Math.PI / 2 : 0, rng.range(0, 6), 0]);
-      B.add(UNIT, 'plastic', M.clone().multiply(mat4([0, 0, 0], [0, 0, 0], [0.42, 0.3, 0.3])), { color: col });
-      B.add(UNIT, 'black', M.clone().multiply(mat4([0, 0.02, 0], [0, 0, 0], [0.38, 0.28, 0.31])), { color: [1, 1, 1] });
+    if (k < 0.5) {
+      // sacos em montinho: o segundo encosta/empilha no primeiro
+      const nb = rng.chance(0.4) ? 2 : 1;
+      for (let j = 0; j < nb; j++) {
+        const s = rng.range(0.24, 0.33);
+        const v = rng.int(0, 2);
+        const ox = j ? rng.range(-0.2, 0.2) : 0, oz = j ? rng.range(-0.2, 0.2) : 0;
+        const lift = j ? s * 0.45 : 0;
+        I.add('trashbag' + v, bagGeo(v), 'bag', mat4([px + ox, y + s * 0.62 + lift, pz + oz], [rng.range(-0.25, 0.25) + (j ? 0.5 : 0), rng.range(0, 6), rng.range(-0.25, 0.25)], [s * rng.range(1.0, 1.15), s * rng.range(0.9, 1.05), s]), rng.pick(BAG_T));
+        if (!j) contact(B, px, y, pz, s * 2.6, s * 2.4, 0, 1);
+      }
+    } else if (k < 0.75) {
+      cardboardBox(W, px, y, pz);
+    } else if (k < 0.87) {
+      // engradado de bebidas: paredes vazadas (moldura + grade), fundo
+      const col = vary(rng, rng.pick([[0.6, 0.12, 0.1], [0.12, 0.28, 0.55], [0.75, 0.62, 0.15], [0.2, 0.45, 0.22]]), { tone: 0.06, fade: 0.4, dirt: 0.25 });
+      const tipped = rng.chance(0.3);
+      const M = mat4([px, y + (tipped ? 0.15 : 0), pz], [tipped ? Math.PI / 2 : 0, rng.range(0, 6), 0]).multiply(mat4([0, tipped ? -0.15 : 0, 0]));
+      for (const sd of [-1, 1]) {
+        part(B, M, bevelBox(0.4, 0.28, 0.02, 0.008), 'plasticW', [0, 0.15, sd * 0.14], [0, 0, 0], col);
+        part(B, M, bevelBox(0.02, 0.28, 0.27, 0.008), 'plasticW', [sd * 0.2, 0.15, 0], [0, 0, 0], col);
+        part(B, M, bevelBox(0.1, 0.04, 0.025, 0.01), 'black', [0, 0.25, sd * 0.142], [0, 0, 0], [0.4, 0.4, 0.4]);
+      }
+      part(B, M, bevelBox(0.4, 0.015, 0.28, 0.005), 'plasticW', [0, 0.01, 0], [0, 0, 0], col.map((c) => c * 0.7));
+      for (let gx = -1; gx <= 1; gx++) part(B, M, bevelBox(0.008, 0.2, 0.26, 0.002), 'plasticW', [gx * 0.1, 0.11, 0], [0, 0, 0], col.map((c) => c * 0.85));
+      contact(B, px, y, pz, 0.6, 0.5, 0, 1);
     } else {
-      // cadeira de plástico branca tombada
-      const M = mat4([px, y + 0.22, pz], [Math.PI / 2 * (rng.chance(0.6) ? 1 : 0), rng.range(0, 6), 0]);
-      const c = [0.86, 0.85, 0.8];
-      B.add(UNIT, 'plastic', M.clone().multiply(mat4([0, 0.2, 0], [0, 0, 0], [0.44, 0.03, 0.42])), { color: c });
-      B.add(UNIT, 'plastic', M.clone().multiply(mat4([0, 0.5, -0.2], [-0.15, 0, 0], [0.44, 0.5, 0.03])), { color: c });
-      for (const sx of [-0.19, 0.19]) for (const sz of [-0.18, 0.18]) B.add(UNIT, 'plastic', M.clone().multiply(mat4([sx, -0.02, sz], [0, 0, 0], [0.035, 0.44, 0.035])), { color: c });
+      plasticChair(W, px, y, pz);
     }
   }
 }

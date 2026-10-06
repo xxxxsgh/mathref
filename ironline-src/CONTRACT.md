@@ -45,7 +45,7 @@ export default {
 - `this` dentro dos métodos é o próprio objeto exportado (guarde estado nele).
 
 Ordens de referência: `world 10`, `rendering 20`, `audio 25`,
-`movement 30`, `weapon 40`, `enemies 50`, `vfx 60`, `hud 90`.
+`movement 30`, `weapon 40`, `enemies 50`, `vfx 60`, `hud 90`, `touch 95`.
 
 ### Ordem de um frame
 
@@ -102,8 +102,20 @@ renderizado (features iniciadas e aquecimento do preset feito).
 - `consumeLook()` → `{ yaw, pitch }` em rad (o player já consome); `consumeWheel()`.
 - `locked` (pointer lock), `requestLock()`, `exitLock()`, `enabled`,
   `sensitivity`, `invertY`.
-- `simulate(nome, on)` — aciona uma ação por código (testes, bots, shots).
+- `simulate(nome, on)` — aciona uma ação por código (testes, bots, shots, toque).
 - Evento `input:lock` (bool) no bus.
+- **Toque** (celular/tablet): `touchMode` (bool; liga sozinho em aparelhos
+  só de toque ou ao primeiro toque, `?touch=1|0` força), `setTouchMode(on)`,
+  `touchSensitivity` (multiplicador da mira por arrasto), `addTouchLook(dxPx, dyPx)`,
+  `axis { x, y, active }` + `setAxis(x, y)` — eixo analógico de movimento
+  (−1..1, y > 0 = frente) além das teclas digitais. No toque NÃO existe
+  pointer lock: `requestLock()` faz uma captura **virtual** (`locked = true`,
+  `input:lock` true) e `exitLock()` a solta (`input:lock` false) — o fluxo
+  DEPLOY/pausa da HUD é o mesmo do desktop. Mousedown/mouseup são ignorados
+  em `touchMode` (eventos de compatibilidade dos toques). Evento
+  `input:touch` (bool) ao trocar de modo. O controlador de movimento pode
+  ler `input.axis` (quando `active`) para andar com velocidade analógica; o
+  embutido do `player` já lê.
 
 ### `collision`
 
@@ -150,11 +162,41 @@ Estado: `position` (pés), `prevPosition`, `velocity`, `yaw`, `pitch`,
 
 ### `quality`
 
-`{ level, dprCap, msaa, shadows, shadowMapSize, shadowCascades, anisotropy,
-ssao, ssr, bloom, taa, motionBlur, volumetrics, drawDistance, particleBudget,
-textureSize, foliage }` — presets `low | medium | high | ultra` (padrão
-`high`, URL `?q=`). `quality.set('low' | patch)` emite `quality:change`.
+`{ level, dprCap, msaa, shadows, shadowMapSize, shadowCascades, shadowScale, anisotropy,
+ssao, contactAO, ssr, bloom, taa, motionBlur, volumetrics, drawDistance, particleBudget,
+textureSize, foliage }` — presets `low | medium | high | ultra` (URL `?q=`).
+`quality.set('auto' | 'low' | … | patch)` emite `quality:change`.
 São dicas: cada feature decide como honrá-las.
+
+- **Modo automático** (padrão fora do modo shot; `?q=auto`): `quality.mode`
+  = `'auto' | 'manual'`, `quality.setting` = `'auto'` ou o preset (é o valor
+  para mostrar/salvar nas configurações), `quality.device` = classe do
+  aparelho (`classifyDevice`: `{ preset, ceiling, mobile, gpuClass, targetFps,
+  minScale, reason }`, a partir de `WEBGL_debug_renderer_info`, UA/ponteiro
+  grosso, `hardwareConcurrency`, `deviceMemory`), `quality.rung` = degrau atual
+  de `AUTO_LADDER` (`ultra, high, high-, medium, medium-, low, low-`). Em auto,
+  **`level` continua sendo sempre um dos 4 presets**; os degraus "−" só
+  aplicam patches (`motionBlur/volumetrics` off, `shadowScale 0.5`, `ssao/bloom`
+  off, `foliage`/`particleBudget` menores). O modo shot fica em `high` fixo.
+- `shadowScale` (0,125..1): multiplicador da resolução do shadow map do sol
+  (o compositor honra; potência de 2, ≥ 512). `contactAO` (bool): AO barata de
+  contato quando `ssao` está desligado.
+- `foliage` e `particleBudget` podem mudar em jogo (degraus "−"): quem os usa
+  deve reagir a `quality:change` se quiser economizar de verdade.
+
+### `ctx.governor` (desempenho)
+
+`core/Governor.js`, alimentado pelo tempo de frame real (fora do modo shot,
+`?dynres=0` desliga): `scale` (resolução dinâmica, `minScale..1`, multiplica
+o pixel ratio), `targetFps` (60; 30 em celular; `?fps=N`), `rung`, `ceiling`,
+`auto`, `enabled`, `last` (`{ mean, p90, p10 }` da última janela, ms),
+`hold(s)`. Desce a resolução rápido (janelas de 1 s, +12 % do orçamento);
+em modo auto, com a resolução no piso por 2 janelas, desce um degrau; sobe
+resolução com 2 janelas folgadas e degrau com 8 (folga = < 85 % do orçamento
+ou frames estáveis no vsync); 3 s de carência após cada troca; subida que
+falha em < 15 s bloqueia novas subidas por 30 s × 2ⁿ. Emite
+`quality:auto` `{ rung, scale, reason }`. `ctx.dynres` segue como atalho
+compatível (`scale`, `enabled`, `min`). `?govlog=1` loga as decisões.
 
 ## Serviços (`ctx.services`)
 
@@ -172,6 +214,7 @@ documento.
 | `enemies` | enemies | `list`, `spawn(pose) → enemy`, `count()`, `clear()`, `auto` (bool: repõe o esquadrão sozinho; a partida desliga e conduz as ondas) |
 | `vfx` | vfx | `impact(point, normal, material?)`, `tracer(from, to)`, `muzzleFlash(obj3d)` |
 | `hud` | hud | `root`, `setMenu(bool)`, `setVisible(bool)` |
+| `touch` | touch | `active`, `visible`, `sensitivity`, `setSensitivity(0.2..4)`, `setScale(0.6..1.5)`, `setFullscreen(bool)`, `enterFullscreen()` |
 
 ## Eventos do bus
 
@@ -181,7 +224,9 @@ documento.
 | `resize` | `{ width, height, dpr }` | núcleo |
 | `quality:change` | `quality` | núcleo |
 | `service:ready` | `{ name, api }` | núcleo (`provide`) |
-| `input:lock` | `bool` | núcleo |
+| `input:lock` | `bool` | núcleo (no toque: captura virtual) |
+| `input:touch` | `bool` | núcleo (troca mouse ↔ toque) |
+| `quality:auto` | `{ rung, scale, reason }` | núcleo (governador trocou de degrau) |
 | `player:damage` | `{ amount, health, source?, from? }` | núcleo (`player.damage`) |
 | `player:death` / `player:jump` / `player:land` | `{…}` | núcleo / controlador |
 | `weapon:fire` | `{ origin, dir, muzzle, ads }` | weapon |
@@ -197,14 +242,17 @@ documento.
 |---|---|
 | `?only=a,b` | carrega só essas features (nomes de pasta) |
 | `?skip=a,b` | carrega todas menos essas |
-| `?q=low\|medium\|high\|ultra` | preset de qualidade |
+| `?q=auto\|low\|medium\|high\|ultra` | qualidade (padrão `auto`; `high` no modo shot) |
+| `?touch=1\|0` | força/desliga os controles de toque |
+| `?fps=N` | alvo do governador (padrão 60; 30 em celular) |
+| `?govlog=1` | loga as decisões do governador no console |
 | `?shot=<preset>` | modo screenshot (abaixo) |
 | `&seed=N` | semente do modo shot (padrão 1337) |
 | `&hud=0\|1`, `&vm=0\|1` | força HUD / viewmodel no preset |
 | `&sim=s` | segundos de aquecimento antes do 1º frame |
 | `&pause=1` | congela a simulação depois do aquecimento (só renderiza) |
 | `&preserve=1` | `preserveDrawingBuffer` (o shot.mjs liga para medir luminância) |
-| `?dynres=0` | desliga a resolução dinâmica (fora do modo shot o pixel ratio cai até 0,6× quando o frame passa de ~19 ms e volta quando sobra folga) |
+| `?dynres=0` | desliga o governador (resolução dinâmica + degraus automáticos; ver `ctx.governor`) |
 | `?waves=1,1&wi=1&mt=300` | partida curta: ondas, intervalo entre ondas e tempo (hud) |
 
 ## Modo screenshot (`?shot=<preset>`)
@@ -261,7 +309,7 @@ mire as capturas (`--size 720`, `?only=`) enquanto itera.
 `node tools/e2e.mjs [--q low] [--size 640x360] [--shots dir]` joga uma
 partida curta de verdade (menu → loadout → DEPLOY → anda/pula → mata o
 inimigo da onda 1 → recarrega → onda 2 → relatório pós-ação) e falha com
-qualquer pageerror/console.error/erro de feature. Leva ~8 min no SwiftShader.
+qualquer pageerror/console.error/erro de feature. `--extra "k=v"` soma parâmetros de URL (ex.: `dynres=0`); a espera da recarga é medida em tempo de jogo. Leva ~8 min no SwiftShader.
 
 `window.__hold = true` congela o loop (as ferramentas usam isso para
 capturar a tela sem esperar um frame novo do SwiftShader).
