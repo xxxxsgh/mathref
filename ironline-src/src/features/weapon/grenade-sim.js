@@ -126,3 +126,32 @@ export function throwVelocity(aim, speed, playerVel = { x: 0, y: 0, z: 0 }, loft
     z: (vz / l) * speed + playerVel.z * 0.8,
   };
 }
+
+/**
+ * Devolução de granada (IA): escolhe a granada de fragmentação viva mais
+ * próxima de `pos` (alcance `maxDist`, plano XZ + altura) com espoleta
+ * restante ≥ `minFuse` e que ainda não foi devolvida. Devolve o índice ou −1.
+ */
+export function pickGrenade(list, pos, { maxDist = 2.6, minFuse = 0.35 } = {}) {
+  let best = -1, bd = Infinity;
+  for (let i = 0; i < list.length; i++) {
+    const g = list[i];
+    if (g.kind && g.kind !== 'frag') continue;
+    if (g.thrownBack) continue;
+    if (g.fuse - g.t < minFuse) continue;
+    const d = Math.hypot(g.p.x - pos.x, (g.p.y - pos.y) * 0.5, g.p.z - pos.z);
+    if (d <= maxDist && d < bd) (bd = d), (best = i);
+  }
+  return best;
+}
+
+/**
+ * Velocidade de um arremesso em arco de `from` até `to` (gravidade g):
+ * tempo de voo proporcional à distância (0,45–1,3 s), sem arrasto.
+ */
+export function lobVelocity(from, to, g = NADE.gravity ?? 9.81) {
+  const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+  const h = Math.hypot(dx, dz);
+  const T = Math.min(1.3, Math.max(0.45, h / 12));
+  return { x: dx / T, y: (dy + 0.5 * g * T * T) / T, z: dz / T, T };
+}

@@ -43,6 +43,9 @@ export class Instancer {
     const key = `${geoKey}|${mat}|${opts.shadow === false ? 0 : 1}`;
     let s = this.sets.get(key);
     if (!s) {
+      // camadas leves: entulho miúdo em low-poly (caixa / icosaedro do mesmo
+      // volume) — 108 → 12–20 triângulos por pedaço, milhares de pedaços
+      if (this.fewVariants && MINOR.test(geoKey)) geo = lowPoly(geoKey, geo);
       s = { geo: withColor(geo), mat, mats: [], cols: [], shadow: opts.shadow !== false, seen: 0, minor: MINOR.test(geoKey) };
       this.sets.set(key, s);
     }
@@ -125,6 +128,25 @@ export class Instancer {
     }
     return out;
   }
+}
+
+const _lp = new Map();
+/** Versão low-poly de uma peça de entulho (mesma caixa envolvente). */
+function lowPoly(key, geo) {
+  const tri = (geo.index ? geo.index.count : geo.attributes.position.count) / 3;
+  if (tri <= 24) return geo;
+  let g = _lp.get(key);
+  if (g) return g;
+  geo.computeBoundingBox();
+  const b = geo.boundingBox;
+  const size = b.getSize(new THREE.Vector3());
+  const c = b.getCenter(new THREE.Vector3());
+  g = (/^rbrick/.test(key) ? new THREE.BoxGeometry(1, 1, 1) : new THREE.IcosahedronGeometry(0.62, 0)).toNonIndexed();
+  g.scale(size.x, size.y, size.z);
+  g.translate(c.x, c.y, c.z);
+  g.computeVertexNormals();
+  _lp.set(key, g);
+  return g;
 }
 
 function withColor(geo) {
