@@ -183,3 +183,14 @@ execução não caem. Evento `enemy:knockdown { enemy, phase: 'down'|'up' }`.
 - **Props**: geometrias e materiais compartilhados, só o corpo projeta
   sombra (nenhum em q=low), 10 por partida no desktop, 7 em q=low, 5 em
   celular.
+
+### LOD de malha
+
+`geo.js` tem `withDetail(k, fn)`: com k < 1 os segmentos de cilindros,
+lofts, tubos e elipsoides caem (k = 0,45) e as caixas pequenas perdem o
+arredondamento. Soldado cheio ≈ 40,9 mil triângulos → LOD ≈ 10,9 mil.
+- Aparelho fraco (`quality.tier !== 'desktop'` ou `quality.level === 'low'`):
+  todos os soldados (inclusive o herói do menu) usam o LOD e a população de
+  fundo do menu não nasce (só o herói): menu de ~245 mil → ~10 mil triângulos.
+- Desktop: o LOD de cada variante é gerado em segundo plano e a malha troca
+  de geometria além de ~25 m (histerese 22/26 m).
