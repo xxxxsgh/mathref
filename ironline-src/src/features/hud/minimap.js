@@ -56,6 +56,45 @@ export class Minimap {
     this.cv.height = Math.round(S * k);
   }
 
+  /**
+   * Varredura da UAV (`uav.sweep`: 0 = norte/−Z, sentido horário) em torno de
+   * `uav.center`, e losangos vermelhos nos inimigos de `revealed` (alpha cai
+   * até o próximo ping); os distantes ficam presos na borda.
+   */
+  drawUav(g, { cx, cy, rot, pos, E, reveal, uav }) {
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(rot);
+    if (uav?.active) {
+      const ux = ((uav.center?.x ?? pos.x) - pos.x) * VIEW, uz = ((uav.center?.z ?? pos.z) - pos.z) * VIEW;
+      const R = Math.max(E, (uav.radius || 200) * VIEW);
+      const a = -Math.PI / 2 + (uav.sweep || 0);
+      const wg = g.createRadialGradient(ux, uz, 0, ux, uz, R);
+      wg.addColorStop(0, 'rgba(120,220,200,.22)');
+      wg.addColorStop(1, 'rgba(120,220,200,.04)');
+      g.fillStyle = wg;
+      g.beginPath(); g.moveTo(ux, uz); g.arc(ux, uz, R, a - 0.55, a); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(150,240,220,.75)';
+      g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(ux, uz); g.lineTo(ux + Math.cos(a) * R, uz + Math.sin(a) * R); g.stroke();
+    }
+    g.restore();
+    const cs = Math.cos(rot), sn = Math.sin(rot), lim = E / 2 - 8;
+    for (const r of reveal || []) {
+      let dx = (r.x - pos.x) * VIEW, dz = (r.z - pos.z) * VIEW;
+      [dx, dz] = [dx * cs - dz * sn, dx * sn + dz * cs];
+      const m = Math.max(Math.abs(dx), Math.abs(dz));
+      if (m > lim) { dx *= lim / m; dz *= lim / m; }
+      const x = cx + dx, y = cy + dz, s = 5;
+      g.globalAlpha = Math.max(0, Math.min(1, r.alpha ?? 1));
+      g.fillStyle = '#ff5a4a';
+      g.strokeStyle = 'rgba(0,0,0,.75)';
+      g.lineWidth = 1;
+      g.beginPath(); g.moveTo(x, y - s); g.lineTo(x + s, y); g.lineTo(x, y + s); g.lineTo(x - s, y); g.closePath(); g.fill(); g.stroke();
+    }
+    g.globalAlpha = 1;
+  }
+
   /** Rasteriza a planta a partir dos colisores estáticos. */
   build(ctx) {
     const cols = [...ctx.collision.colliders.values()].filter((c) => !c.dynamic && c.box && !c.trigger && c.tag !== 'player');
@@ -289,7 +328,7 @@ export class Minimap {
     this.aerialOk = true;
   }
 
-  draw(ctx, { yaw, pos, pings = [] }) {
+  draw(ctx, { yaw, pos, pings = [], reveal = null, uav = null }) {
     // reconstrói só se o conjunto ESTÁTICO mudar (checado a cada ~2 s)
     if (!this.plan) this.build(ctx);
     else if (ctx.time.frame % 120 === 0) {
@@ -359,6 +398,8 @@ export class Minimap {
       g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill(); g.stroke();
     }
     g.globalAlpha = 1;
+    // UAV (feature streaks): varredura do radar + inimigos revelados no último ping
+    if (uav?.active || reveal?.length) this.drawUav(g, { cx, cy, rot, pos, E, reveal, uav });
     // escurece levemente as bordas (profundidade)
     const vg = g.createRadialGradient(cx, cy, E * 0.35, cx, cy, E * 0.75);
     vg.addColorStop(0, 'rgba(0,0,0,0)');

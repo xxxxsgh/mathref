@@ -395,6 +395,8 @@ export default {
         return ok;
       },
       /** Detona uma granada do jogador no ponto (QA/roteiros): mesmo dano/efeito do arremesso. */
+      /** IA devolve uma granada viva do jogador: { position, target, by } → true se pegou uma. */
+      throwBack: (o) => self.throwables.throwBack(o),
       explodeAt: (point, kind = 'frag') => self.throwables.detonate(kind, new THREE.Vector3(point.x, point.y, point.z)),
       refill: () => self.lo.refill(),
       setGrenades: (n) => self.lo.setGrenades(n),

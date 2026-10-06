@@ -380,7 +380,8 @@ export class Match {
       // a onda continua chegando enquanto o jogador espera para renascer
       this.updateWaves(dt);
       this.updateZone(dt);
-      if (this.deadT > 4 && this.phase === 'dead') this.respawn();
+      // a killcam (feature streaks) adia o renascimento até terminar
+      if (this.deadT > 4 && this.phase === 'dead' && !ctx.services.streaks?.killcam?.active) this.respawn();
     }
   }
 

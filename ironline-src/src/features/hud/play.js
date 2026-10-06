@@ -412,12 +412,15 @@ export class PlayHud {
     const pp = p.position;
     const fadeA = (t) => (t < 2 ? 1 : 1 - (t - 2));
     // redesenho dos canvas de navegação a ~20 Hz (não a cada quadro)
+    const sk = ctx.services.streaks;
+    const uavOn = !!sk?.uav?.active;
     this.navT = (this.navT ?? 1) + rdt;
-    if (this.navT >= 0.05) {
+    // com a varredura da UAV no ar o minimapa sobe para ~30 Hz
+    if (this.navT >= (uavOn ? 0.033 : 0.05)) {
       this.navT = 0;
       this.compass.draw(heading, this.pings.map((q) => ({ bearing: bearing(q.x - pp.x, q.z - pp.z), a: fadeA(q.t) })));
       this.minimap.rotate = st.minimapRotate;
-      this.minimap.draw(ctx, { yaw: p.yaw, pos: pp, pings: this.pings.map((q) => ({ x: q.x, z: q.z, a: fadeA(q.t) })) });
+      this.minimap.draw(ctx, { yaw: p.yaw, pos: pp, pings: this.pings.map((q) => ({ x: q.x, z: q.z, a: fadeA(q.t) })), reveal: sk?.revealed, uav: sk?.uav });
     }
 
     // placar

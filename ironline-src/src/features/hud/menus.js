@@ -384,6 +384,7 @@ export class Screens {
           <div class="slot small"><div class="lbl"><span class="k">${t11('LETHAL', { size: 9 })}</span>${T('FRAG GRENADE', { size: 14, weight: 1.35, tracking: 2.2 })}</div><span class="img">${fragSVG('', 34)}</span></div>
           <div class="slot small ${flashLocked ? 'locked' : ''}"><div class="lbl"><span class="k">${t11('TACTICAL', { size: 9 })}</span>${T('STUN GRENADE', { size: 14, weight: 1.35, tracking: 2.2 })}</div>${flashLocked ? lockTag(flashLv) : `<span class="img">${flashSVG('', 34)}</span>`}</div>
           <div class="slot small ${this.loPick === 'melee' ? 'on' : ''}" data-lo="melee">${chg}<div class="lbl"><span class="k">${t11('MELEE', { size: 9 })}</span>${T(kn ? kn.name : 'COMBAT KNIFE', { size: 14, weight: 1.35, tracking: 2.2 })}</div><span class="img">${kn ? skinImg(kn, 34) : knifeSVG('', 60)}</span></div>
+          ${this.streakSlot()}
           <div class="camos panel">
             <div class="ph">${T('WEAPON CAMO', { size: 13, weight: 1.6, tracking: 2.4 })}<span class="r">${mono(CAMOS.filter((c) => c.level <= level).length + ' / ' + CAMOS.length + ' UNLOCKED')}</span></div>
             <div class="sw">${CAMOS.map((c) => {
@@ -410,6 +411,14 @@ export class Screens {
       </div>
       ${this.loPick ? this.loadoutPicker(level, lockOf, lockTag) : ''}
       ${this.footer([['ESC', 'BACK'], ['ENTER', 'DEPLOY']])}`;
+  }
+  /** Conjunto de killstreaks (feature streaks): clicar abre o seletor dela. */
+  streakSlot() {
+    const s = this.ctx.services.streaks;
+    if (!s?.openPicker) return '';
+    const ids = s.loadout || [];
+    const S = s.STREAKS || {};
+    return `<div class="slot small ks-slot" data-ks="1"><span class="chg">${t11('TROCAR', { size: 9 })}</span><div class="lbl"><span class="k">${t11('KILLSTREAKS', { size: 9 })}</span><div class="ksl">${ids.map((id) => `<span>${N(S[id]?.kills ?? '', 11)}${t11(S[id]?.name || id, { size: 10, weight: 1.4, tracking: 1.6 })}</span>`).join('')}</div></div></div>`;
   }
   /** Primária/secundária escolhidas (inventário > loadoutIds da weapon > 2 primeiras). */
   loadoutSel() {
@@ -715,10 +724,16 @@ export class Screens {
     const hud = this.hud;
     if (name === 'arsenal') hud.arsenal?.bind(el);
     el.addEventListener('click', (ev) => {
-      const t = ev.target.closest('[data-go],[data-act],[data-tab],[data-att],[data-v],[data-lo],[data-mode],[data-map],[data-camo],[data-pick]');
+      const t = ev.target.closest('[data-go],[data-act],[data-tab],[data-att],[data-v],[data-lo],[data-mode],[data-map],[data-camo],[data-pick],[data-ks]');
       if (!t || t.closest('[data-a]')) return;
       if (t.dataset.tab2 && hud.arsenal) hud.arsenal.tab = t.dataset.tab2;
       if (t.dataset.pick) return this.pickLoadout(t.dataset.pick, t.dataset.id);
+      if (t.dataset.ks) {
+        // seletor próprio da feature streaks; ao fechar, o slot é redesenhado
+        this.ctx.services.streaks?.openPicker?.();
+        const off = this.ctx.bus.on?.('streak:loadout', () => { off?.(); if (this.cur === 'loadout') this.show('loadout'); });
+        return;
+      }
       if (t.dataset.lo) { this.loPick = this.loPick === t.dataset.lo ? null : t.dataset.lo; return this.show('loadout'); }
       if (t.dataset.mode) { hud.selectMode(t.dataset.mode); this.show('main'); }
       else if (t.dataset.map) this.pickMap(t.dataset.map);

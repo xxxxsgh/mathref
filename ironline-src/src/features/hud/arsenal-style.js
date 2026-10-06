@@ -365,6 +365,12 @@ export const ARS_CSS = /* css */ `
 @keyframes ksPulse { 50% { box-shadow: 0 0 18px rgba(226,180,90,.55); } }
 #hud .ksb .kst { color: var(--ink3); margin-bottom: 2px; }
 #hud .medal .m + .m { margin-top: 6px; }
+/* placa atrás do rótulo: legível sobre o metal claro da arma */
+#hud .medal .m { padding: 3px 12px 3px 6px; background: linear-gradient(90deg, rgba(6,8,10,0), rgba(6,8,10,.62) 18%, rgba(6,8,10,.62) 82%, rgba(6,8,10,0)); }
+#hud .medal .m .mt { filter: drop-shadow(0 0 1px #000) drop-shadow(0 1px 1px #000) drop-shadow(0 0 3px rgba(0,0,0,.9)); }
+#hud .ks-slot .ksl { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+#hud .ks-slot .ksl span { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); }
+#hud .ks-slot .ksl span svg:first-child { color: var(--amber); }
 #hud .medal .m .xpm { color: var(--amber); margin-left: 4px; }
 #hud .slidei { position: absolute; left: 960px; top: 640px; transform: translateX(-50%); color: rgba(242,244,239,.75); opacity: 0; transition: opacity .15s; }
 #hud .slidei.on { opacity: 1; }

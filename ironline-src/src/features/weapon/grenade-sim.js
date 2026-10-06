@@ -138,7 +138,7 @@ export function pickGrenade(list, pos, { maxDist = 2.6, minFuse = 0.35 } = {}) {
     const g = list[i];
     if (g.kind && g.kind !== 'frag') continue;
     if (g.thrownBack) continue;
-    if (g.fuse - g.t < minFuse) continue;
+    if (g.fuse < minFuse) continue; // fuse = segundos RESTANTES
     const d = Math.hypot(g.p.x - pos.x, (g.p.y - pos.y) * 0.5, g.p.z - pos.z);
     if (d <= maxDist && d < bd) (bd = d), (best = i);
   }

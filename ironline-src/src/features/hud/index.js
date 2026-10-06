@@ -260,6 +260,8 @@ export default {
       settings: this.settings,
       get loadout() { return this.__s?.profile.loadout; },
       banner: (t, s) => this.play.banner(t, s),
+      /** o minimapa desenha `streaks.revealed`/`uav` (o radar de reserva da streaks some) */
+      handlesReveal: true,
       deploy: () => this.action('deploy'),
       __s: this,
     });

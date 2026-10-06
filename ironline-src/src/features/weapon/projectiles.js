@@ -13,7 +13,7 @@
  */
 import * as THREE from 'three';
 import { buildFrag, buildFlash } from './equipment.js';
-import { makeGrenade, stepGrenade, blastDamage, NADE } from './grenade-sim.js';
+import { makeGrenade, stepGrenade, blastDamage, NADE, pickGrenade, lobVelocity } from './grenade-sim.js';
 import { EQUIP_DEFS } from './loadout.js';
 
 const _a = new THREE.Vector3();
@@ -75,7 +75,7 @@ export class Throwables {
       const ev = stepGrenade(g, dt, this.ray, NADE);
       if (ev === 'bounce') this.ctx.bus.emit('weapon:grenadeBounce', { kind: g.kind, speed: g.lastImpact, position: new THREE.Vector3(g.p.x, g.p.y, g.p.z) });
       if (ev === 'explode') {
-        this.detonate(g.kind, _c.set(g.p.x, g.p.y, g.p.z).clone());
+        this.detonate(g.kind, _c.set(g.p.x, g.p.y, g.p.z).clone(), g);
         g.mesh.removeFromParent();
         this.list.splice(i, 1);
       }
@@ -99,8 +99,35 @@ export class Throwables {
     }
   }
 
+  /**
+   * Inimigo devolve uma granada viva do jogador (gancho da feature enemies):
+   * pega a de fragmentação mais próxima de `position`, mantém a espoleta que
+   * resta e a lança em arco até `target`. `by` (o inimigo) fica marcado:
+   * a explosão sai com `source: 'enemy'`, `by`, `thrownBack: true`.
+   */
+  throwBack({ position, target, by = null } = {}) {
+    if (!position || !target) return false;
+    const i = pickGrenade(this.list, position);
+    if (i < 0) return false;
+    const g = this.list[i];
+    // sai da mão do inimigo (~1,3 m do chão), na frente dele
+    const from = { x: position.x, y: position.y + 1.3, z: position.z };
+    const to = { x: target.x, y: target.y + 0.2, z: target.z };
+    const v = lobVelocity(from, to);
+    g.p = from;
+    g.v = { x: v.x, y: v.y, z: v.z };
+    g.rest = false;
+    g.grounded = false;
+    g.bounces = 0;
+    g.thrownBack = true;
+    g.by = by;
+    this.ctx.bus.emit('weapon:throwBack', { kind: g.kind, by, position: new THREE.Vector3(from.x, from.y, from.z), target: new THREE.Vector3(to.x, to.y, to.z), fuse: g.fuse });
+    return true;
+  }
+
   /** Detonação (também usada quando a granada cozinha demais na mão). */
-  detonate(kind, point) {
+  detonate(kind, point, g = null) {
+    const by = g?.by || null;
     const ctx = this.ctx;
     const def = EQUIP_DEFS[kind] || EQUIP_DEFS.frag;
     const vfx = ctx.services.vfx;
@@ -115,7 +142,7 @@ export class Throwables {
     // explosão visual + som + tremor (vfx emite 'vfx:explosion' para áudio/câmera)
     if (vfx?.explosion) vfx.explosion(point.clone(), { radius: def.radius, normal: up });
     else ctx.bus.emit('explosion', { point: point.clone(), radius: def.radius });
-    ctx.bus.emit('weapon:explode', { kind, point: point.clone(), radius: def.radius });
+    ctx.bus.emit('weapon:explode', { kind, point: point.clone(), radius: def.radius, by, thrownBack: !!by });
     // dano em área: colisores com data.damage (inimigos), com linha de visão
     const eyeLift = _a.copy(point).add(_d.set(0, 0.25, 0));
     const seen = new Set();
@@ -132,7 +159,7 @@ export class Throwables {
       const los = ctx.collision.lineOfSight(eyeLift.clone(), center, { filter: (o) => o !== c && o.tag !== 'enemy' && o.tag !== 'player' });
       if (!los) continue;
       const dir = center.clone().sub(point).normalize();
-      const info = { point: center, normal: dir.clone().negate(), distance: dist, collider: c, part: 'torso', dir, damage: dmg, source: 'player', weapon: 'frag', explosion: true, ballistic: true };
+      const info = { point: center, normal: dir.clone().negate(), distance: dist, collider: c, part: 'torso', dir, damage: dmg, source: by ? 'enemy' : 'player', weapon: 'frag', explosion: true, ballistic: true, ...(by ? { by, thrownBack: true } : {}) };
       if (this.live) c.data.damage(dmg, info);
       ctx.bus.emit('weapon:hit', info);
     }
@@ -144,7 +171,7 @@ export class Throwables {
       const dist = pc.distanceTo(point);
       const dmg = blastDamage(Math.max(0, dist - 0.3), def.radius, def.damage * 0.85);
       if (dmg > 0 && ctx.collision.lineOfSight(eyeLift.clone(), pc.clone(), { filter: (o) => o.tag !== 'player' && o.tag !== 'enemy' })) {
-        pl.damage?.(dmg, { source: 'grenade', from: point.clone(), dir: pc.clone().sub(point).normalize() });
+        pl.damage?.(dmg, { source: 'grenade', from: point.clone(), dir: pc.clone().sub(point).normalize(), ...(by ? { by, enemy: by, thrownBack: true } : {}) });
       }
     }
   }

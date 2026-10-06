@@ -285,3 +285,28 @@ function mulberryTest(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+import { pickGrenade, lobVelocity } from './grenade-sim.js';
+
+test('weapon/granada: devolução escolhe a frag viva mais próxima, mantém a espoleta e acerta o alvo', () => {
+  const at = (x, z, fuse, t, kind = 'frag') => makeGrenade(new Vector3(x, 0.05, z), new Vector3(), fuse, { kind, t });
+  const list = [at(2.0, 0, 2.5, 1.0), at(0.8, 0, 2.5, 1.0, 'flash'), at(1.2, 0, 0.2, 3.3), at(1.5, 0, 1.5, 2.0), at(9, 0, 3.5, 0)];
+  // flash ignorada, a de 0,2 s restantes ignorada, a de 9 m fora do alcance → índice 3 (1,5 m)
+  assert.equal(pickGrenade(list, { x: 0, y: 0, z: 0 }), 3);
+  list[3].thrownBack = true;
+  assert.equal(pickGrenade(list, { x: 0, y: 0, z: 0 }), 0, 'já devolvida não volta de novo');
+  assert.equal(pickGrenade([], { x: 0, y: 0, z: 0 }), -1);
+  // arco: sem arrasto, chega ao alvo no tempo de voo
+  const from = { x: 0, y: 1.3, z: 0 }, to = { x: 10, y: 0.2, z: -6 };
+  const v = lobVelocity(from, to, 9.81);
+  const T = v.T;
+  assert.ok(T >= 0.45 && T <= 1.3);
+  assert.ok(Math.abs(from.x + v.x * T - to.x) < 1e-9 && Math.abs(from.z + v.z * T - to.z) < 1e-9);
+  assert.ok(Math.abs(from.y + v.y * T - 0.5 * 9.81 * T * T - to.y) < 1e-9);
+  // espoleta restante preservada pela simulação (só t avança)
+  const g = list[0];
+  const left = g.fuse;
+  g.v = { x: v.x, y: v.y, z: v.z };
+  stepGrenade(g, DT, () => null);
+  assert.ok(Math.abs(g.fuse - (left - DT)) < 1e-9, 'espoleta segue de onde estava');
+});

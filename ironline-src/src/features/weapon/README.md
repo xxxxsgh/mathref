@@ -112,6 +112,12 @@ atordoante — usado pela progressão do HUD), `tune()`, `debugPose()`,
   `mountSway` (balanço/inércia), `tacSprint` (arma erguida), `hanging` (arma baixa, sem tiro/ADS). O `melee`
   consumido pela movement (slide kick) não saca a faca.
 
+- `throwBack({ position, target, by })` (gancho da IA): pega a granada de fragmentação VIVA do jogador mais
+  próxima de `position` (≤ 2,6 m, ainda não devolvida, ≥ 0,35 s de espoleta), mantém a espoleta que resta e a
+  lança em arco até `target` (mesma simulação de quique). Devolve `true` se pegou uma. A explosão sai com
+  `source: 'enemy'`, `by`, `thrownBack: true` (dano nos inimigos, no jogador e em `weapon:explode`); emite
+  `weapon:throwBack { kind, by, position, target, fuse }`. Lógica pura em `grenade-sim.js` (`pickGrenade`, `lobVelocity`).
+
 Eventos v3: `weapon:kill { weaponId, enemy, headshot, melee }` (abate do jogador; faca → id do modelo),
 `weapon:breath { phase:'hold'|'release'|'gasp', stamina }`, `weapon:foley { name, id }` (sempre que a animação
 tem som: mag_out/mag_in/bolt_release, pump_back/pump_fwd, shell_in, bolt_up/back/fwd/down, cover_open/close,
