@@ -721,8 +721,11 @@ const rendering = {
     // cada 2 quadros (3 no modo shot). O mapa de 4096² é o passe mais caro.
     renderer.shadowMap.autoUpdate = false;
     const every = ctx.shot ? 3 : this.lowCost ? 4 : 2;
-    renderer.shadowMap.needsUpdate = !!this.shadowDirty || this.frameIndex % every === 0 || !sun?.shadow?.map;
-    this.shadowDirty = false;
+    const due = this.frameIndex % every === 0;
+    // preset low / camadas leves: mesmo com a câmera andando (shadowDirty),
+    // o mapa só é refeito a cada `every` quadros
+    renderer.shadowMap.needsUpdate = !sun?.shadow?.map || (this.lowCost && !ctx.shot ? due : !!this.shadowDirty || due);
+    if (renderer.shadowMap.needsUpdate) this.shadowDirty = false;
     // PCSS: mapa cru com a mesma câmera, no mesmo ritmo do shadow map
     if (this.rawShadow && shadowsOn && (renderer.shadowMap.needsUpdate || !this.rawShadow.valid)) {
       const needs = renderer.shadowMap.needsUpdate;
