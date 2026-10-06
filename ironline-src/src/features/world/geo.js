@@ -152,6 +152,7 @@ export class Builder {
     const tri = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     const nrm = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     const fn = new THREE.Vector3();
+    let lastM = null, lastB = null;
     for (let i = 0; i < P.count; i += 3) {
       let m = mat;
       if (opts.faceMats) {
@@ -159,7 +160,13 @@ export class Builder {
         if (fm === null) continue; // face omitida
         if (fm) m = fm;
       }
-      const b = this._bucket(m, cx, cz);
+      // o balde só muda com o material da face (chunk/sombra são fixos na
+      // chamada): evita montar a chave em string a cada triângulo
+      if (m !== lastM) {
+        lastB = this._bucket(m, cx, cz);
+        lastM = m;
+      }
+      const b = lastB;
       for (let k = 0; k < 3; k++) {
         tri[k].fromBufferAttribute(P, i + k);
         nrm[k].fromBufferAttribute(Nn, i + k);

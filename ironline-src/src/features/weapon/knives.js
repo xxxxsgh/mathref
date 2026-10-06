@@ -604,7 +604,7 @@ export function makeKnifeRig(M, handR, id) {
   const pose6 = (p, r) => ({ pos: V(...p), rot: new THREE.Euler(...r) });
   const rev = !!spec.reverse;
   // espera: baixa à direita, lâmina para a frente/cima (reversa: para baixo/dentro)
-  const hip = rev ? pose6([0.15, -0.16, -0.33], [0.25, 0.35, 0.9]) : pose6([0.14, -0.15, -0.34], [0.55, 0.25, 0.55]);
+  const hip = rev ? pose6([0.11, -0.05, -0.3], [-0.21, 0.32, -0.71]) : pose6([0.1, -0.1, -0.3], [0.58, 0.3, -1.58]);
   const ads = pose6(hip.pos.toArray(), [hip.rot.x, hip.rot.y, hip.rot.z]);
   const sprint = pose6([0.0, -0.06, 0.06], [-0.4, 0.3, 0.2]);
   const relaxed = clonePose(POSES.relaxed);

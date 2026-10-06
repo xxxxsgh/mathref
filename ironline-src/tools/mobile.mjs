@@ -30,6 +30,8 @@
  *   --size WxH                viewport CSS (padrão 412x915 android, 390x844 iphone)
  *   --dpr N                   deviceScaleFactor (padrão 3)
  *   --dist dir                serve outra pasta de build (ex.: build sem minificar p/ perfil)
+ *   --desktop                 sem emulação de celular (1280x720, DPR 1) — p/ comparar shots
+ *   --frames N                frames extras depois do menu, antes da captura
  *   --profile                 perfil de CPU (CDP) da carga: top funções por tempo próprio
  *   --eval "js"               roda depois do menu (recebe ctx, pode usar await); imprime o retorno
  */
@@ -54,7 +56,7 @@ try {
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '/opt/pw-browsers';
 
 const argv = process.argv.slice(2);
-const opt = { device: 'android', cpu: 6, params: '', gpu: '', phonegl: false, out: '', json: '', timeout: 900000, size: '', dpr: 3, eval: '', profile: false };
+const opt = { device: 'android', cpu: 6, params: '', gpu: '', phonegl: false, out: '', json: '', timeout: 900000, size: '', dpr: 3, eval: '', profile: false, desktop: false, frames: 0 };
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   const next = () => argv[++i];
@@ -70,6 +72,8 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--dpr') opt.dpr = Number(next());
   else if (a === '--eval') opt.eval = next();
   else if (a === '--profile') opt.profile = true;
+  else if (a === '--desktop') opt.desktop = true;
+  else if (a === '--frames') opt.frames = Number(next());
   else if (a === '--dist') DIST = resolve(next());
   else {
     console.error('argumento desconhecido:', a);
@@ -115,13 +119,15 @@ const url = `http://127.0.0.1:${server.address().port}${BASE}?${['bootlog=1', op
 const browser = await chromium.launch({
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', '--disable-gpu-sandbox', '--enable-precise-memory-info'],
 });
-const context = await browser.newContext({
-  viewport: { width: vw, height: vh },
-  deviceScaleFactor: opt.dpr,
-  isMobile: true,
-  hasTouch: true,
-  userAgent: dev.ua,
-});
+const context = await browser.newContext(opt.desktop
+  ? { viewport: { width: opt.size ? vw : 1280, height: opt.size ? vh : 720 }, deviceScaleFactor: 1 }
+  : {
+    viewport: { width: vw, height: vh },
+    deviceScaleFactor: opt.dpr,
+    isMobile: true,
+    hasTouch: true,
+    userAgent: dev.ua,
+  });
 // Antes de qualquer script da página: tarefas longas, simulação de GPU de
 // celular e registro dos textos da tela de carga.
 await context.addInitScript(({ gpu, phonegl }) => {
@@ -216,6 +222,10 @@ try {
   });
 } catch (e) {
   status = 'timeout: ' + e.message.split('\n')[0];
+}
+if (opt.frames && status === 'ok') {
+  const f0 = await page.evaluate(() => window.__frames);
+  await page.waitForFunction((n) => window.__frames >= n, f0 + opt.frames, { timeout: opt.timeout, polling: 100 }).catch(() => {});
 }
 const wallS = +((Date.now() - t0) / 1000).toFixed(1);
 clearInterval(sampler);

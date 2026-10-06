@@ -18,14 +18,17 @@ export function setCanvasScale(s) {
 }
 
 /** Canvas na escala da camada (também usado por vegetation.js e road.js). */
-export function canvas(w, h) {
+export function canvas(w, h, read = false) {
   const c = document.createElement('canvas');
   // só encolhe as grandes; as de 128² (contato, pintura) usam ImageData fixo
   const k = SCALE < 1 && Math.min(w, h) >= 256 ? SCALE : 1;
   c.width = Math.round(w * k);
   c.height = Math.round(h * k);
   c.__k = k;
-  const g = c.getContext('2d');
+  // read: mapa de altura lido de volta (getImageData) → canvas em CPU. Num
+  // canvas acelerado a leitura força a GPU a rasterizar e copiar tudo de
+  // volta (segundos no SwiftShader, travadas no celular)
+  const g = c.getContext('2d', read ? { willReadFrequently: true } : undefined);
   if (k !== 1) g.scale(k, k);
   return [c, g];
 }
@@ -147,7 +150,7 @@ function blob(g, r, x, y, rad, n = 11, jag = 0.45) {
 export function crackTexture(seed = 7) {
   const r = mulberry(seed);
   const [c, g] = canvas(512, 512);
-  const [hc, hg] = canvas(512, 512);
+  const [hc, hg] = canvas(512, 512, true);
   hg.fillStyle = 'rgb(128,128,128)';
   hg.fillRect(0, 0, 512, 512);
   g.lineCap = hg.lineCap = 'round';
@@ -208,7 +211,7 @@ export function bulletHolesTexture(seed = 9) {
   // soltos de calibre variado, metralhadora pesada) — nada se repete igual
   const r = mulberry(seed);
   const [c, g] = canvas(1024, 1024);
-  const [hc, hg] = canvas(1024, 1024);
+  const [hc, hg] = canvas(1024, 1024, true);
   hg.fillStyle = 'rgb(128,128,128)';
   hg.fillRect(0, 0, 1024, 1024);
   for (let t = 0; t < 4; t++) {
@@ -285,7 +288,7 @@ export function bulletHolesTexture(seed = 9) {
 export function metalHolesTexture(seed = 31) {
   const r = mulberry(seed);
   const [c, g] = canvas(1024, 1024);
-  const [hc, hg] = canvas(1024, 1024);
+  const [hc, hg] = canvas(1024, 1024, true);
   hg.fillStyle = 'rgb(128,128,128)';
   hg.fillRect(0, 0, 1024, 1024);
   for (let t = 0; t < 4; t++) {
@@ -337,7 +340,7 @@ export const bulletRect = (q) => [(q % 2) * 0.5, 0.5 - Math.floor(q / 2) * 0.5, 
 export function chipsTexture(seed = 15) {
   const r = mulberry(seed);
   const [c, g] = canvas(1024, 1024);
-  const [hc, hg] = canvas(1024, 1024);
+  const [hc, hg] = canvas(1024, 1024, true);
   hg.fillStyle = 'rgb(128,128,128)';
   hg.fillRect(0, 0, 1024, 1024);
   for (let i = 0; i < 4; i++) {
@@ -945,7 +948,7 @@ export function crateTexture(seed = 43) {
   const r = mulberry(seed);
   const S = 1024, Q = 512;
   const [c, g] = canvas(S, S);
-  const [hc, hg] = canvas(S, S);
+  const [hc, hg] = canvas(S, S, true);
   hg.fillStyle = 'rgb(140,140,140)';
   hg.fillRect(0, 0, S, S);
   const quad = (qx, qy, vertical, planks, stencil) => {
@@ -1083,7 +1086,7 @@ export function trashTexture(seed = 37) {
   const r = mulberry(seed);
   const S = 512, C = 128;
   const [c, g] = canvas(S, S);
-  const [hc, hg] = canvas(S, S);
+  const [hc, hg] = canvas(S, S, true);
   hg.fillStyle = 'rgb(128,128,128)';
   hg.fillRect(0, 0, S, S);
   const dirt = (x0, y0, w, h, a) => {

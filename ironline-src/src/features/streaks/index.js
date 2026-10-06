@@ -213,7 +213,8 @@ export default {
 
   emitReady(id, extra = {}) {
     const d = STREAKS[id];
-    this.ctx.bus.emit('streak:ready', { id, name: d.name, kills: d.kills, icon: d.icon, ...extra });
+    const slot = this.tracker.loadout.indexOf(id);
+    this.ctx.bus.emit('streak:ready', { id, name: d.name, kills: d.kills, icon: d.icon, key: slot >= 0 ? String(3 + slot) : null, ...extra });
     if (!extra.refund) {
       this.sfx.beep(880, 0.08, 0.12, 'triangle');
       setTimeout(() => this.sfx.beep(1320, 0.12, 0.12, 'triangle'), 90);

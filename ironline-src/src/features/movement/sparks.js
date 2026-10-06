@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * Faíscas do slide em superfície dura (metal: muitas; concreto/asfalto: só
+ * Faíscas do slide em superfície dura (metal: muitas, das duas botas; concreto/asfalto: só
  * em alta velocidade, poucas — são os cravos/biqueira raspando). Pontos
  * aditivos com gravidade e esfriamento (branco-amarelado → laranja → some).
  * 1 draw call, orçamento escalado por `quality.particleBudget`.
@@ -9,7 +9,7 @@ import * as THREE from 'three';
 const MAX = 72;
 
 /** Faíscas por segundo e por m/s, por material (0 = nenhuma). */
-export const SPARK_RATE = { metal: 9, concrete: 0.9, asphalt: 0.7, brick: 0.5, glass: 1.2 };
+export const SPARK_RATE = { metal: 16, concrete: 0.9, asphalt: 0.7, brick: 0.5, glass: 1.2 };
 
 function dotTexture() {
   const N = 32;
@@ -42,7 +42,7 @@ export class Sparks {
     this.n = 0;
     this.acc = 0;
     this.mat = new THREE.PointsMaterial({
-      size: 0.05,
+      size: 0.07,
       map: dotTexture(),
       vertexColors: true,
       transparent: true,
@@ -58,7 +58,7 @@ export class Sparks {
   }
   budget() {
     const b = this.ctx.quality?.particleBudget; // 0..1
-    return b ? Math.max(0.3, Math.min(1, b)) : 1;
+    return b ? Math.max(0.6, Math.min(1, b)) : 1;
   }
   /** Emite ao longo do slide: `rate` faíscas/s, saindo para trás e para cima. */
   trail(dt, pos, dir, speed, material) {

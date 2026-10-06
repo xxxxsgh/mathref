@@ -370,7 +370,7 @@ export default {
           this.dust.trail(fdt, cp[k], _dir, s, c.groundMaterial, rate * (k === 'L' ? 0.6 : 0.4));
         }
         // faíscas: calcanhar da perna estendida raspando em superfície dura
-        if (this.sparks) this.sparks.trail(fdt, cp.L, _dir, s, c.groundMaterial);
+        if (this.sparks) for (const k of ['L', 'R']) this.sparks.trail(fdt * (k === 'L' ? 0.65 : 0.35), cp[k], _dir, s, c.groundMaterial);
       }
     }
     if (this.dust) this.dust.update(fdt);

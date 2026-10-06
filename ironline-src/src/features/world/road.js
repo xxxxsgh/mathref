@@ -43,7 +43,7 @@ function heightNormal(c, strength) {
 export function ironTextures(seed = 61) {
   const r = mulberry(seed);
   const [c, g] = canvas(1024, 512);
-  const [hc, hg] = canvas(1024, 512);
+  const [hc, hg] = canvas(1024, 512, true);
   hg.fillStyle = 'rgb(128,128,128)'; hg.fillRect(0, 0, 1024, 512);
   // ── tampa redonda ──
   const cx = 256, cy = 256;
