@@ -30,8 +30,13 @@ import * as THREE from 'three';
 import { camoTexture, detailTexture } from './textures.js';
 
 let shared = null;
+/** Tamanho das texturas procedurais: 512² no desktop, 256² em celular/lite. */
+let TEX_SIZE = 512;
+export function setSoldierTextureSize(n) {
+  if (!shared) TEX_SIZE = n;
+}
 function textures() {
-  if (!shared) shared = { camo: camoTexture(512), detail: detailTexture(512) };
+  if (!shared) shared = { camo: camoTexture(TEX_SIZE), detail: detailTexture(TEX_SIZE) };
   return shared;
 }
 

@@ -147,7 +147,8 @@ export const REGULAR_VARIANTS = VARIANTS.filter((v) => !v.boss && !v.role).lengt
 export const ROLE_VARIANT = Object.fromEntries(VARIANTS.map((v, i) => [v.role, i]).filter((x) => x[0]));
 export const BOSS_VARIANT = VARIANTS.findIndex((v) => v.boss);
 
-export function buildSoldierGeometry(variant = VARIANTS[0]) {
+/** `opts` vai para SkinBuilder.build (ex.: { aoVoxel } mais grosso em celular). */
+export function buildSoldierGeometry(variant = VARIANTS[0], opts = undefined) {
   const b = new SkinBuilder();
   const V = variant;
   const M = {
@@ -668,7 +669,7 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
   else addRifle(b, M);
   if (V.boss) addLmgParts(b, M);
 
-  return b.build();
+  return b.build(opts);
 }
 
 /**

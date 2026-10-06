@@ -22,7 +22,7 @@
 import * as THREE from 'three';
 import { createSkeleton, B, rayCapsule } from './rig.js';
 import { buildSoldierGeometry, VARIANTS, RIFLE, REGULAR_VARIANTS, BOSS_VARIANT } from './soldier.js';
-import { createSoldierMaterial, updateSoldierLighting, CAMO } from './material.js';
+import { createSoldierMaterial, updateSoldierLighting, CAMO, setSoldierTextureSize } from './material.js';
 import { ContactShadows } from './contact.js';
 import { Animator } from './anim.js';
 import { Ragdoll } from './ragdoll.js';
@@ -584,16 +584,28 @@ export default {
   name: 'enemies',
   order: 50,
 
-  init(ctx) {
+  async init(ctx) {
     const t0 = performance.now();
     this.ctx = ctx;
     this.list = [];
-    // variantes comuns na inicialização; chefe e classes especiais só
-    // quando forem usadas (ou pré-aquecidas antes da onda em que entram)
-    const lazy = (v) => v.boss || v.role;
-    this.geos = VARIANTS.map((v) => (lazy(v) ? null : buildSoldierGeometry(v)));
+    const boot = (label, f) => ctx.bootProgress?.(label, f);
+    // celular/lite: texturas 256² e AO assada em voxels mais grossos
+    this.mobile = (ctx.quality?.tier ?? 'desktop') !== 'desktop';
+    if (this.mobile) setSoldierTextureSize(256);
+    this.geoOpts = this.mobile ? { aoVoxel: 0.02, aoDist: 0.1 } : undefined;
+    // TODAS as variantes sob demanda (ensureVariant no spawn): só as que a
+    // população inicial usa são geradas aqui, uma por vez cedendo um frame
+    this.geos = VARIANTS.map(() => null);
+    this.mats = VARIANTS.map(() => null);
+    const initial = ctx.shot ? [] : (ctx.services.world?.enemySpawns || []).map((sp, i) => sp.variant ?? (nextId + i) % REGULAR_VARIANTS);
+    const need = [...new Set(initial)];
+    if (!need.length) need.push(0);
+    for (let k = 0; k < need.length; k++) {
+      await boot('Soldados', k / (need.length + 2));
+      this.ensureVariant(need[k]);
+    }
     const tGeo = performance.now() - t0;
-    this.mats = VARIANTS.map((v) => (lazy(v) ? null : createSoldierMaterial({ camo: CAMO[v.camo] || CAMO.woodland })));
+    await boot('Navegação', need.length / (need.length + 2));
     this.wave = 0;
     this.grenades = new EnemyGrenades(ctx);
     this.props = new ExplosiveProps(ctx);
@@ -613,7 +625,8 @@ export default {
         console.warn('[enemies] grade de navegação falhou', err);
       }
     }
-    this.stats = { geoMs: Math.round(tGeo), verts: this.geos[0].attributes.position.count, tris: this.geos[0].index.count / 3, nav: this.nav?.stats };
+    const g0 = this.geos.find((g) => g);
+    this.stats = { geoMs: Math.round(tGeo), verts: g0?.attributes.position.count, tris: g0 ? g0.index.count / 3 : 0, nav: this.nav?.stats, mobile: this.mobile };
 
     // classes especiais: ?roles=all|rusher|sniper|shield|medic força; senão
     // entram a partir da onda ROLE_MIX.from (as ondas 1–2 são só fuzileiros)
@@ -698,6 +711,7 @@ export default {
       }
     });
 
+    await boot('Esquadrão', (need.length + 1) / (need.length + 2));
     // ── população ──
     const preset = ctx.shot?.preset;
     if (ctx.shot) {
@@ -905,7 +919,7 @@ export default {
   ensureVariant(i) {
     if (!this.geos[i]) {
       const t0 = performance.now();
-      this.geos[i] = buildSoldierGeometry(VARIANTS[i]);
+      this.geos[i] = buildSoldierGeometry(VARIANTS[i], this.geoOpts);
       if (this.stats) this.stats.bossGeoMs = Math.round(performance.now() - t0);
     }
     if (!this.mats[i]) this.mats[i] = createSoldierMaterial({ camo: CAMO[VARIANTS[i].camo] || CAMO.woodland });
