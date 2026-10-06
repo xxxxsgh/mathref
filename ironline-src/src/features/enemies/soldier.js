@@ -14,6 +14,7 @@
  */
 import { SkinBuilder, GROUPS } from './geo.js';
 import { B } from './rig.js';
+import { addRoleGear, addShotgun, addSniper } from './rolegear.js';
 
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
 const sstep = (a, b, x) => {
@@ -121,8 +122,29 @@ export const VARIANTS = [
   // demanda (não entra no sorteio de variantes das ondas).
   { name: 'juggernaut', camo: 'urban', gear: '#2a2b28', gear2: '#20211f', helmetCamo: 0, helmet: '#2f312d', belt: '#222320', glove: '#1d1d1b', boot: '#262019', bala: '#2c2d29', shirt: '#34362f', ruck: false, face: 'bala', head: 'helmet', nvg: false, sleeves: 'full', lens: '#16201d', boss: true },
 ];
-/** Variantes do sorteio comum (o chefe fica de fora). */
-export const REGULAR_VARIANTS = VARIANTS.filter((v) => !v.boss).length;
+// ─── classes especializadas (roles.js) — fora do sorteio comum ──────────
+VARIANTS.push(
+  // ARROMBADOR (shotgun rusher): urbano preto, máscara de gás com filtro
+  // lateral, placa extra de peito + protetor de virilha, bandoleira de
+  // cartuchos atravessada no peito, escopeta de bomba com cartucheira lateral
+  { name: 'breacher', role: 'rusher', gun: 'shotgun', camo: 'urban', gear: '#1f201e', gear2: '#191a18', helmetCamo: 0, helmet: '#262724', belt: '#1c1c1a', glove: '#1a1a18', boot: '#221d18', bala: '#262622', shirt: '#2f312d', ruck: false, face: 'bala', head: 'helmet', nvg: false, sleeves: 'full', lens: '#141618', gasmask: true, heavy: true, shells: true },
+  // ATIRADOR DE ELITE: boonie + capuz/ombros de ghillie em tiras, fuzil de
+  // ferrolho com luneta grande (reflexo visível) e laser
+  { name: 'marksman', role: 'sniper', gun: 'sniper', camo: 'woodland', gear: '#4a4836', gear2: '#3b3a2c', helmetCamo: 1, belt: '#34322a', glove: '#2e2c27', boot: '#2f271f', bala: '#45463b', shirt: '#4b4d41', ruck: false, face: 'bala', head: 'boonie', scarf: true, nvg: false, lens: '#1c1e20', ghillie: true },
+  // ESCUDEIRO (riot shield): capacete com viseira balística fumê,
+  // ombreiras; o escudo é uma malha à parte (gear.js) presa ao antebraço
+  { name: 'riot', role: 'shield', gun: 'rifle', camo: 'urban', gear: '#2a2c2a', gear2: '#202220', helmetCamo: 0, helmet: '#2b2d2b', belt: '#212220', glove: '#1c1c1a', boot: '#241e18', bala: '#2d2e2a', shirt: '#363834', ruck: false, face: 'bala', head: 'helmet', nvg: false, elbow: true, lens: '#1a1d20', visor: true, pads: true },
+  // SOCORRISTA (medic): árido, braçadeiras brancas com cruz verde,
+  // bolsa médica no quadril e injetor no peito
+  { name: 'medic', role: 'medic', gun: 'rifle', camo: 'arid', gear: '#6a5c46', gear2: '#584b39', helmetCamo: 1, belt: '#4a4034', glove: '#3d3429', boot: '#3e3124', bala: '#4d473a', shirt: '#57524a', ruck: true, face: 'bala', head: 'helmet', nvg: false, goggles: true, lens: '#241c15', medic: true },
+  // OPERADOR (o jogador em 3ª pessoa: execução, killcam) — coyote/árido com
+  // NVG; nunca nasce como inimigo
+  { name: 'operator', role: 'operator', gun: 'rifle', camo: 'arid', gear: '#75664b', gear2: '#5f523d', helmetCamo: 1, belt: '#4f4436', glove: '#2f2b25', boot: '#3b2f22', bala: '#3a3a33', shirt: '#5e594d', ruck: false, face: 'bala', head: 'helmet', nvg: true, lens: '#1d2023', elbow: true },
+);
+/** Variantes do sorteio comum (o chefe e as classes especiais ficam de fora). */
+export const REGULAR_VARIANTS = VARIANTS.filter((v) => !v.boss && !v.role).length;
+/** Índice da variante de cada classe especial (roles.js). */
+export const ROLE_VARIANT = Object.fromEntries(VARIANTS.map((v, i) => [v.role, i]).filter((x) => x[0]));
 export const BOSS_VARIANT = VARIANTS.findIndex((v) => v.boss);
 
 export function buildSoldierGeometry(variant = VARIANTS[0]) {
@@ -637,8 +659,13 @@ export function buildSoldierGeometry(variant = VARIANTS[0]) {
   // ═══ BLINDAGEM DO CHEFE ═══════════════════════════════════════════════
   if (V.boss) addJuggernaut(b, M, chestW);
 
-  // ═══ FUZIL ════════════════════════════════════════════════════════════
-  addRifle(b, M);
+  // ═══ EQUIPAMENTO DE CLASSE (rolegear.js) ═════════════════════════════
+  addRoleGear(b, M, V, chestW);
+
+  // ═══ ARMA ═════════════════════════════════════════════════════════════
+  if (V.gun === 'shotgun') addShotgun(b, M);
+  else if (V.gun === 'sniper') addSniper(b, M);
+  else addRifle(b, M);
   if (V.boss) addLmgParts(b, M);
 
   return b.build();

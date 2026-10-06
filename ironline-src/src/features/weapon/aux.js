@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { Hand, POSES, clonePose, buildSleeve } from './arms.js';
 import { fitHand, sdCapsule } from './grip.js';
 import { buildKnife, buildFrag, buildFlash } from './equipment.js';
+import { buildKnifeModel, knifeGrip, KNIFE_MODELS } from './knives.js';
 import { basis, basisFD } from './guns.js';
 import { Track } from './anim.js';
 
@@ -126,6 +127,30 @@ export class AuxRig {
     this.pose = clonePose(POSES.relaxed);
     this.current = null;
     this.setItem('knife');
+  }
+
+  /**
+   * Troca o modelo da faca do golpe rápido (pega resolvida por modelo e
+   * cacheada). M = materiais da faca (skin própria).
+   */
+  setKnifeModel(id, M) {
+    this.knifeCache ||= {};
+    let k = this.knifeCache[id];
+    if (!k) {
+      const model = buildKnifeModel(M, id);
+      model.visible = false;
+      this.root.add(model);
+      const spec = KNIFE_MODELS[id] || KNIFE_MODELS.tk7;
+      const grip = knifeGrip(this.hand, this.root, model.userData.info, !!spec.reverse);
+      k = this.knifeCache[id] = { model, grip };
+    }
+    if (this.items.knife.root !== k.model) {
+      this.items.knife.root.visible = false;
+      this.items.knife = { root: k.model };
+    }
+    this.grips.knife = k.grip;
+    if (this.current === 'knife') this.setItem('knife');
+    else k.model.visible = false;
   }
 
   /** Mostra o item e posiciona a mão na pega dele. */

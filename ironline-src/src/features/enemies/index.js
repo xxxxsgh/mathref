@@ -29,11 +29,20 @@ import { Ragdoll } from './ragdoll.js';
 import { NavGrid } from './nav.js';
 import { Brain, Squad, BOSS } from './brain.js';
 import { stagingSlots } from './staging.js';
+import { ROLES, ROLE_MIX, pickRole, frontal, rayObb } from './roles.js';
+import { ROLE_VARIANT } from './soldier.js';
+import { GUNS } from './rolegear.js';
+import { buildShield, SHIELD_HALF, Glint, Laser, Pulse } from './gear.js';
+import { EnemyGrenades } from './grenades.js';
+import { ExplosiveProps } from './props.js';
+import { createPuppet, canExecute, startExecution, stepExecution, puppetExecution, EXEC } from './execution.js';
 
 const _v = new THREE.Vector3();
 const _w = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const MUZZLE = new THREE.Vector3(...RIFLE.muzzle);
+const _inv = new THREE.Matrix4();
+const _sq = new THREE.Quaternion();
 
 // cápsulas de acerto: [osso A, osso B (ou null = esfera), raio, parte, offset em A]
 const HITBOXES = [
@@ -90,9 +99,13 @@ class Enemy {
     this.ctx = ctx;
     this.id = nextId++;
     const boss = !!pose.boss || !!VARIANTS[pose.variant]?.boss;
-    const variant = boss ? BOSS_VARIANT : pose.variant ?? this.id % REGULAR_VARIANTS;
+    // classe especial: pose.role ou a variante de uma classe
+    const roleId = boss ? null : pose.role || (VARIANTS[pose.variant]?.role !== 'operator' ? VARIANTS[pose.variant]?.role : null);
+    this.role = ROLES[roleId] || null;
+    const variant = boss ? BOSS_VARIANT : this.role ? ROLE_VARIANT[this.role.id] : pose.variant ?? this.id % REGULAR_VARIANTS;
     this.variant = variant;
     this.boss = boss;
+    this.muzzleLocal = new THREE.Vector3(...(GUNS[VARIANTS[variant].gun] || GUNS.rifle).muzzle);
     feature.ensureVariant(variant);
     const group = new THREE.Group();
     group.name = 'enemy-' + this.id;
@@ -111,7 +124,8 @@ class Enemy {
     this.bones = bones;
     this.anim = new Animator(bones, this.id * 0.71);
     this.home = pose;
-    this.maxHealth = boss ? BOSS.health : 100;
+    this.maxHealth = boss ? BOSS.health : this.role?.health ?? 100;
+    this.revives = 0;
     this.health = this.maxHealth;
     this.alive = true;
     this.velocity = new THREE.Vector3();
@@ -132,6 +146,16 @@ class Enemy {
       data: { kind: 'enemy', enemy: this, damage: (amount, info) => this.damage(amount, info) },
     });
     this.collider = ctx.collision.get(this.colliderId);
+    // equipamento à parte (gear.js)
+    if (this.role?.id === 'shield') {
+      this.shield = buildShield();
+      group.add(this.shield);
+    }
+    if (this.role?.id === 'sniper') {
+      this.glint = new Glint(bones[B.weapon], GUNS.sniper.scope);
+      this.laser = new Laser(ctx.scene);
+      this._laserTo = new THREE.Vector3();
+    }
   }
 
   /** pose do mundo: yaw no padrão do jogador (0 = olha para -Z) */
@@ -165,6 +189,17 @@ class Enemy {
   raycast(o, d, max) {
     this.group.updateMatrixWorld();
     let best = null;
+    // escudo: volume próprio na frente do corpo (parte 'shield')
+    if (this.shield && this.alive && this.shield.parent === this.group) {
+      this.shield.updateMatrixWorld();
+      _inv.copy(this.shield.matrixWorld).invert();
+      const t = rayObb(o, d, _inv, SHIELD_HALF, max);
+      if (t >= 0) {
+        const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(this.shield.getWorldQuaternion(_sq));
+        best = { distance: t, point: o.clone().addScaledVector(d, t), normal, part: 'shield' };
+        max = t;
+      }
+    }
     const a = new THREE.Vector3(), b = new THREE.Vector3();
     for (const h of HITBOXES) {
       this.joint(h.a, a);
@@ -190,7 +225,7 @@ class Enemy {
 
   muzzleWorld(out = new THREE.Vector3()) {
     this.group.updateMatrixWorld();
-    return out.copy(MUZZLE).applyQuaternion(this.anim.weaponQ).add(this.anim.weaponP).applyMatrix4(this.group.matrixWorld);
+    return out.copy(this.muzzleLocal).applyQuaternion(this.anim.weaponQ).add(this.anim.weaponP).applyMatrix4(this.group.matrixWorld);
   }
 
   /** gira o tronco/arma para um ponto do mundo (suavizado) */
@@ -210,8 +245,19 @@ class Enemy {
   damage(amount, info = {}) {
     const ctx = this.ctx;
     const part = info.part || 'torso';
+    // execução em andamento: só o golpe da própria execução conta
+    if (this.exec && !info.execution) return;
+    // finalização "segurando" a faca: o golpe normal não interrompe
+    if (this.finisherLock > ctx.time.now && info.melee && !info.execution && !info.backstab) return;
+    // escudo: bala/faca de frente param no aço (faísca de metal, sem dano)
+    if (part === 'shield' && this.alive) return this.shieldHit(info);
     let dmg = amount * ((this.boss ? BOSS_MULT : PART_MULT)[part] ?? 1);
     if (this.boss && (info.explosion || info.melee)) dmg *= 0.7;
+    // explosão de frente para o escudo: o aço segura boa parte
+    if (this.shield && this.alive && info.explosion && info.point && info.dir) {
+      const origin = info.point.clone().addScaledVector(info.dir, -(info.distance || 2));
+      if (frontal(this.group.position, this.yaw, origin, 1.0)) dmg *= 0.4;
+    }
     const dir = info.dir ? info.dir.clone().normalize() : new THREE.Vector3(0, 0, -1);
     if (!this.alive) {
       // corpo: só um tranco local (bala de fuzil não "arrasta" um corpo de
@@ -230,9 +276,84 @@ class Enemy {
     if (this.health <= 0) this.die(info, dir);
   }
 
+  /** Bala no escudo: o colisor vira 'metal' só para este impacto (vfx/áudio). */
+  shieldHit(info) {
+    const c = this.collider;
+    c.material = 'metal';
+    queueMicrotask(() => (c.material = 'flesh'));
+    this.anim.hitPitch.v += 1.2;
+    this.brain.suppress(0.08);
+    if (info.source === 'player' || info.source === undefined) this.ctx.bus.emit('enemy:shieldHit', { enemy: this, info });
+  }
+
+  /** Posição do corpo (ragdoll) no chão — para o socorrista. */
+  corpsePos(out = new THREE.Vector3()) {
+    if (this.ragdoll) {
+      const b = this.ragdoll.bounds(new THREE.Box3());
+      b.getCenter(out);
+      out.y = this.group.position.y;
+      return out;
+    }
+    return out.copy(this.group.position);
+  }
+
+  /**
+   * Volta à vida (socorrista): de joelhos no lugar do corpo, 50 % da vida,
+   * já em combate. Quem reanima fica em `revivedBy`.
+   */
+  revive(by) {
+    if (this.alive || this.removed) return false;
+    const ctx = this.ctx;
+    const c = this.corpsePos(new THREE.Vector3());
+    const gy = ctx.collision.groundHeight?.(c.x, c.z, c.y + 1.5);
+    this.group.position.set(c.x, Number.isFinite(gy) ? gy : c.y, c.z);
+    if (by?.group) this.yaw = Math.atan2(by.group.position.x - c.x, by.group.position.z - c.z) + Math.PI;
+    this.group.rotation.set(0, this.yaw, 0);
+    this.ragdoll = null;
+    this.alive = true;
+    this.health = this.maxHealth * 0.5;
+    this.deadT = 0;
+    this.revives++;
+    this.revivedBy = by || null;
+    this.claimedBy = null;
+    this.collider.data.kind = 'enemy';
+    this.collider.blocksPlayer = true;
+    const p = this.anim.p;
+    p.crouch = 1;
+    p.aim = 0;
+    p.reload = -1;
+    p.duck = 0;
+    p.headBack = 0;
+    this.anim.over.wL = this.anim.over.wR = 0;
+    this.velocity.set(0, 0, 0);
+    const br = this.brain;
+    br.state = 'combat';
+    br.mode = null;
+    br.reloadT = -1;
+    br.ammo = br.magSize;
+    br.awareness = 1;
+    br.throwT = -1;
+    br.reactT = 0.8;
+    if (this.shield) {
+      this.shield.removeFromParent();
+      this.group.add(this.shield);
+      this.shieldFall = null;
+    }
+    this.anim.update(0);
+    ctx.bus.emit('enemy:revive', { enemy: this, medic: by, phase: 'done' });
+    ctx.services.vfx?.impact?.(this.group.position.clone().setY(this.group.position.y + 0.1), new THREE.Vector3(0, 1, 0), 'dirt', { scale: 1.4 });
+    return true;
+  }
+
   die(info, dir) {
     const ctx = this.ctx;
     this.alive = false;
+    this.exec = null;
+    this.brain.revive = null;
+    this.brain.reviving = 0;
+    this.brain.throwT = -1;
+    this.anim.over.wL = this.anim.over.wR = 0;
+    this.dropGear();
     this.health = 0;
     this.deadT = 0;
     this.collider.data.kind = 'corpse';
@@ -257,21 +378,52 @@ class Enemy {
     if (mate) this.feature.squad.callout(mate, 'mandown', ctx.time.now, true);
   }
 
+  /** Larga o escudo (cai no chão) e apaga laser/reflexo. */
+  dropGear() {
+    if (this.shield && this.shield.parent === this.group) {
+      this.shield.updateMatrixWorld();
+      const m = this.shield.matrixWorld.clone();
+      this.ctx.scene.add(this.shield);
+      m.decompose(this.shield.position, this.shield.quaternion, this.shield.scale);
+      const gy = this.ctx.collision.groundHeight?.(this.shield.position.x, this.shield.position.z, this.shield.position.y + 0.5) ?? this.group.position.y;
+      this.shieldFall = { t: 0, q0: this.shield.quaternion.clone(), p0: this.shield.position.clone(), gy, yaw: this.yaw };
+    }
+    this.laser?.update(_v, _v, this.ctx.camera, 0);
+    if (this.glint) this.glint.sprite.visible = false;
+  }
+
   /** passo fixo: IA + locomoção */
   update(dt) {
+    if (this.shieldFall) {
+      // escudo tomba e assenta deitado (face para cima)
+      const f = this.shieldFall;
+      f.t = Math.min(1, f.t + dt / 0.55);
+      const e = f.t * f.t;
+      const flat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, f.yaw, 0, 'YXZ'));
+      this.shield.quaternion.copy(f.q0).slerp(flat, e);
+      this.shield.position.lerpVectors(f.p0, _v.set(f.p0.x, f.gy + 0.05, f.p0.z), e);
+      if (f.t >= 1) this.shieldFall = null;
+    }
     if (!this.alive) {
       this.deadT += dt;
       this.ragdoll?.step(dt);
       return;
     }
     const br = this.brain;
-    br.update(dt);
     const p = this.anim.p;
+    // execução: a vítima segue a coreografia (sem IA, sem andar)
+    if (this.exec) {
+      stepExecution(this, dt, this.ctx);
+      this.speed = 0;
+      return;
+    }
+    br.update(dt);
     // suavização dos parâmetros de pose
     const k = 1 - Math.exp(-dt * 6);
     p.crouch += (br.desiredCrouch - p.crouch) * k;
     p.aim += (br.desiredAim - p.aim) * (1 - Math.exp(-dt * 9));
     p.lean += (br.leanTarget - p.lean) * k;
+    p.duck += ((br.duck || 0) - p.duck) * (1 - Math.exp(-dt * 8));
     if (br.state === 'idle' && br.lookYaw != null) p.aimYaw += (br.lookYaw - p.aimYaw) * k * 0.5;
     // locomoção
     const target = br.moveDir && br.speedTarget > 0 ? _v.copy(br.moveDir).multiplyScalar(br.speedTarget * (1 - p.crouch * 0.55)) : _v.set(0, 0, 0);
@@ -331,11 +483,37 @@ class Enemy {
     this._ph = ph;
   }
 
+  /** Escudo diante do peito, mão esquerda na alça (antes da animação). */
+  poseShield() {
+    const a = this.anim;
+    const ch = a.Pm[B.chest];
+    const yr = a.p.aimYaw * 0.85;
+    const s = Math.sin(yr), c = Math.cos(yr);
+    // frente (+Z girado) e esquerda (+X girado) no espaço do modelo
+    const cx = ch.x + s * 0.44 + c * 0.1, cz = ch.z + c * 0.44 - s * 0.1;
+    const cy = ch.y - 0.27;
+    this.shield.position.set(cx, cy, cz);
+    this.shield.rotation.set(-0.05, yr, 0);
+    a.over.L.set(cx - s * 0.1 + c * 0.02, cy + 0.06, cz - c * 0.1 - s * 0.02);
+    a.over.wL = 1;
+  }
+
   /** por frame de render: animação/ragdoll → ossos */
   frame(dt) {
     if (this.ragdoll) {
       this.ragdoll.pose();
       return;
+    }
+    if (this.shield) this.poseShield();
+    if (this.glint) this.frameSniper(dt);
+    if (this.role?.id === 'medic') {
+      const br = this.brain;
+      if (br.reviving > 0 && br.revive?.corpse) {
+        this.pulse ||= new Pulse(this.ctx.scene);
+        const cp = br.revive.corpse.corpsePos(new THREE.Vector3());
+        cp.y += 0.35;
+        this.pulse.update(cp, Math.min(1, br.reviving * 1.2), this.ctx.time.now);
+      } else this.pulse?.update(_v, 0, 0);
     }
     // LOD: longe da câmera anima a cada 2 frames
     const cam = this.ctx.camera.position;
@@ -350,7 +528,37 @@ class Enemy {
     this.anim.update(Math.min(dt, 1 / 20));
   }
 
+  /** Atirador: reflexo da luneta e laser (comprimento por raycast). */
+  frameSniper(dt) {
+    const br = this.brain;
+    const ctx = this.ctx;
+    const aiming = this.alive && br.state === 'combat' ? this.anim.p.aim : 0;
+    this.glint.update(ctx.camera, br.charge || 0, aiming, dt);
+    const on = this.alive && br.laser ? Math.max(0.25, br.charge || 0) : 0;
+    const from = this.muzzleWorld(new THREE.Vector3());
+    if (on > 0) {
+      this._lt = (this._lt || 0) + 1;
+      const dir = _w.set(0, 0, 1).applyQuaternion(this.anim.weaponQ).applyQuaternion(this.group.quaternion).normalize();
+      if (this._lt % 3 === 1 || !this._laserLen) {
+        const hit = ctx.collision.raycast(from, dir, 140, { filter: (c) => c.owner !== this.group && c.tag !== 'player' });
+        this._laserLen = hit ? hit.distance : 140;
+        // o laser "acha" o jogador: termina nele se passa rente
+        const pl = ctx.player;
+        const pc = _v.copy(pl.position).setY(pl.position.y + 1.3).sub(from);
+        const t = pc.dot(dir);
+        if (pl.alive && t > 0 && t < this._laserLen && Math.sqrt(Math.max(0, pc.lengthSq() - t * t)) < 0.35) this._laserLen = t;
+      }
+      this._laserTo.copy(from).addScaledVector(dir, this._laserLen);
+    }
+    this.laser.update(from, this._laserTo || from, ctx.camera, on);
+  }
+
   dispose() {
+    this.removed = true;
+    this.laser?.dispose();
+    this.glint?.dispose();
+    this.pulse?.dispose();
+    this.shield?.removeFromParent();
     this.ctx.scene.remove(this.group);
     this.ctx.collision.remove(this.colliderId);
     this.brain.releaseCover();
@@ -365,10 +573,15 @@ export default {
     const t0 = performance.now();
     this.ctx = ctx;
     this.list = [];
-    // variantes comuns na inicialização; a do chefe só quando for usada
-    this.geos = VARIANTS.map((v) => (v.boss ? null : buildSoldierGeometry(v)));
+    // variantes comuns na inicialização; chefe e classes especiais só
+    // quando forem usadas (ou pré-aquecidas antes da onda em que entram)
+    const lazy = (v) => v.boss || v.role;
+    this.geos = VARIANTS.map((v) => (lazy(v) ? null : buildSoldierGeometry(v)));
     const tGeo = performance.now() - t0;
-    this.mats = VARIANTS.map((v) => (v.boss ? null : createSoldierMaterial({ camo: CAMO[v.camo] || CAMO.woodland })));
+    this.mats = VARIANTS.map((v) => (lazy(v) ? null : createSoldierMaterial({ camo: CAMO[v.camo] || CAMO.woodland })));
+    this.wave = 0;
+    this.grenades = new EnemyGrenades(ctx);
+    this.props = new ExplosiveProps(ctx);
     // chefe no preset de combate (captura do modo sobrevivência)
     if (ctx.shot?.preset?.combat && ctx.params.get('boss') === '1') this.ensureVariant(BOSS_VARIANT);
     this.squad = new Squad(ctx);
@@ -387,7 +600,16 @@ export default {
     }
     this.stats = { geoMs: Math.round(tGeo), verts: this.geos[0].attributes.position.count, tris: this.geos[0].index.count / 3, nav: this.nav?.stats };
 
+    // classes especiais: ?roles=all|rusher|sniper|shield|medic força; senão
+    // entram a partir da onda ROLE_MIX.from (as ondas 1–2 são só fuzileiros)
+    const forceRole = ctx.params.get('roles');
     const spawn = (pose) => {
+      if (!pose.boss && pose.role === undefined && !VARIANTS[pose.variant]?.role && !ctx.shot) {
+        const counts = {};
+        for (const o of this.list) if (o.alive && o.role) counts[o.role.id] = (counts[o.role.id] || 0) + 1;
+        const role = pickRole(this.wave, () => ctx.rng.next(), { force: this.forceRole ?? forceRole, counts });
+        if (role) pose = { ...pose, role };
+      }
       const e = new Enemy(this, ctx, pose, this.geos, this.mats);
       this.list.push(e);
       return e;
@@ -409,6 +631,11 @@ export default {
           if (t > 0) {
             const miss = Math.sqrt(Math.max(0, c.lengthSq() - t * t));
             if (miss < 2.5) e.brain.suppress(((2.5 - miss) / 2.5) * 0.4);
+            // bala rente: sobressalto (lado da passagem)
+            if (miss < 1.1 && miss > 0.25 && t < 120) {
+              const side = Math.sign(c.x * dir.z - c.z * dir.x) || 1;
+              e.anim.nearMiss(side, (1.1 - miss) / 0.85);
+            }
           }
         }
       }
@@ -418,6 +645,41 @@ export default {
       for (const e of this.list) if (e.alive && e.group.position.distanceToSquared(h.point) < 4) e.brain.suppress(0.25);
     });
 
+    // ── granadas do JOGADOR: previsão simples (balística + quiques) para
+    // os soldados perto do ponto de queda fugirem (e devolverem, se a
+    // feature weapon publicar `throwBack`) ──
+    this.playerNades = [];
+    ctx.bus.on('weapon:throw', (g) => {
+      if (!g?.position || !g.velocity || g.kind === 'flash') return;
+      this.playerNades.push({ p: g.position.clone(), v: g.velocity.clone(), fuse: g.fuse ?? 3, t: 0 });
+    });
+    ctx.bus.on('weapon:grenadeBounce', (b) => {
+      if (!b?.position) return;
+      let best = null, bd = 3;
+      for (const n of this.playerNades) {
+        const d = n.p.distanceTo(b.position);
+        if (d < bd) {
+          bd = d;
+          best = n;
+        }
+      }
+      if (best) {
+        best.p.copy(b.position);
+        best.v.multiplyScalar(0.35);
+        if ((b.speed ?? 0) < 1.5) best.v.set(0, 0, 0);
+      }
+    });
+    ctx.bus.on('match:wave', (w) => (this.wave = w?.wave || this.wave));
+    ctx.bus.on('match:start', () => {
+      this.wave = 0;
+      this.grenades.clear();
+      // props novos a cada partida
+      if (!ctx.shot) {
+        this.props.clear();
+        this.props.populate(ctx.services.world, this.nav, ctx.rng.fork ? ctx.rng.fork('props') : ctx.rng);
+      }
+    });
+
     // ── população ──
     const preset = ctx.shot?.preset;
     if (ctx.shot) {
@@ -425,6 +687,9 @@ export default {
     } else {
       for (const sp of world?.enemySpawns || []) spawn(sp);
     }
+    // props explosivos (barris/botijões) perto das entradas e coberturas
+    if (!ctx.shot) this.props.populate(world, this.nav, ctx.rng.fork ? ctx.rng.fork('props') : ctx.rng);
+    else if (ctx.params.get('props') === '1') this.stageProps(ctx);
 
     const self = this;
     this.auto = true;
@@ -464,7 +729,158 @@ export default {
       get objective() { return self.squad.objective; },
       /** Manda um soldado para o objetivo/jogador já em combate (ondas). */
       assault: (e, opts) => e?.brain?.assault?.(opts),
+
+      // ── classes especiais (roles.js) ──
+      roles: ROLES,
+      roleMix: ROLE_MIX,
+      /** Força/limpa a classe dos próximos spawns: null | 'all' | id. */
+      setRoleForce: (r) => (this.forceRole = r),
+      /** Variante de uma classe (para `spawn({ role })` ou `variant`). */
+      roleVariant: (id) => ROLE_VARIANT[id],
+      /** Socorrista: reanima um corpo (também chamável por QA). */
+      revive: (e, by) => this.revive(e, by),
+
+      // ── execução / marionetes (execution.js) ──
+      exec: EXEC,
+      /** Distância se o jogador pode executar `e` (por trás, desatento), senão -1. */
+      canExecute: (e, pos = ctx.player.position) => canExecute(e, pos),
+      /** Melhor alvo de execução perto do jogador (ou null). */
+      executionTarget: (pos = ctx.player.position) => {
+        let best = null, bd = Infinity;
+        for (const e of this.list) {
+          const d = canExecute(e, pos);
+          if (d >= 0 && d < bd) {
+            bd = d;
+            best = e;
+          }
+        }
+        return best;
+      },
+      /** Operador em 3ª pessoa: { group, anim, place, update, die, joint, dispose }. */
+      createPuppet: (opts) => createPuppet(this, ctx, opts),
+      /** Começa a execução da vítima; devolve a função de animação do atacante. */
+      execute: (e, puppet) => {
+        startExecution(e, puppet);
+        const vPos = e.group.position.clone(), vYaw = e.yaw;
+        return (P, t, from) => puppetExecution(P, t, from, vPos, vYaw, e);
+      },
+
+      // ── killcam: retratos e "fantasmas" (poses gravadas aplicadas só no render) ──
+      /** Retrato compacto de todos os vivos (para o anel da killcam). */
+      snapshot: () => this.snapshot(),
+      ghost: {
+        /** Aplica retratos (Map id → retrato) neste frame; restaura no próximo passo. */
+        apply: (map) => (this.ghostMap = map),
+        end: () => {
+          this.ghostMap = null;
+          this.restoreGhosts();
+        },
+      },
+
+      // ── props e granadas ──
+      props: this.props,
+      grenades: this.grenades,
     });
+  },
+
+  revive(e, by) {
+    return e?.revive?.(by) || false;
+  },
+
+  snapshot() {
+    const out = [];
+    for (const e of this.list) {
+      if (!e.alive) continue;
+      const g = e.group.position, p = e.anim.p;
+      out.push({ id: e.id, x: g.x, y: g.y, z: g.z, yaw: e.yaw, aimYaw: p.aimYaw, aimPitch: p.aimPitch, crouch: p.crouch, aim: p.aim, speed: p.speed, moveX: p.moveX, moveZ: p.moveZ, lean: p.lean, reload: p.reload });
+    }
+    return out;
+  },
+
+  /** Fantasmas da killcam: aplica a pose gravada (guarda a real). */
+  applyGhosts() {
+    const map = this.ghostMap;
+    if (!map) return;
+    for (const e of this.list) {
+      const s = map.get(e.id);
+      if (!s || !e.alive || e.ragdoll) continue;
+      if (!e._real) {
+        const p = e.anim.p;
+        e._real = { x: e.group.position.x, y: e.group.position.y, z: e.group.position.z, yaw: e.yaw, p: { ...p, over: undefined } };
+      }
+      e.group.position.set(s.x, s.y, s.z);
+      e.yaw = s.yaw;
+      e.group.rotation.y = s.yaw;
+      Object.assign(e.anim.p, { aimYaw: s.aimYaw, aimPitch: s.aimPitch, crouch: s.crouch, aim: s.aim, speed: s.speed, moveX: s.moveX, moveZ: s.moveZ, lean: s.lean, reload: s.reload });
+    }
+  },
+  restoreGhosts() {
+    for (const e of this.list) {
+      const r = e._real;
+      if (!r) continue;
+      e._real = null;
+      e.group.position.set(r.x, r.y, r.z);
+      e.yaw = r.yaw;
+      e.group.rotation.y = r.yaw;
+      const { over, ...p } = r.p;
+      Object.assign(e.anim.p, p);
+    }
+  },
+
+  /** Shot com ?props=1: alguns props diante da pose do preset. */
+  stageProps(ctx) {
+    const pl = ctx.shotPose(ctx.shot.name) || ctx.shot.preset.pose;
+    const fx = -Math.sin(pl.yaw), fz = -Math.cos(pl.yaw);
+    const rx = -fz, rz = fx;
+    const P = (f, r) => [pl.position[0] + fx * f + rx * r, pl.position[2] + fz * f + rz * r];
+    for (const [f, r, kind] of [[6, -2.2, 'barrel'], [6.4, -1.5, 'barrel'], [5.6, -1.6, 'canister'], [8, 2.4, 'barrel'], [9, 3.0, 'canister']]) {
+      const [x, z] = P(f, r);
+      const y = ctx.collision.groundHeight?.(x, z, 3);
+      this.props.add(kind, x, Number.isFinite(y) ? y : 0, z, f * 1.7);
+    }
+  },
+
+  /** Granadas do jogador: integra a previsão e manda fugir quem está perto. */
+  updatePlayerNades(dt, ctx) {
+    for (let i = this.playerNades.length - 1; i >= 0; i--) {
+      const n = this.playerNades[i];
+      n.t += dt;
+      if (n.t > n.fuse + 0.1) {
+        this.playerNades.splice(i, 1);
+        continue;
+      }
+      if (n.v.lengthSq() > 0) {
+        n.v.y -= 9.8 * dt;
+        n.p.addScaledVector(n.v, dt);
+        const gy = ctx.collision.groundHeight?.(n.p.x, n.p.z, n.p.y + 0.5);
+        if (Number.isFinite(gy) && n.p.y < gy) {
+          n.p.y = gy;
+          n.v.set(n.v.x * 0.3, 0, n.v.z * 0.3);
+          if (n.v.lengthSq() < 0.2) n.v.set(0, 0, 0);
+        }
+      }
+      const left = n.fuse - n.t;
+      if (left > 2.4 || n.warned) continue;
+      let any = false;
+      for (const e of this.list) {
+        if (!e.alive || e.exec || e.boss) continue;
+        const d = Math.hypot(e.group.position.x - n.p.x, e.group.position.z - n.p.z);
+        if (d > 5.5) continue;
+        any = true;
+        // devolve (gancho da weapon) se está em cima dela e há tempo
+        const tb = ctx.services.weapon?.throwBack;
+        if (tb && d < 2.2 && left > 1.3 && !n.thrownBack && e.brain.state !== 'idle') {
+          n.thrownBack = true;
+          e.brain.squad.callout(e, 'incoming', ctx.time.now, true);
+          e.brain.throwT = 0;
+          e.brain.thrown = true; // a granada é a do jogador (a weapon a relança)
+          tb({ position: n.p.clone(), target: ctx.player.position.clone(), by: e });
+          continue;
+        }
+        e.brain.evade(n.p);
+      }
+      if (any) n.warned = true;
+    }
   },
 
   /** Gera geometria/material de uma variante sob demanda (o chefe). */
@@ -519,12 +935,25 @@ export default {
   },
 
   update(dt, ctx) {
+    this.restoreGhosts();
     for (const e of this.list) e.update(dt);
+    this.grenades.update(dt);
+    this.props.update(dt);
+    if (this.playerNades.length) this.updatePlayerNades(dt, ctx);
+    // pré-aquece as variantes das classes especiais uma onda antes (sem engasgo)
+    if (!ctx.shot && (this.wave >= ROLE_MIX.from - 1 || ctx.params.get('roles'))) {
+      this.warmT = (this.warmT ?? 0) - dt;
+      if (this.warmT <= 0) {
+        this.warmT = 0.8;
+        const id = ['rusher', 'sniper', 'shield', 'medic'].find((r) => !this.geos[ROLE_VARIANT[r]]);
+        if (id) this.ensureVariant(ROLE_VARIANT[id]);
+      }
+    }
     // corpos somem e o esquadrão é reposto (fora do modo screenshot)
     if (!ctx.shot) {
       for (let i = this.list.length - 1; i >= 0; i--) {
         const e = this.list[i];
-        if (!e.alive && e.deadT > 20) {
+        if (!e.alive && e.deadT > 20 && !e.claimedBy?.alive) {
           e.dispose();
           this.list.splice(i, 1);
           this.respawnT = (this.respawnT ?? 0) + 1;
@@ -547,11 +976,15 @@ export default {
   frame(dt, ctx) {
     const fdt = ctx.time.virtual ? 1 / 60 : dt;
     updateSoldierLighting(ctx);
+    this.applyGhosts();
+    this.props.frame(ctx.time.virtual ? ctx.time.now : performance.now() * 0.001);
     for (const e of this.list) e.frame(fdt);
     this.contact.update(this.list);
   },
 
   dispose(ctx) {
+    this.grenades?.clear();
+    this.props?.clear();
     for (const e of this.list) e.dispose();
     this.list.length = 0;
     this.contact?.mesh.removeFromParent();

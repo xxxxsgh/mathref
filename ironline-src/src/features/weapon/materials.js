@@ -93,12 +93,91 @@ const GLOVE_GLSL = /* glsl */ `
 `;
 
 /**
+ * Camada de PINTURA da skin (dentro do detalhe "hard", antes do desgaste):
+ *  - cor do padrão (textura tileável de patterns.js) amostrada em TRIPLANAR no
+ *    espaço do objeto, girada/deslocada/escalada pela seed; modo 1 = degradê
+ *    ao longo do comprimento (−Z) com um leve viés vertical;
+ *  - perda de tinta pelo float: quinas (curvatura de tela) descascam primeiro,
+ *    depois manchas grandes e arranhões; `uSkinZone` = quanto a peça gasta
+ *    além da base (punho/carregador/gatilho > corpo);
+ *  - onde a tinta saiu na QUINA aparece metal vivo (wMask); nas manchas
+ *    aparece o acabamento de fábrica por baixo (a cor anterior);
+ *  - acabamento (metalness/roughness) próprio onde há tinta; alfa do padrão =
+ *    emissivo (brasa).
+ */
+const SKIN_GLSL = /* glsl */ `
+    if (uSkinOn > 0.5) {
+      vec3 sp = vWObj;
+      float cr = cos(uSkinXf.w), sr = sin(uSkinXf.w);
+      sp.xy = mat2(cr, sr, -sr, cr) * sp.xy;
+      sp.yz = mat2(cr, -sr, sr, cr) * sp.yz;
+      sp = sp * uSkinScale + uSkinXf.xyz;
+      vec4 sc;
+      if (uSkinMode < 0.5) {
+        sc = texture(tSkin, sp.yz) * bw.x + texture(tSkin, sp.xz) * bw.y + texture(tSkin, sp.xy) * bw.z;
+      } else {
+        float f = (uSkinFade.x - vWObj.z) / max(uSkinFade.y, 1e-4) + vWObj.y * 0.9 / max(uSkinFade.y, 1e-4);
+        f = clamp(f * 0.85 + uSkinFade.z + (wD.r - 0.5) * 0.04, 0.0, 1.0);
+        sc = texture(tSkin, vec2(f, 0.5));
+      }
+      float wnoise = wD.b * 0.6 + wD.r * 0.4;
+      float sEdge = edge * smoothstep(0.78, 0.3, wnoise - uSkinWear.x * 0.5) * clamp(uSkinWear.x * 1.7, 0.0, 1.0);
+      float sBlot = smoothstep(0.86 - uSkinWear.y * 0.36, 0.9 - uSkinWear.y * 0.34, wD.b) * clamp(uSkinWear.y * 2.0, 0.0, 1.0);
+      float sScr = wD.g * wD.g * uSkinWear.z * smoothstep(0.3, 0.8, wD.b + 0.15);
+      float sLoss = clamp(max(max(sEdge, sBlot), sScr * 1.1) * uSkinZone, 0.0, 1.0);
+      sPaint = 1.0 - sLoss;
+      vec3 paint = sc.rgb * mix(1.0, 0.72 + 0.56 * wD.b, uSkinWear.w * 0.45);
+      diffuseColor.rgb = mix(diffuseColor.rgb, paint, sPaint);
+      sEmis = sc.rgb * sc.a * uSkinFin.z * sPaint;
+      // metal vivo só onde a tinta saiu na quina / no arranhão
+      wMask = clamp(max(sEdge * uSkinZone, sScr * 0.9) * (1.0 - sBlot * 0.7), 0.0, 1.0);
+    }`;
+
+let _blank = null;
+/** Textura 1×1 branca (skin desligada). */
+function blankSkin() {
+  if (!_blank) {
+    _blank = new THREE.DataTexture(new Uint8Array([255, 255, 255, 0]), 1, 1, THREE.RGBAFormat);
+    _blank.needsUpdate = true;
+  }
+  return _blank;
+}
+/** Uniforms de oclusão isolados e zerados (prévias fora da viewmodel). */
+function isolatedOcc() {
+  return {
+    uOccA: { value: Array.from({ length: OCC_MAX }, () => new THREE.Vector4(0, 0, 0, 0)) },
+    uOccB: { value: Array.from({ length: OCC_MAX }, () => new THREE.Vector3()) },
+    uOccN: { value: 0 },
+    uOccK: { value: 1 },
+    uIblSat: { value: 0.8 },
+  };
+}
+
+/**
+ * Clona um material com detalhe (parâmetros PBR + opções do detalhe). As
+ * texturas de detalhe são cacheadas, então o clone é barato. `extra` soma
+ * opções (ex.: { noOcc: true } para prévias, { zone } para o desgaste).
+ */
+export function cloneDetail(mat, extra = {}) {
+  const ud = mat.userData;
+  mat.userData = {};
+  const c = mat.clone();
+  mat.userData = ud;
+  c.userData = {};
+  if (!ud.detailOpts) return c;
+  return withDetail(c, { ...ud.detailOpts, ...extra });
+}
+
+/**
  * Aplica o detalhe procedural a um material padrão/físico.
  * opts.kind: 'hard' | 'fabric' | 'camo'
  */
 export function withDetail(mat, opts = {}) {
   const kind = opts.kind || 'hard';
   const panels = !!opts.panels;
+  // oclusão de contato: as cápsulas valem só na viewmodel; prévias (inventário)
+  // usam uniforms próprios zerados (senão as mãos "sombreariam" a prévia)
+  const occ = opts.noOcc ? isolatedOcc() : OCC;
   const u = {
     tDetail: { value: kind === 'hard' ? grimeTexture() : fabricTexture() },
     tCamo: { value: kind === 'camo' ? camoTexture() : null },
@@ -117,9 +196,20 @@ export function withDetail(mat, opts = {}) {
     uDustColor: { value: new THREE.Color(opts.dustColor ?? 0x6e665a) },
     uStreak: { value: opts.streak ?? 0 },
     uWearBoost: { value: opts.wearBoost ?? 1 },
-    ...OCC,
+    // ─ camada de pintura (skin) — ver skin.js; desligada por padrão ─
+    tSkin: { value: blankSkin() },
+    uSkinOn: { value: 0 },
+    uSkinMode: { value: 0 },
+    uSkinScale: { value: 4 },
+    uSkinXf: { value: new THREE.Vector4(0, 0, 0, 0) },
+    uSkinFade: { value: new THREE.Vector3(0, 1, 0) },
+    uSkinWear: { value: new THREE.Vector4(0, 0, 0.1, 0.1) },
+    uSkinFin: { value: new THREE.Vector3(0.3, 0.5, 0) },
+    uSkinZone: { value: opts.zone ?? 1 },
+    ...occ,
   };
   mat.userData.detail = u;
+  mat.userData.detailOpts = { ...opts };
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader
@@ -139,6 +229,12 @@ uniform float uIblSat;
 float wStreak = 0.5;
 uniform vec3 uWearColor, uDustColor;
 uniform vec2 uEdge;
+uniform sampler2D tSkin;
+uniform float uSkinOn, uSkinMode, uSkinScale, uSkinZone;
+uniform vec4 uSkinXf, uSkinWear;
+uniform vec3 uSkinFade, uSkinFin;
+float sPaint = 0.0;
+vec3 sEmis = vec3(0.0);
 ${panels ? 'varying vec2 vGlove;' : ''}
 float wMask = 0.0;
 float wH = 0.0;
@@ -165,6 +261,7 @@ ${PERTURB}`;
     diffuseColor.rgb *= mix(1.0, 0.7 + 0.6 * wD.b, uGrime);
     float up = smoothstep(0.55, 0.95, oN.y);
     diffuseColor.rgb = mix(diffuseColor.rgb, uDustColor, up * uDust * (0.4 + 0.6 * wD.a));
+    ${SKIN_GLSL}
     diffuseColor.rgb = mix(diffuseColor.rgb, uWearColor * uWearBoost, wMask);
     wH = wD.r * 0.2 - wD.g * 0.6 + (wStreak - 0.5) * uStreak * 0.25;
   }`;
@@ -189,6 +286,11 @@ ${PERTURB}`;
       .replace(
         '#include <metalnessmap_fragment>',
         `#include <metalnessmap_fragment>
+  // pintura da skin: acabamento próprio (metalizado/fosco/brilhante) onde há tinta
+  if (uSkinOn > 0.5) {
+    metalnessFactor = mix(metalnessFactor, uSkinFin.x, sPaint);
+    roughnessFactor = mix(roughnessFactor, uSkinFin.y, sPaint);
+  }
   roughnessFactor = clamp(roughnessFactor + (wStreak - 0.5) * uStreak + (wD.r - 0.5) * uRoughVar + wD.b * uGrime * 0.12 - wMask * ${kind === 'hard' ? '0.16' : '-0.1'}, 0.05, 1.0);
   ${panels ? '// couro sintético: mais liso e acetinado que o tecido\n  roughnessFactor = clamp(roughnessFactor - vGlove.x * 0.3 + gStitch * 0.15, 0.05, 1.0);' : ''}
   // digitais/óleo: manchas grandes mais lisas (brilho irregular no anodizado)
@@ -208,9 +310,10 @@ ${PERTURB}`;
         `#include <normal_fragment_maps>
   normal = wPerturb(-vViewPosition, normal, vec2(dFdx(wH), dFdy(wH)) * uBump, faceDirection);`,
       )
-      .replace('#include <aomap_fragment>', '#include <aomap_fragment>' + OCC_GLSL);
+      .replace('#include <aomap_fragment>', '#include <aomap_fragment>' + OCC_GLSL)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += sEmis;');
   };
-  mat.customProgramCacheKey = () => 'wdetail2-' + kind + (panels ? '-panels' : '');
+  mat.customProgramCacheKey = () => 'wdetail3-' + kind + (panels ? '-panels' : '');
   return mat;
 }
 
@@ -293,5 +396,31 @@ export function makeMaterials() {
   M.nade = std({ color: 0x3f4430, roughness: 0.55, metalness: 0.15 }, { wear: 0.85, wearColor: 0x8a877d, wearMetal: 0.9, scratch: 0.5, grime: 0.45, dust: 0.2, edge: [40, 200] });
   M.nadeMetal = std({ color: 0x4a4c45, roughness: 0.45, metalness: 0.6 }, { wear: 0.7, wearColor: 0x9a978f, scratch: 0.5, grime: 0.4 });
   M.band = std({ color: 0xb08a1c, roughness: 0.5, metalness: 0.05 }, { wear: 0.6, wearColor: 0x8a877d, wearMetal: 0.8, scratch: 0.5, grime: 0.4 });
+  // ─── armas novas (v3) ───────────────────────────────────────────────
+  // corpo de luneta/ótica: alumínio anodizado preto fosco, um pouco mais liso
+  M.scope = std({ color: 0x1e1f20, roughness: 0.42, metalness: 0.45 }, { wear: 0.7, wearColor: 0x8c8a85, wearMetal: 1.0, scratch: 0.3, grime: 0.25, roughVar: 0.2, smudge: 0.5, edge: [70, 300] });
+  // base/anéis de luneta (anodizado cinza-grafite)
+  M.mount = std({ color: 0x343537, roughness: 0.45, metalness: 0.5 }, { wear: 0.9, wearColor: 0x9a9893, wearMetal: 1.0, scratch: 0.4, grime: 0.3, edge: [60, 260] });
+  // supressor: cerakote grafite com azulado de calor perto da boca (via grime)
+  M.suppressor = std({ color: 0x2e2f30, roughness: 0.62, metalness: 0.3 }, { wear: 0.7, wearColor: 0x8a8780, wearMetal: 0.9, scratch: 0.3, grime: 0.55, dust: 0.15, bump: 0.6, edge: [60, 260] });
+  // aço inox acetinado (lâminas claras, pinos de faca)
+  M.satin = std({ color: 0x9c9d9b, roughness: 0.3, metalness: 1.0 }, { wear: 0.35, wearColor: 0xc9c9c5, wearMetal: 1, scratch: 0.75, grime: 0.12, streak: 0.55, edge: [50, 220] });
+  // madeira (cabo do kukri/cutelo; telha do BR-12 não usa): nogueira oleada
+  M.wood = std({ color: 0x4b2d1b, roughness: 0.55, metalness: 0 }, { wear: 0.5, wearColor: 0x7a5534, wearMetal: 0, scratch: 0.25, grime: 0.5, bump: 0.7, streak: 0.8, roughVar: 0.3, scale: 6 });
+  // G10 texturizado (cabos de faca)
+  M.g10 = std({ color: 0x23272a, roughness: 0.74, metalness: 0 }, { wear: 0.45, wearColor: 0x4a4f53, wearMetal: 0, scratch: 0.2, grime: 0.35, bump: 1.8, scale: 34, roughVar: 0.3 });
+  // micarta de linho (cabo da baioneta/tanto): fibra marrom-oliva
+  M.micarta = std({ color: 0x3e3a2a, roughness: 0.68, metalness: 0 }, { wear: 0.5, wearColor: 0x6a6450, wearMetal: 0, scratch: 0.2, grime: 0.45, bump: 1.1, scale: 20, streak: 0.35 });
+  // alumínio anodizado (cabos da balisong)
+  M.alu = std({ color: 0x5c6166, roughness: 0.36, metalness: 1.0 }, { wear: 0.7, wearColor: 0xc0c3c5, wearMetal: 1, scratch: 0.55, grime: 0.18, streak: 0.35, edge: [60, 240] });
+  // cartucho 12: casca de plástico vermelho-escuro (base de latão usa M.brass)
+  M.hull = std({ color: 0x7a1712, roughness: 0.48, metalness: 0 }, { wear: 0.4, wearColor: 0x9a4a40, wearMetal: 0, scratch: 0.3, grime: 0.3, bump: 0.4 });
+  // fita (elos de aço) da HM-60
+  M.link = std({ color: 0x2c2c2a, roughness: 0.5, metalness: 0.85 }, { wear: 0.9, wearColor: 0x8a8780, scratch: 0.5, grime: 0.5, edge: [40, 200] });
+  // bolsa/caixa de munição em cordura
+  M.pouch = withDetail(
+    new THREE.MeshPhysicalMaterial({ color: 0x3b3a2c, roughness: 0.86, metalness: 0, sheen: 0.4, sheenRoughness: 0.6, sheenColor: new THREE.Color(0x5a5642) }),
+    { kind: 'fabric', scale: 110, wear: 0.35, wearColor: 0x6b6650, grime: 0.55, bump: 1.0 },
+  );
   return M;
 }

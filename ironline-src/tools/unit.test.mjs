@@ -179,6 +179,32 @@ test('qualidade automática: degraus, modo e preset manual', () => {
   assert.equal(rungSettings(rungIndex('medium-')).contactAO, true);
 });
 
+test('camada do aparelho: celular/leve são teto; desktop não muda', async () => {
+  const { deviceTier, TIER_PATCHES } = await import('../src/core/Quality.js');
+  const desk = createQuality('high', null, null, { tier: 'desktop' });
+  for (const [k, v] of Object.entries(QUALITY_PRESETS.high)) assert.equal(desk[k], v, k);
+  assert.equal(desk.detail, 1);
+  assert.equal(desk.hdr, true);
+  const phone = classifyDevice({ gpu: 'Adreno (TM) 640', mobile: true, cores: 8, memory: 6 });
+  assert.equal(deviceTier(phone), 'mobile');
+  assert.equal(deviceTier(phone, { lite: true }), 'lite');
+  const m = createQuality('auto', null, phone, { tier: deviceTier(phone) });
+  assert.equal(m.tier, 'mobile');
+  assert.equal(m.textureSize, 512);
+  assert.equal(m.ssao, false);
+  assert.ok(m.detail < 1);
+  m.set('ultra'); // trocar de preset não fura o teto
+  assert.equal(m.textureSize, 512);
+  assert.equal(m.volumetrics, false);
+  assert.ok(m.shadowMapSize <= TIER_PATCHES.mobile.shadowMapSize);
+  m.set({ ssao: true }); // nem patch parcial
+  assert.equal(m.ssao, false);
+  const l = createQuality('low', null, phone, { tier: 'lite' });
+  assert.equal(l.hdr, false);
+  assert.equal(l.bloom, false);
+  assert.ok(l.drawDistance <= QUALITY_PRESETS.low.drawDistance);
+});
+
 test('governador: resolução dinâmica desce rápido e sobe devagar', () => {
   const g = new Governor({ targetFps: 60, minScale: 0.6, auto: false });
   // 25 ms (40 fps): a escala cai em poucas janelas até o piso, nunca abaixo
@@ -252,3 +278,11 @@ import '../src/features/weapon/weapon.test.mjs';
 
 // testes da feature hud (progressão, modos, captura do hardpoint) — arquivo próprio da feature
 import '../src/features/hud/hud.test.mjs';
+import '../src/features/inventory/inventory.test.mjs';
+
+// testes da feature movement (slide, rampa, cancel, slide-jump, estamina) — arquivo próprio da feature
+import '../src/features/movement/slidephys.test.mjs';
+
+// testes das features streaks e enemies (killstreaks, medalhas, killcam, torreta, classes, barris)
+import '../src/features/streaks/streaks.test.mjs';
+import '../src/features/enemies/enemies.test.mjs';

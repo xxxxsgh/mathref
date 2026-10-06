@@ -23,10 +23,66 @@ Dona de: `src/features/hud/` e do estilo de `index.html`. Ordem 90.
 | Telas | `menus.js` | principal (operador iluminado sobre o mundo desfocado, cartão do jogador com *calling card*, desafios, evento e arma em destaque), loadout, configurações, pausa, placar (Tab), **relatório pós-ação** (placar por equipes, classificação completa, nêmesis, estatísticas da arma, medalhas, progressão) |
 | Regras | `match.js` | motor de ondas dos três modos (ver abaixo); renascer em 4 s no ponto mais seguro (emite `player:respawn` — a weapon reabastece); regeneração de vida após 4,2 s sem dano; XP, medalhas (double/triple, headshot, longshot, payback, sequência, GIANT SLAYER), XP de objetivo |
 | Tipografia/ícones | `font.js`, `.mono` | face primária vetorial própria (títulos/valores) + face secundária monoespaçada do sistema para metadados e leituras de dados (`mono()` em menus.js); desafios com anel de progresso (`challengeSVG`); fundo do relatório com carta topográfica procedural (curvas de nível anti-serrilhadas) |
+| ARSENAL | `arsenal.js`, `arsenal-style.js` | telas do inventário sobre `services.inventory` (ver abaixo) |
+| Arte de itens | `itemart.js` | silhuetas de perfil das 7 armas e 5 facas, os 12 padrões de skin (semente + desgaste), miniaturas, arte das caixas, chaveiros, adesivos, ícones de crédito/chave |
+| Visualizador 3D | `viewer.js` | `ItemViewer` (WebGLRenderer próprio, RoomEnvironment, pedestal com anel da raridade, arrastar/roda/duplo clique) + `buildItemModel`: `weapon.buildPreview(item)` com reserva local (KR-9 clonado ou silhueta extrudada com a textura do padrão) |
 | Configurações | `settings.js` | sensibilidade (+ multiplicador em ADS), sensibilidade da mira por toque (só em `input.touchMode`, aplicada por `services.touch.setSensitivity`), inverter Y, qualidade (`auto` — padrão, comparada com `quality.setting` — ou preset fixo), FOV horizontal, volume, cor da mira, minimapa girando — salvas em `localStorage` (com try/catch) |
 
 Toda a interface é diagramada numa prancheta 1920×1080 (`.stage`) escalada
 por `transform` — medidas do CSS são as do layout de referência.
+
+## ARSENAL (inventário, caixas, passe…)
+
+Aba **ARSENAL** no topo (selo com itens novos / diário disponível), botão no
+menu principal e tecla `I`. Carteira (créditos, chaves, aviso de diário) no
+topo de todas as telas. Subabas (`<`/`>` ou Q/E):
+
+- **INVENTÁRIO** — grade com filtros (tipo, raridade, arma), busca, ordenação
+  (recentes, raridade, nome, desgaste), selos NOVO/equipado, sucatear
+  duplicatas; clicar abre a **inspeção 3D** (arrastar gira com inércia, roda
+  dá zoom, duplo clique redefine) com condição, valor de desgaste, barra das
+  faixas, semente, origem, registro, valor de sucata, equipar/sucatear
+  (chaveiros/adesivos escolhem a arma).
+- **CAIXAS** — 3 caixas com arte, botões ABRIR · 1 CHAVE / · 300 CR, tabela
+  de chances publicada (raridade, itens, chance, chance por item) e conteúdo.
+  Abrir = roleta horizontal (60 itens, prêmio no 51º, 6,6 s de desaceleração
+  `1 − (1 − t)^4,2`, tique sintetizado a cada item que passa pelo marcador —
+  `services.audio.context` ou WebAudio próprio), facas aparecem como "?"
+  dourado, clarão da cor da raridade e revelação 3D com nome, raridade,
+  desgaste e semente; GUARDAR / EQUIPAR / SUCATEAR / ABRIR OUTRA.
+- **CONTRATO** — 10 itens de uma raridade → 1 da seguinte, com resultados
+  possíveis e chances; PREENCHER automático; resultado revelado como na caixa.
+- **PASSE** — 30 níveis só na trilha gratuita (sem trilha paga), RESGATAR.
+- **DIÁRIO** — calendário de 7 dias com sequência (hora local).
+- **MAESTRIA** — abates por arma e as 4 camuflagens de maestria.
+- **COLEÇÃO** — álbum por caixa (itens não obtidos em silhueta) e % geral.
+- **PERFIL** — cartão de chamada e emblema (procedurais, `art.js`) usados no
+  topo, no placar e no relatório.
+
+O **loadout** escolhe primária/secundária entre TODAS as armas de
+`weapon.weapons` (cadeado por nível) e a faca entre as possuídas; mostra a
+skin equipada. O **relatório** mostra os créditos ganhos (com composição) e o
+avanço do passe; a hud emite `match:end` { win, kills, headshots, captures,
+waves, bossKilled, medals, playTime, xp } para o inventário.
+
+HUD de combate (contrato v3): `medal:award` { id, name, xp, icon } entra na
+fila de medalhas (até 3) e soma XP/medalha no relatório (as que a partida já
+dá — multiabate, headshot, longshot, payback, sequência — não somam de novo e
+o toast local some quando a feature streaks está ativa); barra de
+**killstreaks** à direita, acima da arma, por `streak:ready`/`streak:used`
+{ id, name, kills, key? } e `services.streaks.slots()` se existir (carga pela
+sequência atual, PRONTO pulsando com a tecla); `player:slide` +
+`ctx.player.sliding` dão a medalha **SLIDE KILL** (só se a streaks não mandar
+a dela). Glifos novos de medalha: slide, mastery, airstrike, uav, shield. A
+fonte vetorial ganhou maiúsculas acentuadas (Á À Â Ã É Ê Í Ó Ô Õ Ú Ü Ç).
+
+QA (URL): `?inv=open` ou `&ui=arsenal`; `&arsenal=inventario|caixas|contrato|
+passe|diario|maestria|colecao|perfil`; `&inspect=N` (N-ésimo item da grade);
+`?case=1&seed=N` abre a caixa 1 com semente fixa (`&reelt=2.4` congela a
+roleta nesse instante, `&reveal=1` pula para a revelação); `&trade=1`
+contrato preenchido; `&ivview=yaw,pitch,dist` ângulo do visualizador;
+`&ks=1` no preset combat encena a barra de killstreaks + medalha externa. No
+modo shot o inventário é o de demonstração (determinístico).
 
 ## Modos (menu principal → cartões de modo; `?mode=waves|hardpoint|survival`)
 

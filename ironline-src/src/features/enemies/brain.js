@@ -19,6 +19,7 @@
  * Callouts: bus 'enemy:callout' { enemy, kind, text, position }.
  */
 import * as THREE from 'three';
+import { GUNCFG, combatRusher, combatSniper, combatShield, medicThink } from './roles.js';
 
 const _v = new THREE.Vector3();
 const _w = new THREE.Vector3();
@@ -43,6 +44,21 @@ export const CALLOUTS = {
   lost: ['Perdi ele de vista!', 'Cadê ele?'],
   push: ['Ele tá recarregando, avança!', 'Agora, pra cima!'],
   heard: ['Tiros! Atenção!', 'Ouviu isso?'],
+  // classes especiais
+  breach: ['Entrando! Abram caminho!', 'Arrombador avançando!', 'Vou pra cima dele!'],
+  sniper: ['Atirador em posição!', 'Tenho ele na luneta!'],
+  shield: ['Escudo na frente! Avança!', 'Escudo erguido, me sigam!'],
+  medic: ['Aguenta aí, tô indo!', 'Socorrista a caminho!'],
+  reviving: ['Fica comigo!', 'Te peguei, respira!'],
+  revived: ['De pé! Volta pra luta!', 'Tá vivo, levanta!'],
+  // granadas
+  frag: ['Granada saindo!', 'Fogo na granada!'],
+  incoming: ['Granada! Sai daí!', 'Granada no chão!'],
+  // killstreaks do jogador
+  uav: ['Drone de reconhecimento no ar!', 'Eles têm olhos no céu!'],
+  airstrike: ['Morteiro chegando! Abriga!', 'Fogo de artilharia!'],
+  turret: ['Torreta automática! Derruba ela!', 'Sentinela armada ali!'],
+  drone: ['Drone de ataque! Atira nele!', 'Drone em cima de nós!'],
 };
 
 export class Squad {
@@ -120,6 +136,20 @@ export class Brain {
       this.skill = 1.15;
       this.reaction = 0.45;
     }
+    // classe especial (roles.js) e arma da classe
+    this.role = enemy.role || null;
+    this.gun = GUNCFG[this.role?.gun || 'rifle'];
+    if (!this.boss) {
+      this.magSize = this.gun.mag;
+      this.ammo = this.magSize;
+    }
+    this.focus = null; // alvo alternativo (torreta/drone do jogador)
+    this.nadeT = 4 + r.next() * 6; // recarga própria da granada
+    this.throwT = -1;
+    this.duck = 0;
+    this.charge = 0; // atirador: carga da mira 0..1
+    this.laser = 0;
+    this.reviving = 0;
     this.sustain = 0; // tiros seguidos na rajada atual (abre o cone)
     this.assaulter = false; // HARDPOINT: vai para a zona e luta de dentro
     this.toObjective = false;
@@ -188,6 +218,7 @@ export class Brain {
       this.awareness = Math.min(1, this.awareness + rate * dt2);
     } else this.awareness = Math.max(0, this.awareness - 0.15 * dt2);
     this.canSee = visible && this.awareness >= 1;
+    this.pickFocus(eye, visible ? dist : Infinity);
     if (this.canSee) {
       this.squad.lastKnown.copy(pl.position);
       this.squad.lastSeen = this.now;
@@ -196,6 +227,55 @@ export class Brain {
         this.squad.callout(this.e, 'contact', this.now, true);
       }
     }
+  }
+
+  /**
+   * Alvos alternativos publicados pela feature streaks (`services.streaks.decoys`:
+   * torreta, drone) — { position, alive, radius, damage(amount, info) }.
+   * Em combate, atira no decoy visível se ele estiver mais perto que o jogador
+   * (ou se o jogador não estiver à vista).
+   */
+  pickFocus(eye, playerDist) {
+    const decoys = this.ctx.services.streaks?.decoys;
+    this.focus = null;
+    if (!decoys?.length || this.state === 'idle' || this.boss && playerDist < 30) return;
+    let best = null, bd = 45;
+    const filt = { filter: (c) => c.tag !== 'enemy' && c.tag !== 'player' && !c.data?.enemy && !c.data?.decoy };
+    for (const d of decoys) {
+      if (!d.alive || !d.position) continue;
+      const dist = eye.distanceTo(d.position);
+      if (dist >= bd) continue;
+      if (!this.ctx.collision.lineOfSight(eye, d.position, filt)) continue;
+      best = d;
+      bd = dist;
+    }
+    if (best && (!(playerDist < Infinity) || bd < playerDist * 0.85)) {
+      if (this.focus !== best && !best._called) {
+        best._called = true;
+        this.squad.callout(this.e, best.kind === 'drone' ? 'drone' : 'turret', this.now, true);
+      }
+      this.focus = best;
+    }
+  }
+
+  /** Granada do jogador por perto: corre para longe (e avisa). */
+  evade(pos) {
+    if (this.state === 'dead' || this.boss || this.e.exec) return;
+    if (this.evadeT > this.now) return;
+    this.evadeT = this.now + 2.5;
+    this.enterCombat();
+    this.squad.callout(this.e, 'incoming', this.now, true);
+    const p = this.e.group.position;
+    const away = _v.set(p.x - pos.x, 0, p.z - pos.z);
+    if (away.lengthSq() < 1e-4) away.set(1, 0, 0);
+    away.normalize();
+    const goal = p.clone().addScaledVector(away, 6.5);
+    const path = this.nav?.findPath(p, goal, 6000);
+    this.releaseCover();
+    this.path = path || [goal];
+    this.pathI = 0;
+    this.revive = null;
+    this.setMode('evade');
   }
 
   hear(pos, delay) {
@@ -222,6 +302,14 @@ export class Brain {
     this.squad.lastKnown.copy(this.ctx.player.position);
     this.squad.lastSeen = this.now;
     if (this.e.health > 0 && this.ctx.rng.next() < 0.5) this.squad.callout(this.e, 'hit', this.now);
+    // socorrista baleado no meio da reanimação: larga o corpo
+    if (this.revive && amount > 20) {
+      this.revive.corpse.claimedBy = null;
+      this.revive = null;
+      this.reviving = 0;
+      this.setMode(null);
+    }
+    this.charge = 0; // atirador perde a carga da mira
   }
 
   enterCombat() {
@@ -295,14 +383,14 @@ export class Brain {
     const pl = ctx.player;
     this.modeT = (this.modeT ?? 0) + dt;
     this.reactT = Math.max(0, (this.reactT ?? 0) - dt);
-    const threat = this.canSee ? pl.position : squad.lastKnown;
+    const threat = this.focus ? this.focus.position : this.canSee ? pl.position : squad.lastKnown;
     const dist = e.group.position.distanceTo(threat);
     if (this.canSee) this.lostFor = 0;
     else this.lostFor += dt;
 
     // recarga
     if (this.reloadT >= 0) {
-      this.reloadT += dt / (this.boss ? BOSS.reload : 2.4);
+      this.reloadT += dt / (this.boss ? BOSS.reload : this.gun.reload);
       e.anim.p.reload = this.reloadT;
       if (this.reloadT >= 1) {
         this.reloadT = -1;
@@ -312,6 +400,25 @@ export class Brain {
     }
     if (this.ammo <= 0 && this.reloadT < 0) this.startReload();
     if (this.boss) return this.bossCombat(dt, dist, threat);
+    // reação a fogo: encolhe (cabeça baixa) sob supressão, fora do tiro
+    this.duck = this.suppression > 0.6 && this.onTarget < 0.2 ? Math.min(1, (this.suppression - 0.6) / 0.6) : 0;
+    // arremesso de granada em andamento
+    if (this.throwT >= 0) return this.throwing(dt);
+    if (this.mode === 'evade') {
+      this.desiredAim = 0.2;
+      this.desiredCrouch = 0;
+      this.leanTarget = 0;
+      const arrived = this.followPath(dt, 5.2);
+      this.faceMove(dt);
+      if (arrived || this.modeT > 3) this.setMode(null);
+      return;
+    }
+    const rid = this.role?.id;
+    if (rid === 'rusher') return combatRusher(this, dt, dist, threat);
+    if (rid === 'sniper') return combatSniper(this, dt, dist, threat);
+    if (rid === 'shield') return combatShield(this, dt, dist, threat);
+    if (rid === 'medic' && medicThink(this, dt)) return;
+    if (this.maybeGrenade(dt, dist)) return;
 
     this.thinkT -= dt;
     if (this.thinkT <= 0 || !this.mode) {
@@ -366,6 +473,11 @@ export class Brain {
         // sem cobertura: prefere ficar baixo (alvo menor)
         this.desiredCrouch = this.ctx.rng.next() < 0.6 ? 1 : 0.25;
         if (this.desiredCrouch > 0.5) this.strafeDir = 0;
+      }
+      // sob fogo pesado: abaixa de vez e para o strafe
+      if (this.suppression > 1.0) {
+        this.desiredCrouch = 1;
+        this.strafeDir = 0;
       }
       this.strafe(dt, threat);
       this.aimAndFire(dt, dist, 0.85);
@@ -587,6 +699,59 @@ export class Brain {
     return false;
   }
 
+  /**
+   * Granada do inimigo: o jogador sumiu atrás de cobertura (perdido há
+   * 1,5–10 s), a 7–26 m da última posição conhecida — "desentoca" com uma
+   * granada. Uma por soldado a cada ~14 s e uma por esquadrão a cada 7 s.
+   */
+  maybeGrenade(dt, dist) {
+    this.nadeT -= dt;
+    const sq = this.squad;
+    if (this.nadeT > 0 || this.canSee || this.focus || this.reloadT >= 0) return false;
+    if (this.lostFor < 1.5 || this.lostFor > 10 || dist < 7 || dist > 26) return false;
+    if ((sq.nadeT ?? 0) > this.now || !this.e.feature.grenades) return false;
+    this.nadeT = 3;
+    if (this.ctx.rng.next() > 0.3) return false;
+    this.nadeT = 14 + this.ctx.rng.next() * 8;
+    sq.nadeT = this.now + 7;
+    this.throwT = 0;
+    this.thrown = false;
+    this.speedTarget = 0;
+    sq.callout(this.e, 'frag', this.now, true);
+    return true;
+  }
+
+  /** Animação de arremesso (mão direita por cima do ombro) + lançamento. */
+  throwing(dt) {
+    const e = this.e;
+    const a = e.anim;
+    this.throwT += dt;
+    const t = this.throwT;
+    this.speedTarget = 0;
+    this.desiredAim = 0;
+    this.desiredCrouch = Math.min(this.desiredCrouch, 0.3);
+    const tgt = this.squad.lastKnown;
+    this.faceTowards(tgt, dt, 5);
+    // alvo da mão no espaço do modelo: atrás da cabeça → à frente e acima
+    const back = Math.min(1, t / 0.45), fwd = Math.max(0, Math.min(1, (t - 0.45) / 0.2));
+    const s = (x) => x * x * (3 - 2 * x);
+    a.over.R.set(-0.2 + s(fwd) * 0.12, 1.72 - s(fwd) * 0.32, -0.22 + s(fwd) * 0.62);
+    a.over.wR = t < 0.85 ? Math.min(1, t / 0.15) : Math.max(0, 1 - (t - 0.85) / 0.25);
+    if (!this.thrown && t >= 0.58) {
+      this.thrown = true;
+      const from = e.joint(11, new THREE.Vector3()); // mão direita
+      const to = tgt.clone();
+      to.x += (this.ctx.rng.next() - 0.5) * 2.5;
+      to.z += (this.ctx.rng.next() - 0.5) * 2.5;
+      e.feature.grenades.throw(from, to, e);
+    }
+    if (t > 1.1) {
+      this.throwT = -1;
+      a.over.wR = 0;
+      this.setMode(null);
+    }
+  }
+
   releaseCover() {
     if (this.cover && this.squad.claims.get(this.cover.i) === this.e) this.squad.claims.delete(this.cover.i);
     this.cover = null;
@@ -674,13 +839,14 @@ export class Brain {
   }
 
   // ─── tiro ───────────────────────────────────────────────────────────────
-  aimAndFire(dt, dist, fireRate = 1) {
+  aimAndFire(dt, dist, fireRate = 1, noTurn = false) {
     const { ctx } = this;
     const e = this.e;
-    const tgt = this.canSee ? this.targetPoint(_w) : _w.copy(this.squad.lastKnown).setY(this.squad.lastKnown.y + 1.2);
-    this.faceTowards(tgt, dt, 5);
+    const sees = this.canSee || !!this.focus;
+    const tgt = this.focus ? _w.copy(this.focus.position) : this.canSee ? this.targetPoint(_w) : _w.copy(this.squad.lastKnown).setY(this.squad.lastKnown.y + 1.2);
+    if (!noTurn) this.faceTowards(tgt, dt, 5);
     e.aimAt(tgt, dt);
-    if (!this.canSee || this.reactT > 0 || this.flinch > 0 || this.reloadT >= 0 || this.ammo <= 0) {
+    if (!sees || this.reactT > 0 || this.flinch > 0 || this.reloadT >= 0 || this.ammo <= 0) {
       this.onTarget = Math.max(0, this.onTarget - dt * 2);
       return;
     }
@@ -695,12 +861,13 @@ export class Brain {
         return;
       }
       // metralhadora do chefe: rajadas longas e sustentadas
-      this.burst = this.boss ? 14 + Math.floor(ctx.rng.next() * 14) : 3 + Math.floor(ctx.rng.next() * 5);
-      this.burstPause = this.boss ? 0.45 + ctx.rng.next() * 0.5 : (0.35 + ctx.rng.next() * 0.7) / fireRate;
+      const G = this.gun;
+      this.burst = this.boss ? 14 + Math.floor(ctx.rng.next() * 14) : G.burst[0] + Math.floor(ctx.rng.next() * (G.burst[1] - G.burst[0] + 1));
+      this.burstPause = this.boss ? 0.45 + ctx.rng.next() * 0.5 : (G.pause[0] + ctx.rng.next() * (G.pause[1] - G.pause[0])) / fireRate;
     }
     this.burst--;
     this.sustain++;
-    this.shotT = this.boss ? 60 / BOSS.rpm : 0.095;
+    this.shotT = this.boss ? 60 / BOSS.rpm : this.gun.interval;
     this.fireShot(dist);
   }
 
@@ -709,8 +876,9 @@ export class Brain {
     const e = this.e;
     const pl = ctx.player;
     const origin = e.muzzleWorld(new THREE.Vector3());
-    const tgt = this.targetPoint(new THREE.Vector3());
-    if (ctx.shot) {
+    const focus = this.focus;
+    const tgt = focus ? focus.position.clone() : this.targetPoint(new THREE.Vector3());
+    if (ctx.shot && !focus) {
       // screenshot: rajadas de supressão passando AO LADO do jogador (um
       // traçante que atravessa a lente vira uma faixa pela tela inteira)
       const sdx = tgt.x - origin.x, sdz = tgt.z - origin.z, l = Math.hypot(sdx, sdz) || 1;
@@ -725,7 +893,10 @@ export class Brain {
     const settle = Math.max(0, 0.08 - this.onTarget * 0.04);
     // rajada longa abre o cone (o cano "sobe"): até +0,03 rad no chefe
     const climb = this.boss ? Math.min(0.03, this.sustain * 0.0016) : 0;
-    const err = (0.014 + dist * 0.0005 + this.suppression * 0.035 + moving + plMoving + settle + climb) / this.skill;
+    const G = this.gun;
+    let err = (0.014 + dist * 0.0005 + this.suppression * 0.035 + moving + plMoving + settle + climb + (G.err || 0)) / this.skill;
+    // atirador de elite: tiro carregado, quase sem erro (ainda sente supressão)
+    if (this.role?.id === 'sniper') err = (0.003 + dist * 0.00008 + this.suppression * 0.03 + plMoving * 0.6) / this.skill;
     const r = ctx.rng;
     const a = r.next() * Math.PI * 2, m = Math.sqrt(r.next()) * err;
     const up = new THREE.Vector3(0, 1, 0);
@@ -734,11 +905,28 @@ export class Brain {
     dir.addScaledVector(side, Math.cos(a) * m).addScaledVector(up2, Math.sin(a) * m).normalize();
     this.ammo--;
     e.anim.fire();
-    ctx.bus.emit('enemy:fire', { enemy: e, origin: origin.clone(), dir: dir.clone(), heavy: this.boss });
+    const kind = this.role?.gun || 'rifle';
+    ctx.bus.emit('enemy:fire', { enemy: e, origin: origin.clone(), dir: dir.clone(), heavy: this.boss, gun: kind, pellets: G.pellets });
     // chefe: camada grave da metralhadora (mesmo som sintetizado, mais lento)
     if (this.boss) ctx.services.audio?.play?.('shot_enemy', { position: origin, rate: 0.72, volume: 1.15, reverb: 0.35, cap: 10, jitter: 0.03 });
-    else ctx.services.audio?.play?.('enemy_shot', { position: origin, volume: 1 });
+    else if (kind === 'shotgun') ctx.services.audio?.play?.('shot_enemy', { position: origin, rate: 0.62, volume: 1.2, reverb: 0.4, cap: 6, jitter: 0.04 });
+    else if (kind === 'sniper') {
+      ctx.services.audio?.play?.('shot_enemy', { position: origin, rate: 0.8, volume: 1.35, reverb: 0.55, cap: 4 });
+      ctx.services.audio?.play?.('shot_far', { position: origin, volume: 0.8, delay: 0.12, cap: 3 });
+    } else ctx.services.audio?.play?.('enemy_shot', { position: origin, volume: 1 });
+    // bagos extras da escopeta: traçantes só visuais (o som/clarão é do evento)
+    const dirs = [dir];
+    if (G.pellets > 1) {
+      for (let k = 1; k < G.pellets; k++) {
+        const pa = r.next() * Math.PI * 2, pm = Math.sqrt(r.next()) * G.spread;
+        const pd = dir.clone().addScaledVector(side, Math.cos(pa) * pm).addScaledVector(up2, Math.sin(pa) * pm).normalize();
+        dirs.push(pd);
+        if (k % 2 === 0) ctx.services.vfx?.tracer?.(origin.clone().addScaledVector(pd, 0.4), origin.clone().addScaledVector(pd, Math.min(30, dist + 4)), { speed: 260, length: 2 });
+      }
+    }
+    if (focus) return this.shootFocus(origin, dirs, dist);
     if (ctx.shot || !pl.alive) return;
+    if (G.pellets > 1) return this.pelletsOnPlayer(origin, dirs, dist);
     // acerto: aproximação raio × segmento do corpo do jogador
     const a0 = _v.copy(pl.position).setY(pl.position.y + 0.25);
     const a1 = _o.copy(pl.position).setY(pl.position.y + (pl.eyeHeight ?? 1.62) + 0.1);
@@ -746,11 +934,47 @@ export class Brain {
     if (t.dist < 0.3 && t.t > 0) {
       const block = ctx.collision.raycast(origin, dir, t.t, { filter: (c) => c.tag !== 'enemy' && c.tag !== 'player' && !c.data?.enemy && c.owner !== e.group });
       if (!block) {
-        const base = this.boss ? BOSS.damage : 10;
-        const dmg = base * (dist < 15 ? 1 : dist < 35 ? 0.8 : 0.6) * (t.h > 0.82 ? 1.4 : 1);
-        pl.damage(dmg, { source: 'enemy', from: origin.clone(), enemy: e, dir: dir.clone() });
+        const base = this.boss ? BOSS.damage : G.damage;
+        const fall = this.role?.id === 'sniper' ? 1 : dist < 15 ? 1 : dist < 35 ? 0.8 : 0.6;
+        const dmg = base * fall * (t.h > 0.82 ? 1.4 : 1);
+        pl.damage(dmg, { source: 'enemy', from: origin.clone(), enemy: e, dir: dir.clone(), gun: kind });
       }
     }
+  }
+
+  /** Bagos da escopeta no jogador: soma o dano de cada bago que acerta. */
+  pelletsOnPlayer(origin, dirs, dist) {
+    const { ctx } = this;
+    const pl = ctx.player;
+    const a0 = _v.copy(pl.position).setY(pl.position.y + 0.25);
+    const a1 = _o.copy(pl.position).setY(pl.position.y + (pl.eyeHeight ?? 1.62) + 0.1);
+    let total = 0;
+    for (const d of dirs) {
+      const t = closestRaySegment(origin, d, a0, a1);
+      if (t.dist > 0.32 || t.t <= 0) continue;
+      const block = ctx.collision.raycast(origin, d, t.t, { filter: (c) => c.tag !== 'enemy' && c.tag !== 'player' && !c.data?.enemy && c.owner !== this.e.group });
+      if (block) continue;
+      total += this.gun.damage * Math.max(0.25, 1 - Math.max(0, dist - 5) / 16);
+    }
+    if (total > 0) pl.damage(total, { source: 'enemy', from: origin.clone(), enemy: this.e, dir: dirs[0].clone(), gun: 'shotgun' });
+  }
+
+  /** Tiro num decoy (torreta/drone): esfera de acerto + bloqueio do cenário. */
+  shootFocus(origin, dirs, dist) {
+    const { ctx } = this;
+    const f = this.focus;
+    const filt = { filter: (c) => c.tag !== 'enemy' && c.tag !== 'player' && !c.data?.enemy && !c.data?.decoy };
+    let total = 0;
+    for (const d of dirs) {
+      const c = _v.copy(f.position).sub(origin);
+      const t = c.dot(d);
+      if (t <= 0) continue;
+      const miss = Math.sqrt(Math.max(0, c.lengthSq() - t * t));
+      if (miss > (f.radius || 0.45)) continue;
+      if (ctx.collision.raycast(origin, d, t - 0.2, filt)) continue;
+      total += (this.boss ? BOSS.damage : this.gun.damage) * (this.gun.pellets > 1 ? Math.max(0.25, 1 - Math.max(0, dist - 5) / 16) : 1);
+    }
+    if (total > 0) f.damage?.(total, { source: 'enemy', enemy: this.e, from: origin.clone(), dir: dirs[0].clone() });
   }
 
   /** Soldado do preset de screenshot: mira e atira no jogador sem se mover. */

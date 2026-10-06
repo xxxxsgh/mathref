@@ -16,17 +16,32 @@ import { mulberry } from './noise.js';
 import { bevelBox, bevelCyl, atlasBox, vary, part, CRATE_RECT, treadTire } from './propkit.js';
 
 // ─── instanciamento ────────────────────────────────────────────────────
+/**
+ * Entulho miúdo (lascas, tijolos soltos, grãos, aglomerados): o que mais
+ * soma triângulos no mapa (~1,7 M dos ~2,4 M instanciados na rua). Nas
+ * camadas mobile/lite (`quality.detail` < 1) só uma fração entra.
+ */
+const MINOR = /^(rchunk|rgrit|rbrick|rclus|rpeb|rshard|glassbit|leafbit)/;
+
 export class Instancer {
-  constructor() {
+  /** @param detail 0..1 (`quality.detail`): fração do entulho miúdo mantida ≈ detail^1.5 */
+  constructor(detail = 1) {
     this.sets = new Map();
+    this.keep = detail >= 1 ? 1 : Math.max(0.05, Math.pow(Math.max(0, detail), 1.5));
+    this.skipped = 0;
   }
   /** Registra uma instância de `geoKey` (geometria) com material `mat`. */
   add(geoKey, geo, mat, matrix, color = [1, 1, 1], opts = {}) {
     const key = `${geoKey}|${mat}|${opts.shadow === false ? 0 : 1}`;
     let s = this.sets.get(key);
     if (!s) {
-      s = { geo: withColor(geo), mat, mats: [], cols: [], shadow: opts.shadow !== false };
+      s = { geo: withColor(geo), mat, mats: [], cols: [], shadow: opts.shadow !== false, seen: 0, minor: MINOR.test(geoKey) };
       this.sets.set(key, s);
+    }
+    // amostragem determinística (sequência de Weyl): mesma escolha em toda carga
+    if (s.minor && this.keep < 1 && ((s.seen++ * 0.6180339887) % 1) >= this.keep) {
+      this.skipped++;
+      return;
     }
     s.mats.push(matrix.clone());
     s.cols.push(color);
@@ -44,6 +59,7 @@ export class Instancer {
     const SPLIT = 160; // só vale partir conjuntos grandes (cada parte = 1 draw call)
     const _p = new THREE.Vector3();
     for (const [key, s] of this.sets) {
+      if (!s.mats.length) continue;
       const groups = new Map();
       if (s.mats.length > SPLIT) {
         s.mats.forEach((M, i) => {

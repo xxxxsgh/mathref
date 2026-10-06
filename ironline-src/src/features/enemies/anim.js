@@ -46,6 +46,8 @@ const W_GRIP_L = new THREE.Vector3(...RIFLE.gripL);
 const W_GRIP_L_LOW = new THREE.Vector3(0, 0.066, 0.165);
 const _lt = new THREE.Vector3();
 const _lq = new THREE.Quaternion();
+const _rt = new THREE.Vector3();
+const _rt2 = new THREE.Vector3();
 const W_MAGWELL = new THREE.Vector3(0, -0.04, 0.13);
 const W_CHARGE = new THREE.Vector3(0.02, 0.1, -0.03);
 
@@ -100,7 +102,15 @@ export class Animator {
       lean: 0, // -1..1 (+ = inclina para a esquerda dele)
       reload: -1, // progresso 0..1 ou -1
       sprint: 0,
+      duck: 0, // 0..1 encolhe sob fogo (cabeça baixa, ombros para dentro)
+      headBack: 0, // 0..1 cabeça puxada para trás (execução)
     };
+    /**
+     * Alvos das mãos no ESPAÇO DO MODELO com peso (0..1): escudo na mão
+     * esquerda, faca/agarrão da execução, arremesso de granada. Com peso 0
+     * a mão fica na arma (padrão).
+     */
+    this.over = { L: new THREE.Vector3(), wL: 0, R: new THREE.Vector3(), wR: 0 };
     this.phase = seed * 0.37;
     this.t = seed * 3.1;
     this.recoil = new Spring(260, 22);
@@ -127,6 +137,13 @@ export class Animator {
     this.hitRoll.v += -dirLocal.x * k * 0.5;
   }
 
+  /** Bala passando rente (near miss): sobressalto curto, sem dano. */
+  nearMiss(sideSign = 1, k = 1) {
+    this.headHit.v += 4 * k;
+    this.hitYaw.v += sideSign * 1.6 * k;
+    this.hitPitch.v += 1.2 * k;
+  }
+
   /** Passo da animação. */
   update(dt) {
     const p = this.p;
@@ -145,6 +162,7 @@ export class Animator {
     const breath = Math.sin(this.t * 1.7) * (1 - gait);
     const crouch = p.crouch;
     const aim = p.aim;
+    const duck = p.duck || 0;
 
     // ── quadril ──
     // postura de tiro "lâmina": quadril e peito giram para a direita do
@@ -173,7 +191,7 @@ export class Animator {
     // ombros "para dentro" da arma ao mirar; o recuo empurra o peito para trás
     // meio agachado mirando (por cima de cobertura baixa): tronco projetado
     // para frente, apoiado na mira
-    const leanForward = 0.06 + aim * 0.16 + run * 0.14 - crouch * 0.32 - rec * 0.22 + aim * crouch * (1 - crouch) * 0.7;
+    const leanForward = 0.06 + aim * 0.16 + run * 0.14 - crouch * 0.32 - rec * 0.22 + aim * crouch * (1 - crouch) * 0.7 + duck * 0.5;
     const pitchUp = p.aimPitch;
     const comp = shift * 1.2; // coluna compensa a inclinação do quadril
     qEuler(leanForward * 0.5 - pitchUp * 0.25 + hp * 0.5 + breath * 0.01 + athletic * -0.04, yawRest * 0.45 + hy * 0.5 + rec * 0.04, p.lean * 0.12 + hr * 0.5 + comp, _q);
@@ -190,7 +208,7 @@ export class Animator {
     const lookPitch = -pitchUp - chestE.x;
     qEuler(lookPitch * 0.4 + aim * 0.2, lookYaw * 0.45, -aim * 0.1, _q);
     Qm[B.neck].multiplyQuaternions(Qm[B.chest], _q);
-    qEuler(lookPitch * 0.6 + aim * 0.12 + hh * 0.6, lookYaw * 0.55 + hh * 0.2 - aim * 0.12, -aim * 0.22 + hh * 0.2, _q);
+    qEuler(lookPitch * 0.6 + aim * 0.12 + hh * 0.6 + duck * 0.55 - (p.headBack || 0) * 0.9, lookYaw * 0.55 + hh * 0.2 - aim * 0.12, -aim * 0.22 + hh * 0.2, _q);
     Qm[B.head].multiplyQuaternions(Qm[B.neck], _q);
     for (const b of [B.neck, B.head, B['upperArm.L'], B['upperArm.R'], B['thigh.L'], B['thigh.R']])
       Pm[b].copy(OFFSET[b]).applyQuaternion(Qm[PARENT[b]]).add(Pm[PARENT[b]]);
@@ -224,7 +242,10 @@ export class Animator {
 
 
     // ── braços (IK até o fuzil) ──
-    this._arm('R', W_GRIP_R, _v3.set(-0.7, -0.6, -0.25));
+    const ov = this.over;
+    let rightTarget = W_GRIP_R;
+    if (ov.wR > 0) rightTarget = this._toWeapon(ov.R, _rt).lerpVectors(W_GRIP_R, _rt, Math.min(1, ov.wR));
+    this._arm('R', rightTarget, _v3.set(-0.7, -0.6, -0.25));
     // mão esquerda: guarda-mão, ou ciclo de recarga
     let leftTarget = _lt.lerpVectors(W_GRIP_L, W_GRIP_L_LOW, 1 - aim);
     let leftQ = null;
@@ -251,12 +272,18 @@ export class Animator {
       }
       leftQ = qEuler(0, 0, -0.6, _lq, 'XYZ');
     }
+    if (ov.wL > 0) leftTarget = _lt.lerp(this._toWeapon(ov.L, _rt2), Math.min(1, ov.wL));
     this._arm('L', leftTarget, _v3.set(0.45, -0.85, -0.1), leftQ);
 
     // ── pernas (IK até alvos de pé) ──
     this._legs(dt, gait, run, crouch, ph, hipYaw, aim);
 
     this.applyModelPose();
+  }
+
+  /** Ponto do espaço do modelo → espaço do fuzil. */
+  _toWeapon(pm, out) {
+    return out.copy(pm).sub(this.weaponP).applyQuaternion(_q2.copy(this.weaponQ).invert());
   }
 
   /** IK do braço até um ponto do fuzil (espaço do fuzil). */

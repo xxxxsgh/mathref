@@ -645,9 +645,15 @@ export function weather(mat, opts = {}) {
   return mat;
 }
 
-/** Cria todos os materiais. `q` = ctx.quality. Retorna { mats, tex }. */
-export function createMaterials(q, renderer) {
+/**
+ * Cria todos os materiais. `q` = ctx.quality. Retorna { mats, sets, genMs }.
+ * Assíncrono: `tick(rótulo, fração)` é aguardado entre um conjunto de
+ * texturas e outro — a geração procedural é o trecho mais pesado da carga
+ * e, sem ceder o thread, o celular trava a página por dezenas de segundos.
+ */
+export async function createMaterials(q, renderer, tick = async () => {}) {
   W.tex = weatherTexture();
+  // textureSize ≤ 512 (camada mobile/lite) → conjuntos de 512/256
   const N = q.textureSize >= 1024 ? 1024 : 512;
   const Ns = N >= 1024 ? 512 : 256;
   W.road = roadTexture(N);
@@ -656,26 +662,33 @@ export function createMaterials(q, renderer) {
   const anG = Math.min(q.anisotropy || 4, 8, maxA);
   const an = Math.min(q.anisotropy || 2, 4, maxA);
   const t0 = performance.now();
-  const sets = {
-    plaster: T.makeSet(T.genPlaster, N, an),
-    concrete: T.makeSet(T.genConcrete, N, an),
-    brick: T.makeSet(T.genBrick, N, an),
-    asphalt: T.makeSet(T.genAsphalt, N, anG),
-    pavers: T.makeSet(T.genPavers, N, anG),
-    metal: T.makeSet((n) => T.genPaintedMetal(n, 61, 0.84), Ns, an),
-    car: T.makeSet((n) => T.genPaintedMetal(n, 64, 0.9), Ns, an),
-    corrugated: T.makeSet(T.genCorrugated, Ns, an),
-    wood: T.makeSet(T.genWood, Ns, an),
-    tiles: T.makeSet(T.genTiles, Ns, anG),
-    dirt: T.makeSet(T.genDirt, Ns, anG),
-    fabric: T.makeSet(T.genFabric, Ns, an),
-    bark: T.makeSet(T.genBark, Ns, an),
-    burnt: T.makeSet(T.genBurnt, Ns, an),
-    clay: T.makeSet(T.genClay, 256, an),
-    grime: T.makeSet(T.genGrime, 256, an),
-    far: T.makeSet(T.genFarFacade, Ns, an),
-    gravel: T.makeSet(T.genGravel, Ns, anG),
+  const plan = {
+    plaster: [T.genPlaster, N, an],
+    concrete: [T.genConcrete, N, an],
+    brick: [T.genBrick, N, an],
+    asphalt: [T.genAsphalt, N, anG],
+    pavers: [T.genPavers, N, anG],
+    metal: [(n) => T.genPaintedMetal(n, 61, 0.84), Ns, an],
+    car: [(n) => T.genPaintedMetal(n, 64, 0.9), Ns, an],
+    corrugated: [T.genCorrugated, Ns, an],
+    wood: [T.genWood, Ns, an],
+    tiles: [T.genTiles, Ns, anG],
+    dirt: [T.genDirt, Ns, anG],
+    fabric: [T.genFabric, Ns, an],
+    bark: [T.genBark, Ns, an],
+    burnt: [T.genBurnt, Ns, an],
+    clay: [T.genClay, 256, an],
+    grime: [T.genGrime, 256, an],
+    far: [T.genFarFacade, Ns, an],
+    gravel: [T.genGravel, Ns, anG],
   };
+  const sets = {};
+  const keys = Object.keys(plan);
+  for (let i = 0; i < keys.length; i++) {
+    const [gen, n, a] = plan[keys[i]];
+    sets[keys[i]] = T.makeSet(gen, n, a);
+    await tick(keys[i], (i + 1) / keys.length);
+  }
   const genMs = performance.now() - t0;
 
   // PBR completo (especular GGX, IBL) em high/ultra. Em low/medium as

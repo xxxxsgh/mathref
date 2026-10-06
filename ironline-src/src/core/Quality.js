@@ -40,6 +40,57 @@ export const QUALITY_PRESETS = {
 export const QUALITY_LEVELS = ['low', 'medium', 'high', 'ultra'];
 
 /**
+ * CAMADAS de aparelho (`quality.tier`), aplicadas POR CIMA de qualquer
+ * preset/degrau — o preset diz "quão bonito", a camada diz "quanto o
+ * aparelho aguenta carregar". Desktop não tem patch (nada muda em high).
+ *
+ *   mobile  celular/tablet (classifyDevice → mobile): texturas 512, sombra
+ *           1024 sem cascatas, sem SSAO/SSR/volumétrico/TAA/motion blur,
+ *           MSAA off, distância de desenho curta e `detail` 0,5 (o mundo
+ *           pula entulho miúdo, props de fundo, janelas internas etc.).
+ *   lite    `?lite=1` (botão "Tentar modo leve") ou carga anterior que não
+ *           terminou: o mínimo que ainda é o jogo — `detail` 0,25, sem bloom
+ *           nem AO de contato, folhagem/partículas no chão.
+ *
+ * Campos novos (dicas): `detail` (0..1, detalhe geométrico do mundo, 1 =
+ * completo), `hdr` (false = o compositor usa caminho LDR/sem alvos float),
+ * `probes` (false = sem sondas/cubemaps de reflexo locais), `tier`.
+ */
+export const TIER_PATCHES = {
+  desktop: {},
+  mobile: {
+    dprCap: 1, msaa: false, shadowMapSize: 1024, shadowCascades: 1, anisotropy: 2, ssao: false, ssr: false,
+    taa: false, motionBlur: false, volumetrics: false, drawDistance: 240, textureSize: 512,
+    detail: 0.5, probes: false,
+  },
+  lite: {
+    dprCap: 1, msaa: false, shadowMapSize: 1024, shadowCascades: 1, shadowScale: 0.5, anisotropy: 1, ssao: false,
+    contactAO: false, ssr: false, bloom: false, taa: false, motionBlur: false, volumetrics: false, drawDistance: 180,
+    textureSize: 512, foliage: 0.15, particleBudget: 0.25, detail: 0.25, hdr: false, probes: false,
+  },
+};
+
+/**
+ * Aplica a camada como TETO: números ficam no mínimo (preset, camada),
+ * booleanos só continuam ligados se a camada não os desliga. Assim `low`
+ * num celular não "sobe" nada por causa da camada.
+ */
+export function applyTier(q, patch) {
+  for (const [k, v] of Object.entries(patch || {})) {
+    if (typeof v === 'number') q[k] = typeof q[k] === 'number' ? Math.min(q[k], v) : v;
+    else if (typeof v === 'boolean') q[k] = v ? !!q[k] || q[k] === undefined : false;
+    else q[k] = v;
+  }
+  return q;
+}
+
+/** Camada do aparelho: 'lite' (pedido/forçado), 'mobile' ou 'desktop'. */
+export function deviceTier(device, { lite = false } = {}) {
+  if (lite) return 'lite';
+  return device?.mobile ? 'mobile' : 'desktop';
+}
+
+/**
  * Degraus do modo automático, do mais caro (0) ao mais barato. Cada degrau =
  * preset + patch. Os "−" cortam primeiro os passes caros e pouco visíveis
  * (motion blur, volumétrico, resolução da sombra) antes de trocar de preset.
@@ -193,13 +244,19 @@ export function probeDevice(win = globalThis.window) {
  * @param level 'auto' | 'low' | 'medium' | 'high' | 'ultra'
  * @param device resultado de classifyDevice() (usado por 'auto')
  */
-export function createQuality(level = 'high', bus = null, device = null) {
+export function createQuality(level = 'high', bus = null, device = null, { tier = 'desktop' } = {}) {
   const dev = device || classifyDevice({});
   const auto = level === 'auto';
   const start = auto ? rungSettings(rungIndex(dev.preset)) : QUALITY_PRESETS[level] ? { ...QUALITY_PRESETS[level], level } : { ...QUALITY_PRESETS.high, level: 'high' };
+  const patch = TIER_PATCHES[tier] || TIER_PATCHES.desktop;
   const q = {
     level: start.level,
+    detail: 1,
+    hdr: true,
+    probes: true,
     ...start,
+    /** Camada do aparelho ('desktop' | 'mobile' | 'lite'), ver TIER_PATCHES. */
+    tier: TIER_PATCHES[tier] ? tier : 'desktop',
     /** 'auto' (governador escolhe degraus) ou 'manual' (preset fixo). */
     mode: auto ? 'auto' : 'manual',
     /** Degrau atual do modo automático (nome em AUTO_LADDER) ou null. */
@@ -218,6 +275,8 @@ export function createQuality(level = 'high', bus = null, device = null) {
         if (!QUALITY_PRESETS[levelOrPatch]) return q;
         Object.assign(q, QUALITY_PRESETS[levelOrPatch], { level: levelOrPatch, mode: 'manual', rung: null });
       } else Object.assign(q, levelOrPatch);
+      // a camada do aparelho é teto sobre qualquer preset/degrau
+      applyTier(q, patch);
       bus?.emit('quality:change', q);
       return q;
     },
@@ -226,5 +285,6 @@ export function createQuality(level = 'high', bus = null, device = null) {
       return q.mode === 'auto' ? 'auto' : q.level;
     },
   };
+  applyTier(q, patch);
   return q;
 }

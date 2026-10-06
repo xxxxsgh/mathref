@@ -9,11 +9,24 @@
 import * as THREE from 'three';
 import { mulberry } from './noise.js';
 
+// Escala das texturas de canvas (camadas mobile/lite: 0,5 → ¼ dos pixels,
+// da memória e do tempo de rasterização). O desenho continua nas
+// coordenadas lógicas (g.scale), então nenhum gerador precisa saber disso.
+let SCALE = 1;
+export function setCanvasScale(s) {
+  SCALE = Math.max(0.25, Math.min(1, s || 1));
+}
+
 function canvas(w, h) {
   const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  return [c, c.getContext('2d')];
+  // só encolhe as grandes; as de 128² (contato, pintura) usam ImageData fixo
+  const k = SCALE < 1 && Math.min(w, h) >= 256 ? SCALE : 1;
+  c.width = Math.round(w * k);
+  c.height = Math.round(h * k);
+  c.__k = k;
+  const g = c.getContext('2d');
+  if (k !== 1) g.scale(k, k);
+  return [c, g];
 }
 
 function tex(c, { srgb = true, repeat = false, aniso = 4 } = {}) {
@@ -88,6 +101,8 @@ export function sootTexture(seed = 5) {
 /** Altura (canvas em tons de cinza, 128 = plano) → normal map tangente. */
 function canvasNormal(c, strength = 2) {
   const w = c.width, h = c.height;
+  // canvas reduzido: o mesmo relevo cabe em menos pixels (gradiente maior)
+  strength *= c.__k || 1;
   const src = c.getContext('2d').getImageData(0, 0, w, h).data;
   const out = new Uint8Array(w * h * 4);
   const H = (x, y) => src[(Math.min(h - 1, Math.max(0, y)) * w + Math.min(w - 1, Math.max(0, x))) * 4] / 255;

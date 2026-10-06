@@ -26,6 +26,21 @@ function sdRound(px, py, cx, cy, hx, hy, r) {
   return Math.hypot(ox, oy) + Math.min(Math.max(qx, qy), 0) - r;
 }
 
+/**
+ * Fábrica de SDF de guarda-mão genérico (armas novas): corpo = caixa
+ * arredondada na seção XY (centro cy, meia-largura hx, meia-altura hy, raio
+ * r) ∪ trilho opcional no topo (railY = centro, railHx), válido em z ∈ [z1, z0].
+ */
+export function makeGuardSdf({ cy = -0.008, hx = 0.02, hy = 0.022, r = 0.008, railY = null, railHx = 0.0105, z0 = -0.2, z1 = -0.5 } = {}) {
+  return (p) => {
+    let d = sdRound(p.x, p.y, 0, cy, hx, hy, r);
+    if (railY != null) d = Math.min(d, sdRound(p.x, p.y, 0, railY, railHx, 0.0042, 0.0012));
+    const dz = Math.max(p.z - z0, z1 - p.z, 0);
+    if (dz > 0) d = Math.hypot(Math.max(d, 0), dz);
+    return d;
+  };
+}
+
 /** SDF do guarda-mão (corpo + trilho), espaço da arma. */
 export function guardSdf(p, z0 = -0.236, z1 = -0.585) {
   const body = sdRound(p.x, p.y, 0, -0.0078, 0.0218, 0.0243, 0.0085);
@@ -56,7 +71,7 @@ function toGun(obj, local, inv, out) {
  *   fwd   inclinação dos dedos para a frente (rad)
  *   gap   folga de contato (m)
  */
-export function solveClamp(hand, gunRoot, { phi = 3.75, z = -0.43, fwd = 0.38, lift = 0.0, gap = 0.0007, thumbUp = 0.0115, over = false, thumbX = -0.026, roll = 0 } = {}) {
+export function solveClamp(hand, gunRoot, { phi = 3.75, z = -0.43, fwd = 0.38, lift = 0.0, gap = 0.0007, thumbUp = 0.0115, over = false, thumbX = -0.026, roll = 0, sdf = guardSdf, cy = -0.0078, ceilY = 0.012, maxY = 0.018 } = {}) {
   const n = new THREE.Vector3(Math.cos(phi), Math.sin(phi), 0);
   const t = new THREE.Vector3(-Math.sin(phi), Math.cos(phi), 0);
   // over: dedos sobem e passam por cima (dorso para fora/câmera, punho embaixo)
@@ -73,13 +88,13 @@ export function solveClamp(hand, gunRoot, { phi = 3.75, z = -0.43, fwd = 0.38, l
     D.copy(D1.z > D2.z ? D1 : D2);
   }
   // ponto da superfície na direção n (marcha a partir do centro)
-  const c = new THREE.Vector3(0, -0.0078, z);
+  const c = new THREE.Vector3(0, cy, z);
   const s = new THREE.Vector3();
   let lo = 0, hi = 0.08;
   for (let i = 0; i < 40; i++) {
     const mid = (lo + hi) / 2;
     s.copy(c).addScaledVector(n, mid);
-    if (guardSdf(s) < 0) lo = mid;
+    if (sdf(s) < 0) lo = mid;
     else hi = mid;
   }
   s.copy(c).addScaledVector(n, hi);
@@ -97,11 +112,11 @@ export function solveClamp(hand, gunRoot, { phi = 3.75, z = -0.43, fwd = 0.38, l
   _inv.copy(gunRoot.matrixWorld).invert();
 
   const fit = fitHand(hand, gunRoot, {
-    sdf: guardSdf,
+    sdf,
     gap,
     // pega por cima: o polegar desce pelo flanco esquerdo apontando para a
     // frente (visível da câmera), não sobe para junto do indicador
-    thumb: { target: new THREE.Vector3(thumbX, thumbUp, z - 0.05), maxY: over ? null : 0.018, ...(over ? { lim: [[-1.4, 1.4], [-1.2, 1.4], [-1.4, 1.4], [-0.1, 0.9], [-0.1, 0.9]], ceilY: 0.012 } : {}) },
+    thumb: { target: new THREE.Vector3(thumbX, thumbUp, z - 0.05), maxY: over ? null : maxY, ...(over ? { lim: [[-1.4, 1.4], [-1.2, 1.4], [-1.4, 1.4], [-0.1, 0.9], [-0.1, 0.9]], ceilY } : {}) },
   });
   return { pos, quat, pose: fit.pose, cost: fit.cost };
 }

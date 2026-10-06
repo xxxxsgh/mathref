@@ -14,6 +14,11 @@
  *                  sombra do tronco/cabeça (só no mapa de sombra).
  *   dust.js        poeira do slide, da aterrissagem e do sprint em terra.
  *   speedfx.js     borrão/escurecimento de borda em alta velocidade.
+ *   sparks.js      faíscas do slide em metal/concreto (pontos aditivos).
+ *   sfx.js         loop de slide por superfície, baque do chute/dive,
+ *                  clique de montar (WebAudio no contexto do serviço audio).
+ *   slidephys.js   lógica pura (slide, rampa, cancel, slide-jump, estamina,
+ *                  montar) — testada em slidephys.test.mjs.
  *   tuning.js      todos os números.
  *
  * Serviço `movement`: builtin=false, stance(), getters de estado e
@@ -24,7 +29,7 @@
  * a partir da pose do preset, e o estado é congelado no instante da
  * captura — a imagem mostra o movimento de verdade (posição, olhos, FOV,
  * roll, corpo, poeira). Roteiros: sprint, tactical, slide, crouch, prone,
- * leanL, leanR, jump. `&mvpitch=` / `&mvyaw=` somam à pose do preset.
+ * leanL, leanR, jump, slidecancel, slidejump, dive, kick, tacdouble. `&mvpitch=` / `&mvyaw=` somam à pose do preset.
  */
 import * as THREE from 'three';
 import { Controller } from './controller.js';
@@ -32,6 +37,8 @@ import { CameraMotion } from './camera.js';
 import { Body } from './body.js';
 import { Dust } from './dust.js';
 import { SpeedFx } from './speedfx.js';
+import { Sparks } from './sparks.js';
+import { MoveSfx } from './sfx.js';
 import { T } from './tuning.js';
 
 /** Entrada virtual (mesma interface que o controlador usa de ctx.input). */
@@ -48,6 +55,9 @@ class VirtualInput {
   }
   released() {
     return false;
+  }
+  consume(n) {
+    this.edge.delete(n);
   }
   set(n, on) {
     if (on) {
@@ -74,7 +84,27 @@ const SCRIPTS = {
   leanL: { ev: [[0.05, 'leanLeft', true]], capture: 0.7 },
   leanR: { ev: [[0.05, 'leanRight', true]], capture: 0.7 },
   jump: { ev: [[0, 'forward', true], ...tap(0.05, 'sprint'), ...tap(0.5, 'jump')], capture: 'land' },
+  // slide → toque de agachar cedo: levanta já correndo (#39)
+  slidecancel: { ev: [[0, 'forward', true], ...tap(0.05, 'sprint'), ...tap(1.0, 'crouch'), ...tap(1.25, 'crouch')], capture: 1.4 },
+  // slide → pulo: sai voando com o embalo (#40), captura no ar
+  slidejump: { ev: [[0, 'forward', true], ...tap(0.05, 'sprint'), ...tap(0.3, 'sprint'), ...tap(1.0, 'crouch'), ...tap(1.2, 'jump')], capture: 1.42 },
+  // sprint + deitar: mergulho (#43), captura logo após o impacto
+  dive: { ev: [[0, 'forward', true], ...tap(0.05, 'sprint'), ...tap(1.0, 'prone')], capture: 'land' },
+  // slide + corpo a corpo: chute (#42), captura com a perna estendida
+  kick: { ev: [[0, 'forward', true], ...tap(0.05, 'sprint'), ...tap(1.0, 'crouch'), ...tap(1.12, 'melee')], capture: 1.22, pitch: -0.15 },
+  // duplo toque de sprint parado → tático direto (#48)
+  tacdouble: { ev: [[0, 'forward', true], ...tap(0.05, 'sprint'), ...tap(0.22, 'sprint')], capture: 1.2 },
 };
+
+/**
+ * Ações de movimento que o toque ainda não tem botão (hook para a feature
+ * touch): ela pode ler `services.movement.touchHints` e criar os botões.
+ */
+const TOUCH_HINTS = [
+  { action: 'prone', label: 'DIVE', hint: 'deitar; em sprint/slide = dolphin dive' },
+  { action: 'leanLeft', label: 'Q', hint: 'inclinar à esquerda (segurar)' },
+  { action: 'leanRight', label: 'E', hint: 'inclinar à direita (segurar)' },
+];
 
 const _pos = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -118,6 +148,47 @@ export default {
       },
       get stepPhase() {
         return ctrl.stepPhase;
+      },
+      get diving() {
+        return ctrl.diving;
+      },
+      get hanging() {
+        return !!ctrl.hang;
+      },
+      /** 'ledge' | 'wall' | null — arma apoiada (#50) */
+      get mounted() {
+        return ctrl.mount?.kind || null;
+      },
+      get cover() {
+        return ctrl.cover > 0;
+      },
+      /** multiplicador de dispersão para a arma (também em ctx.player.slideSpread) */
+      get slideSpread() {
+        return p.slideSpread ?? 1;
+      },
+      /** declive medido no slide (dh/dx; negativo = descendo) */
+      get slope() {
+        return ctrl.slope;
+      },
+      touchHints: TOUCH_HINTS,
+      /** Zera slide/mantle/pendurar/montar etc. (teleporte, ferramentas) */
+      reset: () => ctrl.reset(p),
+      /**
+       * Cria um vão baixo de teste (colisor + caixa visível) para o slide
+       * passar por baixo (#45): `addLowGap([x,y,z] centro do topo-vão, largura, profundidade, vão)`.
+       * Qualquer colisor com o fundo entre 1.0 e 1.28 m do chão já funciona.
+       */
+      addLowGap(at, width = 2, depth = 1.2, gap = 1.12, thick = 0.5) {
+        const THREE_ = ctx.THREE || THREE;
+        const [x, y, z] = at;
+        const min = new THREE_.Vector3(x - width / 2, y + gap, z - depth / 2);
+        const max = new THREE_.Vector3(x + width / 2, y + gap + thick, z + depth / 2);
+        const id = ctx.collision.addBox(min, max, { tag: 'lowgap', material: 'metal' });
+        const m = new THREE_.Mesh(new THREE_.BoxGeometry(width, thick, depth), new THREE_.MeshStandardMaterial({ color: 0x6b6f72, roughness: 0.6, metalness: 0.4 }));
+        m.position.set(x, y + gap + thick / 2, z);
+        m.castShadow = m.receiveShadow = true;
+        ctx.scene.add(m);
+        return { id, mesh: m, remove: () => (ctx.collision.remove(id), ctx.scene.remove(m)) };
       },
       get groundMaterial() {
         return ctrl.groundMaterial;
@@ -180,7 +251,39 @@ export default {
     } catch (err) {
       console.warn('[movement] speedfx desligado', err);
     }
+    try {
+      this.sparks = new Sparks(ctx);
+    } catch (err) {
+      console.warn('[movement] faíscas desligadas', err);
+    }
+    const sfx = (this.sfx = new MoveSfx(ctx));
+    ctx.bus.on('player:slide', (e) => {
+      if (e?.phase === 'start') sfx.startSlide(e.material);
+      else sfx.stopSlide(e?.reason === 'jump' || e?.reason === 'cancel' ? 0.08 : 0.2);
+    });
+    ctx.bus.on('player:slideKick', (e) => {
+      sfx.kick(!!e?.hit);
+      if (e?.hit && this.sparks && e.point && ctrl.groundMaterial === 'metal') this.sparks.burst(e.point, _dir.set(p.velocity.x, 0, p.velocity.z).normalize(), 6, 4);
+    });
+    ctx.bus.on('player:dive', (e) => {
+      if (e?.phase !== 'land') return;
+      sfx.diveImpact(e.material);
+      ctx.services.audio?.play?.('body_drop', { bus: 'foley', volume: 0.8, cap: 2 });
+      if (this.dust) this.dust.burst(p.position, 0.9, e.material);
+    });
+    ctx.bus.on('player:mount', (e) => {
+      if (!e?.on) return;
+      sfx.mountClick();
+      ctx.services.audio?.play?.('gear', { bus: 'foley', volume: 0.22, cap: 2 });
+    });
+    ctx.bus.on('player:cover', () => ctx.services.audio?.play?.('body_drop', { bus: 'foley', volume: 0.35, cap: 2 }));
+    ctx.bus.on('player:hang', (e) => {
+      if (e?.phase === 'start') ctx.services.audio?.play?.('cloth_long', { bus: 'foley', volume: 0.5, cap: 2 });
+    });
     this.fxTarget = 0;
+
+    // renascimento: nada de slide/pendurado "herdado" da vida anterior
+    ctx.bus.on('player:respawn', () => ctrl.reset(p));
 
     // poeira de aterrissagem
     ctx.bus.on('player:land', (e) => {
@@ -250,7 +353,7 @@ export default {
       const phase = c.prevStepPhase + (c.stepPhase - c.prevStepPhase) * (ctx.time.alpha ?? 1);
       this.body.update(
         fdt,
-        { stance: c.stance, sliding: !!c.slide, grounded: p.onGround, speed: hs, phase, mantle: !!c.mantle, moveX: mx, moveZ: mz, slideT: c.slide?.t || 0, eye: p.eyeHeight, lean: c.lean },
+        { stance: c.stance, sliding: !!c.slide, grounded: p.onGround, speed: hs, phase, mantle: !!c.mantle, moveX: mx, moveZ: mz, slideT: c.slide?.t || 0, eye: p.eyeHeight, lean: c.lean, kick: c.kick ? Math.sin(Math.PI * Math.min(1, c.kick.t / T.kickTime)) : 0, hang: !!c.hang, diving: c.diving },
         _pos,
         p.yaw,
         p.alive !== false,
@@ -266,9 +369,13 @@ export default {
           cp[k].y = p.position.y;
           this.dust.trail(fdt, cp[k], _dir, s, c.groundMaterial, rate * (k === 'L' ? 0.6 : 0.4));
         }
+        // faíscas: calcanhar da perna estendida raspando em superfície dura
+        if (this.sparks) this.sparks.trail(fdt, cp.L, _dir, s, c.groundMaterial);
       }
     }
     if (this.dust) this.dust.update(fdt);
+    if (this.sparks) this.sparks.update(fdt);
+    if (c.slide && fdt > 0) this.sfx.updateSlide(c.slide.speed, fdt);
 
     // borrão de velocidade
     if (this._fx) {
@@ -288,5 +395,7 @@ export default {
     this.body?.dispose();
     this.dust?.dispose();
     this._fx?.dispose();
+    this.sparks?.dispose();
+    this.sfx?.dispose();
   },
 };

@@ -132,6 +132,40 @@ const rendering = {
     this.frameIndex = 0;
     this.stats = { ms: 0, passes: 0 };
 
+    // ── caminho LEVE (sem HDR) ──
+    // Modo leve (quality.hdr false) ou GPU que não renderiza em half-float
+    // (WebGL2 sem EXT_color_buffer_float/half_float — Mali/PowerVR antigos):
+    // o compositor inteiro depende de alvos HalfFloat, e com eles incompletos
+    // a tela fica preta com erros de GL. Aqui fica o pipeline padrão do núcleo
+    // (cena + viewmodel, ACES do three), o céu/névoa/IBL do world e sombras
+    // simples — barato e compatível com qualquer WebGL2.
+    this.hdrOk = quality.hdr !== false && canRenderHalfFloat(renderer);
+    if (!this.hdrOk) {
+      this.lite = true;
+      renderer.shadowMap.type = THREE.PCFShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
+      ctx.setRenderPipeline(null);
+      if (quality.hdr !== false) console.warn('[rendering] GPU sem alvos half-float renderizáveis: caminho LDR');
+      const P = this.params;
+      this.api = ctx.provide('rendering', {
+        setExposure(v) {
+          P.exposure = v;
+          renderer.toneMappingExposure = v;
+        },
+        get exposure() { return P.exposure; },
+        get environment() { return scene.environment || null; },
+        get params() { return P; },
+        get stats() { return { ms: 0, passes: 1, lite: true }; },
+        setFog() {}, setVolumetrics() {}, setAO() {}, setBloom() {}, setGrade() {}, setLens() {},
+        setAutoExposure() {}, setGI() {}, setContact() {}, setBleed() {}, setShadow() {}, setTAA() {},
+        setSky() {}, setMenuBlur() {}, flash() {}, setDebug() {}, readExposure() { return null; },
+        get hdr() { return false; },
+        get lite() { return true; },
+      });
+      return;
+    }
+
     // Anti-aliasing especular (Kaplanyan/Tokuyoshi): a variação da normal
     // FINAL (com normal map) entre pixels vira rugosidade extra — faixas,
     // tampas de bueiro e trilhos param de cintilar.
@@ -195,8 +229,9 @@ const rendering = {
     this.ambient = new THREE.Color(0.1, 0.1, 0.1);
     this.ambientDirty = true;
     this.jitter = new THREE.Vector2();
-    // sonda de reflexo local para a viewmodel (medium+)
-    this.probe = ctx.quality.level === 'low' ? null : new LocalProbe(renderer, ctx.quality.level === 'ultra' ? 192 : 128);
+    // sonda de reflexo local para a viewmodel (medium+; nunca no celular:
+    // 2 cubemaps HalfFloat + PMREM + 6 vistas da cena inteira)
+    this.probe = ctx.quality.level === 'low' || ctx.quality.probes === false ? null : new LocalProbe(renderer, ctx.quality.level === 'ultra' ? 192 : 128);
     this.taaFrames = 0;
 
     // ── pipeline ──
@@ -207,6 +242,19 @@ const rendering = {
     this.offs = [
       bus.on('resize', () => this.resize()),
       bus.on('quality:change', () => this.configure()),
+      // contexto WebGL restaurado (main.js): o three re-sobe texturas e
+      // geometrias, mas o CONTEÚDO de alvos (LUT do céu, PMREM, histórico
+      // TAA, exposição) se perdeu — refaz tudo
+      bus.on('renderer:restored', () => {
+        this.disposeTargets();
+        this.atmo.updateLut(true);
+        this.env = this.atmo.updateEnvironment(true) || this.env;
+        this.applyEnvironment();
+        this.rawShadow && (this.rawShadow.valid = false);
+        this.shadowDirty = true;
+        this.needsClears = true;
+        this.resize();
+      }),
     ];
     this.prevViewProj = new THREE.Matrix4();
     this.hasPrev = false;
@@ -371,6 +419,17 @@ const rendering = {
     if (q.msaa && tier.msaa === 0 && !tier.taa) tier.msaa = 4;
     if (!q.shadows) tier.far = 0;
     tier.bloom = q.bloom !== false;
+    // camadas mobile/lite (core/Quality.js): cortam os passes que redesenham
+    // a cena inteira (RSM do GI, cascata larga, mapa cru do PCSS, poeira)
+    if (q.tier === 'mobile' || q.tier === 'lite') {
+      tier.gi = 0;
+      tier.far = 0;
+      tier.pcss = 0;
+      tier.dust = 0;
+      tier.taa = false;
+      tier.bloomLevels = Math.min(tier.bloomLevels, 5);
+    }
+    this.mobile = q.tier === 'mobile' || q.tier === 'lite';
     this.tier = tier;
 
     this.shadowFit.configure(q);
@@ -497,6 +556,7 @@ const rendering = {
 
   // ─── por frame: sol, céu, sombra, poeira ─────────────────────────────
   frame(dt, ctx) {
+    if (this.lite) return;
     const { camera } = ctx;
     const sun = this.sun || ctx.service('world')?.sun || null;
     if (sun && !this.sun) this.sun = sun;
@@ -648,7 +708,7 @@ const rendering = {
     // (câmera andou/sol girou) e, para objetos móveis (inimigos, portas), a
     // cada 2 quadros (3 no modo shot). O mapa de 4096² é o passe mais caro.
     renderer.shadowMap.autoUpdate = false;
-    const every = ctx.shot ? 3 : 2;
+    const every = ctx.shot ? 3 : this.mobile ? 4 : 2;
     renderer.shadowMap.needsUpdate = !!this.shadowDirty || this.frameIndex % every === 0 || !sun?.shadow?.map;
     this.shadowDirty = false;
     // PCSS: mapa cru com a mesma câmera, no mesmo ritmo do shadow map
@@ -1022,6 +1082,10 @@ const rendering = {
 
   dispose(ctx) {
     this.offs?.forEach((off) => off());
+    if (this.lite) {
+      ctx.setRenderPipeline(null);
+      return;
+    }
     ctx.renderer.shadowMap.autoUpdate = true;
     ctx.setRenderPipeline(null);
     this.disposeTargets();
@@ -1062,6 +1126,36 @@ function installSpecularAA(scene) {
       const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
       for (const m of ms) if (m.isMeshStandardMaterial) m.needsUpdate = true;
     });
+  }
+}
+
+/**
+ * O WebGL2 deste aparelho renderiza em RGBA16F? (precisa de
+ * EXT_color_buffer_float ou EXT_color_buffer_half_float). Testa de verdade:
+ * cria um framebuffer 4×4 e checa se está completo. Nunca lança.
+ */
+function canRenderHalfFloat(renderer) {
+  try {
+    const gl = renderer.getContext();
+    if (!(typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext)) return false;
+    const ext = gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float');
+    if (!ext) return false;
+    const prevFb = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+    const prevTex = gl.getParameter(gl.TEXTURE_BINDING_2D);
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 4, 4, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, prevFb);
+    gl.bindTexture(gl.TEXTURE_2D, prevTex);
+    gl.deleteFramebuffer(fb);
+    gl.deleteTexture(tex);
+    return ok;
+  } catch {
+    return false;
   }
 }
 

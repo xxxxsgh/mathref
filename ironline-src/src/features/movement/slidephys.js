@@ -22,7 +22,7 @@ export function slideStartSpeed(cur, { tactical = false, bonus = 0 } = {}, T = D
 export function slopeAccel(slope, T = DEF) {
   const s = clamp(slope, -T.slopeMax, T.slopeMax);
   const sin = s / Math.sqrt(1 + s * s);
-  return -T.gravity * sin * T.slopeGain;
+  return -T.gravity * sin * T.slopeGain + 0; // + 0: evita -0
 }
 
 /** Atrito do slide no instante `t` (s), reduzido em descida forte. */

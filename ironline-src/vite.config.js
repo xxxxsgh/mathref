@@ -9,7 +9,11 @@ export default defineConfig({
   build: {
     outDir: '../ironline',
     emptyOutDir: true,
-    target: 'es2022',
+    // Safari 15 (iOS 15): blocos `static {}` de classe (ES2022, usados pelo three)
+    // só existem no Safari 16.4+ — com target es2022 o chunk do three não
+    // compilava em iPhones mais antigos e o jogo nem começava. O bundler
+    // rebaixa a sintaxe para estes alvos.
+    target: ['es2021', 'safari15', 'chrome90', 'firefox90', 'edge90'],
     sourcemap: true,
     chunkSizeWarningLimit: 1500,
     rolldownOptions: {

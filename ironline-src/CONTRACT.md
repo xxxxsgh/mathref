@@ -87,6 +87,9 @@ pipeline(ctx, dt)              → render (padrão: cena + viewmodel)
 | `renderViewmodel(target)` | desenha a viewmodel por cima do alvo (limpa só depth). O pipeline customizado DEVE chamá-la (ou compor a viewmodel de outro jeito) |
 | `shotPose(name?)` | pose do preset (`services.world.shotPoses[name]` > padrão de `core/Shots.js`) |
 | `features` / `errors` | estado de carregamento `{ name, order, ok, error }` e erros registrados |
+| `bootProgress(rótulo, f)` | durante o `init`: atualiza a tela de carga (f = 0..1 dentro da fatia da feature) e **cede um frame** — `await` entre blocos pesados para o celular não travar a página. Fora da carga só cede |
+| `gpu` | `{ webgl2, maxTexture, halfFloatRT }` (core/Renderer.js `gpuCaps`); sem `halfFloatRT` o núcleo põe `quality.hdr = false` |
+| `tier` | camada do aparelho: `'desktop' \| 'mobile' \| 'lite'` (= `quality.tier`) |
 
 `window.__ironline` = `ctx`. `window.__ready = true` após o 3º frame
 renderizado (features iniciadas e aquecimento do preset feito).
@@ -99,6 +102,9 @@ renderizado (features iniciadas e aquecimento do preset feito).
 - Ações padrão (`input.bindings`, editável): `forward back left right jump
   sprint crouch prone reload interact melee grenade weapon1 weapon2 leanLeft
   leanRight scoreboard pause fire ads` (`fire` = `Mouse0`, `ads` = `Mouse2`).
+- `consume(nome)` apaga a borda de `pressed(nome)` no passo atual (features
+  de ordem maior passam a ver `false`; `action` não muda). O movimento
+  consome `melee` durante o slide (vira slide kick, a faca não sai).
 - `consumeLook()` → `{ yaw, pitch }` em rad (o player já consome); `consumeWheel()`.
 - `locked` (pointer lock), `requestLock()`, `exitLock()`, `enabled`,
   `sensitivity`, `invertY`.
@@ -152,6 +158,13 @@ Estado: `position` (pés), `prevPosition`, `velocity`, `yaw`, `pitch`,
   locomoção embutida (é o que a feature `movement` faz). O controlador deve
   manter `position/velocity/onGround/state/eyeHeight` coerentes e pode usar
   `ctx.collision.moveCapsule`.
+- **Publicado pela feature `movement`** (leia com `?? 1` / `?.`, pode não
+  existir sem ela): `sliding` (bool), `slideSpread` (multiplicador de
+  dispersão; 1 fora do slide), `slideRecoil`, `mounted` (`'ledge'|'wall'|null`),
+  `mountRecoil`, `mountSway`, `tacSprint` (sprint tático: pose de arma
+  erguida), `hanging`, `diving`. A arma deve multiplicar a dispersão por
+  `player.slideSpread ?? 1` e o recuo por `(player.slideRecoil ?? 1) *
+  (player.mountRecoil ?? 1)`.
 - Canais de câmera (somados em `syncCamera`, cada dono reescreve o seu):
   `viewOffset` (Vector3 local à câmera — bob, lean),
   `viewKick { pitch, yaw, roll }` (recuo, impacto) e
@@ -178,6 +191,13 @@ São dicas: cada feature decide como honrá-las.
   **`level` continua sendo sempre um dos 4 presets**; os degraus "−" só
   aplicam patches (`motionBlur/volumetrics` off, `shadowScale 0.5`, `ssao/bloom`
   off, `foliage`/`particleBudget` menores). O modo shot fica em `high` fixo.
+- **Camada do aparelho** (`quality.tier`, `TIER_PATCHES` em core/Quality.js):
+  `desktop` (sem patch), `mobile` (celular/tablet) e `lite` (`?lite=1`,
+  botão "Tentar modo leve", ou carga anterior que não terminou). A camada é
+  um TETO aplicado por cima de qualquer preset/degrau (números no mínimo,
+  booleanos só desligam). Campos extras: `detail` (0..1, detalhe
+  geométrico/texturas do mundo; 1 = completo), `hdr` (false → compositor
+  LDR, sem alvos float nem PMREM), `probes` (false → sem sondas/cubemaps).
 - `shadowScale` (0,125..1): multiplicador da resolução do shadow map do sol
   (o compositor honra; potência de 2, ≥ 512). `contactAO` (bool): AO barata de
   contato quando `ssao` está desligado.
@@ -209,7 +229,7 @@ documento.
 | `world` | world | `root`, `sun` (DirectionalLight), `hemi`, `bounds: Box3`, `spawnPoints: [{position:[x,y,z], yaw, pitch}]`, `enemySpawns: [...]`, `shotPoses: { [preset]: {position, yaw, pitch} }`, `materialAt(hit) → string` |
 | `rendering` | rendering | `setExposure(v)`, `environment` (Texture PMREM ou null) |
 | `audio` | audio | `play(nome, { position?, volume? })`, `setVolume(v)`, `context` |
-| `movement` | movement | `builtin: bool`, `stance() → 'stand'|'crouch'|'prone'|'slide'` |
+| `movement` | movement | `builtin: bool`, `stance() → 'stand'|'crouch'|'prone'|'slide'`; extras: `sliding mounted hanging diving cover tacFuel slideSpread slope`, `reset()`, `touchHints` (ações sem botão no toque: `prone`, `leanLeft`, `leanRight`), `addLowGap(...)` |
 | `weapon` | weapon | `gun` (Object3D na vm), `muzzle` (Object3D), getters `ammo`, `reserve`, `magSize`, `ads` (0..1), `reloading`, `name` |
 | `enemies` | enemies | `list`, `spawn(pose) → enemy`, `count()`, `clear()`, `auto` (bool: repõe o esquadrão sozinho; a partida desliga e conduz as ondas) |
 | `vfx` | vfx | `impact(point, normal, material?)`, `tracer(from, to)`, `muzzleFlash(obj3d)` |
@@ -227,8 +247,13 @@ documento.
 | `input:lock` | `bool` | núcleo (no toque: captura virtual) |
 | `input:touch` | `bool` | núcleo (troca mouse ↔ toque) |
 | `quality:auto` | `{ rung, scale, reason }` | núcleo (governador trocou de degrau) |
+| `renderer:lost` / `renderer:restored` | `{}` | núcleo (`webglcontextlost/restored`; quem tem alvos de render refaz o conteúdo no restored) |
 | `player:damage` | `{ amount, health, source?, from? }` | núcleo (`player.damage`) |
 | `player:death` / `player:jump` / `player:land` | `{…}` | núcleo / controlador |
+| `player:slide` | `{ phase:'start'\|'end', on, speed, material, reason? }` | movement |
+| `player:slideKick` | `{ target, hit, damage?, killed? }` (+ `weapon:hit` com `weapon:'slideKick'`, `melee`, `knockback`, `knockdown`) | movement |
+| `player:dive` / `player:tacSprint` | `{ phase:'start'\|'land' , speed }` / `{ phase:'start'\|'end', fuel }` | movement |
+| `player:mount` / `player:hang` / `player:cover` | `{ on, kind }` / `{ phase }` / `{ height }` | movement |
 | `weapon:fire` | `{ origin, dir, muzzle, ads }` | weapon |
 | `weapon:hit` | `{ point, normal, distance, collider, part, dir, damage, source }` | weapon |
 | `weapon:reload` / `weapon:reloaded` / `weapon:dry` | `{…}` | weapon |
@@ -253,6 +278,8 @@ documento.
 | `&pause=1` | congela a simulação depois do aquecimento (só renderiza) |
 | `&preserve=1` | `preserveDrawingBuffer` (o shot.mjs liga para medir luminância) |
 | `?dynres=0` | desliga o governador (resolução dinâmica + degraus automáticos; ver `ctx.governor`) |
+| `?lite=1\|0` | força o modo leve (camada `lite`) / desliga a detecção automática de carga que não terminou |
+| `?bootlog=1` | imprime o tempo de import/init de cada feature (`window.__bootlog` sempre existe) |
 | `?waves=1,1&wi=1&mt=300` | partida curta: ondas, intervalo entre ondas e tempo (hud) |
 
 ## Modo screenshot (`?shot=<preset>`)

@@ -82,6 +82,7 @@ export function weaponIcon(kind, h = 16, playerImg = null) {
 // ─── medalhas: arte em camadas com metal (bronze / prata / ouro) ─────────
 const TIER = {
   kill: 'bronze', payback: 'bronze', head: 'silver', long: 'silver', double: 'silver', triple: 'gold', streak: 'gold',
+  slide: 'silver', mastery: 'gold', airstrike: 'gold', uav: 'silver', shield: 'bronze',
 };
 const METAL = {
   bronze: ['#ffd6a8', '#c77b3f', '#6d3a17', '#e8a56c', '#3a1c0b'],
@@ -105,6 +106,12 @@ export function medalSVG(kind, s = 64, tierOverride) {
     triple: '<path d="M21,44 L32,36 L43,44 V48 L32,40 L21,48 Z M21,36 L32,28 L43,36 V40 L32,32 L21,40 Z M21,28 L32,20 L43,28 V32 L32,24 L21,32 Z"/>',
     long: '<path d="M18,30.5 H40 V26 L48,32 L40,38 V33.5 H18 Z"/><circle cx="20" cy="32" r="4.4"/>',
     streak: '<path d="M27,17 H39 L34.5,28.5 H43 L25,48 L29.5,34 H21.5 Z"/>',
+    // deslize (corpo baixo + rastro) e maestria (coroa) — medalhas de outras features
+    slide: '<path d="M16,40 H48 V44 H16 Z M30,22 L40,26 L44,36 H24 Z M38,16 A4,4 0 1,1 37.9,16 Z"/><path d="M10,30 H22 M8,35 H20" fill="none" stroke-width="2.4"/>',
+    mastery: '<path d="M17,42 L14,22 L24,30 L32,18 L40,30 L50,22 L47,42 Z M17,45 H47 V48 H17 Z"/>',
+    airstrike: '<path d="M32,14 L36,24 V30 L50,36 V40 L36,37 V44 L41,48 V50 L32,48 L23,50 V48 L28,44 V37 L14,40 V36 L28,30 V24 Z"/>',
+    uav: '<g fill="none" stroke-width="2.6"><circle cx="32" cy="32" r="12"/><circle cx="32" cy="32" r="5"/></g><path d="M32,16 V20 M32,44 V48 M16,32 H20 M44,32 H48" stroke-width="2.6"/>',
+    shield: '<path d="M32,16 L46,21 V31 C46,40 40,46 32,49 C24,46 18,40 18,31 V21 Z"/>',
     payback: '<path d="M23,24 L16,31 L23,38 V33.6 H38 C41,33.6 43,35.6 43,38.4 C43,41.2 41,43.2 38,43.2 H31 V47 H38 C43.4,47 47,43.4 47,38.4 C47,33.4 43.4,29.8 38,29.8 H23 Z"/>',
   }[kind] || '';
   const grad = `<defs>

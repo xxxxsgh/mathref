@@ -141,3 +141,147 @@ test('weapon/granada: dano cai com a distância e arremesso sobe em arco', () =>
   assert.ok(v.z < -14 && v.x > 0.5, 'segue a mira e herda a velocidade do jogador');
   assert.ok(Math.abs(Math.hypot(v.x - 0.8, v.y, v.z) - 15) < 1e-6);
 });
+
+// ─── v3: catálogo, faca na mão, chumbos, fôlego, contador, padrões, chaveiro ───
+import { ALL_WEAPONS, KNIVES, knifeId, weaponDef } from './loadout.js';
+import { pelletPattern, scopeSway, BreathHold, falloff } from './ballistics.js';
+import { formatKills, KillCounters, CharmSim } from './cosmetic-logic.js';
+import { PATTERNS, renderPattern, skinParams, wearProfile, parseHex } from './patterns.js';
+
+test('weapon/loadout: catálogo de 7 armas, setSlot preserva munição e troca slots', () => {
+  assert.equal(ALL_WEAPONS.length, 7);
+  assert.deepEqual(ALL_WEAPONS.map((d) => d.kind), ['rifle', 'pistol', 'smg', 'shotgun', 'sniper', 'lmg', 'dmr']);
+  assert.equal(new Set(ALL_WEAPONS.map((d) => d.id)).size, 7);
+  const lo = new Loadout(WEAPON_DEFS);
+  lo.current.ammo = 9;
+  assert.equal(lo.setSlot(0, weaponDef('mx9')), true);
+  assert.equal(lo.weapons[0].def.id, 'mx9');
+  assert.equal(lo.weapons[0].ammo, 32);
+  lo.weapons[0].ammo = 5;
+  // volta o fuzil: recupera os 9 do cache
+  lo.setSlot(0, weaponDef('kr9'));
+  assert.equal(lo.weapons[0].ammo, 9);
+  // a pistola como primária: os slots trocam de lugar
+  lo.setSlot(0, weaponDef('p11'));
+  assert.equal(lo.weapons[0].def.id, 'p11');
+  assert.equal(lo.weapons[1].def.id, 'kr9');
+  assert.equal(lo.weapons[1].ammo, 9);
+  assert.equal(lo.setSlot(0, weaponDef('p11')), false);
+});
+
+test('weapon/loadout: faca na mão entra na troca mas não no ciclo da roda', () => {
+  const lo = new Loadout(WEAPON_DEFS);
+  assert.equal(lo.request(2), true);
+  for (let i = 0; i < 120; i++) lo.step(DT);
+  assert.equal(lo.knifeOut, true);
+  assert.equal(lo.def.kind, 'knife');
+  assert.equal(lo.canReload(), false);
+  lo.cycle(1);
+  assert.equal(lo.pending, 0, 'da faca, a roda volta para as armas');
+  assert.equal(knifeId('garra'), 'karambit');
+  assert.equal(knifeId('cleaver'), 'cleaver');
+  assert.equal(knifeId('xyz'), null);
+  assert.equal(KNIVES.length, 7);
+  // recarga cartucho a cartucho (escopeta): max limita
+  const sg = { def: weaponDef('br12'), ammo: 2, reserve: 10 };
+  assert.equal(lo.applyReload(sg, 1), 1);
+  assert.equal(sg.ammo, 3);
+});
+
+test('weapon/ballistics: chumbos dentro do cone, padrão centrado e determinístico', () => {
+  const r = mulberryTest(7);
+  const p = pelletPattern(9, 0.07, r);
+  assert.equal(p.length, 9);
+  let mx = 0, my = 0;
+  for (const [x, y] of p) {
+    assert.ok(Math.hypot(x, y) <= 0.07 + 1e-9, 'fora do cone');
+    mx += x / 9;
+    my += y / 9;
+  }
+  assert.ok(Math.hypot(mx, my) < 0.03, 'centro de massa perto do eixo');
+  assert.deepEqual(pelletPattern(9, 0.07, mulberryTest(7)), p);
+  assert.notDeepEqual(pelletPattern(9, 0.07, mulberryTest(8)), p);
+  assert.equal(pelletPattern(1, 0.07, r).length, 1);
+  assert.equal(falloff(5, { falloff: [6, 24, 0.2] }), 1);
+  assert.ok(Math.abs(falloff(24, { falloff: [6, 24, 0.2] }) - 0.2) < 1e-9);
+  assert.equal(falloff(50, { falloff: [40, 0.8] }), 0.8);
+});
+
+test('weapon/ballistics: balanço limitado e fôlego segura → cansa → recupera', () => {
+  for (let t = 0; t < 30; t += 0.37) {
+    const s = scopeSway(t, 0.01);
+    assert.ok(Math.abs(s.x) <= 0.0092 && Math.abs(s.y) <= 0.0094);
+  }
+  const b = new BreathHold({ hold: 4, tired: 2, recover: 0.5 });
+  let m = 1;
+  for (let i = 0; i < 60; i++) m = b.update(DT, true);
+  assert.equal(b.holding, true);
+  assert.ok(m < 0.3, 'segurando: balanço baixo');
+  for (let i = 0; i < 4 * 60; i++) m = b.update(DT, true);
+  assert.equal(b.holding, false, 'fôlego acabou');
+  assert.ok(b.tired > 0 && m > 1.3, 'cansado: balanço maior');
+  assert.ok(b.events.includes('gasp'));
+  // segurar de novo cansado não funciona
+  b.update(DT, true);
+  assert.equal(b.holding, false);
+  for (let i = 0; i < 8 * 60; i++) m = b.update(DT, false);
+  assert.ok(b.stamina > 0.99 && Math.abs(m - 1) < 0.02, 'recuperou');
+});
+
+test('weapon/cosmetics: contador de abates e chaveiro assenta na gravidade', () => {
+  assert.equal(formatKills(42), '000042');
+  assert.equal(formatKills(-3), '000000');
+  assert.equal(formatKills(12345678), '999999');
+  const k = new KillCounters();
+  assert.equal(k.add('kr9'), null, 'sem contador não conta');
+  k.set('kr9', 10);
+  assert.equal(k.add('kr9'), 11);
+  assert.equal(k.get('kr9'), 11);
+  k.set('kr9', null);
+  assert.equal(k.has('kr9'), false);
+  const c = new CharmSim({ L1: 0.012, L2: 0.016 });
+  c.reset([1, 0, 0]); // começa de lado
+  for (let i = 0; i < 600; i++) c.step(DT, [0, -9.8, 0]);
+  const tip = c.p[2];
+  assert.ok(tip[1] < -0.026 && Math.abs(tip[0]) < 0.003, 'pendurado para baixo');
+  // aceleração da arma para +X → chaveiro fica para trás (−X)
+  for (let i = 0; i < 10; i++) c.step(DT, [0, -9.8, 0], [30, 0, 0]);
+  assert.ok(c.p[2][0] < -0.004);
+});
+
+test('weapon/patterns: 12 padrões, bytes determinísticos por seed, seeds diferentes variam', () => {
+  assert.equal(PATTERNS.length, 12);
+  for (const id of ['solid', 'camo', 'digital', 'tiger', 'fade', 'damascus', 'marble', 'hex', 'carbon', 'ember', 'oxide', 'splatter']) assert.ok(PATTERNS.includes(id));
+  const pal = ['#c8862e', '#1a1a1a', '#e9c27a'];
+  for (const id of PATTERNS) {
+    const a = renderPattern(id, pal, 7, 32);
+    const b = renderPattern(id, pal, 7, 32);
+    assert.equal(a.data.length, 32 * 32 * 4);
+    assert.deepEqual(a.data, b.data, id + ' determinístico');
+    if (id !== 'fade') assert.notDeepEqual(renderPattern(id, pal, 8, 32).data, a.data, id + ' varia com a seed');
+  }
+  assert.equal(renderPattern('fade', pal, 1, 16).mode, 1);
+  assert.equal(renderPattern('ember', ['#1a0e08', '#ff6a1f', '#ffcf5a'], 1, 32).emissive, true);
+  // tileável: bordas opostas parecidas (camo)
+  const t = renderPattern('camo', pal, 3, 64).data;
+  let diff = 0;
+  for (let y = 0; y < 64; y++) diff += Math.abs(t[(y * 64) * 4] - t[(y * 64 + 63) * 4]);
+  assert.ok(diff / 64 < 40);
+  const p1 = skinParams({ id: 'x', pattern: 'tiger', seed: 5 }), p2 = skinParams({ id: 'x', pattern: 'tiger', seed: 5 }), p3 = skinParams({ id: 'x', pattern: 'tiger', seed: 6 });
+  assert.deepEqual(p1, p2);
+  assert.notEqual(p1.rotation, p3.rotation);
+  const w0 = wearProfile(0), w1 = wearProfile(0.5), w2 = wearProfile(1);
+  for (const k of ['edge', 'blotch', 'scratch', 'grime']) assert.ok(w0[k] <= w1[k] && w1[k] <= w2[k], 'desgaste monótono: ' + k);
+  assert.deepEqual(parseHex('#ff8000').map((v) => Math.round(v * 255)), [255, 128, 0]);
+});
+
+function mulberryTest(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}

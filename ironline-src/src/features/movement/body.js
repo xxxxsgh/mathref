@@ -414,6 +414,7 @@ export class Body {
   computeTarget(st, dt) {
     const P = this.tgt;
     const { stance, sliding, grounded, speed, phase, mantle, moveX, moveZ, slideT } = st;
+    const kick = st.kick || 0;
     const side = (s) => (s === 'L' ? -1 : 1);
     if (sliding) {
       // recostado para trás: pelve à frente da coluna da câmera, perna
@@ -431,14 +432,28 @@ export class Body {
       const chatter = 0.008 * Math.sin(slideT * 43) * sv;
       // quase esticada (joelho sobe ~6 cm e abre para fora): a canela fica
       // de lado para a câmera em vez de escondida atrás do joelho
-      P.L.ankle.set(-0.44, 0.125 + chatter, -1.1 - 0.04 * sv);
+      // slide kick: a perna estendida dá um coice para a frente e para cima
+      // (sola virada para o alvo) e volta — envelope `kick` 0..1..0
+      P.L.ankle.set(-0.44 + 0.2 * kick, 0.125 + chatter + 0.42 * kick, -1.1 - 0.04 * sv - 0.32 * kick);
       P.L.pole.set(-0.55, 1, 0);
-      P.L.toe = 0.78; // bico para cima, calcanhar raspando
-      P.L.roll = -0.18;
+      P.L.toe = 0.78 + 0.5 * kick; // bico para cima, calcanhar raspando
+      P.L.roll = -0.18 * (1 - kick);
       P.R.ankle.set(0.13, 0.06, -0.44);
       P.R.pole.set(1, -0.2, -0.2);
       P.R.toe = 0.1;
       P.R.roll = 1.2;
+      return;
+    }
+    if (st.hang) {
+      // pendurado na borda: pernas soltas, joelhos levemente dobrados
+      P.pelvis.set(0, 0.95, 0.06);
+      P.pelvisPitch = 0.08;
+      for (const s of ['L', 'R']) {
+        P[s].ankle.set(side(s) * 0.11, 0.1, 0.12 + (s === 'L' ? 0.05 : -0.02));
+        P[s].pole.set(side(s) * 0.1, 0, -1);
+        P[s].toe = -0.55;
+        P[s].roll = 0;
+      }
       return;
     }
     if (mantle) {
