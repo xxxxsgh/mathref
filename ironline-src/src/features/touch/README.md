@@ -24,6 +24,10 @@ aberta. Nada no modo shot.
 | DIVE (acima do SWAP) | `prone` — deita/levanta; em sprint ou slide = dolphin dive |
 | LEAN ◂ / LEAN ▸ (par no alto à direita) | `leanLeft` / `leanRight` (segurar), limitado por parede |
 
+| ★ vagas de killstreak (fileira no alto, centro) | `services.streaks.activate(i)` — só as vagas com killstreak pronta aparecem (lido de `streaks.slots()` a cada quadro); ×N quando acumulada |
+| EXECUTE (ao lado da mira) | `services.streaks.finisher.execute()` — só com `finisher.target` |
+| designador do morteiro aberto | o combate some; arrastar na tela = `designator.move`, CONFIRM (no lugar do tiro) / CANCEL (no lugar do pulo) |
+
 Os três botões de movimento vêm de `services.movement.touchHints` (só
 aparecem com a feature movement carregada). Gestos de movimento sem botão
 novo: slide-jump = JUMP no slide; slide kick = MELEE no slide; vault → slide

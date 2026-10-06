@@ -235,11 +235,13 @@ documento.
 | `rendering` | rendering | `setExposure(v)`, `environment` (Texture PMREM ou null) |
 | `audio` | audio | `play(nome, { position?, volume? })`, `setVolume(v)`, `context` |
 | `movement` | movement | `builtin: bool`, `stance() → 'stand'|'crouch'|'prone'|'slide'`; extras: `sliding mounted hanging diving cover tacFuel slideSpread slope`, `reset()`, `touchHints` (ações sem botão no toque: `prone`, `leanLeft`, `leanRight`), `addLowGap(...)` |
-| `weapon` | weapon | `gun` (Object3D na vm), `muzzle` (Object3D), getters `ammo`, `reserve`, `magSize`, `ads` (0..1), `reloading`, `name` |
-| `enemies` | enemies | `list`, `spawn(pose) → enemy`, `count()`, `clear()`, `auto` (bool: repõe o esquadrão sozinho; a partida desliga e conduz as ondas) |
+| `weapon` | weapon | `gun` (Object3D na vm), `muzzle` (Object3D), getters `ammo`, `reserve`, `magSize`, `ads` (0..1), `reloading`, `name`. **v3**: `weapons` (7 armas: KR-9, P-11, MX-9, BR-12, LR-50, HM-60, SR-7, com `equipped/caliber/rpm/…`), `loadoutIds`, `setPrimary(id)`, `setSecondary(id)`, `knives`, `knife`, `setKnife(id\|alias)`, `patterns`, `setSkin(id, skin\|null)`, `getSkin(id)`, `setCharm(id, charm\|null)`, `setStickers(id, [...])`, `setKillCounter(id, n\|null)`, `killCount(id)`, `attachments`, `attachmentOptions`, `setAttachments(id, {...})`, `buildPreview(item) → Promise<Object3D>`, `inspect()`, luneta (`zoom`, `breath`, `scopeGlint`, `dofScale`, `suppressed`), `throwBack(...)`. Lê de `ctx.player`: `slideSpread`, `slideRecoil`, `mountRecoil`, `mountSway`, `tacSprint`, `hanging` (detalhes em `features/weapon/README.md`) |
+| `enemies` | enemies | `list`, `spawn(pose) → enemy`, `count()`, `clear()`, `auto` (bool: repõe o esquadrão sozinho; a partida desliga e conduz as ondas); extras: `roles`, `revive(e, by)`, `canExecute(e, pos)`, `executionTarget(pos)`, `createPuppet(opts)`, `execute(e, puppet)`, `snapshot()`, `ghost.{ apply, end }` (killcam) |
 | `vfx` | vfx | `impact(point, normal, material?)`, `tracer(from, to)`, `muzzleFlash(obj3d)` |
-| `hud` | hud | `root`, `setMenu(bool)`, `setVisible(bool)` |
-| `touch` | touch | `active`, `visible`, `sensitivity`, `setSensitivity(0.2..4)`, `setScale(0.6..1.5)`, `setFullscreen(bool)`, `enterFullscreen()` |
+| `hud` | hud | `root`, `setMenu(bool)`, `setVisible(bool)`; extras: `open(tela\|null)`, `screen`, `match`, `settings`, `loadout`, `banner(t, sub)`, `deploy()`; flags `handlesStreaks`/`handlesMedals`/`handlesReveal` (a HUD desenha barra de killstreaks, toasts de medalha e revelação da UAV — a streaks esconde as versões de reserva) |
+| `inventory` | inventory | catálogo/créditos/caixas/persistência (`localStorage['ironline.inventory']`): `catalog`, `logic`, `state`, `credits`, `keys`, `items`, `equip`, `def(id)`, `item(uid)`, `open(caseId, { pay, seed? })`, `equipItem(uid)`, `unequip(uid)`, `setLoadout(slot, weaponId)`, `scrap`, `tradeUp`, `dailyStatus/claimDaily`, `claimBp`, `apply()` (aplica skins/facas/chaveiros/adesivos na weapon) |
+| `streaks` | streaks | `STREAKS`, `MEDALS`, `loadout`, `setLoadout(ids)`, `count`, `best`, `ready`, `slots()` → `[{ id, name, kills, icon, key, ready, progress }]`, `next()`, `activate(vaga 0..3 \| id)`, `active`, `busy`, `revealed`/`uav` (minimapa), `decoys` (IA), `designator.{ open, move(dx,dz), confirm(), cancel() }`, `killcam.active`, `finisher.{ target, active, execute() }`, `photo.{ active, enter, exit, capture, settings, set }`, `openPicker()`, `grant(id)` (QA) |
+| `touch` | touch | `active`, `visible`, `sensitivity`, `setSensitivity(0.2..4)`, `setScale(0.6..1.5)`, `setFullscreen(bool)`, `enterFullscreen()`. Botões: lê `movement.touchHints` (DIVE, LEAN Q/E) e `streaks` (vagas prontas → `activate(i)`, EXECUTE → `finisher.execute()`, designador → arrastar = `move`, CONFIRM/CANCEL) |
 
 ## Eventos do bus
 
@@ -259,11 +261,27 @@ documento.
 | `player:slideKick` | `{ target, hit, damage?, killed? }` (+ `weapon:hit` com `weapon:'slideKick'`, `melee`, `knockback`, `knockdown`) | movement |
 | `player:dive` / `player:tacSprint` | `{ phase:'start'\|'land' , speed }` / `{ phase:'start'\|'end', fuel }` | movement |
 | `player:mount` / `player:hang` / `player:cover` | `{ on, kind }` / `{ phase }` / `{ height }` | movement |
-| `weapon:fire` | `{ origin, dir, muzzle, ads }` | weapon |
-| `weapon:hit` | `{ point, normal, distance, collider, part, dir, damage, source }` | weapon |
+| `player:respawn` | `{ position }` | hud (partida) |
+| `weapon:fire` | `{ origin, dir, muzzle, ads, id, kind, suppressed, pellets }` | weapon |
+| `weapon:hit` | `{ point, normal, distance, collider, part, dir, damage, source, weapon?, melee?, explosion?, ballistic? }` | weapon (e movement: slide kick) |
 | `weapon:reload` / `weapon:reloaded` / `weapon:dry` | `{…}` | weapon |
+| `weapon:kill` | `{ weaponId, enemy, headshot, melee }` | weapon |
+| `weapon:switch` / `weapon:melee` / `weapon:throw` / `weapon:explode` / `weapon:flashbang` / `weapon:throwBack` | ver `features/weapon/README.md` | weapon |
+| `weapon:breath` / `weapon:foley` | `{ phase, stamina }` / `{ name, id }` | weapon |
+| `streak:ready` / `streak:used` | `{ id, name, kills, icon, key?, refund? }` | streaks |
+| `streak:end` / `streak:progress` / `streak:loadout` | `{ id }` / `{ count, next }` / `{ loadout }` | streaks |
+| `medal:award` | `{ id, name, xp, icon }` | streaks (a HUD desenha e soma XP) |
+| `uav:ping` | `{ count, t }` | streaks |
+| `designator:open` / `designator:close` | `{ id }` | streaks |
+| `finisher:start` / `finisher:end` | `{ enemy, aborted? }` | streaks |
+| `killcam:start` / `killcam:end` | `{ killer }` | streaks |
+| `photo:enter` / `photo:exit` / `photo:capture` | `{ name? }` | streaks |
+| `inventory:change` / `inventory:award` / `inventory:unlock` | `{ item, def, name }` | inventory |
+| `match:end` | `{ win, kills, headshots, captures, waves, bossKilled, medals, playTime, xp }` | hud |
+| `match:boss` | `{ enemy }` | hud |
 | `enemy:fire` | `{ enemy, origin, dir }` | enemies |
 | `enemy:damage` / `enemy:death` | `{ enemy, amount?, info }` | enemies |
+| `enemy:revive` / `enemy:shieldHit` / `enemy:grenade` / `enemy:grenadeLand` / `prop:explode` | ver `features/enemies/README.md` | enemies |
 | `match:start` / `match:wave` / `match:waveClear` | `{ mode }` / `{ wave, of, count }` / `{ wave, of }` | hud |
 
 ## Parâmetros de URL
