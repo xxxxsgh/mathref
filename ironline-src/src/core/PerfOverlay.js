@@ -1,5 +1,5 @@
 /**
- * Contador de desempenho opcional (canto superior direito): FPS, tempo de
+ * Contador de desempenho opcional (canto inferior direito): FPS, tempo de
  * frame (média / p90 do último ½ s), draw calls, triângulos, resolução
  * interna, qualidade (preset · degrau · camada) e escala do governador —
  * para o jogador reportar números.
@@ -38,7 +38,7 @@ export class PerfOverlay {
     if (this.visible && !this.el) {
       const el = document.createElement('div');
       el.id = 'perf-overlay';
-      el.style.cssText = 'position:fixed;top:6px;right:6px;z-index:9;pointer-events:none;font:600 11px/1.35 ui-monospace,Menlo,Consolas,monospace;'
+      el.style.cssText = 'position:fixed;bottom:40px;right:6px;z-index:9;pointer-events:none;font:600 11px/1.35 ui-monospace,Menlo,Consolas,monospace;'
         + 'color:#e8ffe0;background:rgba(0,0,0,.55);padding:5px 8px;border-radius:3px;white-space:pre;text-shadow:0 1px 0 #000';
       document.body.appendChild(el);
       this.el = el;

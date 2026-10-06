@@ -343,13 +343,23 @@ derrubava a aba e recarregava — a tela de carga "infinita".
   de sombra 1024 atualizada a cada 4 quadros (sem cascata larga, PCSS, GI,
   poeira, SSAO, sonda, volumétrico, TAA); materiais sem "texture bombing"
   (metade das leituras de textura nas superfícies grandes); geometria
-  estática mesclada em blocos de 128 m e entulho em células de 52 m (menos
-  draw calls); vfx com atlas 1024, menos partículas/marcas/destroços e uma
-  só luz de clarão.
+  estática mesclada em blocos de 192 m centrados e entulho em células de 78 m (menos
+  draw calls), entulho miúdo com 2 variantes de forma em low-poly e props
+  pequenos (≤ 32 instâncias) mesclados na geometria estática; sombra só é
+  refeita a cada 4 quadros mesmo com a câmera andando; vfx com atlas 1024
+  (512 no modo leve), menos partículas/marcas/destroços, uma só luz de
+  clarão e sem pré-passe de profundidade.
 - **Governador** (`core/Governor.js`): além da resolução, desce degrau NA
   HORA quando a média passa de 1,33× o orçamento (60 fps → abaixo de
   ~45 fps) e dois degraus abaixo de 30 fps, com carência curta (1,5 s); os
   3 s iniciais não contam (compilação/upload).
+- **Medidas** (Chromium/SwiftShader fingindo "Intel UHD 620", 960×540,
+  CPU 4× mais lenta, menu principal; o tempo de frame do SwiftShader não
+  representa uma GPU real — valem draw calls/triângulos/memória): preset
+  `low` 1 796 → 317 draw calls por quadro, 7,4 M → 2,3 M triângulos,
+  texturas ~164 → ~87 MB, carga até o menu 235 s → 127 s; `auto` no PC
+  fraco (agora camada `low-desktop`) 1 791 → 309 draw calls, carga 186 s →
+  83 s. `high` no desktop: idêntico (mesmas draw calls/triângulos).
 - **Contador de FPS**: `?fps=show` (ou `?perf=1`), **F7** ou
   `ctx.perf.show(true)` — FPS, ms (média/p90), draw calls, triângulos,
   resolução interna, escala e preset·degrau·camada. A escolha fica salva.
