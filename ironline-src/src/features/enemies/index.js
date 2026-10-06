@@ -920,7 +920,7 @@ export default {
     if (!this.geos[i]) {
       const t0 = performance.now();
       this.geos[i] = buildSoldierGeometry(VARIANTS[i], this.geoOpts);
-      if (this.stats) this.stats.bossGeoMs = Math.round(performance.now() - t0);
+      if (this.stats) (this.stats.lazyGeoMs ||= {})[VARIANTS[i].name] = Math.round(performance.now() - t0);
     }
     if (!this.mats[i]) this.mats[i] = createSoldierMaterial({ camo: CAMO[VARIANTS[i].camo] || CAMO.woodland });
   },
@@ -972,6 +972,16 @@ export default {
     this.grenades.update(dt);
     this.props.update(dt);
     if (this.playerNades.length) this.updatePlayerNades(dt, ctx);
+    // variantes comuns que a população inicial não usou: geradas em
+    // segundo plano, uma a cada 0,6 s de jogo (antes das ondas chegarem)
+    if (!ctx.shot) {
+      this.warmRegT = (this.warmRegT ?? 0.6) - dt;
+      if (this.warmRegT <= 0) {
+        this.warmRegT = 0.6;
+        const i = this.geos.findIndex((g, k) => !g && k < REGULAR_VARIANTS);
+        if (i >= 0) this.ensureVariant(i);
+      }
+    }
     // pré-aquece as variantes das classes especiais uma onda antes (sem engasgo)
     // (só se a partida tiver ondas onde elas entram: ?waves=1,1 nunca gera)
     if (!ctx.shot && ((this.wave >= ROLE_MIX.from - 1 && (this.waveOf ?? Infinity) >= ROLE_MIX.from) || ctx.params.get('roles'))) {

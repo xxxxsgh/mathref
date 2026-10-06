@@ -272,8 +272,13 @@ export class Laser {
     this.beam.visible = this.dot.visible = vis;
     if (!vis) return;
     const axis = _v.subVectors(to, from);
-    const len = axis.length();
+    let len = axis.length();
     axis.divideScalar(len || 1);
+    // feixe apontado para a câmera: termina 2,5 m antes dela (senão a fita
+    // vira uma faixa larga cruzando a tela); o ponto fica no fim visível
+    const tc = _w.subVectors(camera.position, from).dot(axis);
+    const near = Math.sqrt(Math.max(0, _w.lengthSq() - tc * tc));
+    if (tc > 0 && tc < len + 0.5 && near < 0.6) len = Math.max(0.5, tc - 2.5);
     // fita: eixo Y ao longo do feixe, girada para encarar a câmera
     const toCam = _w.subVectors(camera.position, from);
     const side = new THREE.Vector3().crossVectors(axis, toCam).normalize();
@@ -283,10 +288,10 @@ export class Laser {
     this.beam.position.copy(from);
     // largura cresce com a distância da câmera (sempre ~1–2 px)
     const dc = camera.position.distanceTo(from);
-    this.beam.scale.set(0.012 + dc * 0.0012, len, 1);
+    this.beam.scale.set(0.01 + dc * 0.0007, len, 1);
     this.mat.opacity = 0.35 + 0.5 * k;
-    this.dot.position.copy(to).addScaledVector(axis, -0.02);
-    const dd = camera.position.distanceTo(to);
+    this.dot.position.copy(from).addScaledVector(axis, len - 0.02);
+    const dd = camera.position.distanceTo(this.dot.position);
     this.dot.scale.setScalar((0.06 + dd * 0.006) * (0.7 + 0.6 * k));
   }
 
