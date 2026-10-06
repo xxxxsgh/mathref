@@ -66,7 +66,8 @@ export class Input {
   constructor(element, bus) {
     this.el = element;
     this.bus = bus;
-    this.bindings = structuredClone(DEFAULT_BINDINGS);
+    // cópia profunda via JSON (structuredClone não existe no iOS < 15.4)
+    this.bindings = JSON.parse(JSON.stringify(DEFAULT_BINDINGS));
     this.keys = new Set();
     this.prev = new Set();
     this.edgeDown = new Set();
