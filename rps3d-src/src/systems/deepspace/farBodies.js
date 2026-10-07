@@ -173,7 +173,7 @@ function rockyMaterial(u, mobile) {
       const cn = vec3(nL.x.mul(cs).sub(nL.z.mul(sn)), nL.y, nL.x.mul(sn).add(nL.z.mul(cs)));
       const cw = vec3(n3(cn.mul(0.9).add(5.5)).r, n3(cn.mul(0.9).add(9.1)).g, 0).sub(0.5);
       const cq = cn.mul(1.6).add(cw.mul(vec3(1.2, 0.5, 1.2))).add(u.seed.zxy);
-      const cl = fbm3(cq).mul(0.75).add(n3(cq.mul(4.3)).a.mul(0.25));
+      const cl = fbm3(cq).mul(0.85).add(n3(cq.mul(3.1)).g.mul(0.15));
       // faixas de latitude (células de Hadley)
       const band = sin(nL.y.mul(9.0).add(cl.mul(4.0))).mul(0.08);
       const thr = mix(float(0.7), float(0.46), u.clouds);
@@ -189,7 +189,7 @@ function rockyMaterial(u, mobile) {
     const night = smoothstep(0.05, -0.15, NLs);
     If(u.city.greaterThan(0.5), () => {
       const land = float(1).sub(isSea);
-      const grid = smoothstep(0.62, 0.9, n3(Q.mul(9.0)).b).mul(smoothstep(0.55, 0.85, n3(Q.mul(2.1).add(8.0)).r));
+      const grid = smoothstep(0.6, 0.88, n3(Q.mul(9.0)).b).mul(smoothstep(0.4, 0.6, n3(Q.mul(2.1).add(8.0)).r));
       const coast = smoothstep(0.12, 0.0, abs(h.sub(seaT))).mul(0.6);
       emis.addAssign(vec3(1.0, 0.62, 0.28).mul(grid.add(coast.mul(grid.add(0.15)))).mul(land).mul(night).mul(3.5));
     });
@@ -334,7 +334,7 @@ export class FarBodies {
   setSystem(sys, params = null) {
     // ambiente do céu: tom da nebulosa (ou da Via Láctea) bem fraco
     const n = params?.nebula;
-    this.amb = n?.on ? n.colorA.clone().lerp(n.colorB, 0.5).multiplyScalar(0.03) : new THREE.Color(0.01, 0.01, 0.013);
+    this.amb = n?.on ? n.colorA.clone().lerp(n.colorB, 0.5).multiplyScalar(0.06) : new THREE.Color(0.022, 0.022, 0.028);
     for (const it of this.items) it.dispose();
     this.items = [];
     if (!sys) return;

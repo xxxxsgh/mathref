@@ -5,7 +5,7 @@
 //   3 gelo, 4 cristalino raro)  ·  w = raio (m)
 import * as THREE from 'three/webgpu';
 import {
-  Fn, vec3, vec4, float, mix, smoothstep, clamp, pow, abs, attribute, positionGeometry, normalGeometry, select, max,
+  Fn, vec3, vec4, float, mix, smoothstep, clamp, pow, abs, attribute, positionGeometry, normalGeometry, select, max, fwidth, length,
 } from 'three/tsl';
 import { n3, bumpNormal } from './tsl.js';
 
@@ -33,8 +33,12 @@ export function makeRockMaterial(quality = 'high') {
   const veinN = n3(P.mul(1.3).add(5.1)).a.toVar(); // veios (ridged)
   // detalhe fino: crateras pequenas e grãos (some com a distância via derivadas)
   const hi = quality !== 'mobile';
-  const crat2 = hi ? n3(P.mul(6.2).add(1.7)).b.toVar() : float(0.5);
-  const grain = hi ? n3(P.mul(19.0).add(4.4)).g.toVar() : float(0.5);
+  // anti-serrilhado: o detalhe some quando fica menor que ~1 pixel
+  const fw = hi ? length(fwidth(P)) : float(1);
+  const fadeC = hi ? smoothstep(0.05, 0.02, fw) : float(0);
+  const fadeG = hi ? smoothstep(0.016, 0.006, fw) : float(0);
+  const crat2 = hi ? mix(float(0.5), n3(P.mul(6.2).add(1.7)).b, fadeC).toVar() : float(0.5);
+  const grain = hi ? mix(float(0.5), n3(P.mul(19.0).add(4.4)).g, fadeG).toVar() : float(0.5);
 
   m.colorNode = Fn(() => {
     const t = lo.mul(0.6).add(mid.mul(0.4)).toVar();

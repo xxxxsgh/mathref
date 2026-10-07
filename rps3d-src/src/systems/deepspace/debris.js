@@ -35,6 +35,12 @@ function hullMaterial(quality) {
   const pp = an.x.greaterThan(an.y).select(an.x.greaterThan(an.z).select(P.yz, P.xy), an.y.greaterThan(an.z).select(P.xz, P.xy));
   const g = abs(fract(pp.mul(vec3(2.2, 3.1, 1).xy)).sub(0.5));
   const seam = smoothstep(0.47, 0.495, max(g.x, g.y));
+  // variação por painel (cada placa com tom e desgaste próprios)
+  const cellId = pp.mul(vec3(2.2, 3.1, 1).xy).floor();
+  const panelT = n3(vec3(cellId.mul(0.173), a.x.mul(0.31))).g;
+  // micro-greebles: pequenas tampas/rebites em grade fina
+  const gg = abs(fract(pp.mul(vec3(13.0, 17.0, 1).xy)).sub(0.5));
+  const rivet = smoothstep(0.16, 0.08, max(gg.x, gg.y)).mul(smoothstep(0.62, 0.7, n3(P.mul(2.3).add(9.0)).r));
   const n1 = n3(P.mul(0.9)).r, n2 = n3(P.mul(3.7)).g, n3b = n3(P.mul(1.6).add(4.0)).a;
   const burn = smoothstep(0.3, 0.7, n1.mul(0.6).add(n3b.mul(0.5)).add(a.z.mul(0.6)).sub(0.2));
   const edgeWear = smoothstep(0.6, 0.85, n2).mul(0.6);
@@ -44,17 +50,21 @@ function hullMaterial(quality) {
     const stripe = smoothstep(0.08, 0.06, abs(fract(P.x.mul(0.35).add(a.x)).sub(0.5)));
     paint.assign(mix(paint, paint.mul(vec3(1.05, 0.9, 0.6)), stripe.mul(0.5)));
     const metal = vec3(0.56, 0.56, 0.58);
+    paint.mulAssign(panelT.mul(0.5).add(0.75));
     const c = mix(paint, metal, edgeWear).toVar();
     c.mulAssign(float(1).sub(seam.mul(0.55)));
+    // escorrimento de fuligem ao longo de um eixo (rajadas de plasma)
+    const soot = smoothstep(0.45, 0.8, n3(P.mul(vec3(0.4, 2.6, 0.4)).add(2.0)).r);
+    c.mulAssign(float(1).sub(soot.mul(0.45)));
     c.assign(mix(c, vec3(0.025, 0.02, 0.018), burn.mul(0.92)));
     return c;
   })();
-  m.metalnessNode = mix(float(0.35), float(0.95), edgeWear).mul(float(1).sub(burn.mul(0.7)));
-  m.roughnessNode = mix(float(0.42), float(0.85), burn).add(n2.mul(0.12));
+  m.metalnessNode = mix(float(0.55), float(0.95), edgeWear).mul(float(1).sub(burn.mul(0.7)));
+  m.roughnessNode = mix(float(0.3), float(0.85), burn).add(n2.mul(0.12)).add(panelT.mul(0.15));
   // brasas: metal ainda incandescente nas bordas queimadas
   const ember = b.w.mul(smoothstep(0.6, 0.85, burn.mul(n3(P.mul(5.0).add(1.0)).r.mul(1.6))));
   m.emissiveNode = vec3(1.0, 0.32, 0.06).mul(ember.mul(4.0));
-  m.normalNode = bumpNormal(seam.mul(-0.6).add(n2.mul(0.25)), a.w.mul(0.04));
+  m.normalNode = bumpNormal(seam.mul(-0.6).add(n2.mul(0.25)).add(rivet.mul(0.25)), a.w.mul(0.04));
   m.fog = false;
   return m;
 }

@@ -33,6 +33,9 @@ function hold(state, ctx, from, to, up, roll, vel = null) {
   aim(ctx, from, to, up, roll);
 }
 
+/** Lente mais limpa nos quadros de apresentação (menos fantasmas do flare). */
+function flareSoft(c) { c.services.rendering?.setFlare?.({ ghosts: 0.12 }); }
+
 export function registerShots(ctx, state, api) {
   const reg = (name, fn) => ctx.shots.register(name, async (c) => {
     c.game.setMode('cinematic', { shot: name });
@@ -57,6 +60,7 @@ export function registerShots(ctx, state, api) {
     const mixK = Number(k.get('mix') || 0.36);
     const lookDir = toPlanet.clone().multiplyScalar(1 - mixK).addScaledVector(toStar, mixK).normalize();
     hold(state, c, from, from.clone().add(lookDir), up, Number(k.get('roll') || 0.12));
+    flareSoft(c);
   });
 
   // Buraco negro com disco de acreção e lente gravitacional
@@ -67,7 +71,8 @@ export function registerShots(ctx, state, api) {
     const acc = sys.star.accretion;
     const n = state.bh?.normal.clone() || new THREE.Vector3(0, 1, 0);
     const dist = sys.star.radius * Number(c.params.get('bhd') || 34);
-    const dir = new THREE.Vector3(0.82, 0, 0.57).projectOnPlane(n).normalize();
+    const dir = new THREE.Vector3(0.82, 0, 0.57).projectOnPlane(n).normalize()
+      .applyAxisAngle(n, THREE.MathUtils.degToRad(Number(c.params.get('bha') || -14)));
     const from = dir.clone().multiplyScalar(dist).addScaledVector(n, dist * Number(c.params.get('bhe') || 0.12));
     const look = sys.star.pos.clone().addScaledVector(n, -acc.outer * 0.05);
     hold(state, c, from, look, n, 0.0);
@@ -87,8 +92,10 @@ export function registerShots(ctx, state, api) {
     // câmera do lado do sol (fase ~45°): faces iluminadas com sombras longas,
     // o campo atrás do herói aceso e sumindo na névoa do cinturão
     const Rh = hero.radius;
-    const from = hero.pos.clone().addScaledVector(toStar, Rh * 2.5).addScaledVector(side, Rh * 2.3).add(new THREE.Vector3(0, Rh * 0.7, 0));
-    const look = hero.pos.clone().addScaledVector(side, -Rh * 0.9).addScaledVector(toStar, -Rh * 1.2);
+    const ph = THREE.MathUtils.degToRad(Number(c.params.get('ph') || 78));
+    const camDir = toStar.clone().multiplyScalar(Math.cos(ph)).addScaledVector(side, Math.sin(ph)).normalize();
+    const from = hero.pos.clone().addScaledVector(camDir, Rh * 3.1).add(new THREE.Vector3(0, Rh * 0.6, 0));
+    const look = hero.pos.clone().addScaledVector(side, -Rh * 0.6).addScaledVector(toStar, -Rh * 0.9);
     hold(state, c, from, look, new THREE.Vector3(0, 1, 0), -0.1);
   });
 
@@ -117,10 +124,19 @@ export function registerShots(ctx, state, api) {
   // Céu de Halden (abertura): núcleo hegemônico, Via Láctea brilhante
   reg('deepspace-halden', async (c) => {
     const sys = useSystem(c, 'halden');
-    const poi = sys.pois.find((p) => p.kind === 'opening_battle');
-    const from = poi.pos.clone();
-    const look = sys.star.pos.clone().lerp(from, 0.2).add(new THREE.Vector3(0, 2.5e6, 0));
-    hold(state, c, from, look, new THREE.Vector3(0, 1, 0), 0.1);
+    const aurora = sys.bodies.find((b) => b.name === 'Aurora');
+    const up = new THREE.Vector3(0, 1, 0);
+    // câmera sobre o terminador de Aurora: metade dia (mar, nuvens, brilho do
+    // sol no oceano), metade noite com as luzes da colônia; o sol no limbo
+    const R = aurora.radius;
+    const sA = sys.star.pos.clone().sub(aurora.pos).normalize();
+    const camDir = sA.clone().applyAxisAngle(up, THREE.MathUtils.degToRad(Number(c.params.get('ang') || 96))).normalize();
+    const from = aurora.pos.clone().addScaledVector(camDir, R * 3.3).addScaledVector(up, R * 0.5);
+    const toA = aurora.pos.clone().sub(from).normalize();
+    const toS = sys.star.pos.clone().sub(from).normalize();
+    const lookDir = toA.clone().multiplyScalar(0.7).addScaledVector(toS, 0.3).addScaledVector(up, 0.06).normalize();
+    hold(state, c, from, from.clone().add(lookDir), up, 0.06);
+    flareSoft(c);
   });
 
   // Tempestade de íons
@@ -128,6 +144,7 @@ export function registerShots(ctx, state, api) {
     const sys = useSystem(c, 'kessa');
     const s = state.storms?.list?.[0];
     if (!s) return;
+    state.storms.forceBolt = true; // quadro com descarga ativa
     const from = s.pos.clone().add(new THREE.Vector3(s.radius * 1.9, s.radius * 0.25, s.radius * 0.8));
     hold(state, c, from, s.pos.clone(), new THREE.Vector3(0, 1, 0), 0.05);
   });
