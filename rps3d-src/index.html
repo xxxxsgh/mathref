@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>RAFAEL PAOLI SHOOTER 3D: REVOLUTION</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  #game{position:fixed;inset:0;width:100%;height:100%;display:block}
+  #ui{position:fixed;inset:0;pointer-events:none;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#dfe8f5}
+  #ui .interactive{pointer-events:auto}
+  #boot{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;color:#9fb4d0;font:500 13px/1.4 ui-monospace,Menlo,monospace;letter-spacing:.25em;z-index:50;transition:opacity .8s}
+  #boot b{display:block;color:#e8eef8;font:700 22px/1.2 system-ui,sans-serif;letter-spacing:.35em;margin-bottom:14px;text-align:center}
+  #boot .bar{width:220px;height:2px;background:#1a2230;margin-top:18px;overflow:hidden}
+  #boot .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#f4b860,#fff3d6);transition:width .3s}
+  #boot.done{opacity:0;pointer-events:none}
+  #boot .err{color:#ff8a7a;max-width:80vw;margin-top:16px;letter-spacing:0;white-space:pre-wrap;font-size:12px}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui"></div>
+<div id="boot"><b>RAFAEL PAOLI SHOOTER 3D<br>REVOLUTION</b><span id="boot-msg">INICIALIZANDO NÚCLEO</span><div class="bar"><i id="boot-bar"></i></div></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

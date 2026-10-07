@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com cinco sites estáticos publicados pelo GitHub Pages.
+Repositório com seis sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -9,12 +9,13 @@ Repositório com cinco sites estáticos publicados pelo GitHub Pages.
 | [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
 | [`/arena/`](https://xxxxsgh.github.io/mathref/arena/) | **NULLPOINT** — FPS tático de arena com skins e inspeção de faca |
 | [`/ironline/`](https://xxxxsgh.github.io/mathref/ironline/) | **IRONLINE** — FPS militar com arquitetura de features plugáveis |
+| [`/rps3d/`](https://xxxxsgh.github.io/mathref/rps3d/) | **RAFAEL PAOLI SHOOTER 3D: REVOLUTION** — exploração espacial sem loading, combate em nave e a pé (WebGPU/TSL) |
 
 ## Publicação
 
 O deploy é automático: qualquer push em `main` dispara
 [`.github/workflows/pages.yml`](./.github/workflows/pages.yml), que compila os
-jogos a partir de `game-src/`, `drone-src/`, `arena-src/` e `ironline-src/`, monta o site e
+jogos a partir de `game-src/`, `drone-src/`, `arena-src/`, `ironline-src/` e `rps3d-src/`, monta o site e
 publica no Pages.
 
 Não há configuração manual: o passo `configure-pages` roda com
@@ -28,7 +29,7 @@ Para republicar sem commit novo: aba *Actions* → *Publicar no GitHub Pages* �
 
 O workflow copia a raiz do repositório **por exclusão** — qualquer arquivo
 novo na raiz é publicado sem precisar editar o workflow. Ficam de fora:
-`game-src/`, `drone-src/`, `arena-src/`, `ironline-src/`, `docs/`, `.github/`, `README.md`, `.gitignore` e
+`game-src/`, `drone-src/`, `arena-src/`, `ironline-src/`, `rps3d-src/`, `docs/`, `.github/`, `README.md`, `.gitignore` e
 `node_modules/`.
 
 ### Plano B, sem Actions

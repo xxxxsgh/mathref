@@ -7,6 +7,7 @@
 #   /mathref/drone/ → Dronefarer (compilado a partir de drone-src/)
 #   /mathref/arena/ → NULLPOINT  (compilado a partir de arena-src/)
 #   /mathref/ironline/ → IRONLINE (compilado a partir de ironline-src/)
+#   /mathref/rps3d/ → RAFAEL PAOLI SHOOTER 3D: REVOLUTION (de rps3d-src/)
 #
 # ═══ POR QUE COMPILAR AQUI E NÃO SÓ PUBLICAR A PASTA game/ ═══
 #
@@ -72,6 +73,7 @@ jobs:
             drone-src/package-lock.json
             arena-src/package-lock.json
             ironline-src/package-lock.json
+            rps3d-src/package-lock.json
 
       - name: Instalar dependências (Starfarer)
         working-directory: game-src
@@ -115,13 +117,25 @@ jobs:
         working-directory: ironline-src
         run: npm run build
 
+      - name: Instalar dependências (RPS3D)
+        working-directory: rps3d-src
+        run: npm ci
+
+      - name: Testes unitários (RPS3D)
+        working-directory: rps3d-src
+        run: npm test
+
+      - name: Compilar o RPS3D
+        working-directory: rps3d-src
+        run: npm run build
+
       - name: Verificar os caminhos base
         # O `base` do Vite precisa bater com o caminho do Pages. Se alguém
         # mexer nele, o site publicado carrega uma tela preta e o erro só
         # aparece no console do navegador. Falhar aqui é muito mais barato.
         run: |
           fail=0
-          for pair in "game:/mathref/game/assets/" "drone:/mathref/drone/assets/" "arena:/mathref/arena/assets/" "ironline:/mathref/ironline/assets/"; do
+          for pair in "game:/mathref/game/assets/" "drone:/mathref/drone/assets/" "arena:/mathref/arena/assets/" "ironline:/mathref/ironline/assets/" "rps3d:/mathref/rps3d/assets/"; do
             dir="${pair%%:*}"
             needle="${pair#*:}"
             if ! grep -q "$needle" "$dir/index.html"; then
@@ -151,6 +165,7 @@ jobs:
             --exclude='./drone-src' \
             --exclude='./arena-src' \
             --exclude='./ironline-src' \
+            --exclude='./rps3d-src' \
             --exclude='./node_modules' \
             --exclude='./docs' \
             --exclude='./README.md' \
@@ -230,13 +245,13 @@ jobs:
           mkdir -p docs
           # Remove só o que é site publicado. As notas em markdown que moram
           # em docs/ (FASE-0-STACK.md, STARFARER.md) ficam onde estão.
-          rm -rf docs/game docs/drone docs/arena docs/ironline docs/index.html docs/.nojekyll
+          rm -rf docs/game docs/drone docs/arena docs/ironline docs/rps3d docs/index.html docs/.nojekyll
           cp -R _site/. docs/
           git add -A docs
           # O passo de build reescreveu `game/`, `drone/`, `arena/` e `ironline/` na raiz.
           # Elas já foram copiadas para dentro de docs/; deixá-las sujas aqui
           # só atrapalharia o rebase mais abaixo.
-          git checkout -- game drone arena ironline || true
+          git checkout -- game drone arena ironline rps3d || true
           if git diff --cached --quiet; then
             echo "docs/ já está atualizado."
             exit 0

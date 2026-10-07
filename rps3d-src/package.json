@@ -1,0 +1,21 @@
+{
+  "name": "rps3d",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "RAFAEL PAOLI SHOOTER 3D: REVOLUTION — exploração espacial sem loading, Three.js WebGPU/TSL + Vite.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test tools/unit.test.mjs",
+    "shot": "node tools/shot.mjs",
+    "fps": "node tools/fps.mjs"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "vite": "8.3.3"
+  }
+}
