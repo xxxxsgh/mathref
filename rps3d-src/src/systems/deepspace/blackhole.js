@@ -45,7 +45,7 @@ export class BlackHole {
       n: uniform(n), e1: uniform(e1), e2: uniform(e2),
       inner: uniform(acc.inner / rs), outer: uniform(Math.min(acc.outer / rs, RB - 4)),
       time: uniform(0),
-      gain: uniform(1),
+      gain: uniform(1.6),
     };
     const N = STEPS[ctx.quality.name] || STEPS.high;
     const U = sky.u;

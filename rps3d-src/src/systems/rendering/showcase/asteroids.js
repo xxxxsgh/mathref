@@ -62,7 +62,8 @@ export function asteroidMaterial(tint = [0.3, 0.27, 0.24], scale = 1) {
   const grit = vnoise3(pm.mul(5.0));
   const base = mix(vec3(0.06, 0.055, 0.052), vec3(...tint), strata.mul(0.55).add(fine.mul(0.2)).add(mid.mul(0.25)));
   const regolith = smoothstep(0.45, 0.85, cav).mul(0.35).mul(mid.mul(0.8).add(0.4));
-  const veins = smoothstep(0.82, 0.9, vnoise3(p.mul(7.3).add(4.1)));
+  // veios metálicos só nas rochas do campo (na rocha herói viravam "curvas de nível")
+  const veins = scale > 1 ? float(0) : smoothstep(0.82, 0.9, vnoise3(p.mul(7.3).add(4.1)));
   const col = mix(base, vec3(0.42, 0.39, 0.35), regolith).mul(mix(float(0.35), float(1), smoothstep(0.0, 0.55, cav)));
   const col2 = mix(col, vec3(0.6, 0.48, 0.32), veins.mul(0.8)).mul(float(1).sub(cracks.mul(0.6))).mul(grit.mul(0.25).add(0.85));
   m.colorNode = col2.mul(scale > 1 ? mix(float(0.55), float(1.0), mid) : float(1));

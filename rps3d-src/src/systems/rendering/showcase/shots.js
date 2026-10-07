@@ -12,6 +12,7 @@
 import * as THREE from 'three/webgpu';
 import { makeSky } from './sky.js';
 import { buildShowcaseShip } from './ship.js';
+import { makeShowcasePlanet } from './planet.js';
 import { asteroidField, asteroidGeometry, asteroidMaterial } from './asteroids.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -58,6 +59,14 @@ function setupCommon(ctx, S, systemId = 'kessa') {
   return own;
 }
 
+/** Planeta de vitrine no lugar do corpo real (só sem o sistema `planets`). */
+function showcasePlanet(ctx, S, body, type) {
+  if (ctx.services.planets || ctx.params.get('rplanet') === '0') return null;
+  const g = makeShowcasePlanet({ radius: body.radius, type, sun: S.sun.uniforms, seed: (body.seed ?? 3) % 97 });
+  ctx.world.add(g, body.pos);
+  return g;
+}
+
 function placeCamera(ctx, S, pos, quat) {
   ctx.player.camWorld.copy(pos);
   ctx.player.pos.copy(pos);
@@ -72,27 +81,35 @@ export function registerShots(ctx, api, S) {
     setupCommon(ctx, S, 'kessa');
     const sys = ctx.universe.system;
     const ver = sys.bodies.find((b) => b.name === 'Verídia') || sys.bodies[0];
-    // câmera entre a estrela e Verídia (planeta às costas)
-    const C = ver.pos.clone().addScaledVector(ver.pos.clone().normalize(), -260e3);
+    // composição: sol no canto superior esquerdo, Verídia (gibosa, terminador
+    // à esquerda) enchendo o canto inferior direito, nave em primeiro plano e
+    // uma explosão recortada contra a atmosfera.
+    const toSun0 = ver.pos.clone().negate().normalize();
+    const s0 = basis(toSun0);
+    const w = s0.R.clone().multiplyScalar(0.8).addScaledVector(s0.U, -0.6).normalize();
+    const rad = THREE.MathUtils.degToRad;
+    const D = toSun0.clone().multiplyScalar(Math.cos(rad(63))).addScaledVector(w, Math.sin(rad(63))).normalize();
+    const dist = ver.radius / Math.sin(rad(24));
+    const C = ver.pos.clone().addScaledVector(D, -dist);
     const toSun = C.clone().negate().normalize();
     const b0 = basis(toSun);
-    const a = THREE.MathUtils.degToRad(24);
-    const F = toSun.clone().multiplyScalar(Math.cos(a)).add(b0.R.clone().multiplyScalar(0.78).addScaledVector(b0.U, -0.62).multiplyScalar(Math.sin(a))).normalize();
+    const F = toSun.clone().multiplyScalar(Math.cos(rad(30))).addScaledVector(w, Math.sin(rad(30))).normalize();
     const { R, U } = basis(F);
-    placeCamera(ctx, S, C, lookQuat(F));
+    placeCamera(ctx, S, C, lookQuat(F, b0.U));
     S.sun.update(ctx, 0);
+    showcasePlanet(ctx, S, ver, 'lush');
 
     // nave em primeiro plano (direita, cruzando para a esquerda)
     if (!ctx.services.ships) {
       const ship = buildShowcaseShip();
-      const sp = C.clone().addScaledVector(F, 34).addScaledVector(R, 8.5).addScaledVector(U, -3.2);
-      const dir = R.clone().multiplyScalar(-0.62).addScaledVector(F, -0.55).addScaledVector(U, 0.12).normalize();
-      ship.quaternion.copy(noseQuat(dir, U.clone().addScaledVector(R, 0.35).normalize()));
+      const sp = C.clone().addScaledVector(F, 30).addScaledVector(R, 6.5).addScaledVector(U, -3.6);
+      const dir = R.clone().multiplyScalar(-0.7).addScaledVector(F, -0.45).addScaledVector(U, 0.1).normalize();
+      ship.quaternion.copy(noseQuat(dir, U.clone().addScaledVector(R, 0.3).addScaledVector(F, -0.3).normalize()));
       ctx.world.add(ship, sp);
     }
-    // asteroides: campo + alguns cruzando o disco do sol (raios)
-    const field = asteroidField({ count: 45, radius: 4200, seed: 31, minSize: 25, maxSize: 340, keepOut: (p) => p.length() < 900 });
-    ctx.world.add(field, C.clone().addScaledVector(F, 2600));
+    // destroços de batalha: campo esparso + rochas cruzando o disco do sol (raios)
+    const field = asteroidField({ count: 24, radius: 3200, seed: 31, minSize: 12, maxSize: 160, keepOut: (p) => p.length() < 900 });
+    ctx.world.add(field, C.clone().addScaledVector(F, 2600).addScaledVector(R, -1200));
     const geo = asteroidGeometry(77, 5), mat = asteroidMaterial([0.4, 0.36, 0.32]);
     const sunHits = [[1400, 150, 0.85], [2600, 210, -1.25], [900, 60, 2.2]];
     for (const [d, size, ang] of (ctx.params.get('rhits') === '0' ? [] : sunHits)) {
@@ -102,10 +119,10 @@ export function registerShots(ctx, api, S) {
       m.castShadow = m.receiveShadow = true;
       ctx.world.add(m, C.clone().addScaledVector(toSun, d).add(off));
     }
-    // explosão ao fundo à esquerda
-    const ep = C.clone().addScaledVector(F, 520).addScaledVector(R, -170).addScaledVector(U, 40);
-    api.explosion(ep, 46, 'ship');
-    api.explosion(ep.clone().addScaledVector(R, -60).addScaledVector(U, -25), 18, 'missile');
+    // explosão entre a nave e o planeta
+    const ep = C.clone().addScaledVector(F, 420).addScaledVector(R, 95).addScaledVector(U, -55);
+    api.explosion(ep, 40, 'ship');
+    api.explosion(ep.clone().addScaledVector(R, -70).addScaledVector(U, 30), 14, 'missile');
     advance(S, ctx, Number(ctx.params.get('rtime') ?? 0.75));
     S.shake.trauma = 0; S.flash.v = 0;
   });
@@ -114,21 +131,30 @@ export function registerShots(ctx, api, S) {
   ctx.shots.register('rendering-explosion', async (ctx) => {
     setupCommon(ctx, S, 'kessa');
     const sys = ctx.universe.system;
-    const ver = sys.bodies.find((b) => b.name === 'Ashar') || sys.bodies[1];
-    const C = ver.pos.clone().addScaledVector(ver.pos.clone().normalize(), -300e3);
+    const ash = sys.bodies.find((b) => b.name === 'Ashar') || sys.bodies[1];
+    // Ashar ocupa o terço inferior (horizonte curvo), sol de lado (85°): o
+    // volume da explosão mostra lado iluminado e lado em sombra.
+    const toSun0 = ash.pos.clone().negate().normalize();
+    const s0 = basis(toSun0);
+    const rad = THREE.MathUtils.degToRad;
+    const down = s0.U.clone().negate();
+    const side = s0.R.clone();
+    const F0 = toSun0.clone().multiplyScalar(Math.cos(rad(85))).addScaledVector(side, Math.sin(rad(85))).normalize();
+    // planeta abaixo da linha de visão
+    const D = F0.clone().multiplyScalar(Math.cos(rad(40))).addScaledVector(down, Math.sin(rad(40))).normalize();
+    const C = ash.pos.clone().addScaledVector(D, -ash.radius / Math.sin(rad(27)));
     const toSun = C.clone().negate().normalize();
-    const b0 = basis(toSun);
-    // sol de lado (90°): volume da explosão com lado iluminado e lado sombra
-    const F = b0.R.clone().multiplyScalar(0.92).addScaledVector(toSun, 0.3).addScaledVector(b0.U, -0.1).normalize();
+    const F = F0.clone().addScaledVector(down, 0.08).normalize();
     const { R, U } = basis(F);
-    placeCamera(ctx, S, C, lookQuat(F));
+    placeCamera(ctx, S, C, lookQuat(F, s0.U));
     S.sun.update(ctx, 0);
-    const field = asteroidField({ count: 30, radius: 3000, seed: 12, minSize: 30, maxSize: 260, keepOut: (p) => p.length() < 700 });
-    ctx.world.add(field, C.clone().addScaledVector(F, 2400));
-    const e1 = C.clone().addScaledVector(F, 190).addScaledVector(R, 12).addScaledVector(U, 4);
-    api.explosion(e1, 32, 'ship', { vel: R.clone().multiplyScalar(-8) });
-    api.explosion(C.clone().addScaledVector(F, 260).addScaledVector(R, -75).addScaledVector(U, 30), 14, 'missile');
-    api.explosion(C.clone().addScaledVector(F, 150).addScaledVector(R, 58).addScaledVector(U, -22), 7, 'plasma');
+    showcasePlanet(ctx, S, ash, 'desert');
+    const field = asteroidField({ count: 18, radius: 2400, seed: 12, minSize: 8, maxSize: 90, keepOut: (p) => p.length() < 500 });
+    ctx.world.add(field, C.clone().addScaledVector(F, 1600));
+    const e1 = C.clone().addScaledVector(F, 120).addScaledVector(R, 6).addScaledVector(U, 6);
+    api.explosion(e1, 26, 'ship', { vel: R.clone().multiplyScalar(-6) });
+    api.explosion(C.clone().addScaledVector(F, 210).addScaledVector(R, -78).addScaledVector(U, 30), 12, 'missile');
+    api.explosion(C.clone().addScaledVector(F, 95).addScaledVector(R, 42).addScaledVector(U, -16), 5, 'plasma');
     advance(S, ctx, Number(ctx.params.get('rtime') ?? 0.55));
     S.shake.trauma = 0; S.flash.v = 0;
   });

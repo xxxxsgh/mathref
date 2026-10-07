@@ -21,6 +21,7 @@ import { DebrisFields } from './debris.js';
 import { Dust } from './dust.js';
 import { Warp } from './warp.js';
 import { IonStorms } from './ionstorm.js';
+import { FarBodies } from './farBodies.js';
 import { galaxyMap } from './galaxyMap.js';
 import { registerShots } from './shots.js';
 
@@ -30,7 +31,7 @@ const state = {
   ctx: null,
   bake: null, dome: null, params: null,
   stars: [], bh: null,
-  field: null, ring: null, debris: null, dust: null, warp: null, storms: null,
+  field: null, ring: null, far: null, debris: null, dust: null, warp: null, storms: null,
   systemId: null,
   fallbackLight: null, fallbackEnv: null, pmrem: null,
   envDirty: false,
@@ -72,6 +73,19 @@ function applyEnvironment(ctx) {
   state.envDirty = true;
 }
 
+// O flare/god rays do pipeline seguem o "sol"; num buraco negro a luz vem do
+// disco (e não de um ponto), então o flare analítico é atenuado.
+const FLARE_DEFAULT = { sun: 1, god: 0.32, ghosts: 0.35 };
+let flareBH = false;
+function applyFlare(ctx) {
+  const r = ctx.services.rendering;
+  if (!r?.setFlare) return;
+  const bh = !!state.bh;
+  if (bh === flareBH) return;
+  flareBH = bh;
+  r.setFlare(bh ? { sun: 0.08, god: 0.06, ghosts: 0.12 } : FLARE_DEFAULT);
+}
+
 function onSystem(ctx, sys) {
   if (!sys || sys.id === state.systemId) return;
   state.systemId = sys.id;
@@ -81,6 +95,7 @@ function onSystem(ctx, sys) {
   state.dome.setNeighbors(state.params.neighbors);
   buildStars(ctx, sys);
   state.field?.setSystem(sys);
+  state.far?.setSystem(sys);
   state.ring?.setSystem(sys);
   state.debris?.setSystem(sys);
   state.storms?.setSystem(sys);
@@ -171,6 +186,7 @@ export default {
     state.dust = new Dust(ctx);
     state.warp = new Warp(ctx, state);
     state.storms = new IonStorms(ctx);
+    state.far = new FarBodies(ctx);
     ctx.provide('space', api);
 
     await state.bake.compile(ctx.renderer);
@@ -197,6 +213,8 @@ export default {
     state.dome.frame(ctx);
     for (const s of state.stars) s.frame(ctx, t);
     state.bh?.frame(ctx, t);
+    state.far?.frame(ctx, t);
+    applyFlare(ctx);
     state.warp?.frame(dt, ctx);
     state.field?.frame(dt, ctx);
     state.ring?.frame(dt, ctx);
@@ -209,5 +227,6 @@ export default {
   dispose(ctx) {
     for (const s of state.stars) s.dispose();
     state.bh?.dispose();
+    state.far?.dispose();
   },
 };

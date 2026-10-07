@@ -44,12 +44,19 @@ export function registerShots(ctx, state, api) {
   reg('deepspace-kessa', async (c) => {
     const sys = useSystem(c, 'kessa');
     const ver = sys.bodies.find((b) => b.name === 'Verídia');
+    const R = ver.radius;
+    const up = new THREE.Vector3(0, 1, 0);
     const toStar = sys.star.pos.clone().sub(ver.pos).normalize();
-    const side = new THREE.Vector3().crossVectors(toStar, new THREE.Vector3(0, 1, 0)).normalize();
-    const from = ver.pos.clone().addScaledVector(toStar, -ver.radius * 4.2).addScaledVector(side, ver.radius * 1.6).add(new THREE.Vector3(0, ver.radius * 0.9, 0));
-    // olhar entre a estrela e a borda do planeta
-    const look = ver.pos.clone().addScaledVector(toStar, ver.radius * 6).addScaledVector(side, -ver.radius * 0.3).add(new THREE.Vector3(0, ver.radius * 1.4, 0));
-    hold(state, c, from, look, new THREE.Vector3(0, 1, 0), 0.08);
+    // câmera atrás do terminador: Verídia em crescente gordo, sol na outra ponta do quadro
+    const k = c.params;
+    const ang = THREE.MathUtils.degToRad(Number(k.get('ang') || 118));
+    const dist = Number(k.get('dist') || 3.1);
+    const camDir = toStar.clone().applyAxisAngle(up, ang).normalize();
+    const from = ver.pos.clone().addScaledVector(camDir, R * dist).addScaledVector(up, R * Number(k.get('up') || 0.55));
+    const toPlanet = ver.pos.clone().sub(from).normalize();
+    const mixK = Number(k.get('mix') || 0.5);
+    const lookDir = toPlanet.clone().multiplyScalar(1 - mixK).addScaledVector(toStar, mixK).normalize();
+    hold(state, c, from, from.clone().add(lookDir), up, Number(k.get('roll') || 0.12));
   });
 
   // Buraco negro com disco de acreção e lente gravitacional
@@ -59,9 +66,9 @@ export function registerShots(ctx, state, api) {
     const sys = useSystem(c, id);
     const acc = sys.star.accretion;
     const n = state.bh?.normal.clone() || new THREE.Vector3(0, 1, 0);
-    const dist = acc.outer * 2.6;
+    const dist = sys.star.radius * Number(c.params.get('bhd') || 34);
     const dir = new THREE.Vector3(0.82, 0, 0.57).projectOnPlane(n).normalize();
-    const from = dir.clone().multiplyScalar(dist).addScaledVector(n, dist * 0.2);
+    const from = dir.clone().multiplyScalar(dist).addScaledVector(n, dist * Number(c.params.get('bhe') || 0.12));
     const look = sys.star.pos.clone().addScaledVector(n, -acc.outer * 0.05);
     hold(state, c, from, look, n, 0.0);
   });
@@ -92,7 +99,7 @@ export function registerShots(ctx, state, api) {
     const from = ash.pos.clone().lerp(ver.pos, 0.35).add(new THREE.Vector3(0, 2e5, 0));
     const vel = dir.clone().multiplyScalar(2.0e6);
     hold(state, c, from, from.clone().add(dir.clone().multiplyScalar(1e6)).add(new THREE.Vector3(0, -1.2e5, 0)), new THREE.Vector3(0, 1, 0), 0.05, vel);
-    api.quantumFx(true, 1, dir);
+    c.bus.emit('quantum:start', { target: ver.id, dir });
     state.warp?.skipSpool?.();
   });
 
