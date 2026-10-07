@@ -41,7 +41,8 @@ export function makeFxConfig(q, backend, params) {
     flareGhosts: p.flareGhosts,
     motionBlur: flag('mblur', !!q.motionBlur),
     mbSamples: p.mbSamples,
-    dofAllowed: flag('dof', !!q.dof),
+    // DoF só roda sob demanda (cinemáticas/mira): liberado também no alto
+    dofAllowed: flag('dof', !!q.dof || name === 'high'),
     grain: flag('grain', !!q.filmGrain),
     godRays: flag('godrays', !!q.godRays),
     godRaySamples: p.godRaySamples,

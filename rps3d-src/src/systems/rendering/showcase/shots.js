@@ -172,14 +172,19 @@ export function registerShots(ctx, api, S) {
     setupCommon(ctx, S, 'kessa');
     const sys = ctx.universe.system;
     const ver = sys.bodies.find((b) => b.name === 'Nivália') || sys.bodies[2];
-    const C = ver.pos.clone().addScaledVector(ver.pos.clone().normalize(), -220e3);
+    // Nivália em quarto (terminador no meio do disco) atrás da nave
+    const toSun0 = ver.pos.clone().negate().normalize();
+    const s0 = basis(toSun0);
+    const Dp = s0.R.clone().multiplyScalar(0.9).addScaledVector(toSun0, 0.12).addScaledVector(s0.U, -0.3).normalize();
+    const C = ver.pos.clone().addScaledVector(Dp, -ver.radius / Math.sin(THREE.MathUtils.degToRad(15)));
     const toSun = C.clone().negate().normalize();
     const b0 = basis(toSun);
-    // olhando perpendicular ao sol, um pouco contra a luz
-    const F = b0.R.clone().multiplyScalar(0.9).addScaledVector(toSun, 0.25).addScaledVector(b0.U, -0.22).normalize();
-    const { R, U } = basis(F);
-    placeCamera(ctx, S, C, lookQuat(F));
+    // olhando um pouco acima e à esquerda do planeta
+    const F = Dp.clone().addScaledVector(s0.U, 0.2).addScaledVector(new THREE.Vector3().crossVectors(Dp, s0.U).normalize(), 0.22).normalize();
+    const { R, U } = basis(F, s0.U);
+    placeCamera(ctx, S, C, lookQuat(F, s0.U));
     S.sun.update(ctx, 0);
+    showcasePlanet(ctx, S, ver, 'ice');
     if (!ctx.services.ships) {
       const ship = buildShowcaseShip();
       const sp = C.clone().addScaledVector(F, 30).addScaledVector(U, -4.5).addScaledVector(R, 1.0);
@@ -189,7 +194,9 @@ export function registerShots(ctx, api, S) {
       ship.quaternion.copy(noseQuat(dir, up));
       ctx.world.add(ship, sp);
     }
-    const field = asteroidField({ count: 36, radius: 5000, seed: 44, minSize: 30, maxSize: 420, keepOut: (p) => p.length() < 1200 });
+    // ?rdof=1: profundidade de campo focada na nave (teste do caminho de cinemática)
+    if (ctx.params.get('rdof') === '1') api.setDof({ focus: 30, range: 8, bokeh: 2 });
+    const field = asteroidField({ count: 14, radius: 5000, seed: 44, minSize: 20, maxSize: 220, keepOut: (p) => p.length() < 1200 });
     ctx.world.add(field, C.clone().addScaledVector(F, 3200));
     S.shake.trauma = 0; S.flash.v = 0;
   });
