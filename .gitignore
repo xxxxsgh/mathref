@@ -6,3 +6,4 @@ dist/
 # Pasta temporária montada pelo workflow do Pages.
 _site/
 rps3d-prints/
+rps3d/
