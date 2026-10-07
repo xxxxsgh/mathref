@@ -176,7 +176,7 @@ export function buildShowcaseShip() {
     nozzle.position.set(side * 2.05, -0.1, 10.3);
     nozzle.material.side = THREE.DoubleSide;
     ship.add(nozzle);
-    const core = new THREE.Mesh(new THREE.CircleGeometry(0.66, 32), emissive([0.55, 0.75, 1.0], 28));
+    const core = new THREE.Mesh(new THREE.CircleGeometry(0.66, 32), emissive([0.55, 0.75, 1.0], 9));
     core.position.set(side * 2.05, -0.1, 10.45);
     ship.add(core);
     const pl = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.12, 6, 24, 1, true), plumeMaterial());

@@ -54,7 +54,7 @@ export const sunFlare = (U, depthTex, { ghosts = 5, strength } = {}) => Fn(() =>
   const burst = sp1.mul(0.4).add(sp2.mul(0.8)).add(rays.mul(0.5).mul(smoothstep(0.004, 0.03, d)));
   // raia anamórfica horizontal (azulada)
   const streak = exp(abs(P.y).mul(-520)).mul(exp(abs(P.x).mul(-2.2))).mul(0.4)
-    .add(exp(abs(P.y).mul(-90)).mul(exp(abs(P.x).mul(-3.5))).mul(0.12));
+    .add(exp(abs(P.y).mul(-90)).mul(exp(abs(P.x).mul(-3.5))).mul(0.06));
   const streakCol = vec3(0.35, 0.55, 1.0);
   // halo arco-íris
   const rr = d.sub(0.38).div(0.018);
@@ -66,7 +66,7 @@ export const sunFlare = (U, depthTex, { ghosts = 5, strength } = {}) => Fn(() =>
   const axis = vec2(0.5, 0.5).sub(U.sunUv);
   const G = [
     [0.55, 0.035, [0.4, 0.8, 1.0], 0.10, 1], [0.78, 0.07, [0.9, 0.5, 1.0], 0.05, 0],
-    [1.12, 0.022, [1.0, 0.85, 0.5], 0.14, 1], [1.45, 0.11, [0.3, 1.0, 0.6], 0.035, 0],
+    [1.12, 0.022, [1.0, 0.85, 0.5], 0.14, 1], [1.45, 0.11, [0.5, 0.8, 0.75], 0.018, 0],
     [1.8, 0.05, [1.0, 0.4, 0.3], 0.06, 1], [-0.35, 0.03, [0.5, 0.7, 1.0], 0.07, 1],
     [2.15, 0.16, [0.5, 0.6, 1.0], 0.025, 0], [0.3, 0.015, [1, 1, 1], 0.12, 1],
   ].slice(0, ghosts);
@@ -75,7 +75,7 @@ export const sunFlare = (U, depthTex, { ghosts = 5, strength } = {}) => Fn(() =>
     const sdf = hex ? hexSdf(q) : length(q);
     const disc = smoothstep(size, size * 0.82, sdf);
     const rim = smoothstep(size * 0.8, size * 0.97, sdf).mul(disc).mul(1.4);
-    col.addAssign(vec3(...c).mul(disc.mul(0.55).add(rim)).mul(inten));
+    col.addAssign(vec3(...c).mul(disc.mul(0.5).add(rim)).mul(inten * 0.75));
   }
   return col.mul(vis);
 })();

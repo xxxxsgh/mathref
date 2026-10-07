@@ -114,8 +114,13 @@ export class Explosions {
       this.D.burst(anchor, n, { size: S * 0.5, speed: K.sparkSpeed * 0.35 * (0.6 + S / 60), kind: kind === 'ground' ? 'rock' : 'metal', vel, hot: K.heat });
     }
     // ── anel de choque ──
-    for (let i = 0; i < K.ring; i++) {
-      const r = this.F.ring({ size: S * (3.2 + i * 2.5), life: 0.9 + i * 0.6, color: energy ? '#9fc8ff' : i ? '#ffd2a0' : '#bcd4ff', power: energy ? 1.4 : 0.8, normal: opts.normal, delay: i * 0.15 });
+    for (let i = 0; i < (this.ctx.params.get('rrings') === '0' ? 0 : K.ring); i++) {
+      // plano do anel inclinado para a câmera (de perfil ele vira um "charuto")
+      let rn = opts.normal;
+      if (!rn) {
+        rn = _v.copy(this.ctx.player.camWorld).sub(pos).normalize().multiplyScalar(1.1).add(new THREE.Vector3().randomDirection()).normalize().clone();
+      }
+      const r = this.F.ring({ size: S * (3.2 + i * 2.5), life: 0.9 + i * 0.6, color: energy ? '#9fc8ff' : i ? '#ffd2a0' : '#bcd4ff', power: energy ? 1.4 : 0.8, normal: rn, delay: i * 0.15 });
       r.userData.follow = (m) => m.position.copy(this.anchors.local[anchor]);
     }
     // ── distorção na tela ──

@@ -283,13 +283,15 @@ export function registerShots(ctx, api, S) {
     const camUp = upV.clone().addScaledVector(sideV, 0.22).normalize();
     placeCamera(ctx, S, C, lookQuat(F, camUp));
     ctx.camera.fov = 58; ctx.camera.updateProjectionMatrix();
+    api.setExposure(0.8);
+    api.setFlare({ sun: 0.75 });
     S.sun.update(ctx, 0);
     showcasePlanet(ctx, S, aur, 'ocean', { cities: true, clouds: 0.45 });
     const { R, U } = basis(F, camUp);
     const at = (f, r, u) => C.clone().addScaledVector(F, f).addScaledVector(R, r).addScaledVector(U, u);
     // ala da Hegemonia: rumo ao planeta, levemente picando
     const heading = F.clone().addScaledVector(U, -0.12).addScaledVector(R, 0.05).normalize();
-    const slots = [[24, -6.5, -4.2, 0.18], [62, 15, -1.5, -0.1], [120, -27, 7, 0.25], [210, 40, -10, -0.2], [330, -70, 18, 0.1], [480, 95, 4, 0.3]];
+    const slots = [[38, -9, -6, 0.18], [62, 15, -1.5, -0.1], [120, -27, 7, 0.25], [210, 40, -10, -0.2], [330, -70, 18, 0.1], [480, 95, 4, 0.3]];
     const ships = [];
     if (!ctx.services.ships) {
       for (const [f, r, u, roll] of slots) {
@@ -303,7 +305,7 @@ export function registerShots(ctx, api, S) {
     }
     // explosão próxima (caça abatido) e nave capital ao longe
     api.explosion(at(560, 170, 60), 34, 'ship', { vel: heading.clone().multiplyScalar(40) });
-    api.explosion(at(3800, -900, 260), 150, 'capital');
+    api.explosion(at(4200, 1500, 900), 140, 'capital');
     advance(S, ctx, Number(ctx.params.get('rtime') ?? 0.9));
     // raios de pulso: dourados (Hegemonia) saindo da ala, vermelhos (defesa da colônia) vindo de frente
     const rng = (a, b) => a + Math.random() * (b - a);

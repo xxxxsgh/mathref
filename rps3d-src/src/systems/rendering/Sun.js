@@ -58,7 +58,10 @@ export class Sun {
     light.castShadow = fx.shadows;
     if (!fx.shadows) return;
     light.shadow.mapSize.set(fx.shadowMapSize, fx.shadowMapSize);
-    light.shadow.bias = -0.0002;
+    // bias em profundidade NORMALIZADA: com a câmera de sombra cobrindo
+    // ~130 km (margem abaixo), -1e-6 ≈ 13 cm. O antigo -2e-4 virava 26 m e
+    // apagava toda sombra de perto.
+    light.shadow.bias = Number(this.ctx.params.get('sbias') ?? -1e-6);
     light.shadow.normalBias = 0.02;
     // A câmera de cada cascata fica `lightMargin` metros na direção do sol.
     // Receptores ENTRE ela e o sol (z < 0 no espaço da sombra) saíam pretos

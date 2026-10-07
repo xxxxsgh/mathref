@@ -120,13 +120,15 @@ export class FireballPool {
       const q = uv().mul(2).sub(1);
       const r = length(q);
       const a = clamp(uPhase, 0, 1);
-      const rad = float(1).sub(pow(float(1).sub(a), 2.5));
+      const rad = float(1).sub(pow(float(1).sub(a), 2.5)).max(0.03);
       const w = mix(float(0.05), float(0.18), a);
       const x = r.sub(rad).div(w);
       const band = exp(x.mul(x).negate());
-      const inner = smoothstep(rad, rad.mul(0.2), r).mul(0.15);
+      // disco interno tênue; máscara dura no círculo unitário (cantos do quad = 0)
+      const inner = float(1).sub(clamp(r.div(rad), 0, 1)).mul(0.05);
+      const mask = clamp(float(1).sub(r).mul(20), 0, 1).mul(smoothstep(0.0, 0.03, a));
       const n = vnoise3(vec3(q.mul(6), a.mul(3))).mul(0.7).add(0.3);
-      const fade = pow(float(1).sub(a), 1.7);
+      const fade = pow(float(1).sub(a), 1.7).mul(mask);
       return vec4(uCol.mul(band.mul(n).add(inner.mul(n))).mul(fade).mul(uPow).mul(3), 1);
     })();
     return mat;

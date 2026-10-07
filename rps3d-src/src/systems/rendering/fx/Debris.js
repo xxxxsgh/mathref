@@ -174,8 +174,8 @@ export class DebrisSystem {
             const back = (j / k) * span;
             e.x = o.x - it.vel.x * back; e.y = o.y - it.vel.y * back; e.z = o.z - it.vel.z * back;
             e.vx = it.vel.x * 0.08; e.vy = it.vel.y * 0.08; e.vz = it.vel.z * 0.08;
-            e.life = 1.8 + Math.random() * 1.6; e.s0 = s0; e.s1 = s0 * 4 + it.scale * 3; e.drag = 0.8; e.g = -0.05;
-            e.a = 0.07; e.b = 0.065; e.c = 0.06; e.w = it.heat * 1.1; e.spin = (Math.random() - 0.5) * 0.6;
+            e.life = 1.8 + Math.random() * 1.6; e.s0 = s0 * 0.7; e.s1 = s0 * 3 + it.scale * 3; e.drag = 0.8; e.g = -0.05;
+            e.a = 0.13; e.b = 0.12; e.c = 0.115; e.w = it.heat * 1.1; e.spin = (Math.random() - 0.5) * 0.6;
             e.delay = -back;
           });
         }

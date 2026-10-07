@@ -19,7 +19,7 @@ import { fbm5, fbm3, vnoise3 } from '../tslib.js';
 const PALETTES = {
   lush: { deep: [0.004, 0.02, 0.05], shallow: [0.01, 0.07, 0.11], low: [0.05, 0.12, 0.05], mid: [0.08, 0.16, 0.09], high: [0.22, 0.18, 0.15], alien: [0.16, 0.07, 0.17], sea: 0.5, ray: [0.18, 0.42, 1.0], mie: [1.0, 0.85, 0.7], clouds: 0.42 },
   desert: { deep: [0.12, 0.06, 0.035], shallow: [0.2, 0.11, 0.06], low: [0.3, 0.17, 0.08], mid: [0.4, 0.26, 0.13], high: [0.2, 0.11, 0.07], alien: [0.34, 0.13, 0.06], sea: -1, ray: [0.75, 0.48, 0.3], mie: [1.0, 0.75, 0.5], clouds: 0.2 },
-  ocean: { deep: [0.003, 0.016, 0.045], shallow: [0.01, 0.08, 0.12], low: [0.09, 0.13, 0.06], mid: [0.13, 0.15, 0.08], high: [0.28, 0.25, 0.22], alien: [0.06, 0.14, 0.1], sea: 0.6, ray: [0.16, 0.4, 1.0], mie: [1.0, 0.86, 0.72], clouds: 0.5 },
+  ocean: { deep: [0.003, 0.016, 0.045], shallow: [0.01, 0.08, 0.12], low: [0.09, 0.13, 0.06], mid: [0.13, 0.15, 0.08], high: [0.28, 0.25, 0.22], alien: [0.06, 0.14, 0.1], sea: 0.62, ray: [0.16, 0.4, 1.0], mie: [1.0, 0.86, 0.72], clouds: 0.5 },
   ice: { deep: [0.05, 0.12, 0.2], shallow: [0.2, 0.32, 0.42], low: [0.55, 0.63, 0.7], mid: [0.75, 0.8, 0.86], high: [0.92, 0.94, 0.97], alien: [0.4, 0.55, 0.7], sea: 0.4, ray: [0.35, 0.55, 1.0], mie: [0.9, 0.9, 1.0], clouds: 0.6 },
 };
 
@@ -42,28 +42,33 @@ export function makeShowcasePlanet({ radius = 38000, type = 'lush', sun, seed = 
   const ridge = float(1).sub(abs(vnoise3(n.mul(9).add(sd)).mul(2).sub(1)));
   const detail = fbm3(n.mul(38).add(sd)).mul(0.6).add(fbm3(n.mul(140).add(sd)).mul(0.4));
   const ridgeFine = float(1).sub(abs(vnoise3(n.mul(60).add(warp.mul(3))).mul(2).sub(1)));
-  const canyon = smoothstep(0.82, 0.97, ridgeFine).mul(smoothstep(0.3, 0.6, vnoise3(n.mul(11).add(sd))));
+  const canyon = smoothstep(0.7, 0.95, ridgeFine).mul(smoothstep(0.45, 0.7, vnoise3(n.mul(11).add(sd)))).mul(0.6);
   const lat = abs(n.y);
+  // altura normalizada (fbm5 concentra em ~0,3–0,7)
+  const hN = smoothstep(0.3, 0.7, h);
   const sea = float(P.sea);
-  const land = smoothstep(sea, sea.add(0.012), h);
-  const elev = clamp(h.sub(sea).div(float(1).sub(sea)), 0, 1);
-  const water = mix(vec3(...P.deep), vec3(...P.shallow), smoothstep(sea.sub(0.08), sea, h));
+  const land = smoothstep(sea, sea.add(0.015), hN);
+  const elev = clamp(hN.sub(sea.max(0)).div(float(1).sub(sea.max(0))), 0, 1);
+  const water = mix(vec3(...P.deep), vec3(...P.shallow), smoothstep(sea.sub(0.1), sea, hN));
   const biome = vnoise3(n.mul(5).add(sd.mul(2)));
-  const g0 = mix(mix(vec3(...P.low), vec3(...P.alien), smoothstep(0.55, 0.75, biome)), vec3(...P.mid), smoothstep(0.1, 0.4, elev));
-  const ground = mix(g0, vec3(...P.high), smoothstep(0.35, 0.7, elev.add(ridge.mul(0.12)))).mul(detail.mul(0.6).add(0.7));
+  const g0 = mix(mix(vec3(...P.low), vec3(...P.alien), smoothstep(0.5, 0.72, biome)), vec3(...P.mid), smoothstep(0.15, 0.5, elev));
+  // estratos (mesetas) e cânions escuros
+  const strata = vnoise3(vec3(elev.mul(26), n.x.mul(3), n.z.mul(3))).mul(0.35).add(0.82);
+  const g1 = mix(g0, vec3(...P.high), smoothstep(0.45, 0.85, elev.add(ridge.mul(0.15)))).mul(strata);
+  const ground = g1.mul(detail.mul(0.7).add(0.6)).mul(float(1).sub(canyon.mul(0.6)));
   // calotas polares
-  const ice = smoothstep(0.78, 0.9, lat.add(detail.mul(0.12)).add(elev.mul(0.1)));
+  const ice = smoothstep(0.8, 0.92, lat.add(detail.mul(0.12)).add(elev.mul(0.08)));
   const base = mix(water, ground, type === 'desert' ? float(1) : land);
   surf.colorNode = mix(base, vec3(0.85, 0.88, 0.92), type === 'desert' ? float(0) : ice);
-  surf.roughnessNode = type === 'desert' ? float(0.95) : mix(float(0.22), float(0.92), max(land, ice.mul(0.6)));
+  surf.roughnessNode = type === 'desert' ? float(0.95) : mix(float(0.2), float(0.92), max(land, ice.mul(0.6)));
   surf.metalnessNode = float(0);
   if (cities) {
     // colônia: luzes de cidades no lado noturno, aglomeradas perto da costa
-    const coast = smoothstep(0.06, 0.0, abs(h.sub(sea).sub(0.02)));
-    const cl = smoothstep(0.55, 0.8, vnoise3(n.mul(16).add(sd))).mul(coast.mul(0.7).add(0.3));
-    const dots = smoothstep(0.6, 0.9, vnoise3(n.mul(420))).mul(0.7).add(smoothstep(0.5, 0.8, vnoise3(n.mul(110))).mul(0.5));
+    const coast = smoothstep(0.08, 0.0, abs(hN.sub(sea).sub(0.03)));
+    const cl = smoothstep(0.62, 0.82, vnoise3(n.mul(16).add(sd))).mul(coast.mul(0.85).add(0.15));
+    const dots = pow(smoothstep(0.55, 0.95, vnoise3(n.mul(520))), 2).mul(0.8).add(smoothstep(0.7, 0.95, vnoise3(n.mul(150))).mul(0.3));
     const night = smoothstep(0.06, -0.12, dot(normalWorld, sun.dir));
-    surf.emissiveNode = vec3(1.0, 0.62, 0.28).mul(cl.mul(dots).mul(land).mul(night).mul(2.2));
+    surf.emissiveNode = vec3(1.0, 0.62, 0.28).mul(cl.mul(dots).mul(max(land, coast)).mul(night).mul(3));
   }
   g.add(new THREE.Mesh(new THREE.SphereGeometry(radius, 256, 128), surf));
 
