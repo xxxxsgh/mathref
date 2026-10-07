@@ -18,6 +18,23 @@ const _n = new THREE.Vector3();
 
 export const GROUPS = { core: 0, armL: 1, armR: 2, gun: 3, sling: 4 };
 
+/**
+ * Nível de detalhe da construção (1 = cheio). < 1 reduz os segmentos de
+ * cilindros/lofts/tubos/elipsoides e arredonda menos as caixas — LOD de
+ * poucos polígonos (aparelho fraco e soldados longe). `withDetail(k, fn)`.
+ */
+let DETAIL = 1;
+const segs = (n, min) => Math.max(min, Math.round(n * DETAIL));
+export function withDetail(k, fn) {
+  const prev = DETAIL;
+  DETAIL = k;
+  try {
+    return fn();
+  } finally {
+    DETAIL = prev;
+  }
+}
+
 export class SkinBuilder {
   constructor() {
     this.P = [];
@@ -74,11 +91,14 @@ export class SkinBuilder {
   box(size, t, mat, wfn, group, radius = 0.006, seg = null) {
     const r = Math.min(radius, Math.min(...size) * 0.49);
     if (seg == null) seg = Math.max(...size) < 0.1 || r < 0.006 ? 1 : 2;
-    const g = r > 0.0005 ? new RoundedBoxGeometry(size[0], size[1], size[2], seg, r) : new THREE.BoxGeometry(...size);
+    if (DETAIL < 1) seg = 1;
+    const g = r > 0.0005 && (DETAIL >= 1 || Math.max(...size) > 0.12) ? new RoundedBoxGeometry(size[0], size[1], size[2], seg, r) : new THREE.BoxGeometry(...size);
     this.prim(g, t, mat, wfn, group);
   }
 
   ellipsoid(radii, t, mat, wfn, group, ws = 16, hs = 12) {
+    ws = segs(ws, 6);
+    hs = segs(hs, 4);
     this.prim(new THREE.SphereGeometry(1, ws, hs), { ...t, s: radii }, mat, wfn, group);
   }
 
@@ -86,7 +106,7 @@ export class SkinBuilder {
   cyl(a, b, r0, r1, mat, wfn, group, seg = 12, open = false) {
     const A = new THREE.Vector3(...a), Bv = new THREE.Vector3(...b);
     const len = A.distanceTo(Bv);
-    const g = new THREE.CylinderGeometry(r1, r0, len, seg, 1, open);
+    const g = new THREE.CylinderGeometry(r1, r0, len, segs(seg, 5), 1, open);
     const dir = Bv.clone().sub(A).normalize();
     _q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
     _m.compose(A.clone().add(Bv).multiplyScalar(0.5), _q, new THREE.Vector3(1, 1, 1));
@@ -101,6 +121,7 @@ export class SkinBuilder {
    * superelipse (2 = elipse, >2 mais quadrado). Fecha as pontas se caps.
    */
   loft(rings, mat, wfn, group = 0, { seg = 20, caps = [true, true], arc = null } = {}) {
+    seg = segs(seg, 6);
     const base = this.P.length / 3;
     const verts = [];
     const ringPts = [];

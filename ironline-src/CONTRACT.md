@@ -87,6 +87,10 @@ pipeline(ctx, dt)              → render (padrão: cena + viewmodel)
 | `renderViewmodel(target)` | desenha a viewmodel por cima do alvo (limpa só depth). O pipeline customizado DEVE chamá-la (ou compor a viewmodel de outro jeito) |
 | `shotPose(name?)` | pose do preset (`services.world.shotPoses[name]` > padrão de `core/Shots.js`) |
 | `features` / `errors` | estado de carregamento `{ name, order, ok, error }` e erros registrados |
+| `bootProgress(rótulo, f)` | durante o `init`: atualiza a tela de carga (f = 0..1 dentro da fatia da feature) e **cede um frame** — `await` entre blocos pesados para o celular não travar a página. Fora da carga só cede |
+| `gpu` | `{ webgl2, maxTexture, halfFloatRT }` (core/Renderer.js `gpuCaps`); sem `halfFloatRT` o núcleo põe `quality.hdr = false` |
+| `tier` | camada do aparelho: `'desktop' \| 'low-desktop' \| 'mobile' \| 'lite'` (= `quality.tier`) |
+| `perf` | contador de FPS (core/PerfOverlay.js): `show(bool)`, `visible`; evento `perf:overlay` (bool). `?fps=show`, F7 |
 
 `window.__ironline` = `ctx`. `window.__ready = true` após o 3º frame
 renderizado (features iniciadas e aquecimento do preset feito).
@@ -99,6 +103,9 @@ renderizado (features iniciadas e aquecimento do preset feito).
 - Ações padrão (`input.bindings`, editável): `forward back left right jump
   sprint crouch prone reload interact melee grenade weapon1 weapon2 leanLeft
   leanRight scoreboard pause fire ads` (`fire` = `Mouse0`, `ads` = `Mouse2`).
+- `consume(nome)` apaga a borda de `pressed(nome)` no passo atual (features
+  de ordem maior passam a ver `false`; `action` não muda). O movimento
+  consome `melee` durante o slide (vira slide kick, a faca não sai).
 - `consumeLook()` → `{ yaw, pitch }` em rad (o player já consome); `consumeWheel()`.
 - `locked` (pointer lock), `requestLock()`, `exitLock()`, `enabled`,
   `sensitivity`, `invertY`.
@@ -152,6 +159,13 @@ Estado: `position` (pés), `prevPosition`, `velocity`, `yaw`, `pitch`,
   locomoção embutida (é o que a feature `movement` faz). O controlador deve
   manter `position/velocity/onGround/state/eyeHeight` coerentes e pode usar
   `ctx.collision.moveCapsule`.
+- **Publicado pela feature `movement`** (leia com `?? 1` / `?.`, pode não
+  existir sem ela): `sliding` (bool), `slideSpread` (multiplicador de
+  dispersão; 1 fora do slide), `slideRecoil`, `mounted` (`'ledge'|'wall'|null`),
+  `mountRecoil`, `mountSway`, `tacSprint` (sprint tático: pose de arma
+  erguida), `hanging`, `diving`. A arma deve multiplicar a dispersão por
+  `player.slideSpread ?? 1` e o recuo por `(player.slideRecoil ?? 1) *
+  (player.mountRecoil ?? 1)`.
 - Canais de câmera (somados em `syncCamera`, cada dono reescreve o seu):
   `viewOffset` (Vector3 local à câmera — bob, lean),
   `viewKick { pitch, yaw, roll }` (recuo, impacto) e
@@ -178,6 +192,17 @@ São dicas: cada feature decide como honrá-las.
   **`level` continua sendo sempre um dos 4 presets**; os degraus "−" só
   aplicam patches (`motionBlur/volumetrics` off, `shadowScale 0.5`, `ssao/bloom`
   off, `foliage`/`particleBudget` menores). O modo shot fica em `high` fixo.
+- **Camada do aparelho** (`quality.tier`, `TIER_PATCHES` em core/Quality.js):
+  `desktop` (sem patch), `low-desktop` (PC fraco detectado; camada MACIA —
+  `quality.set('<preset>')` manual a remove, `set('auto')` a restaura),
+  `mobile` (celular/tablet) e `lite` (`?lite=1`,
+  botão "Tentar modo leve", ou carga anterior que não terminou). A camada é
+  um TETO aplicado por cima de qualquer preset/degrau (números no mínimo,
+  booleanos só desligam). Campos extras: `detail` (0..1, detalhe
+  geométrico/texturas do mundo; 1 = completo), `hdr` (false → compositor
+  LDR, sem alvos float nem PMREM), `probes` (false → sem sondas/cubemaps).
+- `renderScale` (0,45..1): resolução interna do preset (low 0,75; `low-`
+  0,65), multiplicada pela escala do governador no núcleo.
 - `shadowScale` (0,125..1): multiplicador da resolução do shadow map do sol
   (o compositor honra; potência de 2, ≥ 512). `contactAO` (bool): AO barata de
   contato quando `ssao` está desligado.
@@ -209,12 +234,14 @@ documento.
 | `world` | world | `root`, `sun` (DirectionalLight), `hemi`, `bounds: Box3`, `spawnPoints: [{position:[x,y,z], yaw, pitch}]`, `enemySpawns: [...]`, `shotPoses: { [preset]: {position, yaw, pitch} }`, `materialAt(hit) → string` |
 | `rendering` | rendering | `setExposure(v)`, `environment` (Texture PMREM ou null) |
 | `audio` | audio | `play(nome, { position?, volume? })`, `setVolume(v)`, `context` |
-| `movement` | movement | `builtin: bool`, `stance() → 'stand'|'crouch'|'prone'|'slide'` |
-| `weapon` | weapon | `gun` (Object3D na vm), `muzzle` (Object3D), getters `ammo`, `reserve`, `magSize`, `ads` (0..1), `reloading`, `name` |
-| `enemies` | enemies | `list`, `spawn(pose) → enemy`, `count()`, `clear()`, `auto` (bool: repõe o esquadrão sozinho; a partida desliga e conduz as ondas) |
+| `movement` | movement | `builtin: bool`, `stance() → 'stand'|'crouch'|'prone'|'slide'`; extras: `sliding mounted hanging diving cover tacFuel slideSpread slope`, `reset()`, `touchHints` (ações sem botão no toque: `prone`, `leanLeft`, `leanRight`), `addLowGap(...)` |
+| `weapon` | weapon | `gun` (Object3D na vm), `muzzle` (Object3D), getters `ammo`, `reserve`, `magSize`, `ads` (0..1), `reloading`, `name`. **v3**: `weapons` (7 armas: KR-9, P-11, MX-9, BR-12, LR-50, HM-60, SR-7, com `equipped/caliber/rpm/…`), `loadoutIds`, `setPrimary(id)`, `setSecondary(id)`, `knives`, `knife`, `setKnife(id\|alias)`, `patterns`, `setSkin(id, skin\|null)`, `getSkin(id)`, `setCharm(id, charm\|null)`, `setStickers(id, [...])`, `setKillCounter(id, n\|null)`, `killCount(id)`, `attachments`, `attachmentOptions`, `setAttachments(id, {...})`, `buildPreview(item) → Promise<Object3D>`, `inspect()`, luneta (`zoom`, `breath`, `scopeGlint`, `dofScale`, `suppressed`), `throwBack(...)`. Lê de `ctx.player`: `slideSpread`, `slideRecoil`, `mountRecoil`, `mountSway`, `tacSprint`, `hanging` (detalhes em `features/weapon/README.md`) |
+| `enemies` | enemies | `list`, `spawn(pose) → enemy`, `count()`, `clear()`, `auto` (bool: repõe o esquadrão sozinho; a partida desliga e conduz as ondas); extras: `roles`, `revive(e, by)`, `canExecute(e, pos)`, `executionTarget(pos)`, `createPuppet(opts)`, `execute(e, puppet)`, `snapshot()`, `ghost.{ apply, end }` (killcam) |
 | `vfx` | vfx | `impact(point, normal, material?)`, `tracer(from, to)`, `muzzleFlash(obj3d)` |
-| `hud` | hud | `root`, `setMenu(bool)`, `setVisible(bool)` |
-| `touch` | touch | `active`, `visible`, `sensitivity`, `setSensitivity(0.2..4)`, `setScale(0.6..1.5)`, `setFullscreen(bool)`, `enterFullscreen()` |
+| `hud` | hud | `root`, `setMenu(bool)`, `setVisible(bool)`; extras: `open(tela\|null)`, `screen`, `match`, `settings`, `loadout`, `banner(t, sub)`, `deploy()`; flags `handlesStreaks`/`handlesMedals`/`handlesReveal` (a HUD desenha barra de killstreaks, toasts de medalha e revelação da UAV — a streaks esconde as versões de reserva) |
+| `inventory` | inventory | catálogo/créditos/caixas/persistência (`localStorage['ironline.inventory']`): `catalog`, `logic`, `state`, `credits`, `keys`, `items`, `equip`, `def(id)`, `item(uid)`, `open(caseId, { pay, seed? })`, `equipItem(uid)`, `unequip(uid)`, `setLoadout(slot, weaponId)`, `scrap`, `tradeUp`, `dailyStatus/claimDaily`, `claimBp`, `apply()` (aplica skins/facas/chaveiros/adesivos na weapon) |
+| `streaks` | streaks | `STREAKS`, `MEDALS`, `loadout`, `setLoadout(ids)`, `count`, `best`, `ready`, `slots()` → `[{ id, name, kills, icon, key, ready, progress }]`, `next()`, `activate(vaga 0..3 \| id)`, `active`, `busy`, `revealed`/`uav` (minimapa), `decoys` (IA), `designator.{ open, move(dx,dz), confirm(), cancel() }`, `killcam.active`, `finisher.{ target, active, execute() }`, `photo.{ active, enter, exit, capture, settings, set }`, `openPicker()`, `grant(id)` (QA) |
+| `touch` | touch | `active`, `visible`, `sensitivity`, `setSensitivity(0.2..4)`, `setScale(0.6..1.5)`, `setFullscreen(bool)`, `enterFullscreen()`. Botões: lê `movement.touchHints` (DIVE, LEAN Q/E) e `streaks` (vagas prontas → `activate(i)`, EXECUTE → `finisher.execute()`, designador → arrastar = `move`, CONFIRM/CANCEL) |
 
 ## Eventos do bus
 
@@ -227,13 +254,34 @@ documento.
 | `input:lock` | `bool` | núcleo (no toque: captura virtual) |
 | `input:touch` | `bool` | núcleo (troca mouse ↔ toque) |
 | `quality:auto` | `{ rung, scale, reason }` | núcleo (governador trocou de degrau) |
+| `renderer:lost` / `renderer:restored` | `{}` | núcleo (`webglcontextlost/restored`; quem tem alvos de render refaz o conteúdo no restored) |
 | `player:damage` | `{ amount, health, source?, from? }` | núcleo (`player.damage`) |
 | `player:death` / `player:jump` / `player:land` | `{…}` | núcleo / controlador |
-| `weapon:fire` | `{ origin, dir, muzzle, ads }` | weapon |
-| `weapon:hit` | `{ point, normal, distance, collider, part, dir, damage, source }` | weapon |
+| `player:slide` | `{ phase:'start'\|'end', on, speed, material, reason? }` | movement |
+| `player:slideKick` | `{ target, hit, damage?, killed? }` (+ `weapon:hit` com `weapon:'slideKick'`, `melee`, `knockback`, `knockdown`) | movement |
+| `player:dive` / `player:tacSprint` | `{ phase:'start'\|'land' , speed }` / `{ phase:'start'\|'end', fuel }` | movement |
+| `player:mount` / `player:hang` / `player:cover` | `{ on, kind }` / `{ phase }` / `{ height }` | movement |
+| `player:respawn` | `{ position }` | hud (partida) |
+| `weapon:fire` | `{ origin, dir, muzzle, ads, id, kind, suppressed, pellets }` | weapon |
+| `weapon:hit` | `{ point, normal, distance, collider, part, dir, damage, source, weapon?, melee?, explosion?, ballistic? }` | weapon (e movement: slide kick) |
 | `weapon:reload` / `weapon:reloaded` / `weapon:dry` | `{…}` | weapon |
+| `weapon:kill` | `{ weaponId, enemy, headshot, melee }` | weapon |
+| `weapon:switch` / `weapon:melee` / `weapon:throw` / `weapon:explode` / `weapon:flashbang` / `weapon:throwBack` | ver `features/weapon/README.md` | weapon |
+| `weapon:breath` / `weapon:foley` | `{ phase, stamina }` / `{ name, id }` | weapon |
+| `streak:ready` / `streak:used` | `{ id, name, kills, icon, key?, refund? }` | streaks |
+| `streak:end` / `streak:progress` / `streak:loadout` | `{ id }` / `{ count, next }` / `{ loadout }` | streaks |
+| `medal:award` | `{ id, name, xp, icon }` | streaks (a HUD desenha e soma XP) |
+| `uav:ping` | `{ count, t }` | streaks |
+| `designator:open` / `designator:close` | `{ id }` | streaks |
+| `finisher:start` / `finisher:end` | `{ enemy, aborted? }` | streaks |
+| `killcam:start` / `killcam:end` | `{ killer }` | streaks |
+| `photo:enter` / `photo:exit` / `photo:capture` | `{ name? }` | streaks |
+| `inventory:change` / `inventory:award` / `inventory:unlock` | `{ item, def, name }` | inventory |
+| `match:end` | `{ win, kills, headshots, captures, waves, bossKilled, medals, playTime, xp }` | hud |
+| `match:boss` | `{ enemy }` | hud |
 | `enemy:fire` | `{ enemy, origin, dir }` | enemies |
 | `enemy:damage` / `enemy:death` | `{ enemy, amount?, info }` | enemies |
+| `enemy:revive` / `enemy:shieldHit` / `enemy:grenade` / `enemy:grenadeLand` / `prop:explode` | ver `features/enemies/README.md` | enemies |
 | `match:start` / `match:wave` / `match:waveClear` | `{ mode }` / `{ wave, of, count }` / `{ wave, of }` | hud |
 
 ## Parâmetros de URL
@@ -244,7 +292,7 @@ documento.
 | `?skip=a,b` | carrega todas menos essas |
 | `?q=auto\|low\|medium\|high\|ultra` | qualidade (padrão `auto`; `high` no modo shot) |
 | `?touch=1\|0` | força/desliga os controles de toque |
-| `?fps=N` | alvo do governador (padrão 60; 30 em celular) |
+| `?fps=N` | alvo do governador (padrão 60; 30 em celular); `?fps=show` liga o contador de FPS |
 | `?govlog=1` | loga as decisões do governador no console |
 | `?shot=<preset>` | modo screenshot (abaixo) |
 | `&seed=N` | semente do modo shot (padrão 1337) |
@@ -253,6 +301,8 @@ documento.
 | `&pause=1` | congela a simulação depois do aquecimento (só renderiza) |
 | `&preserve=1` | `preserveDrawingBuffer` (o shot.mjs liga para medir luminância) |
 | `?dynres=0` | desliga o governador (resolução dinâmica + degraus automáticos; ver `ctx.governor`) |
+| `?lite=1\|0` | força o modo leve (camada `lite`) / desliga a detecção automática de carga que não terminou |
+| `?bootlog=1` | imprime o tempo de import/init de cada feature (`window.__bootlog` sempre existe) |
 | `?waves=1,1&wi=1&mt=300` | partida curta: ondas, intervalo entre ondas e tempo (hud) |
 
 ## Modo screenshot (`?shot=<preset>`)

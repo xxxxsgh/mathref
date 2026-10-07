@@ -107,6 +107,26 @@ export default {
       pause: btn('t-util t-pause', 'pause', 'PAUSE'),
       score: btn('t-util t-score', 'score', 'SCORE'),
     };
+    // ações de movimento sem botão próprio: lidas de services.movement.touchHints
+    // (prone = DIVE em sprint/slide, lean Q/E). Sem a feature movement, nada.
+    const MOVE_BTN = { prone: ['t-prone', 'prone'], leanLeft: ['t-leanL', 'leanL'], leanRight: ['t-leanR', 'leanR'] };
+    this.moveBtns = [];
+    // killstreaks (até 4 vagas, só aparecem prontas), execução e designador
+    this.stk = [0, 1, 2, 3].map((i) => {
+      const b = btn(`t-stk t-stk${i}`, 'streak', '');
+      b.classList.add('hide');
+      return b;
+    });
+    this.fin = btn('t-fin hide', 'melee', 'EXECUTE');
+    this.dConfirm = btn('t-dconf hide', 'fire', 'CONFIRM');
+    this.dCancel = btn('t-dcancel hide', 'cancel', 'CANCEL');
+    for (const h of ctx.service('movement')?.touchHints || []) {
+      const m = MOVE_BTN[h.action];
+      if (!m) continue;
+      const b = btn(m[0], m[1], h.label === 'Q' ? 'LEAN' : h.label === 'E' ? 'LEAN' : h.label);
+      b.setAttribute('aria-label', h.hint || h.action);
+      this.moveBtns.push([b, h.action]);
+    }
     ctx.ui.appendChild(el);
 
     // aviso de orientação (celular em retrato)
@@ -306,7 +326,10 @@ export default {
     const dy = e.clientY - p.y;
     p.x = e.clientX;
     p.y = e.clientY;
-    this.input.addTouchLook(dx, dy);
+    // tablet do morteiro aberto: arrastar move o retículo em vez de mirar
+    const des = this.ctx.service('streaks')?.designator;
+    if (des?.open) des.move?.(dx * 0.08, dy * 0.08);
+    else this.input.addTouchLook(dx, dy);
   },
 
   applyJoy(nx, ny) {
@@ -371,6 +394,12 @@ export default {
     key(B.crouch, 'crouch'); // toque = agacha/levanta; em sprint = slide; segurar = deita
     key(B.grenade, 'grenade');
     key(B.melee, 'melee');
+    for (const [b, action] of this.moveBtns || []) key(b, action); // segurar = lean / toque = deitar/dive
+    const stk = () => this.ctx.service('streaks');
+    this.stk.forEach((b, i) => on(b, () => stk()?.activate?.(i)));
+    on(this.fin, () => stk()?.finisher?.execute?.());
+    on(this.dConfirm, () => stk()?.designator?.confirm?.());
+    on(this.dCancel, () => stk()?.designator?.cancel?.());
     on(B.swap, () => {
       const w = this.ctx.service('weapon');
       if (typeof w?.swap === 'function') w.swap();
@@ -399,6 +428,33 @@ export default {
     // o movimento larga o sprint ao mirar/atirar; o visual acompanha
     const w = ctx.service('weapon');
     this.b.reload.classList.toggle('on', !!w?.reloading);
+    this.syncStreaks();
+  },
+
+  /** Killstreaks / execução / designador: lê services.streaks a cada quadro. */
+  syncStreaks() {
+    const st = this.ctx.service('streaks');
+    const des = !!st?.designator?.open;
+    this.el.classList.toggle('desig', des);
+    this.dConfirm.classList.toggle('hide', !des);
+    this.dCancel.classList.toggle('hide', !des);
+    let slots = [];
+    try {
+      slots = (!des && st?.slots?.()) || [];
+    } catch {}
+    this.stk.forEach((b, i) => {
+      const s = slots[i];
+      const ready = !!(s && s.ready);
+      b.classList.toggle('hide', !ready);
+      if (ready && b.dataset.id !== s.id + s.ready) {
+        b.dataset.id = s.id + s.ready;
+        const short = String(s.name || s.id).split(' ').pop();
+        b.innerHTML = `${ICONS.streak}<b>${short}${s.ready > 1 ? ' ×' + s.ready : ''}</b>`;
+        b.setAttribute('aria-label', s.name || s.id);
+      }
+    });
+    const fin = !des && !!st?.finisher?.target && !st.finisher.active;
+    this.fin.classList.toggle('hide', !fin);
   },
 
   dispose() {

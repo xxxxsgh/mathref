@@ -101,6 +101,29 @@ const GLYPHS = {};
 for (const [k, [w, d]] of Object.entries(G)) GLYPHS[k] = { w, lines: parse(d) };
 
 /*
+ * Maiúsculas acentuadas (pt-BR: ÉPICO, LENDÁRIO, CRÉDITOS, CAÇADORA…): o
+ * glifo base inteiro + o acento ACIMA da caixa (y −3,4..−1,2), como nas
+ * fontes de display; o SVG do texto tem overflow visível, então a métrica
+ * das linhas não muda.
+ */
+{
+  const ACC = {
+    acute: (w) => `M${w / 2 - 1},-1.3 L${w / 2 + 1.1},-3.4`,
+    grave: (w) => `M${w / 2 - 1.1},-3.4 L${w / 2 + 1},-1.3`,
+    circ: (w) => `M${w / 2 - 1.9},-1.3 L${w / 2},-3.3 L${w / 2 + 1.9},-1.3`,
+    tilde: (w) => `M${w / 2 - 2.3},-1.5 L${w / 2 - 1.1},-3 L${w / 2 + 1.1},-1.8 L${w / 2 + 2.3},-3.3`,
+    diaer: (w) => `M${w / 2 - 1.6},-2.8 V-1.6 M${w / 2 + 1.6},-2.8 V-1.6`,
+  };
+  const MAP = { 'Á': ['A', 'acute'], 'À': ['A', 'grave'], 'Â': ['A', 'circ'], 'Ã': ['A', 'tilde'], 'É': ['E', 'acute'], 'Ê': ['E', 'circ'], 'Í': ['I', 'acute'], 'Ó': ['O', 'acute'], 'Ô': ['O', 'circ'], 'Õ': ['O', 'tilde'], 'Ú': ['U', 'acute'], 'Ü': ['U', 'diaer'] };
+  for (const [ch, [b, a]] of Object.entries(MAP)) {
+    const base = GLYPHS[b];
+    GLYPHS[ch] = { w: base.w, lines: base.lines.concat(parse(ACC[a](Math.max(base.w, 1.2)))) };
+  }
+  // cedilha: abaixo da linha de base (como a vírgula)
+  GLYPHS['Ç'] = { w: GLYPHS.C.w, lines: GLYPHS.C.lines.concat(parse('M3.2,10 V11.2 L2.2,12.2')) };
+}
+
+/*
  * Face PESADA ("IRON HEAVY") para números e valores: o mesmo esqueleto,
  * alargado (counters abertos para o traço grosso não entupir) e com alguns
  * glifos redesenhados — '%' de estêncil, 'M'/'W' mais abertos, '1' sem

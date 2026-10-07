@@ -179,6 +179,71 @@ test('qualidade automática: degraus, modo e preset manual', () => {
   assert.equal(rungSettings(rungIndex('medium-')).contactAO, true);
 });
 
+test('camada do aparelho: celular/leve são teto; desktop não muda', async () => {
+  const { deviceTier, TIER_PATCHES } = await import('../src/core/Quality.js');
+  const desk = createQuality('high', null, null, { tier: 'desktop' });
+  for (const [k, v] of Object.entries(QUALITY_PRESETS.high)) assert.equal(desk[k], v, k);
+  assert.equal(desk.detail, 1);
+  assert.equal(desk.hdr, true);
+  const phone = classifyDevice({ gpu: 'Adreno (TM) 640', mobile: true, cores: 8, memory: 6 });
+  assert.equal(deviceTier(phone), 'mobile');
+  assert.equal(deviceTier(phone, { lite: true }), 'lite');
+  const m = createQuality('auto', null, phone, { tier: deviceTier(phone) });
+  assert.equal(m.tier, 'mobile');
+  assert.equal(m.textureSize, 512);
+  assert.equal(m.ssao, false);
+  assert.ok(m.detail < 1);
+  m.set('ultra'); // trocar de preset não fura o teto
+  assert.equal(m.textureSize, 512);
+  assert.equal(m.volumetrics, false);
+  assert.ok(m.shadowMapSize <= TIER_PATCHES.mobile.shadowMapSize);
+  m.set({ ssao: true }); // nem patch parcial
+  assert.equal(m.ssao, false);
+  const l = createQuality('low', null, phone, { tier: 'lite' });
+  assert.equal(l.hdr, false);
+  assert.equal(l.bloom, false);
+  assert.ok(l.drawDistance <= QUALITY_PRESETS.low.drawDistance);
+});
+
+test('PC fraco → camada low-desktop (macia), nunca começa em high', async () => {
+  const { deviceTier } = await import('../src/core/Quality.js');
+  const weak = [
+    'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)',
+    'ANGLE (Intel, Intel(R) HD Graphics 4000 Direct3D11)',
+    'ANGLE (AMD, AMD Radeon(TM) Vega 8 Graphics Direct3D11)',
+    'ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11)',
+    'ANGLE (NVIDIA, NVIDIA GeForce MX250 Direct3D11)',
+    'ANGLE (NVIDIA, NVIDIA GeForce GT 1030 Direct3D11)',
+    'llvmpipe (LLVM 15.0.7, 256 bits)',
+    'ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11)',
+  ];
+  for (const gpu of weak) {
+    const d = classifyDevice({ gpu, cores: 8, memory: 8 });
+    assert.equal(d.weak, true, gpu);
+    assert.equal(d.preset, 'low', gpu);
+    assert.equal(deviceTier(d), 'low-desktop', gpu);
+  }
+  // 4 núcleos e 4 GB, ou textura máxima pequena, também
+  assert.equal(classifyDevice({ gpu: 'NVIDIA GeForce GTX 1060', cores: 4, memory: 4 }).weak, true);
+  assert.equal(classifyDevice({ gpu: 'NVIDIA GeForce GTX 1060', cores: 8, memory: 16, maxTexture: 4096 }).weak, true);
+  // GPUs boas continuam desktop
+  const good = classifyDevice({ gpu: 'NVIDIA GeForce RTX 3070', cores: 12, memory: 16 });
+  assert.equal(good.weak, false);
+  assert.equal(deviceTier(good), 'desktop');
+  assert.equal(classifyDevice({ gpu: 'AMD Radeon 780M Graphics', cores: 8, memory: 16 }).weak, false);
+  // camada macia: o jogador escolhe high → sai; auto → volta
+  const d = classifyDevice({ gpu: weak[0], cores: 8, memory: 8 });
+  const q = createQuality('auto', null, d, { tier: 'low-desktop' });
+  assert.equal(q.level, 'low');
+  assert.equal(q.renderScale, 0.75);
+  q.set('high');
+  assert.equal(q.tier, 'desktop');
+  for (const [k, v] of Object.entries(QUALITY_PRESETS.high)) assert.equal(q[k], v, k);
+  q.set('auto');
+  assert.equal(q.tier, 'low-desktop');
+  assert.equal(q.ssao, false);
+});
+
 test('governador: resolução dinâmica desce rápido e sobe devagar', () => {
   const g = new Governor({ targetFps: 60, minScale: 0.6, auto: false });
   // 25 ms (40 fps): a escala cai em poucas janelas até o piso, nunca abaixo
@@ -199,7 +264,8 @@ test('governador: resolução dinâmica desce rápido e sobe devagar', () => {
 
 test('governador: degrau só desce com a resolução no chão e respeita a carência', () => {
   const g = new Governor({ targetFps: 60, minScale: 0.6, rung: 1, ceiling: 0, floor: 6, grace: 3 });
-  const ds = feed(g, 40, 30);
+  // excesso moderado (20 ms ≈ 50 fps): primeiro a resolução, depois o degrau
+  const ds = feed(g, 20, 30);
   const rungs = ds.filter((d) => d.rung != null);
   assert.ok(rungs.length >= 1, 'desceu de degrau');
   // a primeira descida de degrau acontece depois da escala chegar ao piso
@@ -210,6 +276,21 @@ test('governador: degrau só desce com a resolução no chão e respeita a carê
   // nunca passa do chão
   feed(g, 80, 120);
   assert.equal(g.rung, 6);
+});
+
+test('governador: queda rápida abaixo de ~45 fps e dupla abaixo de 30', () => {
+  // 25 ms (40 fps): desce degrau já na 1ª janela, sem esperar a resolução
+  const g = new Governor({ targetFps: 60, minScale: 0.6, rung: 1, ceiling: 0, floor: 6 });
+  const d1 = feed(g, 25, 1.05);
+  assert.equal(d1[0].rung, 2);
+  assert.ok(d1[0].scale < 1);
+  // 40 ms (25 fps): de high (1) a low (5) em poucos segundos
+  const h = new Governor({ targetFps: 60, minScale: 0.6, rung: 1, ceiling: 0, floor: 6 });
+  feed(h, 40, 6);
+  assert.ok(h.rung >= 5, `degrau ${h.rung}`);
+  // manual (auto false): nunca troca degrau, só resolução
+  const m = new Governor({ targetFps: 60, minScale: 0.6, rung: 1, auto: false });
+  assert.ok(feed(m, 40, 6).every((d) => d.rung == null));
 });
 
 test('governador: sobe degrau preso no vsync e recua se a subida falhar', () => {
@@ -252,3 +333,11 @@ import '../src/features/weapon/weapon.test.mjs';
 
 // testes da feature hud (progressão, modos, captura do hardpoint) — arquivo próprio da feature
 import '../src/features/hud/hud.test.mjs';
+import '../src/features/inventory/inventory.test.mjs';
+
+// testes da feature movement (slide, rampa, cancel, slide-jump, estamina) — arquivo próprio da feature
+import '../src/features/movement/slidephys.test.mjs';
+
+// testes das features streaks e enemies (killstreaks, medalhas, killcam, torreta, classes, barris)
+import '../src/features/streaks/streaks.test.mjs';
+import '../src/features/enemies/enemies.test.mjs';

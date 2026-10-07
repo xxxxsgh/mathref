@@ -52,8 +52,16 @@ export default {
   init(ctx) {
     const { scene, vm, bus, collision, quality, renderer } = ctx;
     const budget = quality.particleBudget ?? 1;
+    // camadas leves (core/Quality.js: celular, PC fraco, modo leve) e preset
+    // low: atlas menores (o de partículas de 2048² sozinho ocupava ~21 MB),
+    // menos partículas/marcas/destroços e UMA luz de clarão (cada PointLight
+    // na cena encarece o shader de todo material iluminado)
+    const tier = quality.tier || 'desktop';
+    const lite = tier === 'lite';
+    const lean = lite || tier !== 'desktop' || quality.level === 'low';
     const tex = bakeAtlases(renderer, {
-      particleSize: quality.level === 'low' ? 1024 : 2048,
+      particleSize: lite ? 512 : lean ? 1024 : 2048,
+      decalSize: lite ? 512 : 1024,
       anisotropy: Math.min(quality.anisotropy || 4, renderer.capabilities.getMaxAnisotropy?.() || 4),
     });
     this.tex = tex;
@@ -61,7 +69,8 @@ export default {
     tex.detail = detail;
     const clock = () => ctx.time.now;
 
-    const particles = new ParticleSystem({ capacity: Math.max(1024, Math.round(8192 * budget)), atlas: tex.particles, detail, clock, nearFade: 0.3 });
+    const pCap = lean ? Math.min(2048, Math.max(768, Math.round(4096 * budget))) : Math.max(1024, Math.round(8192 * budget));
+    const particles = new ParticleSystem({ capacity: pCap, atlas: tex.particles, detail, clock, nearFade: 0.3 });
     scene.add(particles.mesh);
     const vmParticles = new ParticleSystem({ capacity: 384, atlas: tex.particles, detail, clock, nearFade: 0.0, name: 'vfx-vm-particles' });
     vmParticles.uniforms.uWind.value.set(0, 0, 0);
@@ -88,7 +97,7 @@ export default {
       }
     });
     this.surface = surface;
-    const decals = new Decals({ capacity: Math.round(320 * Math.max(0.5, budget)), albedo: tex.decalAlbedo, normal: tex.decalNormal, rng: ctx.rng, surface });
+    const decals = new Decals({ capacity: lean ? Math.round(160 * Math.max(0.5, budget)) : Math.round(320 * Math.max(0.5, budget)), albedo: tex.decalAlbedo, normal: tex.decalNormal, rng: ctx.rng, surface });
     scene.add(decals.mesh);
 
     // latão deflagrado: um pouco oxidado/fosco (não é ouro polido)
@@ -122,14 +131,14 @@ export default {
     };
     debrisMat.customProgramCacheKey = () => 'vfx-debris-2';
     const debris = new RigidPool(chunkGeometry(), debrisMat, {
-      capacity: Math.round(128 * Math.max(0.5, budget)), collision, restitution: 0.25, friction: 0.5, lieDown: false, name: 'vfx-debris', useColor: true,
+      capacity: lean ? 48 : Math.round(128 * Math.max(0.5, budget)), collision, restitution: 0.25, friction: 0.5, lieDown: false, name: 'vfx-debris', useColor: true,
       onFly: (b) => this.fx?.debrisTrail(b),
     });
     scene.add(debris.mesh);
 
     // luzes de clarão: pool FIXO (adicionar luzes depois recompila shaders)
     const lights = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0, n = lean ? 1 : 3; i < n; i++) {
       const light = new THREE.PointLight(0xffa060, 0, 10, 2);
       light.name = `vfx-flash-${i}`;
       light.castShadow = false;
@@ -144,7 +153,7 @@ export default {
 
     // pré-passe de profundidade (partículas suaves) — só com efeitos vivos
     const own = new Set([particles.mesh, decals.mesh, brass.mesh, debris.mesh, ...lights.map((l) => l.light)]);
-    this.prepass = quality.level === 'low' ? null : new DepthPrepass(renderer, scene, ctx.camera, {
+    this.prepass = lean ? null : new DepthPrepass(renderer, scene, ctx.camera, {
       scale: quality.level === 'ultra' ? 0.75 : 0.5,
       isOwn: (o) => own.has(o) || (o.name && o.name.startsWith('vfx')),
     });

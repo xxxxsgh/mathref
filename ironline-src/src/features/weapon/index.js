@@ -29,9 +29,24 @@
 import * as THREE from 'three';
 import { makeMaterials, OCC, OCC_MAX } from './materials.js';
 import { POSES, clonePose, blendPoses, buildSleeve, Hand } from './arms.js';
-import { makeRifle, makePistol } from './guns.js';
+import { makeRifle, makePistol, basisFD } from './guns.js';
+import { fitHand, sdCapsule } from './grip.js';
+import { makeMX9 } from './smg.js';
+import { makeBR12 } from './shotgun.js';
+import { makeLR50 } from './sniper.js';
+import { makeHM60 } from './lmg.js';
+import { makeSR7 } from './dmr.js';
+import { KNIFE_MODELS, makeKnifeRig, knifeSwing } from './knives.js';
 import { AuxRig, meleeTracks, nadeRaiseTracks, nadeThrowTracks } from './aux.js';
-import { Loadout, WEAPON_DEFS, EQUIP_DEFS } from './loadout.js';
+import { Loadout, WEAPON_DEFS, EQUIP_DEFS, ALL_WEAPONS, KNIVES, knifeId, weaponDef } from './loadout.js';
+import { gunMaterials, applySkin, modelBounds, normSkin, setPatternSize } from './skin.js';
+import { KillCounterView, applyStickers, Charm } from './cosmetics.js';
+import { KillCounters } from './cosmetic-logic.js';
+import { ATTACHMENTS, DEFAULT_ATT, normAttachments, applyAttachments, LaserBeam } from './attachments.js';
+import { ScopeView, updateScopeLens } from './scope.js';
+import { pelletPattern, scopeSway, BreathHold, falloff } from './ballistics.js';
+import { PATTERNS } from './patterns.js';
+import { buildPreview } from './preview.js';
 import { Throwables } from './projectiles.js';
 import { throwVelocity } from './grenade-sim.js';
 import { Spring, ease, clamp, lerp, smoothstep, wobble } from './anim.js';
@@ -48,15 +63,43 @@ const _dir = new THREE.Vector3();
 const _org = new THREE.Vector3();
 const ONE = new THREE.Vector3(1, 1, 1);
 const SWITCH_ACTIONS = ['swap', 'switch', 'switchWeapon', 'weaponSwap', 'nextWeapon'];
+const MAKERS = { kr9: makeRifle, p11: makePistol, mx9: makeMX9, br12: makeBR12, lr50: makeLR50, hm60: makeHM60, sr7: makeSR7 };
+
+/** Malhas fixas da arma que recebem adesivos (não as peças móveis nem acessórios). */
+function stickerTargets(g) {
+  const R = g.R;
+  const skip = new Set([R.mag, R.slide, R.bolt, R.pump, R.cover, R.optic, g.opticRoot, R.trigger, R.chargingHandle, ...(Object.values(g.att?.parts || {}))].filter(Boolean));
+  const painted = new Set(Object.values(g.mats?.painted || {}));
+  const out = [];
+  const walk = (o) => {
+    if (skip.has(o) || !o.visible || o.isSkinnedMesh || o.name === 'stickers' || o.name === 'charm' || o.name === 'killCounter' || o.name === 'handL' || o.name === 'handR') return;
+    if (o.isMesh && painted.has(o.material)) out.push(o);
+    for (const c of o.children) walk(c);
+  };
+  walk(g.root);
+  return out;
+}
 
 export default {
   name: 'weapon',
   order: 40,
 
-  init(ctx) {
+  async init(ctx) {
     const { vm, bus, input, quality, params } = ctx;
     this.ctx = ctx;
+    // carga em fatias: cede um frame entre blocos pesados (celular não trava)
+    const boot = async (label, f) => {
+      try {
+        await ctx.bootProgress?.(label, f);
+      } catch {
+        /* fora da carga */
+      }
+    };
+    // aparelhos fracos: texturas procedurais e render target da luneta menores
+    this.lowTier = (ctx.quality?.tier || ctx.tier || 'desktop') !== 'desktop';
+    setPatternSize(this.lowTier ? 128 : 256);
     const M = (this.M = makeMaterials());
+    await boot('weapon: materiais', 0.1);
 
     // ─── rig: câmera da viewmodel → rig → pivô animado → arma ─────────────
     vm.camera.fov = 50;
@@ -75,30 +118,42 @@ export default {
     this.sleeveL = buildSleeve(M, { left: true, watch: true });
     rig.add(this.sleeveR, this.sleeveL);
 
-    // ─── armas do loadout (as pegas são resolvidas contra cada modelo) ────
-    const rifle = makeRifle(M, this.handR, this.handL, params);
-    const pistol = makePistol(M, this.handR, this.handL, params);
-    this.guns = [rifle, pistol];
-    for (const g of this.guns) {
-      g.root.visible = false;
-      pivot.add(g.root);
-      // cápsulas ejetadas (pool por arma)
-      g.casings = Array.from({ length: g.kind === 'pistol' ? 8 : 14 }, () => {
-        const c = g.casing.clone();
-        c.visible = false;
-        c.userData = { v: new THREE.Vector3(), w: new THREE.Vector3(), life: 0 };
-        vm.camera.add(c);
-        return c;
-      });
-      g.ci = 0;
+    await boot('weapon: mãos', 0.25);
+
+    // ─── armas: só as do loadout são montadas na carga; as outras na 1ª vez
+    // que forem pedidas (setPrimary, prévia de inventário…). Cada arma tem os
+    // próprios materiais pintáveis (skins independentes); o KR-9 mantém
+    // receiver/tan da biblioteca (camuflagem de progressão do HUD).
+    this.view = new ScopeView(this.lowTier || quality.level === 'low' ? 256 : 512);
+    this.gunById = {};
+    this.guns = [];
+    this.counters = new KillCounters();
+    this.skins = {};
+    this.charms = {};
+    this.stickers = {};
+    this.attCfg = {};
+    const ww0 = params.get('wweap');
+    const boot0 = ['kr9', 'p11', ...(ww0 && weaponDef(ww0) ? [ww0] : [])];
+    for (let i = 0; i < boot0.length; i++) {
+      this.ensureGun(boot0[i]);
+      await boot('weapon: ' + boot0[i], 0.3 + (0.45 * (i + 1)) / boot0.length);
     }
+    // facas na mão (tecla 3): uma montagem por modelo, criada sob demanda
+    this.knifeRigs = {};
+    this.knifeSel = 'tk7';
     this.aux = new AuxRig(M, rig);
+    await boot('weapon: faca e granadas', 0.85);
     this.throwables = new Throwables(ctx);
 
     // ─── loadout ─────────────────────────────────────────────────────────
     const lo = (this.lo = new Loadout(WEAPON_DEFS));
-    // ?wgun=1 começa com a pistola (QA)
-    const startSlot = clamp(Number(params.get('wgun')) || 0, 0, this.guns.length - 1);
+    // ?wweap=<id> põe a arma na primária (QA); ?wknife=<id> escolhe a faca;
+    // ?wgun=1 começa com a pistola; ?wgun=2 com a faca na mão
+    const ww = params.get('wweap');
+    if (ww && weaponDef(ww) && this.ensureGun(ww)) lo.setSlot(weaponDef(ww).slot === 'secondary' && ww === 'p11' ? 1 : 0, weaponDef(ww));
+    const wk = knifeId(params.get('wknife'));
+    if (wk) this.knifeSel = wk;
+    const startSlot = clamp(Number(params.get('wgun')) || (ww === 'p11' ? 1 : 0), 0, lo.weapons.length);
     lo.index = startSlot;
     this.setGun(startSlot);
 
@@ -166,7 +221,7 @@ export default {
       shots: 0, lastShot: -9, triggerHeld: false, burstCount: 0,
       sunVis: 1, indoor: 0, sunTimer: 0,
       bobPhase: 0, bobAmt: 0, prevYaw: null, prevPitch: null, landing: 0,
-      flashT: 0, slideLock: false, nade: null, lunge: null,
+      flashT: 0, slideLock: false, nade: null, lunge: null, tac: 0, lowLin: 0, cycleAt: null,
     });
     // munição/cadência da arma ATIVA (delegam ao loadout: trocar não perde o carregador)
     Object.defineProperties(st, {
@@ -197,7 +252,14 @@ export default {
     this.poseR = clonePose(POSES.grip);
     this.poseL = clonePose(POSES.guard);
 
+    this.breath = new BreathHold();
+    this.swayMult = 1;
+    this.flashK = 1;
+    this.laser = new LaserBeam(ctx);
+    this.tmpAcc = new THREE.Vector3();
+    this.prevPlayerV = null;
     if (!input.bindings.inspect) input.bindings.inspect = ['KeyI'];
+    if (!input.bindings.weapon3) input.bindings.weapon3 = ['Digit3'];
     if (!input.bindings.tactical) input.bindings.tactical = ['KeyT'];
     if (!SWITCH_ACTIONS.some((n) => input.bindings[n])) input.bindings.swap = ['KeyX'];
 
@@ -213,6 +275,7 @@ export default {
     bus.on('player:jump', () => this.spr.land.impulse(0.35));
     // respawn / nova partida: reabastece o loadout
     bus.on('player:respawn', () => this.lo.refill());
+    bus.on('enemy:death', (e) => this.onEnemyDeath(e));
     bus.on('match:start', () => {
       this.lo.refill();
       this.throwables.clear();
@@ -232,12 +295,25 @@ export default {
       this.debugView(y, p, d, ox, oy, oz);
     }
 
+    // faca padrão no golpe rápido (materiais próprios: a skin da faca vale nos dois)
+    // (a TK-7 padrão usa o modelo da AuxRig; outra faca/skin troca sob demanda)
+    if (this.knifeSel !== 'tk7') this.setKnife(this.knifeSel);
+    this.applyQaParams(params);
+
     const self = this;
     const def = () => self.lo.def;
-    const weaponInfo = (w, i) => ({
-      slot: i, id: w.def.id, name: w.def.name, icon: w.def.icon, kind: w.def.kind, slotName: w.def.slot,
-      ammo: w.ammo, reserve: w.reserve, magSize: w.def.magSize, auto: w.def.auto, caliber: w.def.caliber,
-    });
+    // catálogo: as 7 armas na ordem fixa (KR-9 e P-11 primeiro — compatível
+    // com a HUD, que lê weapons[0]/[1] como primária/secundária padrão)
+    const weaponInfo = (d, i) => {
+      const k = self.lo.weapons.findIndex((w) => w.def.id === d.id);
+      const w = k >= 0 ? self.lo.weapons[k] : self.lo.cache.get(d.id);
+      return {
+        slot: i, id: d.id, name: d.name, icon: d.icon, kind: d.kind, slotName: d.slot, equipped: k >= 0 ? (k === 0 ? 'primary' : 'secondary') : null,
+        ammo: w?.ammo ?? d.magSize, reserve: w?.reserve ?? d.reserve, magSize: d.magSize, auto: d.auto, caliber: d.caliber,
+        rpm: d.rpm, damage: d.damage, pellets: d.pellets || 1, range: d.range, mobility: d.mobility, control: d.control,
+        scope: d.scope?.zoom || null, attachments: ATTACHMENTS[d.id] || {},
+      };
+    };
     ctx.provide('weapon', {
       // ─ campos do contrato (sempre da arma ATIVA) ─
       get gun() { return self.g.root; },
@@ -256,13 +332,45 @@ export default {
       get auto() { return def().auto; },
       get id() { return def().id; },
       get icon() { return def().icon; },
+      get suppressed() { return !!self.g.att?.mods?.suppressed; },
       get kind() { return def().kind; },
       get slot() { return self.lo.index; },
       get switching() { return self.lo.switching; },
       /** Definição da arma ativa: { id, name, icon, kind, magSize, rpm, auto, … }. */
       get current() { return { ...def(), ammo: st.ammo, reserve: st.reserve, slot: self.lo.index }; },
-      /** Loadout: [{ slot, id, name, icon, kind, ammo, reserve, magSize }]. */
-      get weapons() { return self.lo.weapons.map(weaponInfo); },
+      /** Todas as armas do jogo: [{ slot, id, name, icon, kind, equipped, ammo, reserve, magSize, … }]. */
+      get weapons() { return ALL_WEAPONS.filter((d) => MAKERS[d.id]).map(weaponInfo); },
+      /** Ids do loadout atual: [primária, secundária]. */
+      get loadoutIds() { return self.lo.weapons.map((w) => w.def.id); },
+      setPrimary: (id) => self.setSlotWeapon(0, id),
+      setSecondary: (id) => self.setSlotWeapon(1, id),
+      /** Facas: [{ id, name, style }] (a TK-7 é a padrão). */
+      get knives() { return KNIVES.map((k) => ({ id: k.id, name: k.name, style: k.style, aliases: k.aliases.slice() })); },
+      get knife() { return self.knifeSel; },
+      get knifeOut() { return self.lo.knifeOut; },
+      setKnife: (id) => self.setKnife(id),
+      /** Ids de padrão de skin suportados. */
+      patterns: PATTERNS.slice(),
+      setSkin: (id, skin) => self.setSkin(id, skin),
+      getSkin: (id) => (self.skins[knifeId(id) || id] ? { ...self.skins[knifeId(id) || id] } : null),
+      setCharm: (id, charm) => self.setCharm(id, charm),
+      setStickers: (id, list) => self.setStickers(id, list),
+      setKillCounter: (id, n) => self.setKillCounter(id, n),
+      killCount: (id) => self.counters.get(knifeId(id) || id),
+      /** Acessórios montados por arma: { [id]: { muzzle, grip, laser, optic } }. */
+      get attachments() { return Object.fromEntries(ALL_WEAPONS.map((d) => [d.id, { ...(self.attCfg[d.id] || DEFAULT_ATT) }])); },
+      /** O que cada arma aceita: { [id]: { muzzle:[…], grip:[…], laser:[…], optic:[…] } }. */
+      attachmentOptions: ATTACHMENTS,
+      setAttachments: (id, cfg) => self.setAttachments(id, cfg),
+      /** Modelo isolado (arma/faca/chaveiro) para o visualizador 3D: Promise<Object3D>. */
+      buildPreview: (item) => buildPreview(item, { M: self.M }),
+      /** Luneta: segurando a respiração / fôlego (0..1) / brilho visível da objetiva. */
+      get holdingBreath() { return self.breath.holding; },
+      get breath() { return self.breath.stamina; },
+      get scopeGlint() { return self.g.zoom >= 4 && st.ads > 0.5 ? 1 : 0; },
+      get zoom() { return self.g.zoom || 1; },
+      /** Quanto desfocar a viewmodel no ADS (0 com luneta: a imagem ampliada fica nítida). */
+      get dofScale() { return self.g.zoom > 1 ? 0.12 : 1; },
       get grenades() { return self.lo.grenades; },
       get tacticals() { return self.lo.tacticals; },
       get equipment() { return { frag: { ...EQUIP_DEFS.frag, count: self.lo.grenades }, flash: { ...EQUIP_DEFS.flash, count: self.lo.tacticals }, knife: { ...EQUIP_DEFS.knife } }; },
@@ -287,6 +395,8 @@ export default {
         return ok;
       },
       /** Detona uma granada do jogador no ponto (QA/roteiros): mesmo dano/efeito do arremesso. */
+      /** IA devolve uma granada viva do jogador: { position, target, by } → true se pegou uma. */
+      throwBack: (o) => self.throwables.throwBack(o),
       explodeAt: (point, kind = 'frag') => self.throwables.detonate(kind, new THREE.Vector3(point.x, point.y, point.z)),
       refill: () => self.lo.refill(),
       setGrenades: (n) => self.lo.setGrenades(n),
@@ -300,11 +410,170 @@ export default {
     });
   },
 
+  /**
+   * QA visual (só parâmetros de URL desta feature):
+   *  &wskin=padrão,seed,desgaste,#c1,#c2,#c3[,metal,rugosidade]  skin na arma/faca ativa
+   *  &watt=suppressor,foregrip,laser,3x   acessórios na arma ativa
+   *  &wcharm=forma,#cor   &wstick=glifo:#cor,…   &wkills=N
+   *  &wlineup=guns|knives|<id>   vitrine de prévias diante da câmera (sem mãos)
+   */
+  applyQaParams(params) {
+    const id = this.lo.knifeOut ? this.knifeSel : this.lo.def.id;
+    const ws = params.get('wskin');
+    if (ws) {
+      const [pattern, seed, wear, ...rest] = ws.split(',');
+      const cols = rest.filter((c) => c.startsWith('#') || /^[0-9a-f]{6}$/i.test(c)).map((c) => (c.startsWith('#') ? c : '#' + c));
+      const nums = rest.filter((c) => !(c.startsWith('#') || /^[0-9a-f]{6}$/i.test(c))).map(Number);
+      const skin = { id: 'qa-' + pattern, pattern, seed: Number(seed) || 0, wear: Number(wear) || 0, palette: cols.length ? cols : ['#c8862e', '#1a1a1a', '#e9c27a'], finish: { metalness: nums[0] ?? 0.4, roughness: nums[1] ?? 0.45 } };
+      const tgt = params.get('wskinid') || id;
+      for (const t of tgt.split('+')) this.setSkin(t, skin);
+    }
+    const wa = params.get('watt');
+    if (wa && !this.lo.knifeOut) {
+      const v = wa.split(',');
+      this.setAttachments(id, { muzzle: v.includes('suppressor') ? 'suppressor' : 'none', grip: v.includes('foregrip') ? 'foregrip' : 'none', laser: v.includes('laser') ? 'laser' : 'none', optic: v.includes('3x') ? '3x' : 'default' });
+      this.lens = this.g.lens;
+    }
+    const wc = params.get('wcharm');
+    if (wc) {
+      const [shape, color] = wc.split(',');
+      this.setCharm(id, { id: 'qa', shape, color: color?.startsWith('#') ? color : '#' + (color || 'e2b45a') });
+    }
+    const wst = params.get('wstick');
+    if (wst) this.setStickers(id, wst.split(',').map((x, i) => { const [glyph, color] = x.split(':'); return { id: 'qa' + i, glyph: decodeURIComponent(glyph), color: color?.startsWith('#') ? color : '#' + (color || 'e2b45a') }; }));
+    const wk = params.get('wkills');
+    if (wk != null) this.setKillCounter(id, Number(wk));
+    const wl = params.get('wlineup');
+    if (wl) this.lineup(wl, params);
+  },
+  /** Vitrine de prévias na cena da viewmodel (QA de modelos/skins). */
+  async lineup(kind, params) {
+    const { vm } = this.ctx;
+    this.rig.visible = false;
+    const grp = new THREE.Group();
+    grp.name = 'lineup';
+    vm.camera.add(grp);
+    const ws = params.get('wskin');
+    let skin = null;
+    if (ws) skin = this.skins[knifeId(kind) || kind] || this.skins[this.lo.def.id] || this.skins[this.knifeSel] || null;
+    const list = kind === 'guns' ? ALL_WEAPONS.map((d) => ({ type: 'weapon', baseId: d.id })) : kind === 'knives' ? KNIVES.map((k) => ({ type: 'knife', baseId: k.id })) : [{ type: knifeId(kind) ? 'knife' : 'weapon', baseId: kind }];
+    const items = [];
+    for (const it of list) {
+      const o = await buildPreview({ ...it, skin: params.get('wlskin') ? skin : it.baseId === kind ? skin : null }, { M: this.M });
+      items.push(o);
+    }
+    const n = items.length;
+    items.forEach((o, i) => {
+      if (kind === 'guns') {
+        // armas em duas colunas, de lado (lado esquerdo para a câmera)
+        o.rotation.set(0, Math.PI / 2, 0);
+        const col = i < 4 ? 0 : 1, row = i < 4 ? i : i - 4;
+        o.position.set(col ? 0.55 : -0.55, 0.42 - row * 0.28, -1.5);
+      } else if (kind === 'knives') {
+        // facas lado a lado, lâmina para cima, flanco esquerdo para a câmera
+        o.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, -1, 0)));
+        o.position.set(-0.36 + (i / (n - 1)) * 0.72, 0, -0.62);
+      } else {
+        const [yaw, pitch, dist] = (params.get('wlview') || '1.57,0.15,0.9').split(',').map(Number);
+        o.rotation.set(pitch, yaw, 0, 'YXZ');
+        o.position.set(0, 0, -dist);
+      }
+      grp.add(o);
+    });
+    this.lineupGroup = grp;
+  },
+
   // ─── troca de arma ───────────────────────────────────────────────────
+  /**
+   * Monta a arma `id` se ainda não existe (carga preguiçosa) e reaplica os
+   * cosméticos/acessórios pedidos antes dela existir. Devolve o objeto ou null.
+   */
+  ensureGun(id) {
+    if (this.gunById[id]) return this.gunById[id];
+    const def = weaponDef(id);
+    const mk = MAKERS[id];
+    if (!def || !mk) return null;
+    const mats = gunMaterials(this.M, { shareBase: id === 'kr9' });
+    let g = null;
+    try {
+      g = mk(mats.M, this.handR, this.handL, this.ctx.params, { view: this.view });
+    } catch (e) {
+      console.warn('[weapon] falhou ao montar', id, e);
+      return null;
+    }
+    // a mão direita foi reparentada pelo resolvedor: volta para a arma ativa
+    if (this.g && this.g !== g) {
+      this.g.root.add(this.handR.root, this.handL.root);
+      this.handR.root.position.copy(this.g.handR.pos);
+      this.handR.root.quaternion.copy(this.g.handR.quat);
+    }
+    this.prepGun(g, def, mats);
+    if (this.attCfg[id]) this.setAttachments(id, this.attCfg[id]);
+    if (this.skins[id]) applySkin(mats.painted, this.skins[id], g.bounds);
+    if (this.counters.has(id)) this.refreshCounter(id);
+    if (this.charms[id]) this.setCharm(id, this.charms[id]);
+    if (this.stickers[id]?.length) this.setStickers(id, this.stickers[id]);
+    return g;
+  },
+  /** Prepara uma arma recém-montada: estado visual, cápsulas, acessórios. */
+  prepGun(g, def, mats) {
+    const { vm } = this.ctx;
+    g.def = def;
+    g.mats = mats;
+    g.bounds = modelBounds(g.root);
+    g.zoomDefault = def.scope?.zoom || 1;
+    g.zoom = g.zoomDefault;
+    g.scopeLensDefault = g.R.scopeLens || null;
+    g.scopeLens = g.scopeLensDefault;
+    g.glintDefault = g.R.glint || null;
+    g.glint = g.glintDefault;
+    g.root.visible = false;
+    this.pivot.add(g.root);
+    // cápsulas ejetadas (pool por arma)
+    g.casings = Array.from({ length: g.kind === 'pistol' || g.kind === 'sniper' ? 8 : 14 }, () => {
+      const c = g.casing.clone();
+      c.visible = false;
+      c.userData = { v: new THREE.Vector3(), w: new THREE.Vector3(), life: 0 };
+      vm.camera.add(c);
+      return c;
+    });
+    g.ci = 0;
+    g.cos = { counter: null, charm: null };
+    applyAttachments(g, mats.M, DEFAULT_ATT, this.view);
+    this.gunById[def.id] = g;
+    this.guns.push(g);
+  },
+  /** Objeto visual do slot i (arma do loadout ou a faca na mão). */
+  gunFor(i) {
+    const lo = this.lo;
+    if (i >= lo.weapons.length) return this.knifeRig(this.knifeSel);
+    return this.ensureGun(lo.weapons[i].def.id) || this.guns[0];
+  },
+  /** Montagem da faca na mão (criada na primeira vez). */
+  knifeRig(id) {
+    let k = this.knifeRigs[id];
+    if (!k) {
+      const mats = gunMaterials(this.M, { keys: ['blade', 'alu', 'g10', 'micarta'] });
+      k = makeKnifeRig(mats.M, this.handR, id);
+      k.mats = mats;
+      k.def = { id, kind: 'knife' };
+      k.bounds = modelBounds(k.R.knife);
+      k.casings = [];
+      k.cos = { counter: null, charm: null };
+      k.root.visible = false;
+      this.pivot.add(k.root);
+      this.knifeRigs[id] = k;
+      this.guns.push(k);
+      // cosméticos pendentes desta faca
+      if (this.skins[id]) applySkin(k.mats.painted, this.skins[id], k.bounds);
+      if (this.counters.has(id)) this.refreshCounter(id);
+    }
+    return k;
+  },
   /** Ativa a arma do slot i (visual): reparenta mãos, pegas, oclusores. */
-  setGun(i) {
-    const g = this.guns[i];
-    if (this.g === g) return;
+  setGun(i, force = false) {
+    const g = this.gunFor(i);
+    if (this.g === g && !force) return;
     if (this.g) this.g.root.visible = false;
     this.g = g;
     this.R = g.R;
@@ -313,10 +582,14 @@ export default {
     g.root.add(this.handR.root, this.handL.root);
     this.handR.root.position.copy(g.handR.pos);
     this.handR.root.quaternion.copy(g.handR.quat);
+    const knife = g.kind === 'knife';
+    this.handL.root.visible = !knife;
+    this.sleeveL.visible = !knife;
     if (this.flash) g.R.muzzle.add(this.flash);
     this.occ = g.occ(this.handL, this.handR).slice(0, OCC_MAX);
     OCC.uOccN.value = this.occ.length;
     if (this.st) this.st.slideLock = this.lo.current.ammo === 0;
+    this.breath?.reset();
   },
   requestSlot(i) {
     if (this.busyExclusive()) return false;
@@ -344,7 +617,7 @@ export default {
   /** Ações que não podem ser interrompidas por troca (faca, granada). */
   busyExclusive() {
     const n = this.st.action?.name;
-    return n === 'melee' || n === 'nadeRaise' || n === 'nadeThrow' || n === 'flashRaise' || n === 'flashThrow';
+    return n === 'melee' || n === 'swing' || n === 'swing2' || n === 'nadeRaise' || n === 'nadeThrow' || n === 'flashRaise' || n === 'flashThrow';
   },
   emitSwitch(ctx) {
     const lo = this.lo;
@@ -353,6 +626,184 @@ export default {
       slot: lo.index, id: d.id, name: d.name, icon: d.icon, kind: d.kind,
       ammo: lo.current.ammo, reserve: lo.current.reserve, magSize: d.magSize, auto: d.auto,
     });
+  },
+
+  // ─── loadout / cosméticos (serviço) ──────────────────────────────────
+  /** Troca a arma do slot (0 = primária, 1 = secundária) pelo id. */
+  setSlotWeapon(slot, id) {
+    const def = weaponDef(id);
+    if (!def || !MAKERS[id]) return false;
+    const lo = this.lo;
+    const before = lo.weapons.map((w) => w.def.id).join();
+    if (!lo.setSlot(slot, def)) return lo.weapons[slot].def.id === id;
+    if (before !== lo.weapons.map((w) => w.def.id).join() && lo.index < lo.weapons.length) {
+      // a arma na mão mudou: troca o visual e saca de novo
+      this.st.action = null;
+      this.st.cycleAt = null;
+      this.setGun(lo.index, true);
+      if (!this.ctx.shot) this.startAction('equip');
+      this.emitSwitch(this.ctx);
+    }
+    return true;
+  },
+  /** Faca escolhida (modelo da faca na mão e do golpe rápido). */
+  setKnife(id) {
+    const k = knifeId(id);
+    if (!k) return false;
+    const changed = k !== this.knifeSel || !this.aux.knifeCache?.[k];
+    this.knifeSel = k;
+    this.aux.setKnifeModel(k, this.knifeMats(k).M);
+    this.extraAnims.melee = knifeSwing(k, 'quick') || meleeTracks(EQUIP_DEFS.knife.time);
+    if (this.lo.knifeOut && changed && this.g?.knifeId !== k) {
+      this.st.action = null;
+      this.setGun(this.lo.index, true);
+      if (!this.ctx.shot) this.startAction('equip');
+    }
+    return true;
+  },
+  /** Materiais pintáveis por faca (compartilhados pela faca na mão e pelo golpe rápido). */
+  knifeMats(id) {
+    this.kMats ||= {};
+    if (!this.kMats[id]) this.kMats[id] = gunMaterials(this.M, { keys: ['blade', 'alu', 'g10', 'micarta'] });
+    return this.kMats[id];
+  },
+  /** Alvo de cosméticos por id: { kind: 'gun'|'knife', g?, mats, bounds }. */
+  cosTarget(id) {
+    const kid = knifeId(id);
+    if (kid) {
+      const mats = this.knifeMats(kid);
+      return { kind: 'knife', id: kid, mats, bounds: KNIFE_MODELS[kid]?.bounds || { zRear: 0.13, len: 0.3 }, g: this.knifeRigs[kid] || null };
+    }
+    if (!MAKERS[id]) return null;
+    // arma ainda não montada: guarda o pedido; ensureGun aplica ao montar
+    const g = this.gunById[id] || null;
+    return { kind: 'gun', id, g, mats: g?.mats || null, bounds: g?.bounds };
+  },
+  setSkin(id, skin) {
+    const T = this.cosTarget(id);
+    if (!T) return false;
+    const s = skin ? normSkin(skin) : null;
+    if (s) this.skins[T.id] = s;
+    else delete this.skins[T.id];
+    if (T.mats) applySkin(T.mats.painted, s, T.bounds);
+    // faca selecionada: o golpe rápido passa a usar o modelo com a skin
+    if (T.kind === 'knife' && T.id === this.knifeSel && s) this.setKnife(T.id);
+    return true;
+  },
+  setKillCounter(id, n) {
+    const T = this.cosTarget(id);
+    if (!T) return false;
+    this.counters.set(T.id, n);
+    this.refreshCounter(T.id);
+    return true;
+  },
+  refreshCounter(id) {
+    const T = this.cosTarget(id);
+    const g = T?.g;
+    if (!g) return;
+    const n = this.counters.get(id);
+    if (n == null) {
+      if (g.cos.counter) g.cos.counter.root.parent?.remove(g.cos.counter.root);
+      g.cos.counter = null;
+      return;
+    }
+    if (!g.cos.counter && g.cosmetic?.counter) {
+      const spot = g.cosmetic.counter;
+      const v = new KillCounterView(g.mats.M, { scale: spot.scale || 1 });
+      v.root.position.copy(spot.pos);
+      if (spot.rot) v.root.rotation.copy(spot.rot);
+      (spot.parent || g.root).add(v.root);
+      g.cos.counter = v;
+    }
+    g.cos.counter?.set(n);
+  },
+  setCharm(id, charm) {
+    const T = this.cosTarget(id);
+    if (!T) return false;
+    if (charm) this.charms[T.id] = { ...charm };
+    else delete this.charms[T.id];
+    const g = T.g;
+    if (!g) return true;
+    if (g.cos.charm) g.cos.charm.root.parent?.remove(g.cos.charm.root);
+    g.cos.charm = null;
+    if (charm && g.cosmetic?.charm) {
+      const c = new Charm(charm);
+      c.root.position.copy(g.cosmetic.charm);
+      (g.cosmetic.charmParent || g.root).add(c.root);
+      c.settle();
+      g.cos.charm = c;
+    }
+    return true;
+  },
+  setStickers(id, list) {
+    const T = this.cosTarget(id);
+    if (!T || T.kind !== 'gun') return false;
+    const g = T.g;
+    const L = (Array.isArray(list) ? list : []).filter(Boolean).slice(0, 4);
+    this.stickers[id] = L;
+    if (!g) return true;
+    applyStickers(g.root, stickerTargets(g), g.cosmetic?.stickers, L);
+    return true;
+  },
+  setAttachments(id, cfg = {}) {
+    if (!ATTACHMENTS[id]) return null;
+    const n = normAttachments(id, cfg, this.attCfg[id] || DEFAULT_ATT);
+    this.attCfg[id] = n;
+    const g = this.gunById[id];
+    if (!g) return { ...n };
+    applyAttachments(g, g.mats.M, n, this.view);
+    this.fitForegrip(g);
+    if (this.g === g) {
+      this.lens = g.lens;
+      this.occ = g.occ(this.handL, this.handR).slice(0, OCC_MAX);
+    }
+    // cosméticos e cápsulas de oclusão valem para a nova geometria
+    if (this.stickers[id]?.length) applyStickers(g.root, stickerTargets(g), g.cosmetic?.stickers, this.stickers[id]);
+    return { ...n };
+  },
+  /**
+   * Empunhadura vertical montada: a mão de apoio passa a segurá-la (palma no
+   * flanco esquerdo/traseiro, dedos abraçando pela frente), resolvida contra a
+   * cápsula da empunhadura; sem ela, volta a pega de fábrica.
+   */
+  fitForegrip(g) {
+    if (!g.gripL0) (g.gripL0 = g.gripL), (g.gripLAds0 = g.gripLAds);
+    const fg = g.att?.parts?.foregrip;
+    if (!fg) {
+      g.gripL = g.gripL0;
+      g.gripLAds = g.gripLAds0;
+      return;
+    }
+    const hl = this.handL;
+    const prev = hl.root.parent;
+    g.root.add(hl.root);
+    const fy = fg.position.y, fz = fg.position.z;
+    const b = basisFD([0.2, -0.35, -1], [-1, 0.15, 0.1], [0, 0, 0]);
+    const off = new THREE.Vector3(0, -0.0195, -0.05).applyQuaternion(b.quat);
+    b.pos.set(-0.0175, fy - 0.05, fz + 0.006).sub(off);
+    hl.root.position.copy(b.pos);
+    hl.root.quaternion.copy(b.quat);
+    const a = { x: 0, y: fy - 0.012, z: fz }, c = { x: 0, y: fy - 0.092, z: fz + 0.004 };
+    const fit = fitHand(hl, g.root, {
+      sdf: (p) => sdCapsule(p, a, c, 0.0145),
+      gap: 0.0008,
+      spread: [0.04, 0.0, -0.04, -0.09],
+      minFlex: [0.25, 0.3, 0.2],
+      thumb: { target: new THREE.Vector3(-0.008, fy - 0.006, fz - 0.014), weight: 30 },
+    });
+    g.gripL = { pos: b.pos.clone(), quat: b.quat.clone(), pose: fit.pose };
+    g.gripLAds = g.gripL;
+    if (prev) prev.add(hl.root);
+  },
+  /** Abate do jogador → 'weapon:kill' + contador. */
+  onEnemyDeath(e) {
+    const info = e?.info || {};
+    if (info.source && info.source !== 'player') return;
+    if (!info.source && !info.weapon) return;
+    let wid = info.weapon || this.lo.def.id;
+    if (wid === 'knife') wid = info.knife || this.knifeSel;
+    this.ctx.bus.emit('weapon:kill', { weaponId: wid, enemy: e.enemy, headshot: info.part === 'head', melee: !!info.melee });
+    if (this.counters.add(wid) != null) this.refreshCounter(wid);
   },
 
   // ─── ações ───────────────────────────────────────────────────────────
@@ -381,8 +832,15 @@ export default {
     const st = this.st;
     if (st.action && st.action.name !== 'inspect') return false;
     if (this.lo.switching || !this.lo.canReload()) return false;
-    this.startAction(st.ammo === 0 ? 'reloadEmpty' : 'reload');
-    ctx.bus.emit('weapon:reload', { duration: st.action.duration, empty: st.ammo === 0, id: this.lo.def.id });
+    const empty = st.ammo === 0;
+    if (this.g.shellReload) {
+      // escopeta: trilha montada para o número de cartuchos que faltam
+      st.action = this.g.shellReload(this.lo.reloadAmount(), empty);
+      st.actionT = 0;
+      st.actionDone = {};
+    } else this.startAction(empty ? 'reloadEmpty' : 'reload');
+    if (empty) st.cycleAt = null; // a recarga vazia já fecha o ferrolho/bomba
+    ctx.bus.emit('weapon:reload', { duration: st.action.duration, empty, id: this.lo.def.id, shells: st.action.shells || 0 });
     return true;
   },
 
@@ -391,6 +849,7 @@ export default {
     const st = this.st;
     const d = this.lo.def;
     const g = this.g;
+    const mods = g.att?.mods || {};
     st.ammo--;
     st.shots++;
     st.cooldown += 60 / st.rpm;
@@ -400,40 +859,66 @@ export default {
     const a = st.ads;
     const S = this.spr;
     const rc = g.recoil;
+    // ganchos da movement: recuo no slide / apoiado (mount)
+    const pr = ctx.player;
+    const kMove = (pr.slideRecoil ?? 1) * (pr.mountRecoil ?? 1);
+    const kV = (mods.recoilV ?? 1) * kMove, kH = (mods.recoilH ?? 1) * kMove;
     // ─ recuo visual da arma (molas) ─
     const k = lerp(1, 0.45, a);
     S.recZ.impulse(rc.z * k + 0.1);
-    S.recX.impulse(lerp(rc.x, rc.xAds, a) * (0.85 + rng.next() * 0.3));
-    S.recY.impulse((rng.next() - 0.5) * 0.5 * k);
-    S.recR.impulse((rng.next() - 0.35) * 1.2 * k);
+    S.recX.impulse(lerp(rc.x, rc.xAds, a) * (0.85 + rng.next() * 0.3) * kV);
+    S.recY.impulse((rng.next() - 0.5) * 0.5 * k * kH);
+    S.recR.impulse((rng.next() - 0.35) * 1.2 * k * kH);
     // ─ chute de câmera: subida que acumula + tremor ─
-    const climbP = lerp(rc.climb, rc.climbAds, a) * (st.burstCount < 3 ? 1.25 : 1);
+    const climbP = lerp(rc.climb, rc.climbAds, a) * (st.burstCount < 3 ? 1.25 : 1) * kV;
     this.climb.p += climbP;
-    this.climb.y += (Math.sin(st.shots * 1.7) * 0.6 + (rng.next() - 0.5)) * 0.0016;
-    S.kickP.impulse(rc.kick * lerp(1, 0.7, a));
-    S.kickY.impulse((rng.next() - 0.5) * 0.05);
-    S.kickR.impulse((rng.next() - 0.5) * 0.16);
+    this.climb.y += (Math.sin(st.shots * 1.7) * 0.6 + (rng.next() - 0.5)) * 0.0016 * kH * (rc.yaw ?? 1);
+    S.kickP.impulse(rc.kick * lerp(1, 0.7, a) * kV);
+    S.kickY.impulse((rng.next() - 0.5) * 0.05 * kH);
+    S.kickR.impulse((rng.next() - 0.5) * 0.16 * kH);
     st.flashT = 0.055;
-    // ─ bala: do olho, na direção da câmera (com chute), com dispersão ─
+    this.flashK = mods.flash ?? 1;
+    // ─ bala(s): do olho, na direção da câmera (com chute), com dispersão ─
     camera.updateMatrixWorld();
     camera.getWorldPosition(_org);
     camera.getWorldDirection(_dir);
     const moving = ctx.player.state?.speed || 0;
-    const spread = lerp(d.spread[0], d.spread[1], a) + Math.min(d.moveSpread, moving * 0.003) * (1 - a * 0.7);
+    const hipS = d.spread[0] * (mods.hipSpread ?? 1);
+    const spread = (lerp(hipS, d.spread[1], a) + Math.min(d.moveSpread, moving * 0.003) * (1 - a * 0.7)) * (ctx.player.slideSpread ?? 1);
     const ang = rng.next() * Math.PI * 2, rad = Math.sqrt(rng.next()) * spread;
     _v.set(Math.cos(ang) * rad, Math.sin(ang) * rad, 0).applyQuaternion(camera.quaternion);
     _dir.add(_v).normalize();
-    bus.emit('weapon:fire', { origin: _org.clone(), dir: _dir.clone(), muzzle: g.R.muzzle, ads: a > 0.5, id: d.id });
-    const hit = collision.raycast(_org, _dir, 900, { filter: (c) => c.tag !== 'player' });
-    if (hit) {
+    bus.emit('weapon:fire', { origin: _org.clone(), dir: _dir.clone(), muzzle: g.R.muzzle, ads: a > 0.5, id: d.id, kind: d.kind, suppressed: !!mods.suppressed, pellets: d.pellets || 1 });
+    // chumbos (escopeta): padrão fixo + desvio dentro do cone; dano somado por alvo
+    const dirs = [];
+    if (d.pellets > 1) {
+      const right = _v2.set(1, 0, 0).applyQuaternion(camera.quaternion);
+      const up = _v3.set(0, 1, 0).applyQuaternion(camera.quaternion);
+      for (const [x, y] of pelletPattern(d.pellets, d.pelletSpread * lerp(1, 0.85, a), () => rng.next())) {
+        dirs.push(_dir.clone().addScaledVector(right, x).addScaledVector(up, y).normalize());
+      }
+    } else dirs.push(_dir.clone());
+    const acc = new Map();
+    for (const dir of dirs) {
+      const hit = collision.raycast(_org, dir, 900, { filter: (c) => c.tag !== 'player' });
+      if (!hit) continue;
       const head = hit.part === 'head';
-      const dmg = st.damage * (head ? d.headMult : 1) * (hit.distance > d.falloff[0] ? d.falloff[1] : 1);
-      const info = { ...hit, dir: _dir.clone(), damage: dmg, source: 'player', weapon: d.id };
-      // no preset 'combat' o tiro é só visual (não mata o inimigo da cena)
-      if (!ctx.shot?.preset?.combat) hit.collider.data?.damage?.(dmg, info);
+      const dmg = st.damage * (head ? d.headMult : 1) * falloff(hit.distance, d);
+      const info = { ...hit, dir, damage: dmg, source: 'player', weapon: d.id };
+      if (hit.collider.data?.damage) {
+        const prev = acc.get(hit.collider);
+        if (prev) {
+          prev.damage += dmg;
+          if (head && prev.part !== 'head') Object.assign(prev, { part: 'head', point: hit.point });
+        } else acc.set(hit.collider, { ...info });
+      }
       bus.emit('weapon:hit', info);
     }
-    this.eject(ctx);
+    // no preset 'combat' o tiro é só visual (não mata o inimigo da cena)
+    if (!ctx.shot?.preset?.combat) for (const [c, info] of acc) c.data?.damage?.(info.damage, info);
+    // ação de ciclo (bomba / ferrolho) logo depois do tiro
+    if ((d.pump || d.bolt) && st.ammo > 0) st.cycleAt = ctx.time.now + (d.pump ? 0.1 : 0.2);
+    else this.eject(ctx);
   },
 
   eject(ctx) {
@@ -456,8 +941,20 @@ export default {
   },
 
   // ─── corpo a corpo ───────────────────────────────────────────────────
+  /** Golpe com a faca NA MÃO (tecla 3): alterna os dois golpes do modelo. */
+  startKnifeSwing(ctx) {
+    const st = this.st;
+    this.swingAlt = !this.swingAlt;
+    this.startAction(this.swingAlt || !this.g.anims.swing2 ? 'swing' : 'swing2');
+    st.lunge = null;
+    const target = this.meleeTarget(ctx);
+    if (target) st.lunge = { to: target.pos, dist: target.dist };
+    ctx.bus.emit('weapon:melee', { lunge: !!st.lunge, knife: this.knifeSel, inHand: true });
+    return true;
+  },
   startMelee(ctx) {
     const st = this.st;
+    if (this.lo.knifeOut) return this.st.action ? false : this.startKnifeSwing(ctx);
     if (this.busyExclusive() || this.lo.switching) return false;
     if (st.action && st.action.name.startsWith('reload') && st.actionT > (st.action.insertAt || 0) - 0.05) return false;
     this.startAction('melee');
@@ -467,7 +964,7 @@ export default {
     st.lunge = null;
     const target = this.meleeTarget(ctx);
     if (target) st.lunge = { to: target.pos, dist: target.dist };
-    ctx.bus.emit('weapon:melee', { lunge: !!st.lunge });
+    ctx.bus.emit('weapon:melee', { lunge: !!st.lunge, knife: this.knifeSel });
     return true;
   },
   meleeTarget(ctx) {
@@ -505,7 +1002,7 @@ export default {
     }
     if (!best) return;
     const dmg = EQUIP_DEFS.knife.damage;
-    const info = { ...best, damage: dmg, source: 'player', weapon: 'knife', melee: true, ballistic: true };
+    const info = { ...best, damage: dmg, source: 'player', weapon: 'knife', knife: this.knifeSel, melee: true, ballistic: true };
     if (this.throwables.live) best.collider.data?.damage?.(dmg, info);
     ctx.bus.emit('weapon:hit', info);
     this.spr.jolt.impulse(1.2);
@@ -551,6 +1048,10 @@ export default {
     const preset = ctx.shot?.preset;
     const sprinting = !!player.state?.sprinting && !preset;
     st.sprintLin = clamp(st.sprintLin + (sprinting ? dt / 0.28 : -dt / 0.2), 0, 1);
+    // ganchos da movement: sprint tático (arma erguida) e pendurado (arma baixa)
+    st.tac = clamp((st.tac || 0) + (player.tacSprint && !preset ? dt / 0.2 : -dt / 0.2), 0, 1);
+    const hanging = !!player.hanging && !preset;
+    st.lowLin = clamp((st.lowLin || 0) + (hanging ? dt / 0.25 : -dt / 0.3), 0, 1);
 
     // ação em andamento
     if (st.action && !this.debug?.anim) {
@@ -562,8 +1063,13 @@ export default {
       const t1 = st.actionT;
       const cross = (t) => t != null && t0 < t && t1 >= t;
       if (cross(a.insertAt)) lo.applyReload();
+      // escopeta: um cartucho por encaixe
+      if (a.inserts) for (const ti of a.inserts) if (cross(ti)) lo.applyReload(lo.current, 1);
       if (cross(a.slideReleaseAt)) st.slideLock = false;
-      if (a.name === 'melee') {
+      // foley exato da animação (o áudio segue a mão)
+      if (a.foley) for (const [ti, n] of a.foley) if (cross(ti)) bus.emit('weapon:foley', { name: n, id: lo.def.id });
+      if (a.ejectAt != null && cross(a.ejectAt)) this.eject(ctx);
+      if (a.name === 'melee' || a.name === 'swing' || a.name === 'swing2') {
         // investida: aproxima o jogador do alvo até ~1 m
         if (st.lunge && t1 > 0.06 && t1 < 0.22) {
           const p = player.position;
@@ -588,8 +1094,14 @@ export default {
       }
       if (st.action && st.actionT >= a.duration && !holding && !(a.hold && st.nade)) {
         if (a.name.startsWith('reload')) bus.emit('weapon:reloaded', { ammo: st.ammo, id: lo.def.id });
-        st.action = null;
+        st.action = a.next ? this.anim(a.next) : null;
+        if (st.action) (st.actionT = 0), (st.actionDone = {});
       }
+    }
+    // bomba / ferrolho: ciclo depois do tiro (a arma não atira até terminar)
+    if (st.cycleAt != null && ctx.time.now >= st.cycleAt && !st.action && !lo.switching) {
+      st.cycleAt = null;
+      this.startAction(lo.def.pump ? 'pump' : 'bolt');
     }
     // granada: soltou a tecla depois de armar → arremessa
     if (st.nade && (!preset || st.nade.release)) {
@@ -605,13 +1117,19 @@ export default {
       this.emitSwitch(ctx);
     }
     const busy = !!st.action && st.action.name !== 'inspect';
+    const knifeOut = lo.knifeOut;
 
     // mira
-    st.adsTarget = preset ? !!preset.ads : input.action('ads') && !busy && st.sprintLin < 0.5;
+    st.adsTarget = preset ? !!preset.ads && !knifeOut : input.action('ads') && (!busy || st.action.allowAds) && st.sprintLin < 0.5 && !knifeOut && !player.hanging;
     if (st.adsTarget && st.action?.name === 'inspect') st.action = null;
     st.adsLin = clamp(st.adsLin + (st.adsTarget ? dt / lo.def.adsTime : -dt / (lo.def.adsTime * 0.85)), 0, 1);
     st.ads = ease.inOut(st.adsLin);
-    player.fovFactors.set('ads', lerp(1, lo.def.adsFov, st.ads));
+    player.fovFactors.set('ads', lerp(1, this.g.zoom > 1 && this.g.adsFovScope ? this.g.adsFovScope : lo.def.adsFov, st.ads));
+    // fôlego (Shift mirando com luneta/ótica ampliada)
+    const scoped = this.g.zoom > 1 && st.ads > 0.6;
+    this.swayMult = this.breath.update(dt, scoped && !preset && input.action('sprint'));
+    if (preset?.ads && ctx.params.get('wbreath')) this.swayMult = this.breath.update(dt, true);
+    while (this.breath.events.length) bus.emit('weapon:breath', { phase: this.breath.events.shift(), stamina: this.breath.stamina });
 
     st.cooldown = Math.max(-0.05, st.cooldown - dt);
     if (!preset) {
@@ -622,6 +1140,7 @@ export default {
         else this.requestSlot(0);
       }
       if (input.pressed('weapon2')) this.requestSlot(1);
+      if (input.pressed('weapon3')) this.requestSlot(lo.knifeIndex);
       if (SWITCH_ACTIONS.some((n) => input.pressed(n))) this.requestCycle(1);
       const wheel = input.consumeWheel?.() || 0;
       if (wheel && !st.adsTarget) this.requestCycle(wheel > 0 ? 1 : -1);
@@ -635,7 +1154,19 @@ export default {
     if (preset?.combat && ctx.time.now > 0.75) trig = auto ? (ctx.time.now % 0.9) < 0.6 : (ctx.time.now % 0.36) < 0.18;
     if (!trig) st.burstCount = 0;
     const edge = trig && !st.triggerHeld;
-    const canFire = !busy && !lo.switching && st.sprintLin < 0.15 && st.cooldown <= 0;
+    // recarga cartucho a cartucho: atirar interrompe (se houver munição)
+    if (edge && st.action?.shells && st.ammo > 0 && st.actionT < st.action.duration - 0.3) {
+      bus.emit('weapon:reloaded', { ammo: st.ammo, id: lo.def.id, interrupted: true });
+      this.startAction('reloadExit');
+    }
+    // faca na mão: o gatilho golpeia (segurar repete)
+    if (knifeOut) {
+      if (trig && !st.action && !lo.switching && st.sprintLin < 0.5 && st.lowLin < 0.1) this.startKnifeSwing(ctx);
+      st.triggerHeld = trig;
+      this.throwables.update(dt);
+      return;
+    }
+    const canFire = !busy && !lo.switching && st.sprintLin < 0.15 && st.cooldown <= 0 && st.lowLin < 0.1;
     if (trig && canFire && (auto || edge)) {
       if (st.action?.name === 'inspect') st.action = null;
       if (st.ammo > 0) this.fire(ctx);
@@ -693,7 +1224,7 @@ export default {
     if (Math.abs(dy) > 1 || ctx.shot) dy = 0;
     if (Math.abs(dp) > 1 || ctx.shot) dp = 0;
     const inv = dt > 0 ? 1 / dt : 0;
-    const swayK = lerp(1, 0.25, st.ads);
+    const swayK = lerp(1, 0.25, st.ads) * (player.mountSway ?? 1);
     S.swayY.target = clamp(dy * inv * 0.022, -0.09, 0.09) * swayK;
     S.swayX.target = clamp(-dp * inv * 0.02, -0.07, 0.07) * swayK;
     S.swayPX.target = clamp(-dy * inv * 0.006, -0.02, 0.02) * swayK;
@@ -716,10 +1247,25 @@ export default {
     const arc = Math.sin(Math.PI * st.adsLin);
     pos.y -= arc * 0.012;
     rz += arc * 0.06 * (st.adsTarget ? 1 : -0.5);
-    pos.addScaledVector(SPRINT.pos, sp);
-    rx += SPRINT.rot.x * sp;
-    ry += SPRINT.rot.y * sp;
-    rz += SPRINT.rot.z * sp;
+    // sprint tático (movement: player.tacSprint): arma ERGUIDA junto ao peito,
+    // cano para cima, em vez da pose de corrida baixa
+    const tac = st.tac;
+    pos.addScaledVector(SPRINT.pos, sp * (1 - tac));
+    rx += SPRINT.rot.x * sp * (1 - tac);
+    ry += SPRINT.rot.y * sp * (1 - tac);
+    rz += SPRINT.rot.z * sp * (1 - tac);
+    pos.x += -0.05 * sp * tac;
+    pos.y += 0.035 * sp * tac;
+    pos.z += 0.07 * sp * tac;
+    rx += 0.95 * sp * tac;
+    ry += 0.35 * sp * tac;
+    rz += 0.5 * sp * tac;
+    // pendurado na borda (movement: player.hanging): arma baixa, fora do quadro
+    const low = ease.inOut(st.lowLin);
+    pos.y -= 0.3 * low;
+    pos.z += 0.08 * low;
+    rx -= 0.9 * low;
+    rz += 0.4 * low;
 
     // respiração (ciclo lento + micro tremor)
     const br = lerp(1, 0.35, a) * (1 - sp);
@@ -817,6 +1363,10 @@ export default {
       if (rounds) rounds.visible = true;
     }
     g.catchRot(catchP);
+    // peças móveis próprias da arma (bomba, ferrolho, fita, tampa, cartucho)
+    g.handROver = null;
+    g.leftOffset = null;
+    g.animate?.({ since, act, t: st.actionT, ammo: st.ammo, ads: a, st, dt, now: tnow, lo: this.lo });
     // gatilho e ferrolho da pistola
     const trigOn = st.triggerHeld && st.ammo > 0 && !act;
     if (g.kind === 'pistol') {
@@ -833,10 +1383,22 @@ export default {
 
     // ─ mão esquerda: mistura das pegas ─
     this.placeLeftHand(handW, mag);
+    // mão de apoio acompanha a telha da bomba (deslocamento no espaço da arma)
+    if (g.leftOffset) this.handL.root.position.addScaledVector(g.leftOffset, handW[0]);
 
     // poses de dedos
     const relax = act && act.name !== 'equip' && act.name !== 'holster' ? 1 : 0; // dedo fora do gatilho em recarga/inspeção/faca/granada
-    blendPoses(this.poseR, [[g.poseGrip, relax], [g.poseTrigger, 1 - relax]]);
+    const ov = g.handROver;
+    if (ov && ov.w > 1e-4) {
+      // mão direita sai do punho (ferrolho, faca lançada, …)
+      this.handR.root.position.lerpVectors(g.handR.pos, ov.pos, ov.w);
+      this.handR.root.quaternion.slerpQuaternions(g.handR.quat, ov.quat, ov.w);
+      blendPoses(this.poseR, [[g.poseGrip, relax * (1 - ov.w)], [g.poseTrigger, (1 - relax) * (1 - ov.w)], [ov.pose, ov.w]]);
+    } else {
+      this.handR.root.position.copy(g.handR.pos);
+      this.handR.root.quaternion.copy(g.handR.quat);
+      blendPoses(this.poseR, [[g.poseGrip, relax], [g.poseTrigger, 1 - relax]]);
+    }
     this.handR.apply(this.poseR);
     blendPoses(this.poseL, [[g.gripL.pose, handW[0] * (1 - st.ads)], [g.gripLAds.pose, handW[0] * st.ads], [POSES.mag, handW[1]], [POSES.flat, handW[2] + handW[3]]]);
     this.handL.apply(this.poseL);
@@ -871,15 +1433,73 @@ export default {
     if (auxVis) this.placeSleeve(this.aux.sleeve, this.aux.hand.root, this.aux.anchor, 0.35, 0.4);
 
     // ─ chute de câmera (canal aditivo, sem sobrescrever outros donos) ─
-    const kp = this.climb.p + S.kickP.x * 0.02 + S.jolt.x * 0.004;
+    // balanço da luneta/ótica ampliada mirando (fôlego segura/cansa)
+    let swP = 0, swY = 0;
+    if (g.zoom > 1 && a > 0.05) {
+      const sw = scopeSway(tnow, 0.0042 * this.swayMult * a * (player.state?.crouching ? 0.65 : 1) * (player.mountSway ?? 1));
+      swP = sw.y;
+      swY = sw.x;
+    }
+    const kp = this.climb.p + S.kickP.x * 0.02 + S.jolt.x * 0.004 + swP;
     const ky = this.climb.y + S.kickY.x * 0.02;
     const kr = S.kickR.x * 0.02 * (1 - a * 0.5);
-    this.writeKick(player, kp, ky, kr);
+    this.writeKick(player, kp, ky + swY, kr);
 
     this.updateCasings(dt, ctx);
     this.throwables.frame(dt);
     this.updateLights(dt, ctx);
     this.updateOcclusion(ctx);
+    this.updateExtras(dt, ctx);
+  },
+
+  /**
+   * Skin × camuflagem de progressão do HUD (camo.js injeta em receiver/tan
+   * da biblioteca, usados só pelo KR-9): com skin no KR-9 a camuflagem fica
+   * desligada (o HUD pode religá-la a qualquer momento — reaplicamos por
+   * quadro); sem skin, o estado que o HUD pediu volta.
+   */
+  camoGate() {
+    const on = !!this.skins.kr9;
+    for (const k of ['receiver', 'tan']) {
+      const ud = this.M[k]?.userData?.hudCamo;
+      if (!ud?.uni) continue;
+      if (on) {
+        if (ud.uni.uHudCamo.value !== 0) (ud.wantOn = ud.uni.uHudCamo.value), (ud.uni.uHudCamo.value = 0);
+        if (ud.color && !this.M[k].color.equals(ud.color)) (ud.wantColor = this.M[k].color.clone()), this.M[k].color.copy(ud.color);
+      } else if (ud.wantOn != null || ud.wantColor) {
+        if (ud.wantOn != null) ud.uni.uHudCamo.value = ud.wantOn;
+        if (ud.wantColor) this.M[k].color.copy(ud.wantColor);
+        ud.wantOn = null;
+        ud.wantColor = null;
+      }
+    }
+  },
+  /** Chaveiro, laser, luneta (imagem ampliada) e brilho da objetiva. */
+  updateExtras(dt, ctx) {
+    const g = this.g;
+    this.camoGate();
+    const st = this.st;
+    const vmOn = ctx.vm.visible !== false;
+    // chaveiro: aceleração do jogador entra como força inercial
+    const pv = ctx.player.velocity;
+    if (pv) {
+      if (this.prevPlayerV && dt > 0) this.tmpAcc.set(pv.x - this.prevPlayerV.x, pv.y - this.prevPlayerV.y, pv.z - this.prevPlayerV.z).divideScalar(Math.max(dt, 1e-3)).clampLength(0, 60);
+      this.prevPlayerV = { x: pv.x, y: pv.y, z: pv.z };
+    }
+    const ch = g.cos?.charm;
+    if (ch) {
+      if (ctx.shot) ch.settle();
+      else ch.update(dt, this.tmpAcc);
+    }
+    // laser
+    const em = g.att?.mods?.laser;
+    this.laser.update(em, !!em && vmOn && g.root.visible && st.sprint < 0.6);
+    // luneta: renderiza o mundo ampliado só mirando
+    const lens = g.scopeLens;
+    if (lens) {
+      const fov = updateScopeLens(lens, ctx.vm.camera, ctx.camera, vmOn ? st.ads : 0, this.view);
+      if (fov > 0 && vmOn) this.view.render(ctx, fov);
+    }
   },
 
   updateOcclusion(ctx) {
@@ -1065,7 +1685,7 @@ export default {
     // clarão de boca: curto e quente (pico forte, cauda curta)
     st.flashT = Math.max(0, st.flashT - dt);
     const f = st.flashT > 0 ? st.flashT / 0.055 : 0;
-    this.flash.intensity = f > 0 ? (0.35 + 0.65 * f) * 3.2 : 0;
+    this.flash.intensity = f > 0 ? (0.35 + 0.65 * f) * 3.2 * (this.flashK ?? 1) : 0;
     this.flash.color.setRGB(1, 0.62 + 0.24 * f, 0.36 + 0.24 * f);
     // retículo: um pouco mais brilhante de dia
     if (this.lens) this.lens.material.uniforms.uIntensity.value = lerp(1.3, 1.7, st.sunVis * (1 - st.indoor));
@@ -1076,5 +1696,8 @@ export default {
     ctx.vm.camera.remove(this.rig, this.rim, this.rim.target, this.bounce, this.bounce.target, ...cas);
     ctx.vm.scene.remove(this.sun, this.sun.target, this.hemi);
     this.throwables.clear();
+    this.laser?.dispose();
+    this.view?.dispose();
+    if (this.lineupGroup) ctx.vm.camera.remove(this.lineupGroup);
   },
 };

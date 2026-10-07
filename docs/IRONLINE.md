@@ -58,9 +58,11 @@ A feature `rendering` assume o render inteiro pelo gancho
 | 10 | `world` | mapas (`?map=street\|factory`): MERIDIAN STREET ("Distrito Velho" no código — avenida destruída, prédios paramétricos, interior jogável) e FOUNDRY 9 (fundição abandonada em vários níveis); props modelados de perto (carros com interior, mobília, caçambas, caixas, sacos, entulho em camadas), fogo, fumaça, vegetação, céu, materiais PBR procedurais e colisores |
 | 20 | `rendering` | compositor HDR: céu físico, sombras PCSS, GI de 1 rebatimento (RSM), AO, volumétrico, bloom, TAA, exposição automática, tonemap e gradação |
 | 25 | `audio` | áudio 100% sintetizado (WebAudio): tiro em camadas, HRTF, estalo supersônico, passos por superfície, reverb por convolução, ambiente |
-| 30 | `movement` | locomoção: sprint, sprint tático, slide, agachar/deitar, dive, mantle/vault, lean; bob e corpo visível com IK |
-| 40 | `weapon` | loadout na viewmodel (design original): fuzil KR-9, pistola P-11, faca TK-7, granadas de fragmentação e atordoante; hitscan, recuo, ADS, recargas, troca com guarda/saque, golpe com investida, granadas com física e dano em área; mãos enluvadas anatômicas com skinning |
-| 50 | `enemies` | soldados procedurais (4 variantes), animação procedural, ragdoll Verlet, IA de esquadrão com cobertura e A* |
+| 30 | `movement` | locomoção: sprint, sprint tático (duplo toque, estamina), slide (cancel, slide-jump, slide kick, rampa, sob obstáculo, para cobertura, tiro deslizando), dolphin dive, mantle/vault (→ slide), pendurar/subir, montar arma, lean; bob, faíscas/poeira/som por superfície e corpo visível com IK |
+| 40 | `weapon` | loadout na viewmodel (design original): 7 armas (KR-9, P-11, MX-9, BR-12, LR-50, HM-60, SR-7), 7 facas, skins/adesivos/chaveiros/contador, acessórios, lunetas com imagem ampliada, granadas de fragmentação e atordoante; hitscan, recuo, ADS, recargas, troca com guarda/saque, golpe com investida, granadas com física e dano em área; mãos enluvadas anatômicas com skinning |
+| 45 | `inventory` | créditos, 3 caixas com chances publicadas (só chaves/créditos ganhos jogando), inventário, equipamento de skins/faca/chaveiros/adesivos, contrato de troca, sucata, diário, passe gratuito, maestria, coleção, cartões e emblemas (telas na `hud`, aba ARSENAL) |
+| 50 | `enemies` | soldados procedurais (4 variantes), animação procedural, ragdoll Verlet, IA de esquadrão com cobertura e A*; classes especiais (arrombador, atirador de elite, escudeiro, socorrista), reações (supressão, sobressalto, granadas, callouts), barris/botijões explosivos e execução |
+| 55 | `streaks` | killstreaks (UAV, morteiro com designador, torreta, drone armado/kamikaze), 25 medalhas, execução em 3ª pessoa, killcam e modo foto |
 | 60 | `vfx` | partículas na GPU, impactos por material, clarões, traçantes, cápsulas, marcas de tiro, explosões |
 | 90 | `hud` | HUD de combate, bússola, minimapa, menus (principal, loadout, configurações, pausa, placar, relatório pós-ação), regras da partida |
 | 95 | `touch` | controles de toque (celular/tablet): joystick, mira por arrasto, botões de ação, tela cheia e aviso de paisagem |
@@ -93,15 +95,39 @@ A feature `rendering` assume o render inteiro pelo gancho
     ponte rolante, passarelas a 4,5 m, ponte sobre o galpão, escritórios de
     dois pisos com vidraça quebrada e pátio de carga com doca, carreta e
     contêineres.
-- **Loadout**: fuzil KR-9 (automático, 760 rpm, holográfica sem paralaxe) e
-  pistola P-11 (semiautomática, ferrolho que trava aberto vazio, miras de 3
-  pontos) com troca animada (1/2, roda, X), recuo com molas, recarga
-  tática/vazia por arma, inspeção; faca de combate (V) com investida no
-  inimigo à frente; granada de fragmentação (G — segurar cozinha, soltar
-  arremessa; quica no cenário, dano em área com linha de visão) e
-  atordoante (T). Mãos enluvadas anatômicas (5 dedos articulados com
-  skinning, painéis, costuras e protetor de nós) encaixadas na geometria de
-  cada arma.
+- **Armas** (detalhes em `ironline-src/src/features/weapon/README.md`):
+  primária e secundária escolhidas entre 7 armas procedurais originais —
+  fuzil KR-9 (automático, 760 rpm, holográfica sem paralaxe), pistola P-11
+  (ferrolho que trava aberto vazio), submetralhadora MX-9 (940 rpm, alcance
+  curto), escopeta de bomba BR-12 (9 chumbos em padrão, bomba animada com a
+  mão de apoio, recarga cartucho a cartucho), fuzil de ferrolho LR-50
+  (luneta 8x com imagem ampliada de verdade, balanço e segurar a respiração
+  com Shift, ciclo do ferrolho com a mão), metralhadora HM-60 (caixa de 100
+  com fita visível, tampa articulada, ADS lento) e fuzil designado SR-7
+  (semiautomático, luneta 4x). Troca animada (1/2, roda, X), recuo com
+  molas, recargas e inspeção por arma; acessórios (supressor com som
+  abafado, empunhadura vertical, laser com feixe e ponto, ótica 3x). Faca:
+  TK-7 padrão + karambit, balisong, tanto, baioneta, kukri e cutelo, cada
+  uma com pega, golpes e inspeção próprios (V = golpe rápido; 3 = faca na
+  mão). Skins renderizadas (12 padrões tileáveis gerados por seed, desgaste
+  0–1 que tira tinta das quinas, acabamento metálico/fosco), contador de
+  abates laranja, chaveiros com física e até 4 adesivos decalcados.
+  Granada de fragmentação (G — segurar cozinha, soltar arremessa; quica no
+  cenário, dano em área com linha de visão) e atordoante (T). Mãos
+  enluvadas anatômicas (5 dedos articulados com skinning, painéis, costuras
+  e protetor de nós) encaixadas na geometria de cada arma e faca.
+- **Movimento** (detalhes em `ironline-src/src/features/movement/README.md`):
+  sprint e **sprint tático** (duplo toque no Shift: mais rápido, arma
+  erguida, 3,6 s de estamina com recarga); **slide** com **slide-cancel**
+  (agachar de novo devolve o sprint), **slide-jump** com embalo limitado
+  (9,2 m/s), **tiro deslizando** com dispersão/recuo próprios, **slide kick**
+  (corpo a corpo no slide derruba/empurra e fere), aceleração em **rampa**,
+  passagem **sob obstáculos baixos**, **slide para cobertura** (agacha
+  colado ao muro baixo) e **vault → slide**; **dolphin dive** (deitar em
+  sprint); **pendurar** em bordas altas e subir; **montar a arma** em
+  bordas/paredes ao mirar (menos recuo e balanço); **lean** Q/E que nunca
+  atravessa parede. Retorno: poeira e faíscas por superfície, roll/FOV de
+  câmera, loop de raspagem por superfície.
 - **Inimigos** com hitboxes por osso (headshot), percepção por visão e
   audição, supressão, flanco, callouts e ragdoll — em qualquer mapa (tudo
   lido de `services.world`); chefe juggernaut no modo SURVIVAL.
@@ -111,21 +137,91 @@ A feature `rendering` assume o render inteiro pelo gancho
   ~60 fps (30 em celular). Presets fixos com `?q=low|medium|high|ultra` ou
   no menu de configurações.
 - **Toque**: em celular/tablet, joystick virtual (empurrar até o fim =
-  sprint), arrastar para mirar e botões de tiro, ADS, recarga, pulo,
+  sprint; soltar e empurrar de novo rápido = sprint tático), arrastar para mirar e botões de tiro, ADS, recarga, pulo,
   agachar/slide, granada, corpo a corpo, troca de arma e pausa; tela cheia em
   paisagem ao entrar na partida.
 - **Configurações**: sensibilidade (e multiplicador em ADS), inverter Y,
   FOV, volume, cor da mira, minimapa girando.
+
+## Inventário, caixas e progressão cosmética
+
+Aba **ARSENAL** do menu (tecla `I`; dados em `src/features/inventory/`,
+telas em `src/features/hud/arsenal.js`). **Caixas só abrem com chaves ou
+créditos ganhos jogando — não existe compra com dinheiro real** — e cada caixa
+publica a tabela de chances.
+
+- **Créditos** por partida (abates, headshots, objetivos, medalhas, tempo,
+  bônus de vitória) — composição no relatório pós-ação; saldo e chaves no topo.
+- **3 caixas** (OPERAÇÃO FERRO, MARÉ NEGRA, FOGO CRUZADO): 13 skins de arma em
+  5 raridades + 6 facas como item ESPECIAL. Chances: COMUM 60 %, INCOMUM 25 %,
+  RARO 10 %, ÉPICO 3 %, LENDÁRIO 1,2 %, ESPECIAL (faca) 0,8 %.
+- **Abertura**: roleta horizontal com desaceleração, tique por item, clarão
+  da raridade e revelação 3D (`weapon.buildPreview`) com desgaste (NOVA DE
+  FÁBRICA … MUITO DESGASTADA, 7 casas) e semente do padrão (0–999).
+- **Inventário**: grade com filtros, busca, ordenação e selos de novo;
+  inspeção 3D (arrastar/roda); equipar skin por arma, faca, chaveiro e até 4
+  adesivos — aplicados na arma por `setSkin/setKnife/setCharm/setStickers`.
+- **Contrato de troca** (10 → 1 da raridade seguinte), **sucata** em créditos
+  (inclui "sucatear duplicatas"), **recompensa diária** com sequência de 7
+  dias (hora local), **passe de campanha** de 30 níveis só gratuito (XP de
+  partida; faca garantida no 30), **maestria** por abates com cada arma
+  (bronze/prata/ouro/obsidiana), **coleção** com % por caixa e **cartões de
+  chamada/emblemas** procedurais para o cartão do jogador.
+- O **loadout** escolhe primária e secundária entre todas as armas e a faca.
+- HUD: medalhas de outras features (`medal:award`) em fila, barra de
+  killstreaks (`streak:ready`/`streak:used`) e medalha SLIDE KILL.
+- Persistência: `localStorage['ironline.inventory']` (versionado, try/catch).
+  QA: `?inv=open`, `?case=1&seed=N[&reelt=s|&reveal=1]`, `?credits=N`,
+  `?keys=N`, `&inspect=N`, `&trade=1`, `&arsenal=<aba>` — detalhes em
+  `src/features/inventory/README.md` e `src/features/hud/README.md`.
+
+## Killstreaks, medalhas, execuções e killcam
+
+Feature `streaks` (detalhes em `ironline-src/src/features/streaks/README.md`)
+e classes de inimigo em `enemies` (README da feature).
+
+- **Killstreaks** por abates sem morrer (os abates das próprias killstreaks
+  não contam); conjunto de até 4 escolhido no seletor
+  (`services.streaks.openPicker()`), salvo em `localStorage`:
+  **RECON UAV** (3 — varreduras revelam inimigos no minimapa),
+  **MORTAR STRIKE** (5 — tablet com vista de cima do mapa para marcar o
+  alvo; 8 granadas com assobio), **SENTRY GUN** (6 — torreta em tripé que
+  rastreia, superaquece e pode ser destruída), **ATTACK DRONE** /
+  **KAMIKAZE DRONE** (7). Teclas 3/4/5/6 ou roda radial segurando B.
+- **Medalhas** (25, evento `medal:award`): first blood, double/triple/fury,
+  headshot, longshot, point blank, collateral, revenge, comeback, slide
+  kill, grenade/knife kill, execution, buzzkill, survivor, last stand,
+  kaboom (barril), flanker (escudeiro), sequências de 5/10/15 e abates por
+  killstreak.
+- **Execução**: chegar por trás de um inimigo desatento e SEGURAR V —
+  cena curta em 3ª pessoa com dois planos de câmera; tocar V = golpe pelas
+  costas.
+- **Killcam**: ao morrer, replay de ~2,6 s pela perspectiva de quem atirou
+  (câmera lenta no fim).
+- **Modo foto**: na pausa, H (ou botão) — câmera livre, exposição, FOV,
+  roll, profundidade de campo, filtros, vinheta, grão, barras e captura PNG.
+- **Inimigos novos** (a partir da 3ª onda; `?roles=all` força): arrombador
+  com escopeta que corre para cima, atirador de elite com laser e reflexo da
+  luneta, escudeiro imune pela frente (flanqueie ou use explosivos) e
+  socorrista que reanima companheiros. Todos se abaixam sob fogo, se
+  assustam com balas rentes, fogem de granadas e arremessam as suas.
+- **Barris explosivos e botijões de gás** espalhados perto das entradas e
+  coberturas, com reação em cadeia.
 
 ## Controles
 
 | Ação | Tecla |
 |---|---|
 | mover | W A S D (ou setas) |
-| sprint / sprint tático | Shift (de novo durante o sprint = tático) |
-| pular / mantle / vault | Espaço |
+| sprint / sprint tático | Shift (duplo toque, ou de novo durante o sprint = tático) |
+| pular / mantle / vault / subir pendurado | Espaço |
 | agachar / slide (em sprint) | C ou Ctrl esquerdo |
-| deitar / dive (em sprint) | Z (segurar C também deita) |
+| slide-cancel / slide-jump | C de novo / Espaço durante o slide |
+| slide kick | V durante o slide |
+| vault → slide | C durante o vault |
+| deitar / dolphin dive (em sprint ou slide) | Z (segurar C também deita) |
+| pendurar em borda alta | correr/pular contra a borda segurando W (A/D desliza, C solta) |
+| montar a arma | mirar (botão direito) encostado em borda ou parede |
 | inclinar | Q / E |
 | atirar | botão esquerdo do mouse |
 | mirar (ADS) | botão direito do mouse |
@@ -135,9 +231,12 @@ A feature `rendering` assume o render inteiro pelo gancho
 | faca (corpo a corpo) | V |
 | granada (segurar = cozinhar) | G |
 | atordoante | T |
+| killstreaks (conjunto) | 3 / 4 / 5 / 6 (segurar B = roda radial) |
+| executar (por trás) | segurar V |
+| modo foto (na pausa) | H |
 | placar | Tab (segurar) |
 | pausa | Esc ou P |
-| menu: DEPLOY / loadout / configurações | Enter / L / O |
+| menu: DEPLOY / loadout / configurações / arsenal | Enter / L / O / I |
 
 Clicar em **DEPLOY** no menu inicia a partida e captura o mouse (pointer
 lock). Perder o pointer lock abre a pausa. No toque, DEPLOY mostra os
@@ -167,7 +266,103 @@ Parâmetros de URL úteis (lista completa no `CONTRACT.md`):
 | `?mode=waves\|hardpoint\|survival` | modo de jogo (padrão: o último escolhido no menu) |
 | `?waves=1,1&wi=1&mt=300` | partida curta (ondas, intervalo, tempo); `&hold=s` (posse do HARDPOINT), `&lives=n` (SURVIVAL) |
 | `?dynres=0` | desliga o governador de desempenho (resolução dinâmica + degraus) |
+| `?lite=1\|0` | força o modo leve (celular fraco) / desliga a detecção automática |
+| `?fps=show` | contador de FPS/ms/draw calls (também F7) |
+| `?bootlog=1` | tempo de carga por feature no console (`window.__bootlog`) |
 | `?shot=<preset>` | modo screenshot determinístico (abaixo) |
+
+### Celular e modo leve
+
+A carga em celular é o caso crítico: geração procedural de texturas e
+geometria roda no thread principal, e o mapa de rua tem ~1,4 M triângulos
+únicos (~2,4 M só de entulho instanciado). Antes da camada abaixo, um
+celular passava minutos com a página congelada (uma única tarefa de mais de
+3 min com CPU 6× mais lenta), o pico de heap JS passava de 500 MB e o iOS
+derrubava a aba e recarregava — a tela de carga "infinita".
+
+- **Camada do aparelho** (`quality.tier`, `core/Quality.js` →
+  `TIER_PATCHES`), um TETO por cima de qualquer preset/degrau:
+  - `desktop`: nada muda (o preset `high` é idêntico ao de antes).
+  - `mobile` (detectado por UA/`userAgentData`/ponteiro grosso): texturas
+    procedurais 512, canvas de decalques pela metade, entulho miúdo
+    rarefeito (~35 %), corte de entulho mais curto, sombra 1024 sem
+    cascatas, sem SSAO/SSR/volumétrico/TAA/motion blur/MSAA, sem sonda de
+    reflexo, sem GI (RSM), sem cascata larga nem PCSS, shadow map a cada 4
+    quadros.
+  - `lite` (`?lite=1`, botão **Tentar modo leve**, ou automático quando a
+    carga anterior não terminou — a aba caiu e o navegador recarregou):
+    tudo do `mobile` + entulho ~12 %, sem bloom/AO de contato e o
+    compositor HDR desligado (pipeline padrão do three, sem alvos float nem
+    PMREM). `?lite=0` desliga a detecção automática.
+- **GPU sem alvos half-float** (WebGL2 sem `EXT_color_buffer_float/half_float`,
+  testado com um framebuffer real em `core/Renderer.js` → `gpuCaps`):
+  `quality.hdr = false` e o mesmo caminho LDR do modo leve.
+- **Carga progressiva**: cada feature (e cada bloco pesado do mundo:
+  conjuntos de textura, prédios, entulho, carros…) cede um frame
+  (`ctx.bootProgress`), e a tela de carga mostra o passo e a % reais. Antes
+  do 1º frame os shaders são pré-compilados (`compileAsync`, teto de 20 s).
+- **Falhas legíveis**: erro no init do mundo, script que não carrega
+  (navegador antigo), WebGL2 ausente ou contexto perdido durante a carga
+  mostram a mensagem com **Tentar modo leve** / **Recarregar** em vez de
+  girar para sempre; se nada avança por 25 s aparece a sugestão do modo
+  leve. `webglcontextlost` pausa o render; no `restored` o compositor refaz
+  LUT/PMREM/alvos (evento `renderer:restored`).
+- **Compatibilidade iOS**: o build mira `safari15` (os blocos `static {}`
+  do three só existem no Safari 16.4+ e quebravam o chunk inteiro em
+  iPhones mais antigos) e o núcleo tem `structuredClone` de reserva.
+- **Medidas** (Chromium/SwiftShader emulando celular, CPU 6× mais lenta,
+  máquina carregada — valem as proporções, não os segundos): pico de heap
+  JS ~558 MB → ~130–140 MB (o Builder guardava a geometria em Arrays JS:
+  ~560 MB só na fase de geometria; agora `Float32Array`); texturas ~269 MB
+  → ~100 MB; triângulos por quadro ~13 M → ~3,6–4,8 M; draw calls 2 676 →
+  1 000–1 400; texturas de canvas do mundo 4,2 s + 5,5 s → 0,6 s + 0,1 s
+  (CPU 1×, mapas de altura em canvas de CPU). Antes: uma tarefa de 187 s
+  sem ceder o thread e nenhum progresso na tela; depois: a tela de carga
+  avança por ~40 passos reais até o menu.
+- **Diagnóstico**: `npm run build && node tools/mobile.mjs --device
+  android|iphone --cpu 6 [--phonegl] [--gpu "Adreno (TM) 640"] [--params
+  "lite=1"] --out x.png --json x.json` serve a pasta publicada, emula o
+  celular (toque, DPR 3, UA) com CPU estrangulada e mede tempo até o menu,
+  textos da tela de carga, init por feature (`?bootlog=1`), tarefas longas,
+  heap JS, memória estimada de texturas/geometria e triângulos.
+  `--phonegl` simula GPU de celular (MAX_TEXTURE_SIZE 4096, sem
+  extensões de cor float).
+
+### PC fraco, preset low e contador de FPS
+
+- **Detecção** (`classifyDevice` em `core/Quality.js`): GPU integrada ou
+  antiga pelo `WEBGL_debug_renderer_info` — Intel HD/UHD/Iris Plus, AMD
+  "Radeon Graphics"/Vega (APU), GeForce MX/GT, software (SwiftShader,
+  llvmpipe, Basic Render Driver) —, 4 núcleos com ≤ 4 GB, ou
+  `MAX_TEXTURE_SIZE` < 8192 → `device.weak` → camada **`low-desktop`**
+  (começa em `low`, teto do automático `medium-`). É uma camada MACIA:
+  escolher um preset manual nas configurações (`quality.set('high')`) ou
+  `?q=high` na URL a remove; voltar para `auto` a restaura.
+- **Preset `low` leve de verdade**: resolução interna 75 % (`renderScale`;
+  `low-` do automático 65 %) com nitidez CAS no passe final; uma cascata
+  de sombra 1024 atualizada a cada 4 quadros (sem cascata larga, PCSS, GI,
+  poeira, SSAO, sonda, volumétrico, TAA); materiais sem "texture bombing"
+  (metade das leituras de textura nas superfícies grandes); geometria
+  estática mesclada em blocos de 192 m centrados e entulho em células de 78 m (menos
+  draw calls), entulho miúdo com 2 variantes de forma em low-poly e props
+  pequenos (≤ 32 instâncias) mesclados na geometria estática; sombra só é
+  refeita a cada 4 quadros mesmo com a câmera andando; vfx com atlas 1024
+  (512 no modo leve), menos partículas/marcas/destroços, uma só luz de
+  clarão e sem pré-passe de profundidade.
+- **Governador** (`core/Governor.js`): além da resolução, desce degrau NA
+  HORA quando a média passa de 1,33× o orçamento (60 fps → abaixo de
+  ~45 fps) e dois degraus abaixo de 30 fps, com carência curta (1,5 s); os
+  3 s iniciais não contam (compilação/upload).
+- **Medidas** (Chromium/SwiftShader fingindo "Intel UHD 620", 960×540,
+  CPU 4× mais lenta, menu principal; o tempo de frame do SwiftShader não
+  representa uma GPU real — valem draw calls/triângulos/memória): preset
+  `low` 1 796 → 317 draw calls por quadro, 7,4 M → 2,3 M triângulos,
+  texturas ~164 → ~87 MB, carga até o menu 235 s → 127 s; `auto` no PC
+  fraco (agora camada `low-desktop`) 1 791 → 309 draw calls, carga 186 s →
+  83 s. `high` no desktop: idêntico (mesmas draw calls/triângulos).
+- **Contador de FPS**: `?fps=show` (ou `?perf=1`), **F7** ou
+  `ctx.perf.show(true)` — FPS, ms (média/p90), draw calls, triângulos,
+  resolução interna, escala e preset·degrau·camada. A escolha fica salva.
 
 No GitHub Pages, o workflow `.github/workflows/pages.yml` roda `npm ci`,
 `npm test` e `npm run build` em `ironline-src/` e confere que

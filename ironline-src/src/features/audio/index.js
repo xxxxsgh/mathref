@@ -31,7 +31,10 @@ import { surfaceOf } from './sounds.js';
 const _v = new THREE.Vector3();
 const _w = new THREE.Vector3();
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const ALIAS = { shot: 'shot_player', enemy_shot: 'shot_enemy', hit: 'hitmarker', impact: 'imp_concrete' };
+const ALIAS = { shot: 'shot_player', enemy_shot: 'shot_enemy', hit: 'hitmarker', impact: 'imp_concrete', bolt_release: 'bolt' };
+/** Tiro do jogador por arma (weapon:fire.id); suprimido → shot_supp(_heavy). */
+const SHOT_BY_ID = { kr9: 'shot_player', p11: 'shot_pistol', mx9: 'shot_smg', br12: 'shot_shotgun', lr50: 'shot_sniper', hm60: 'shot_lmg', sr7: 'shot_dmr' };
+const HEAVY = new Set(['lr50', 'sr7', 'hm60', 'br12']);
 
 export default {
   name: 'audio',
@@ -93,9 +96,19 @@ export default {
     bus.on('weapon:fire', (e) => {
       const k = eng.indoor;
       const w = ctx.services.weapon;
-      play(k > 0.55 ? 'shot_player_in' : 'shot_player', { bus: 'weapon', volume: 0.95, reverb: 0.22 + k * 0.25, jitter: 0.025, cap: 6 });
-      if (k < 0.95) play('tail_out', { bus: 'weapon', volume: 0.42 * (1 - k), reverb: 0, delay: 0.012, jitter: 0.04, cap: 5 });
-      if (k > 0.05) play('tail_in', { bus: 'weapon', volume: 0.5 * k, reverb: 0, delay: 0.004, jitter: 0.04, cap: 5 });
+      const id = e?.id || w?.id;
+      if (e?.suppressed) {
+        // supressor: sem cauda de rua (quase), mecânica audível
+        play(HEAVY.has(id) ? 'shot_supp_heavy' : 'shot_supp', { bus: 'weapon', volume: 0.8, reverb: 0.12 + k * 0.2, jitter: 0.03, cap: 6 });
+        if (k > 0.05) play('tail_in', { bus: 'weapon', volume: 0.18 * k, reverb: 0, delay: 0.004, jitter: 0.04, cap: 5 });
+      } else {
+        const base = SHOT_BY_ID[id] || 'shot_player';
+        const name = base === 'shot_player' && k > 0.55 ? 'shot_player_in' : base;
+        const big = HEAVY.has(id) ? 1.35 : 1;
+        play(name, { bus: 'weapon', volume: 0.95, reverb: 0.22 + k * 0.25, jitter: 0.025, cap: 6 });
+        if (k < 0.95) play('tail_out', { bus: 'weapon', volume: 0.42 * (1 - k) * big, reverb: 0, delay: 0.012, jitter: 0.04, cap: 5, rate: big > 1 ? 0.85 : 1 });
+        if (k > 0.05) play('tail_in', { bus: 'weapon', volume: 0.5 * k * big, reverb: 0, delay: 0.004, jitter: 0.04, cap: 5 });
+      }
       const mag = w?.magSize || 30;
       const ammo = w?.ammo;
       if (typeof ammo === 'number' && ammo <= Math.max(3, Math.round(mag * 0.25))) play('low_ammo', { bus: 'ui', volume: 0.32, delay: 0.03, jitter: 0, rate: ammo === 0 ? 0.92 : 1 });
@@ -123,6 +136,13 @@ export default {
       else r(ins + 0.3, 'cloth', 0.3);
     });
     bus.on('weapon:reloaded', () => play('gear', { bus: 'foley', volume: 0.18 }));
+    // faca: golpe (corte no ar); fôlego da luneta (segura/solta/arfa)
+    bus.on('weapon:melee', () => play('knife_swing', { bus: 'foley', volume: 0.55, jitter: 0.05, cap: 3 }));
+    bus.on('weapon:breath', (e) => {
+      if (e?.phase === 'hold') play('breath_in', { bus: 'foley', volume: 0.35 });
+      else if (e?.phase === 'release') play('breath_out', { bus: 'foley', volume: 0.3 });
+      else if (e?.phase === 'gasp') play('breath_out', { bus: 'foley', volume: 0.55, rate: 0.92 });
+    });
 
     // ── acertos ──
     let lastImpact = 0;

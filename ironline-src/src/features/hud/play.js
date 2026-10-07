@@ -76,6 +76,7 @@ export class PlayHud {
       <div class="prompt sh"></div>
       <div class="xp"></div>
       <div class="medal"></div>
+      <div class="ksb sh"></div>
       <div class="banner sh"></div>
       <div class="score sh">
         <div class="top"><div class="timer"></div><div class="mode">${T(MODE.name, { size: 12, weight: 1.45, tracking: 2.4 })}</div></div>
@@ -112,8 +113,10 @@ export class PlayHud {
       timer: q('.score .timer'), usN: q('.rowx.us .n'), usF: q('.rowx.us .fill'), usG: q('.rowx.us .goal'), usT: q('.rowx.us .tag'), thN: q('.rowx.them .n'), thF: q('.rowx.them .fill'), thG: q('.rowx.them .goal'), thT: q('.rowx.them .tag'),
       feed: q('.feed'), wname: q('.wpn .nm'), mag: q('.wpn .mag'), res: q('.wpn .rv'), ticks: q('.wpn .ticks'), reload: q('.wpn .reload'), reloadI: q('.wpn .reload i'), wstate: q('.wpn .state'),
       vit: q('.vit'), cs: q('.vit .cs'), lv: q('.vit .lv'), streak: q('.vit .streak'), hpLag: q('.vit .lag'), hpCur: q('.vit .cur'), hpNum: q('.vit .num'),
-      death: q('.death'), equip: q('.equip'), wpn: q('.wpn'),
+      death: q('.death'), equip: q('.equip'), wpn: q('.wpn'), ksb: q('.ksb'),
     };
+    /** killstreaks (feature streaks): id → { id, name, kills, state, key } */
+    this.ks = new Map();
     this.compass = new Compass(root);
     this.minimap = new Minimap(root);
     // estado
@@ -260,14 +263,51 @@ export class PlayHud {
     X.classList.add('on');
     this.xpT = 0;
   }
-  medal(kind, title, pts) {
+  /**
+   * Medalha: fila de até 3 (as de outras features — 'medal:award' — chegam
+   * junto das da partida). `xp` só aparece nas externas (as da partida já
+   * somam no toast sob a mira).
+   */
+  medal(kind, title, pts, showXp = false) {
     const m = document.createElement('div');
     m.className = 'm';
-    // sem pontos aqui: a pontuação aparece só no toast sob a mira
-    m.innerHTML = `<div class="ic">${medalSVG(kind, 30)}</div><div class="mt">${T(title, { size: 11, weight: 1.4, tracking: 2.4 })}</div>`;
-    this.el.medal.innerHTML = '';
+    m._t = 0;
+    m.innerHTML = `<div class="ic">${medalSVG(kind, 30)}</div><div class="mt">${T(title, { size: 11, weight: 1.4, tracking: 2.4 })}</div>${showXp && pts ? `<div class="xpm">${T('+' + pts, { size: 11, weight: 1.4, heavy: true })}</div>` : ''}`;
     this.el.medal.appendChild(m);
+    while (this.el.medal.children.length > 3) this.el.medal.firstChild.remove();
     this.medalT = 0;
+  }
+
+  // ─── killstreaks ('streak:ready' / 'streak:used' da feature streaks) ──
+  /** Lista conhecida de sequências: [{ id, name, kills, key? }]. */
+  setStreaks(list) {
+    for (const s of list || []) {
+      if (!s?.id) continue;
+      const cur = this.ks.get(s.id);
+      this.ks.set(s.id, { state: 'charging', ...cur, ...s, state: cur?.state || 'charging' });
+    }
+    this.renderStreaks();
+  }
+  streakEvent(kind, e) {
+    if (!e?.id) return;
+    const cur = this.ks.get(e.id) || { id: e.id, name: e.name || e.id, kills: e.kills || 0 };
+    Object.assign(cur, { name: e.name || cur.name, kills: e.kills ?? cur.kills, key: e.key ?? cur.key, state: kind === 'ready' ? 'ready' : 'used' });
+    this.ks.set(e.id, cur);
+    this.renderStreaks();
+  }
+  /** Nova vida: o que não foi usado continua pronto; o resto volta a carregar. */
+  resetStreaks() {
+    for (const s of this.ks.values()) if (s.state === 'used') s.state = 'charging';
+    this.renderStreaks();
+  }
+  renderStreaks() {
+    const list = [...this.ks.values()].sort((a, b) => (a.kills || 0) - (b.kills || 0));
+    this.el.ksb.innerHTML = list.length ? `<div class="kst">${T('KILLSTREAKS', { size: 11, weight: 1.4, tracking: 2.4 })}</div>` + list.map((s) => `<div class="ks ${s.state}" data-id="${s.id}">
+        ${s.state === 'ready' && s.key ? `<span class="kk">${T(String(s.key), { size: 11, weight: 1.5 })}</span>` : ''}
+        <span class="kn2">${T(s.name, { size: 12, weight: 1.5, tracking: 2 })}</span>
+        <span class="kc">${s.state === 'ready' ? T('READY', { size: 11, weight: 1.6, tracking: 1.6 }) : T(String(s.kills || '-'), { size: 13, weight: 1.4, heavy: true })}</span>
+        <i class="kp"></i></div>`).join('') : '';
+    this._ksBars = [...this.el.ksb.querySelectorAll('.ks')].map((el) => ({ el, bar: el.querySelector('.kp'), s: this.ks.get(el.dataset.id) }));
   }
   banner(title, sub) {
     const b = this.el.banner;
@@ -359,16 +399,29 @@ export class PlayHud {
     const pulse = frac < 0.35 ? 0.1 * (0.5 + 0.5 * Math.sin(ctx.time.now * 6.5)) : 0;
     const vigA = clamp(Math.pow(miss, 0.8) * 0.8 + this.flashA * 0.22 + pulse, 0, 1);
     this.set('vig', vigA.toFixed(3), (v) => (this.vig.style.opacity = v));
-    this.set('desat', clamp(miss * 1.5 - 0.15 + this.flashA * 0.35, 0, 1).toFixed(2), (v) => (this.desat.style.opacity = v));
+    // desaturação usa backdrop-filter: fora do DOM quando invisível (e
+    // desligada em qualidade baixa/lite — classe .lowfx da raiz)
+    this.set('desat', clamp(miss * 1.5 - 0.15 + this.flashA * 0.35, 0, 1).toFixed(2), (v) => {
+      this.desat.style.opacity = v;
+      this.desat.style.display = +v > 0 ? '' : 'none';
+    });
     this.set('flash', this.flashA.toFixed(3), (v) => (this.flash.style.opacity = v));
 
     // bússola + minimapa
     for (let i = this.pings.length - 1; i >= 0; i--) if ((this.pings[i].t += rdt) > 3) this.pings.splice(i, 1);
     const pp = p.position;
     const fadeA = (t) => (t < 2 ? 1 : 1 - (t - 2));
-    this.compass.draw(heading, this.pings.map((q) => ({ bearing: bearing(q.x - pp.x, q.z - pp.z), a: fadeA(q.t) })));
-    this.minimap.rotate = st.minimapRotate;
-    this.minimap.draw(ctx, { yaw: p.yaw, pos: pp, pings: this.pings.map((q) => ({ x: q.x, z: q.z, a: fadeA(q.t) })) });
+    // redesenho dos canvas de navegação a ~20 Hz (não a cada quadro)
+    const sk = ctx.services.streaks;
+    const uavOn = !!sk?.uav?.active;
+    this.navT = (this.navT ?? 1) + rdt;
+    // com a varredura da UAV no ar o minimapa sobe para ~30 Hz
+    if (this.navT >= (uavOn ? 0.033 : 0.05)) {
+      this.navT = 0;
+      this.compass.draw(heading, this.pings.map((q) => ({ bearing: bearing(q.x - pp.x, q.z - pp.z), a: fadeA(q.t) })));
+      this.minimap.rotate = st.minimapRotate;
+      this.minimap.draw(ctx, { yaw: p.yaw, pos: pp, pings: this.pings.map((q) => ({ x: q.x, z: q.z, a: fadeA(q.t) })), reveal: sk?.revealed, uav: sk?.uav });
+    }
 
     // placar
     const tl = Math.ceil(m.timeLeft);
@@ -427,10 +480,20 @@ export class PlayHud {
       if (this.xpT > 2.9) { E.xp.innerHTML = ''; E.xp.classList.remove('on', 'out'); this.xpT = undefined; }
       else if (this.xpT < 0.1) E.xp._out = false;
     }
-    if (this.medalT !== undefined) {
-      if (!this.hitPin) this.medalT += rdt;
-      if (this.medalT > 2.4) E.medal.firstChild?.classList.add('out');
-      if (this.medalT > 2.8) { E.medal.innerHTML = ''; this.medalT = undefined; }
+    // fila de medalhas: cada uma com o próprio relógio
+    for (const md of [...E.medal.children]) {
+      if (!this.hitPin) md._t = (md._t || 0) + rdt;
+      if (md._t > 2.4) md.classList.add('out');
+      if (md._t > 2.8) md.remove();
+    }
+    // barra de killstreaks: progresso pela sequência atual de abates
+    if (this._ksBars?.length) {
+      const k = m.streak || 0;
+      for (const b of this._ksBars) {
+        const f = b.s.state === 'charging' && b.s.kills ? Math.min(1, k / b.s.kills) : b.s.state === 'ready' ? 1 : 0;
+        const w = (f * 100).toFixed(0) + '%';
+        if (b._w !== w) { b._w = w; b.bar.style.width = w; }
+      }
     }
 
     // arma

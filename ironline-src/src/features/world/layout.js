@@ -28,7 +28,9 @@ const CROSS = [-66, -52];
 const CRATERS = [[-3.2, 3.0, 1.3, 1], [-2.2, -17, 1.2, 2], [3.0, -41, 1.4, 3], [-1.0, -84, 1.1, 4], [2.4, -118, 1.3, 5],
   [-2.3, 18.2, 0.62, 6], [3.3, 5.5, 0.55, 7], [-3.0, -27, 0.7, 8], [-2.6, -100, 0.6, 9], [2.8, 36, 0.58, 10]];
 
-export function buildLayout(W) {
+/** Assíncrona: cede o thread entre blocos (W.tick) — ver index.js. */
+export async function buildLayout(W) {
+  const tick = W.tick || (async () => {});
   const { B, rng } = W;
 
   // chão e horizonte não projetam sombra (só encheriam o shadow map)
@@ -38,6 +40,7 @@ export function buildLayout(W) {
   W.B.noCastZone = false;
   W.B.cast = true;
 
+  await tick('chão', 0.1);
   // ── prédios do lado esquerdo (fachada +X) ──
   const L = (z0, z1, o) => building(W, { x0: -WALK - DEPTH, x1: -WALK, z0, z1, faces: ['px'], ...o });
   const R = (z0, z1, o) => building(W, { x0: WALK, x1: WALK + DEPTH, z0, z1, faces: ['nx'], ...o });
@@ -55,6 +58,7 @@ export function buildLayout(W) {
   L(-120, -100, { floors: 7, style: 'concrete', tint: [0.8, 0.8, 0.78], door: 3, cond: 0.4, balconies: 0.45 });
   L(-140, -120, { floors: 3, tint: TINTS.green, shop: true, cond: 0.3 });
 
+  await tick('prédios', 0.3);
   R(30, 52, { floors: 3, tint: TINTS.white, shop: true, cond: 0.3 });
   R(16, 30, { floors: 4, style: 'brick', tint: [1, 1, 1], shop: true, cond: 0.3, blasts: [{ f: 2, i: 2 }] });
   R(2, 16, { floors: 3, tint: TINTS.green, shop: true, cond: 0.4, blasts: [{ f: 1, i: 2 }] });
@@ -70,6 +74,7 @@ export function buildLayout(W) {
   R(-104, -80, { floors: 5, tint: TINTS.sand, shop: true, cond: 0.35 });
   R(-140, -104, { floors: 4, tint: TINTS.white, shop: true, cond: 0.3 });
 
+  await tick('prédios', 0.5);
   // fundo das ruas: prédio que fecha a avenida ao sul e ao norte
   // (três prédios de alturas/estilos diferentes: silhueta recortada no fim da rua)
   building(W, { x0: -26, x1: -7, z0: -168, z1: Z_S + 10, floors: 7, style: 'concrete', tint: [0.8, 0.79, 0.76], faces: ['pz'], balconies: 0.55, cond: 0.4, pitch: 3.0 });
@@ -90,7 +95,8 @@ export function buildLayout(W) {
   skyline(W);
   W.B.noCastZone = false;
   W.B.cast = true;
-  dressStreet(W);
+  await tick('horizonte', 0.65);
+  await dressStreet(W, tick);
 }
 
 // ─── chão: asfalto, meio-fio, calçadas, ruela, terreno ─────────────────
@@ -329,7 +335,7 @@ export function skyline(W, opts = {}) {
   }
 }
 // ─── vestir a rua ──────────────────────────────────────────────────────
-function dressStreet(W) {
+async function dressStreet(W, tick = async () => {}) {
   const { B, rng } = W;
 
   streetGrime(W);
@@ -350,6 +356,7 @@ function dressStreet(W) {
   P.tire(W, 5.7, 18.6, { flat: true });
   P.barrel(W, 2.3, 20.5, { fallen: true, tint: [0.27, 0.3, 0.24] });
 
+  await tick('entulho', 0.72);
   // carros estacionados / abandonados / queimados
   P.car(W, 4.6, 36, Math.PI / 2 + 0.03, { kind: 'sedan', tint: [0.74, 0.74, 0.71] });
   P.car(W, 4.7, 28.5, Math.PI / 2 - 0.05, { kind: 'hatch', tint: [0.55, 0.15, 0.12] });
@@ -363,6 +370,7 @@ function dressStreet(W) {
   P.car(W, 4.6, -112, Math.PI / 2 + 0.04, { kind: 'van', tint: [0.72, 0.72, 0.69] });
   P.car(W, -1.5, -128, 0.4, { burnt: true, kind: 'sedan' });
 
+  await tick('carros', 0.8);
   // barreiras jersey em chicane (atrás do ponto do inimigo do preset combat)
   P.jersey(W, -3.6, -2.5, Math.PI / 2 + 0.2);
   P.jersey(W, -0.6, -3.0, Math.PI / 2 - 0.1);
@@ -390,6 +398,7 @@ function dressStreet(W) {
   P.sandbagWall(W, [[-6.6, 12], [-8.8, 12.6]], 4);
   P.crate(W, -8.4, 10.3, 0.2, 0.8, { y: 0.15 });
 
+  await tick('barricadas', 0.86);
   // entulho dos prédios desabados
   P.rubblePile(W, -8.5, -20, 3.2, 1.6, { tint: TINTS.ochre });
   P.rubblePile(W, -5.5, -22.5, 1.6, 0.6, {});

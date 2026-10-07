@@ -15,6 +15,7 @@ import { mapThumb } from './mapthumb.js';
 import { callingCard, emblemSVG } from './art.js';
 import { cropPhoto, photoTitle } from './photo.js';
 import { levelOf, CROSS_COLORS, vfovToH } from './settings.js';
+import { itemThumb, creditSVG, keySVG } from './itemart.js';
 
 const T = (s, o) => svgText(s, o);
 const t11 = (s, o = {}) => T(s, { size: 12, weight: 1.4, tracking: 2.3, ...o });
@@ -73,6 +74,7 @@ const OPTS = {
   INTERFACE: [
     { id: 'crosshair', name: 'CROSSHAIR COLOR', type: 'seg', opts: Object.keys(CROSS_COLORS), help: 'Color of the hip-fire crosshair.' },
     { id: 'minimapRotate', name: 'ROTATE MINIMAP', type: 'bool', help: 'On: the minimap rotates with you (forward is always up). Off: north is always up.' },
+    { id: 'fps', name: 'FPS COUNTER', type: 'bool', help: 'Shows frame rate, frame time and internal resolution in the corner (also F7).' },
   ],
 };
 
@@ -87,11 +89,31 @@ export class Screens {
     this.setTab = 'CONTROLS';
     this.loTab = 'primary';
     this.focusIdx = 0;
-    this.grain = makeGrain();
+    // grão: criado fora do init (canvas 2D no meio da carga sincroniza com
+    // a GPU ocupada compilando shaders — custava >10 s em celular)
+    this.grain = '';
+    this.booting = !this.ctx.shot;
   }
 
   get open() {
     return this.cur;
+  }
+  /** Fim da carga: arte dos cartões, cartão do jogador e grão. */
+  finishBoot() {
+    if (!this.booting) return;
+    this.booting = false;
+    for (const k of new Set([...(this._artReq?.values() || [])].map((r) => r.key))) this.photoReady(k);
+    this.refreshTopbar();
+    this.ensureGrain();
+  }
+  /** Gera o ladrilho de grão (chamado nos primeiros quadros do menu). */
+  ensureGrain() {
+    if (this._grainReq) return;
+    this._grainReq = true;
+    makeGrain((u) => {
+      this.grain = u;
+      for (const e of this.root.querySelectorAll('.grain')) e.style.backgroundImage = `url(${u})`;
+    });
   }
 
   show(name) {
@@ -120,9 +142,12 @@ export class Screens {
    * elemento leva `data-photo` para ser trocado quando a foto chegar.
    */
   art(key, w, h, o = {}) {
-    const url = this.artUrl(key, w, h, o);
     const id = 'a' + (this._ai = (this._ai || 0) + 1);
     (this._artReq ||= new Map()).set(id, { key, w, h, o });
+    // durante a carga: sem arte (canvas 2D aqui travava a carga no celular);
+    // `finishBoot()` preenche nos primeiros quadros do menu
+    if (this.booting) return `data-photo="${key}" data-art="${id}"`;
+    const url = this.artUrl(key, w, h, o);
     return `data-photo="${key}" data-art="${id}" style="background-image:url(${url})"`;
   }
   artUrl(key, w, h, o = {}) {
@@ -173,18 +198,57 @@ export class Screens {
   topbar(active) {
     const P = this.hud.profile;
     const lv = levelOf(P.xp);
-    const tabs = [['main', 'PLAY'], ['loadout', 'LOADOUT'], ['settings', 'SETTINGS']];
+    const inv = this.ctx.services.inventory;
+    const tabs = [['main', 'PLAY'], ['loadout', 'LOADOUT'], ...(inv ? [['arsenal', 'ARSENAL']] : []), ['settings', 'SETTINGS']];
+    const nNew = inv ? inv.items.filter((i) => i.new).length : 0;
+    const daily = inv?.dailyStatus().canClaim;
+    const badge = (id) => id !== 'arsenal' ? '' : nNew ? `<b class="bd">${N(nNew, 11)}</b>` : daily ? '<b class="bd dot"></b>' : '';
+    const pc = this.playerCard();
 
     return `<div class="topbar sh">
       <div class="logo">${logo(22)}</div>
-      <div class="tabs">${tabs.map(([id, n]) => `<div class="tab ${id === active ? 'on' : ''}" data-go="${id}">${T(n, { size: 14, weight: 1.5, tracking: 2.6 })}</div>`).join('')}</div>
+      <div class="tabs">${tabs.map(([id, n]) => `<div class="tab ${id === active ? 'on' : ''}" data-go="${id}">${T(n, { size: 14, weight: 1.5, tracking: 2.6 })}${badge(id)}</div>`).join('')}</div>
+      ${this.wallet()}
       <div class="card">
-        <div class="pc" ${this.art('card', 400, 64, { fy: 0.42 })}>
-          <span class="em">${emblemSVG('vance', 50, 'gold')}</span>
+        <div class="pc" ${pc.card ? `style="background-image:url(${pc.card(400, 64)})"` : this.art('card', 400, 64, { fy: 0.42 })}>
+          <span class="em">${pc.emblem(50)}</span>
           <div class="meta">${T(P.callsign, { size: 16, weight: 1.6, tracking: 2.4 })}${t11(`[${P.tag}]  ·  OPERATOR`, { size: 11 })}<div class="xpb"><i style="width:${((lv.into / lv.need) * 100).toFixed(1)}%"></i></div></div>
         </div>
         <div class="lvl"><span class="rk">${rankSVG(lv.level, '', 30)}</span>${N(lv.level, 18)}</div>
       </div></div>`;
+  }
+  /** Carteira do inventário (créditos, chaves, diário disponível). */
+  wallet() {
+    const inv = this.ctx.services.inventory;
+    if (!inv) return '<div class="wallet"></div>';
+    const d = inv.dailyStatus().canClaim;
+    const fmt = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `<div class="wallet">${d ? `<div class="wc dly" data-go="arsenal" data-tab2="diario">${t11('DIÁRIO', { size: 10 })}</div>` : ''}<div class="wc" data-go="arsenal" title="Créditos (ganhos jogando)">${creditSVG(18)}${N(fmt(inv.credits), 15)}<span class="l">${t11('CR', { size: 9 })}</span></div><div class="wc" data-go="arsenal" title="Chaves (passe e diário)">${keySVG(18)}${N(inv.keys, 15)}</div></div>`;
+  }
+  /**
+   * Cartão de chamada + emblema escolhidos no inventário (reserva: a foto de
+   * campo e o emblema padrão). `card(w, h)` → data URL; `emblem(s)` → SVG.
+   */
+  playerCard() {
+    const inv = this.ctx.services.inventory;
+    const C = inv?.catalog;
+    const E = inv?.equip;
+    const cd = C?.CARDS.find((c) => c.id === E?.card);
+    const em = C?.EMBLEMS.find((e) => e.id === E?.emblem);
+    this._pcCache ||= new Map();
+    return {
+      card: cd && !this.booting ? (w, h) => {
+        const k = cd.id + w + 'x' + h;
+        if (!this._pcCache.has(k)) { const sc = this.hud.tier === 'desktop' ? 2 : 1; this._pcCache.set(k, callingCard('', { seed: cd.seed, theme: cd.theme, w: w * sc, h: h * sc })); }
+        return this._pcCache.get(k);
+      } : null,
+      emblem: (s) => (em ? emblemSVG(em.seed, s, em.tone) : emblemSVG('vance', s, 'gold')),
+    };
+  }
+  /** Atualiza só o topo (carteira/cartão) da tela atual. */
+  refreshTopbar() {
+    const tb = this.el?.querySelector('.topbar');
+    if (tb && this.cur && this.cur !== 'pause') tb.outerHTML = this.topbar(this.cur === 'arsenal' ? 'arsenal' : this.cur);
   }
   footer(hints) {
     return `<div class="foot sh">${hints.map(([k, l]) => `<div class="h">${key(k)}${t11(l, { size: 12 })}</div>`).join('')}<div class="ver">${mono('BUILD 0.3.0 · MERIDIAN')}</div></div>`;
@@ -220,6 +284,7 @@ export class Screens {
         <div class="btns">
           <div class="btn pri" data-act="deploy" tabindex="0">${T('DEPLOY', { size: 24, weight: 2.1, tracking: 4 })}<span class="chev">${T('>>', { size: 16, weight: 2.2, tracking: 0.8 })}</span></div>
           <div class="btn" data-go="loadout" tabindex="0">${T('EDIT LOADOUT', { size: 15, weight: 1.55, tracking: 2.6 })}<span class="hint">${key('L')}</span></div>
+          ${this.ctx.services.inventory ? `<div class="btn" data-go="arsenal" tabindex="0">${T('ARSENAL', { size: 15, weight: 1.55, tracking: 2.6 })}<span class="hint">${key('I')}</span></div>` : ''}
           <div class="btn" data-go="settings" tabindex="0">${T('SETTINGS', { size: 15, weight: 1.55, tracking: 2.6 })}<span class="hint">${key('O')}</span></div>
         </div>
       </div>
@@ -242,7 +307,7 @@ export class Screens {
             <div><span class="k">${t11('WINS')}</span>${N(P.wins, 26)}</div>
           </div></div>
       </div>
-      ${this.footer([['ENTER', 'DEPLOY'], ['< >', 'MODE'], ['M', 'MAP'], ['L', 'LOADOUT'], ['O', 'SETTINGS']])}`;
+      ${this.footer([['ENTER', 'DEPLOY'], ['< >', 'MODE'], ['M', 'MAP'], ['L', 'LOADOUT'], ['I', 'ARSENAL'], ['O', 'SETTINGS']])}`;
   }
   /** "Arma da operação" (tile de destaque) com a camuflagem atual. */
   weaponTile() {
@@ -289,19 +354,24 @@ export class Screens {
       return [v, Math.max(5, Math.min(100, v + m))];
     });
     const ws = this.ctx.services.weapon?.weapons || [];
-    const wname = ws[0]?.name || this.ctx.services.weapon?.name || W.name;
-    const sname = ws[1]?.name || 'P-11';
+    const sel = this.loadoutSel();
+    const wname = sel.primary?.name || ws[0]?.name || this.ctx.services.weapon?.name || W.name;
+    const sname = sel.secondary?.name || ws[1]?.name || 'P-11';
     const table = this.hud.unlocks();
     const lockOf = (key) => table.find((u) => u.key === key);
     const lockTag = (l) => `<span class="lk">${lockSVG(12)}${t11('LV ' + l, { size: 10 })}</span>`;
     const flashLv = EQUIPMENT_LEVELS.flash;
     const flashLocked = flashLv > level;
-    // armas extras publicadas pela weapon além de primária/secundária
-    const extra = ws.slice(2).map((w, i) => {
+    // com inventário, primária/secundária/faca são escolhidas no seletor
+    // (todas as armas de weapon.weapons); sem ele, a lista antiga de extras
+    const extra = this.ctx.services.inventory ? '' : ws.slice(2).map((w, i) => {
       const u = lockOf('weapon:' + w.id);
       const locked = u && u.level > level;
       return `<div class="slot small ${locked ? 'locked' : ''}"><div class="lbl"><span class="k">${t11('WEAPON', { size: 9 })}</span>${T(w.name, { size: 14, weight: 1.35, tracking: 2.2 })}</div>${locked ? lockTag(u.level) : ''}</div>`;
     }).join('');
+    const skP = this.skinOf(sel.primary?.id), skS = this.skinOf(sel.secondary?.id), kn = this.knifeItem();
+    const chg = this.ctx.services.inventory ? `<span class="chg">${t11('TROCAR', { size: 9 })}</span>` : '';
+    const skinImg = (sk, h) => `<img src="${itemThumb(sk.def, sk.it, Math.round(h * 3.4), h)}" style="height:${h}px;display:block" alt="">`;
     const camo = CAMOS.find((c) => c.id === P.camo) || CAMOS[0];
     const nx = nextUnlock(table, level);
     const tint = this.hud.camoMode === 'tint';
@@ -309,12 +379,13 @@ export class Screens {
       <div class="lo">
         <div class="slots sh">
           <div class="eyebrow" style="margin-bottom:14px">${t11('LOADOUT 1  ·  ASSAULT')}</div>
-          <div class="slot on" data-lo="primary"><div class="lbl"><span class="k">${t11('PRIMARY', { size: 9 })}</span>${T(wname, { size: 18, weight: 1.45, tracking: 2.6 })}<span class="cm">${t11(camo.id === 'none' ? 'FACTORY FINISH' : camo.name + ' CAMO', { size: 10 })}</span></div><span class="img">${this.hud.gunIcon ? `<img src="${this.hud.gunIcon.url}" style="height:40px;width:${Math.round(40 * this.hud.gunIcon.aspect)}px;display:block" alt="">` : rifleSVG('', 150)}</span></div>
-          <div class="slot"><div class="lbl"><span class="k">${t11('SECONDARY', { size: 9 })}</span>${T(sname, { size: 18, weight: 1.45, tracking: 2.6 })}</div><span class="img">${pistolSVG('', 64)}</span></div>
+          <div class="slot ${this.loPick === 'primary' || !this.loPick ? 'on' : ''}" data-lo="primary">${chg}<div class="lbl"><span class="k">${t11('PRIMARY', { size: 9 })}</span>${T(wname, { size: 18, weight: 1.45, tracking: 2.6 })}${skP ? `<span class="cm sk" style="--rc:${skP.color}">${t11(skP.def.name, { size: 10 })}</span>` : `<span class="cm">${t11(camo.id === 'none' ? 'FACTORY FINISH' : camo.name + ' CAMO', { size: 10 })}</span>`}</div><span class="img">${skP ? skinImg(skP, 44) : this.hud.gunIcon ? `<img src="${this.hud.gunIcon.url}" style="height:40px;width:${Math.round(40 * this.hud.gunIcon.aspect)}px;display:block" alt="">` : rifleSVG('', 150)}</span></div>
+          <div class="slot ${this.loPick === 'secondary' ? 'on' : ''}" data-lo="secondary">${chg}<div class="lbl"><span class="k">${t11('SECONDARY', { size: 9 })}</span>${T(sname, { size: 18, weight: 1.45, tracking: 2.6 })}${skS ? `<span class="cm sk" style="--rc:${skS.color}">${t11(skS.def.name, { size: 10 })}</span>` : ''}</div><span class="img">${skS ? skinImg(skS, 40) : pistolSVG('', 64)}</span></div>
           ${extra}
           <div class="slot small"><div class="lbl"><span class="k">${t11('LETHAL', { size: 9 })}</span>${T('FRAG GRENADE', { size: 14, weight: 1.35, tracking: 2.2 })}</div><span class="img">${fragSVG('', 34)}</span></div>
           <div class="slot small ${flashLocked ? 'locked' : ''}"><div class="lbl"><span class="k">${t11('TACTICAL', { size: 9 })}</span>${T('STUN GRENADE', { size: 14, weight: 1.35, tracking: 2.2 })}</div>${flashLocked ? lockTag(flashLv) : `<span class="img">${flashSVG('', 34)}</span>`}</div>
-          <div class="slot small"><div class="lbl"><span class="k">${t11('MELEE', { size: 9 })}</span>${T('COMBAT KNIFE', { size: 14, weight: 1.35, tracking: 2.2 })}</div><span class="img">${knifeSVG('', 60)}</span></div>
+          <div class="slot small ${this.loPick === 'melee' ? 'on' : ''}" data-lo="melee">${chg}<div class="lbl"><span class="k">${t11('MELEE', { size: 9 })}</span>${T(kn ? kn.name : 'COMBAT KNIFE', { size: 14, weight: 1.35, tracking: 2.2 })}</div><span class="img">${kn ? skinImg(kn, 34) : knifeSVG('', 60)}</span></div>
+          ${this.streakSlot()}
           <div class="camos panel">
             <div class="ph">${T('WEAPON CAMO', { size: 13, weight: 1.6, tracking: 2.4 })}<span class="r">${mono(CAMOS.filter((c) => c.level <= level).length + ' / ' + CAMOS.length + ' UNLOCKED')}</span></div>
             <div class="sw">${CAMOS.map((c) => {
@@ -339,7 +410,90 @@ export class Screens {
           <div class="stats">${stats.map(([b, v], i) => `<div class="stat"><div class="t">${t11(STAT_NAMES[i])}${N(v, 12)}</div><div class="b"><i class="d" style="width:${Math.max(b, v)}%;${v < b ? 'background:var(--red2)' : ''}"></i><i style="width:${Math.min(b, v)}%"></i></div></div>`).join('')}</div>
         </div>
       </div>
+      ${this.loPick ? this.loadoutPicker(level, lockOf, lockTag) : ''}
       ${this.footer([['ESC', 'BACK'], ['ENTER', 'DEPLOY']])}`;
+  }
+  /** Conjunto de killstreaks (feature streaks): clicar abre o seletor dela. */
+  streakSlot() {
+    const s = this.ctx.services.streaks;
+    if (!s?.openPicker) return '';
+    const ids = s.loadout || [];
+    const S = s.STREAKS || {};
+    return `<div class="slot small ks-slot" data-ks="1"><span class="chg">${t11('TROCAR', { size: 9 })}</span><div class="lbl"><span class="k">${t11('KILLSTREAKS', { size: 9 })}</span><div class="ksl">${ids.map((id) => `<span>${N(S[id]?.kills ?? '', 11)}${t11(S[id]?.name || id, { size: 10, weight: 1.4, tracking: 1.6 })}</span>`).join('')}</div></div></div>`;
+  }
+  /** Primária/secundária escolhidas (inventário > loadoutIds da weapon > 2 primeiras). */
+  loadoutSel() {
+    const w = this.ctx.services.weapon;
+    const ws = w?.weapons || [];
+    const E = this.ctx.services.inventory?.equip || {};
+    const ids = w?.loadoutIds || [];
+    const by = (id) => ws.find((x) => x.id === id);
+    return { primary: by(E.primary) || by(ids[0]) || ws[0], secondary: by(E.secondary) || by(ids[1]) || ws[1] };
+  }
+  /** Skin equipada numa arma (id da weapon): { it, def, color } ou null. */
+  skinOf(weaponId) {
+    const inv = this.ctx.services.inventory;
+    if (!inv || !weaponId) return null;
+    const b = inv.baseOf(weaponId);
+    const it = b && inv.item(inv.equip.skins[b]);
+    if (!it) return null;
+    const def = inv.def(it.def);
+    return { it, def, color: inv.catalog.RARITY[def.rarity].color };
+  }
+  knifeItem() {
+    const inv = this.ctx.services.inventory;
+    const it = inv?.item(inv.equip.knife);
+    if (!it) return null;
+    const def = inv.def(it.def);
+    return { it, def, color: inv.catalog.RARITY.especial.color, name: inv.itemName(it) };
+  }
+  /** Classe da arma: slotName da weapon ou, na falta, pistola = secundária. */
+  slotOf(w) {
+    return w.slotName || (w.kind === 'pistol' ? 'secondary' : 'primary');
+  }
+  /** Painel do seletor (primária, secundária ou faca). */
+  loadoutPicker(level, lockOf, lockTag) {
+    const inv = this.ctx.services.inventory;
+    const slot = this.loPick;
+    const KIND = { rifle: 'ASSAULT RIFLE', pistol: 'PISTOL', smg: 'SMG', shotgun: 'SHOTGUN', sniper: 'SNIPER RIFLE', lmg: 'LMG', dmr: 'MARKSMAN RIFLE' };
+    let rows = '';
+    if (slot === 'melee') {
+      const cur = inv?.equip.knife ?? null;
+      const knives = (inv?.items || []).filter((it) => inv.def(it.def).type === 'knife');
+      rows = `<div class="lopt ${cur == null ? 'on' : ''}" data-pick="melee" data-id=""><div class="ln">${T('COMBAT KNIFE', { size: 16, weight: 1.6, tracking: 2.2 })}${mono('PADRÃO DE FÁBRICA')}</div><span style="display:flex;justify-content:center">${knifeSVG('', 120)}</span></div>`
+        + knives.map((it) => { const d = inv.def(it.def); const wt = inv.catalog.wearTier(it.wear); return `<div class="lopt ${cur === it.uid ? 'on' : ''}" data-pick="melee" data-id="${it.uid}"><div class="ln">${T(inv.itemName(it), { size: 15, weight: 1.6, tracking: 1.8 })}${mono(`${wt.name} · ${it.wear.toFixed(4)} · SEMENTE ${it.seed}`)}</div><img src="${itemThumb(d, it, 220, 70)}" alt=""></div>`; }).join('');
+      if (!knives.length) rows += `<div style="padding:20px;color:var(--ink3)">${mono('FACAS SÃO O ITEM ESPECIAL RARO DAS CAIXAS (ABA ARSENAL).')}</div>`;
+    } else {
+      const ws = this.ctx.services.weapon?.weapons || [];
+      const cur = this.loadoutSel()[slot]?.id;
+      rows = ws.filter((w) => this.slotOf(w) === slot).map((w) => {
+        const u = lockOf('weapon:' + w.id);
+        const locked = u && u.level > level;
+        const sk = this.skinOf(w.id);
+        return `<div class="lopt ${cur === w.id ? 'on' : ''} ${locked ? 'locked' : ''}" ${locked ? '' : `data-pick="${slot}" data-id="${w.id}"`}><div class="ln">${T(w.name, { size: 17, weight: 1.6, tracking: 2.2 })}${mono((KIND[w.kind] || String(w.kind || '').toUpperCase()) + (sk ? ' · ' + sk.def.name : ''))}</div>${sk ? `<img src="${itemThumb(sk.def, sk.it, 220, 70)}" alt="">` : inv ? `<img src="${itemThumb({ id: 'fab-' + w.id, type: 'skin', base: inv.baseOf(w.id) || 'kr9', pattern: 'solid', palette: ['#3a3f45', '#24282d', '#5a6068'], finish: { metalness: 0.5 } }, { seed: 0, wear: 0 }, 220, 70)}" alt="">` : ''}${locked ? `<span class="lk">${lockTag(u.level)}</span>` : ''}</div>`;
+      }).join('') || `<div style="padding:20px;color:var(--ink3)">${mono('NENHUMA ARMA PUBLICADA PARA ESTE SLOT')}</div>`;
+    }
+    const title = { primary: 'PRIMARY WEAPON', secondary: 'SECONDARY WEAPON', melee: 'MELEE · KNIFE' }[slot];
+    return `<div class="lpick panel sh"><div class="ph">${T(title, { size: 14, weight: 1.6, tracking: 2.4 })}<span class="r">${mono('ESC FECHA')}</span></div><div class="pl">${rows}</div></div>`;
+  }
+  /** Escolha no seletor do loadout. */
+  pickLoadout(slot, id) {
+    const inv = this.ctx.services.inventory;
+    const w = this.ctx.services.weapon;
+    if (slot === 'melee') {
+      if (!inv) return;
+      if (!id) { if (inv.equip.knife != null) inv.unequip(inv.equip.knife); }
+      else inv.equipItem(Number(id));
+    } else if (inv) inv.setLoadout(slot, id);
+    else (slot === 'primary' ? w?.setPrimary : w?.setSecondary)?.(id);
+    this.hud.refreshGunIcon?.();
+    this.loPick = null;
+    this.show('loadout');
+  }
+
+  // ─── arsenal (inventário, caixas, passe…) — arsenal.js ─────────────
+  arsenal() {
+    return this.hud.arsenal ? this.hud.arsenal.html() : '';
   }
 
   // ─── configurações ──────────────────────────────────────────────────
@@ -363,6 +517,7 @@ export class Screens {
       </div>
       <div class="set-help panel sh">${T(help.name, { size: 16, weight: 1.4, tracking: 2.4 })}<div class="d">${help.help}</div>
         <div class="pv">${this.preview(help.id)}</div></div>
+      ${this.hud.needsReload?.() ? `<div class="reload-note panel sh">${T('RECARREGAR PARA APLICAR', { size: 13, weight: 1.6, tracking: 2.2 })}<span class="d">${mono('ESCALA DE RENDER, DETALHE E TEXTURAS SÓ MUDAM NA PRÓXIMA CARGA')}</span><div class="btn sm" data-reload="1">${T('RECARREGAR', { size: 13, weight: 1.6, tracking: 2.4 })}</div></div>` : ''}
       ${this.footer([['ESC', 'BACK'], ['TAB', 'NEXT TAB']])}`;
   }
   /** linhas da aba atual (as de toque só aparecem em `input.touchMode`) */
@@ -467,9 +622,10 @@ export class Screens {
     ].sort((a, b) => b.score - a.score);
     const nemesis = hostiles.slice().sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)[0];
     const theirScore = hostiles.reduce((a, r) => a + r.kills, 0);
+    const pc = this.playerCard();
     const row = (r, i) => `<tr class="${r.me ? 'me' : ''}">
         <td class="c-r">${N(i + 1, 14)}</td>
-        <td class="c-l"><span class="lb">${r.me ? emblemSVG('vance', 30, 'gold') : emblemSVG(r.seed, 30, 'red')}</span>${N(r.lvl, 13)}</td>
+        <td class="c-l"><span class="lb">${r.me ? pc.emblem(30) : emblemSVG(r.seed, 30, 'red')}</span>${N(r.lvl, 13)}</td>
         <td class="c-n">${T(r.name, { size: 14, weight: 1.55, tracking: 1.9 })}${r.me ? '' : `<span class="tm-r">${t11(ROLES[hashStr(r.name) % ROLES.length])}</span>`}</td>
         <td>${N(r.score, 15)}</td><td>${N(r.kills, 15)}</td><td>${N(r.deaths, 15)}</td><td>${N((r.deaths ? r.kills / r.deaths : r.kills).toFixed(2), 15)}</td><td>${N(r.hs, 15)}</td><td>${N(r.acc, 15)}</td></tr>`;
     const hdr = ['#', 'LV', 'PLAYER', 'SCORE', 'KILLS', 'DEATHS', 'K/D', 'HS', 'ACC'];
@@ -504,8 +660,8 @@ export class Screens {
         <div class="lcol">
           <div class="panel stand sh"><table><thead><tr>${hdr.map((h, i) => `<th class="${i < 3 ? ['c-r', 'c-l', 'c-n'][i] : ''}">${t11(h)}</th>`).join('')}</tr></thead><tbody>${all.map(row).join('')}</tbody></table></div>
           <div class="me-strip sh">
-            <div class="pcard"><div class="cc" ${this.art('card', 352, 110, { title: 'IRON DAWN', sub: 'SEASON 01 VETERAN', fy: 0.42, illus: true })}></div><div class="pi">${emblemSVG('vance', 56, 'gold')}<div>${T(P.callsign, { size: 20, weight: 1.75, tracking: 2.4 })}<div class="pl">${rankSVG(lv, '', 22)}${t11('LEVEL ' + lv)}</div></div></div>
-              <div class="xpbk">${[['KILLS', m.kills * 100], ['HEADSHOTS', m.headshots * 50], ['MEDALS', medals.reduce((a, [, v]) => a + v.n * 50, 0)], ['OBJECTIVES', m.objectiveXP || 0], [win ? 'WIN BONUS' : 'MATCH BONUS', win ? 1500 : 300]].map(([k, v]) => `<div>${t11(k)}<span>${N('+' + v, 13)}</span></div>`).join('')}</div></div>
+            <div class="pcard"><div class="cc" ${pc.card ? `style="background-image:url(${pc.card(352, 110)})"` : this.art('card', 352, 110, { title: 'IRON DAWN', sub: 'SEASON 01 VETERAN', fy: 0.42, illus: true })}></div><div class="pi">${pc.emblem(56)}<div>${T(P.callsign, { size: 20, weight: 1.75, tracking: 2.4 })}<div class="pl">${rankSVG(lv, '', 22)}${t11('LEVEL ' + lv)}</div></div></div>
+              <div class="xpbk">${[['KILLS', m.kills * 100], ['HEADSHOTS', m.headshots * 50], ['MEDALS', medals.reduce((a, [, v]) => a + v.n * 50, 0)], ['OBJECTIVES', m.objectiveXP || 0], [win ? 'WIN BONUS' : 'MATCH BONUS', win ? 1500 : 300]].map(([k, v]) => `<div>${t11(k)}<span>${N('+' + v, 13)}</span></div>`).join('')}</div>${this.creditsPanel()}</div>
             <div class="tiles">${tile('ELIMINATIONS', m.kills, 0, 'BEST STREAK ' + m.bestStreak, m.kills / MODE.target)}${tile('DEATHS', m.deaths, 1, 'DMG TAKEN ' + Math.round(m.damage / 10), m.deaths / Math.max(1, m.kills + m.deaths))}${MODE.id === 'hardpoint' ? tile('ZONE HOLD', Math.floor(Math.min(MODE.holdGoal, m.zs?.hold || 0)) + 'S', 2, 'CAPTURES ' + (m.zs?.captured || 0), (m.zs?.hold || 0) / MODE.holdGoal)
               : MODE.id === 'survival' ? tile('WAVES', `${m.wave || 0}/${MODE.waves.length}`, 2, m.bossKilled ? 'JUGGERNAUT DOWN' : 'LIVES LEFT ' + (m.lives ?? 0), (m.wave || 0) / MODE.waves.length)
               : tile('K/D RATIO', m.kd.toFixed(2), 2, 'CAREER ' + (P.kills / Math.max(1, P.matches * 6)).toFixed(2), m.kd / 5)}${tile('ACCURACY', Math.round(m.accuracy * 100) + '%', 3, m.hits + '/' + m.shots + ' HITS', m.accuracy)}${tile('SCORE', m.score, 4, 'SPM ' + Math.round(m.score / Math.max(1, m.playTime / 60)), m.score / 5000)}</div>
@@ -535,6 +691,16 @@ export class Screens {
       ${after.level > before.level ? this.levelToast(after.level, unl) : ''}
 `;
   }
+  /** Relatório: créditos ganhos (com composição) e avanço do passe. */
+  creditsPanel() {
+    const inv = this.ctx.services.inventory;
+    const A = inv?.lastAward;
+    if (!A) return '';
+    const fmt = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    const up = A.bpAfter.tier > A.bpBefore.tier;
+    return `<div class="panel crd"><div class="top">${creditSVG(20)}${N('+' + fmt(A.credits), 20)}${t11('CRÉDITOS', { size: 11 })}<span class="r">${t11('PASSE', { size: 10 })}${N(up ? `${A.bpBefore.tier} > ${A.bpAfter.tier}` : `NV ${A.bpAfter.tier}`, 13)}</span></div>
+      <div class="ln">${A.lines.map(([k, v]) => `<span>${t11(k, { size: 9 })}${N('+' + v, 11)}</span>`).join('')}</div></div>`;
+  }
   /**
    * Toast de subida de nível no fim da partida: entra por cima, mostra o
    * nível novo e os desbloqueios, e some sozinho (no modo shot fica parado).
@@ -558,9 +724,20 @@ export class Screens {
   // ─── interação ──────────────────────────────────────────────────────
   bind(name, el) {
     const hud = this.hud;
+    if (name === 'arsenal') hud.arsenal?.bind(el);
     el.addEventListener('click', (ev) => {
-      const t = ev.target.closest('[data-go],[data-act],[data-tab],[data-att],[data-v],[data-lo],[data-mode],[data-map],[data-camo]');
-      if (!t) return;
+      const t = ev.target.closest('[data-go],[data-act],[data-tab],[data-att],[data-v],[data-lo],[data-mode],[data-map],[data-camo],[data-pick],[data-ks],[data-reload]');
+      if (!t || t.closest('[data-a]')) return;
+      if (t.dataset.tab2 && hud.arsenal) hud.arsenal.tab = t.dataset.tab2;
+      if (t.dataset.reload) { this.hud.saveProfile(); return location.reload(); }
+      if (t.dataset.pick) return this.pickLoadout(t.dataset.pick, t.dataset.id);
+      if (t.dataset.ks) {
+        // seletor próprio da feature streaks; ao fechar, o slot é redesenhado
+        this.ctx.services.streaks?.openPicker?.();
+        const off = this.ctx.bus.on?.('streak:loadout', () => { off?.(); if (this.cur === 'loadout') this.show('loadout'); });
+        return;
+      }
+      if (t.dataset.lo) { this.loPick = this.loPick === t.dataset.lo ? null : t.dataset.lo; return this.show('loadout'); }
       if (t.dataset.mode) { hud.selectMode(t.dataset.mode); this.show('main'); }
       else if (t.dataset.map) this.pickMap(t.dataset.map);
       else if (t.dataset.camo) { hud.setCamo(t.dataset.camo); this.show('loadout'); }
@@ -626,6 +803,7 @@ export class Screens {
     this.show(name);
   }
   focusables() {
+    if (this.cur === 'arsenal') return [];
     return this.el ? [...this.el.querySelectorAll(this.cur === 'settings' ? '.opt' : '.btn,.slot')] : [];
   }
   focus(i) {
@@ -637,6 +815,14 @@ export class Screens {
   /** teclado: retorna true se consumiu */
   key(code) {
     if (!this.cur) return false;
+    // digitando na busca do inventário: as teclas são do campo de texto
+    const ae = document.activeElement;
+    if (ae && ae.tagName === 'INPUT' && ae.type === 'text') {
+      if (code === 'Escape') ae.blur();
+      return false;
+    }
+    if (this.cur === 'arsenal' && this.hud.arsenal?.key(code)) return true;
+    if (this.cur === 'loadout' && this.loPick && (code === 'Escape' || code === 'Backspace')) { this.loPick = null; this.show('loadout'); return true; }
     if (code === 'ArrowDown' || code === 'KeyS') { this.focus(this.focusIdx + 1); if (this.cur === 'settings') this.refreshHelp(); return true; }
     if (code === 'ArrowUp' || code === 'KeyW') { this.focus(this.focusIdx - 1); if (this.cur === 'settings') this.refreshHelp(); return true; }
     if (code === 'Enter' || code === 'Space') {
@@ -678,31 +864,40 @@ export class Screens {
     }
     if (code === 'KeyL' && this.cur === 'main') { this.go('loadout'); return true; }
     if (code === 'KeyO' && this.cur === 'main') { this.go('settings'); return true; }
+    if ((code === 'KeyI' || code === 'KeyK') && this.cur === 'main' && this.hud.arsenal) { this.go('arsenal'); return true; }
     if (code === 'Escape' || code === 'Backspace') {
       if (this.cur === 'end') { this.hud.action('quit'); return true; }
-      if (this.cur === 'loadout' || this.cur === 'settings') { this.show(this.hud.inMatch ? 'pause' : 'main'); return true; }
+      if (this.cur === 'loadout' || this.cur === 'settings' || this.cur === 'arsenal') { this.show(this.hud.inMatch ? 'pause' : 'main'); return true; }
       if (this.cur === 'pause') { this.hud.action('resume'); return true; }
     }
     return false;
   }
 }
 
-/** Grão de filme procedural (ladrilho PNG em data URL). */
-function makeGrain() {
-  const n = 256;
+/**
+ * Grão de filme procedural (ladrilho 128² de ruído). Gerado de forma
+ * assíncrona como blob URL (string curta no HTML das telas, sem PNG em data
+ * URL de centenas de KB a cada re-render); `onUrl` recebe a URL pronta.
+ */
+function makeGrain(onUrl) {
+  const n = 128;
   const cv = document.createElement('canvas');
   cv.width = cv.height = n;
   const g = cv.getContext('2d');
   const img = g.createImageData(n, n);
+  // `img.data` é um getter do DOM: lido uma vez (no laço custava segundos em CPU lenta)
+  const d = img.data;
   let s = 99991;
   for (let i = 0; i < n * n; i++) {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    s = (Math.imul(s, 1103515245) + 12345) & 0x7fffffff;
     const v = (s >> 16) & 255;
-    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
-    img.data[i * 4 + 3] = 255;
+    d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v;
+    d[i * 4 + 3] = 255;
   }
   g.putImageData(img, 0, 0);
-  return cv.toDataURL('image/png');
+  if (cv.toBlob) cv.toBlob((b) => b && onUrl(URL.createObjectURL(b)), 'image/png');
+  else onUrl(cv.toDataURL('image/png'));
+  return '';
 }
 
 export { vfovToH };
@@ -721,6 +916,7 @@ function makeTopo() {
   cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
   const img = g.createImageData(W, H);
+  const D = img.data;
   // grade de valores aleatórios + interpolação suave
   const G = 64, vals = new Float32Array(G * G);
   let s = 4242;
@@ -746,8 +942,8 @@ function makeTopo() {
       const index = Math.round(v) % 5 === 0; // curva mestra mais forte
       const a = Math.max(0, 1 - d / (index ? 0.9 : 0.6));
       const o = i * 4;
-      img.data[o] = img.data[o + 1] = img.data[o + 2] = 235;
-      img.data[o + 3] = a * (index ? 255 : 150);
+      D[o] = D[o + 1] = D[o + 2] = 235;
+      D[o + 3] = a * (index ? 255 : 150);
     }
   }
   g.putImageData(img, 0, 0);

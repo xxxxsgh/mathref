@@ -167,21 +167,29 @@ export function factoryMaterials(mats) {
 }
 
 // ─── construção ────────────────────────────────────────────────────────
-export function buildFactory(W) {
+/** Assíncrona: cede o thread entre blocos (W.tick) — ver index.js. */
+export async function buildFactory(W) {
   const { B } = W;
+  const tick = W.tick || (async () => {});
   B.cast = false;
   B.noCastZone = true;
   ground(W);
   B.noCastZone = false;
   B.cast = true;
+  await tick('chão', 0.1);
   hallShell(W);
   roof(W);
+  await tick('galpão', 0.3);
   crane(W);
   catwalks(W);
+  await tick('passarelas', 0.45);
   offices(W);
+  await tick('escritórios', 0.6);
   machinery(W);
+  await tick('máquinas', 0.75);
   yard(W);
   surroundings(W);
+  await tick('pátio', 0.9);
   // pendências registradas pelos geradores (carros queimados, caçambas, prédios)
   for (const r of W.rubbleSpots) {
     if (r.small) P.scatterBricks(W, r.p[0], r.p[2], r.r, r.n, { y: r.p[1] || 0 });

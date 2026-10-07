@@ -37,8 +37,30 @@ export function basisFD(F, D, pos) {
 }
 const pose6 = (p, r) => ({ pos: V(...p), rot: new THREE.Euler(...r) });
 
+/** Pontos dos cosméticos (contador, adesivos, chaveiro) no espaço do modelo. */
+export const KR9_COSMETIC = {
+  counter: { pos: V(-0.0142, -0.004, -0.14) },
+  stickers: [
+    { pos: V(-0.0128, -0.07, -0.19), n: V(-1, 0, 0), size: 0.024 },
+    { pos: V(-0.0142, 0.006, -0.19), n: V(-1, 0, 0), size: 0.018 },
+    { pos: V(-0.0225, -0.012, -0.29), n: V(-1, 0, 0), size: 0.024 },
+    { pos: V(-0.016, -0.005, 0.12), n: V(-1, 0, 0), size: 0.02 },
+  ],
+  charm: V(-0.022, -0.012, -0.03),
+};
+export const P11_COSMETIC = {
+  counter: { pos: V(-0.0119, -0.016, -0.075), scale: 0.8 },
+  stickers: [
+    { pos: V(-0.0122, -0.026, -0.12), n: V(-1, 0, 0), size: 0.016 },
+    { pos: V(-0.0124, 0.004, -0.06), n: V(-1, 0, 0), size: 0.014 },
+    { pos: V(-0.0155, -0.08, 0.0), n: V(-1, 0, 0), size: 0.016 },
+    { pos: V(-0.0124, 0.004, -0.15), n: V(-1, 0, 0), size: 0.012 },
+  ],
+  charm: V(-0.006, -0.112, 0.02),
+};
+
 /** Guarda (troca de arma): a arma desce e gira para fora do quadro. */
-function makeHolster(T, k = 1) {
+export function makeHolster(T, k = 1) {
   const gun = new Track([
     { t: 0, v: [0, 0, 0, 0, 0, 0] },
     { t: T, v: [0.03 * k, -0.26, 0.07, -0.85, 0.25, 0.45], e: 'in' },
@@ -56,7 +78,7 @@ function makeHolster(T, k = 1) {
 export const RIFLE_GRIP = { phi: 2.9, z: -0.34, fwd: 0.2, thumbUp: -0.012, thumbX: -0.026, over: true, roll: 0.5 };
 export const RIFLE_GRIP_ADS = { phi: 4.1, z: -0.32, fwd: 0.35, thumbUp: -0.014 };
 
-function rifleReload(empty) {
+export function rifleReload(empty) {
   const T = empty ? 2.75 : 2.3;
   const gun = new Track([
     { t: 0, v: [0, 0, 0, 0, 0, 0] },
@@ -117,7 +139,7 @@ function rifleInspect() {
   ]);
   return { name: 'inspect', duration: 3.6, gun };
 }
-function rifleEquip() {
+export function rifleEquip() {
   const gun = new Track([
     { t: 0, v: [0.05, -0.28, 0.05, -0.9, 0.25, 0.5] },
     { t: 0.5, v: [0, 0.006, 0, 0.03, 0, -0.02], e: 'out3' },
@@ -133,7 +155,7 @@ export function makeRifle(M, handR, handL, params) {
   const ow = R.opticWindow;
   const lens = makeLens({ w: ow.w, h: ow.h });
   lens.position.set(0, ow.y, (ow.z0 + ow.z1) / 2 + 0.006);
-  R.root.add(lens);
+  R.optic.add(lens);
   const magSpare = buildMag(M);
   magSpare.visible = false;
   R.root.add(magSpare);
@@ -202,6 +224,29 @@ export function makeRifle(M, handR, handL, params) {
     recoil: { z: 0.55, x: 0.9, xAds: 0.35, climb: 0.0042, climbAds: 0.0032, kick: 0.09 },
     // anchors dos antebraços (ombros) no espaço do rig
     anchorL: V(-0.25, -0.65, -0.15), followL: 0, wristL: 0.4,
+    setSight: (sight, er) => ads.pos.set(0, 0, -er).sub(sight.clone().sub(pivot)),
+    adsBase: { sight: R.sight.clone(), eyeRelief, vmFov: 19 },
+    // pontos de montagem de acessórios (attachments.js) e de cosméticos
+    mounts: {
+      muzzle: { u: 0.672, r: 0.0124, base: 0 },
+      under: { u: 0.47, y: -0.0322 },
+      side: { u: 0.43, x: -0.0222, y: -0.006 },
+      top: { u: 0.065, y: 0.0245 },
+    },
+    opticRoot: R.optic,
+    cosmetic: KR9_COSMETIC,
+    /**
+     * A holográfica é fundida na malha principal (draw calls de sempre); a
+     * ótica 3x troca para uma malha sem ela, montada só na 1ª vez.
+     */
+    setOpticMesh(withHolo) {
+      if (!withHolo && !this._noHolo) {
+        this._noHolo = buildRifle(M, { noOptic: true }).rifle;
+        R.root.add(this._noHolo);
+      }
+      R.rifle.visible = withHolo;
+      if (this._noHolo) this._noHolo.visible = !withHolo;
+    },
   };
 }
 
@@ -209,7 +254,7 @@ export function makeRifle(M, handR, handL, params) {
 const RIFLE_TILT = 0.26;
 const _rq = new THREE.Quaternion().setFromAxisAngle(V(1, 0, 0), -RIFLE_TILT);
 const _rp = new THREE.Vector3();
-function rifleGripSdf(p) {
+export function rifleGripSdf(p) {
   _rp.set(p.x, p.y + 0.1, p.z + 0.008).applyQuaternion(_rq);
   const grip = sdBox3(_rp, { x: 0, y: 0, z: 0 }, { x: 0.0145, y: 0.056, z: 0.0215 }, 0.0075);
   const lower = sdBox3(p, { x: 0, y: -0.03, z: -0.1 }, { x: 0.016, y: 0.016, z: 0.1 }, 0.003);
@@ -409,5 +454,14 @@ export function makePistol(M, handR, handL, params) {
     recoil: { z: 0.4, x: 1.25, xAds: 0.7, climb: 0.0055, climbAds: 0.0045, kick: 0.11, slide: true },
     anchorL: V(-0.42, -0.55, -0.1), followL: 0.0, wristL: 0.8,
     anchorR: V(0.24, -0.55, -0.05),
+    setSight: (sight, er) => ads.pos.set(0, 0, -er).sub(sight.clone().sub(pivot)),
+    adsBase: { sight: R.sight.clone(), eyeRelief, vmFov: 38 },
+    mounts: {
+      muzzle: { u: 0.19, r: 0.0058, base: 0, thread: true },
+      under: null,
+      side: { u: 0.135, x: 0, y: -0.0245, under: true, scale: 0.8 },
+      top: null,
+    },
+    cosmetic: P11_COSMETIC,
   };
 }

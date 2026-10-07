@@ -29,8 +29,9 @@
  * mapUrl(id), setMap(id). Detalhes em README.md desta pasta.
  */
 import * as THREE from 'three';
-import { createMaterials, SURFACE, weather, setOcclusionVolumes } from './materials.js';
+import { createMaterials, SURFACE, weather, setOcclusionVolumes, setWeatherLite } from './materials.js';
 import * as DT from './decals.js';
+import { setCanvasScale } from './decals.js';
 import { Builder } from './geo.js';
 import { Instancer } from './props.js';
 import { WindowBatch } from './windows.js';
@@ -106,9 +107,21 @@ export default {
   name: 'world',
   order: 10,
 
-  init(ctx) {
+  async init(ctx) {
     const { scene, collision, quality, renderer } = ctx;
     const t0 = performance.now();
+    // fases da carga: tempo de cada uma (stats.phases) + progresso na tela
+    // de carga, cedendo um frame entre elas (ctx.bootProgress do núcleo)
+    const phases = [];
+    let tp = t0;
+    const phase = async (label, f) => {
+      const now = performance.now();
+      // heap JS (só Chrome) após a fase: acha picos de memória na carga
+      const heap = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : undefined;
+      phases.push([label, Math.round(now - tp), heap]);
+      await ctx.bootProgress?.(label, f);
+      tp = performance.now();
+    };
     // ── seleção de mapa (?map=street|factory) ──
     const req = String(ctx.params?.get?.('map') || 'street').toLowerCase();
     const mapId = MAP_DATA[req] ? req : 'street';
@@ -120,8 +133,18 @@ export default {
     scene.add(root);
     this.root = root;
 
+    // ── camada do aparelho (core/Quality.js → TIER_PATCHES) ──
+    // detail < 1 (celular/modo leve): texturas de canvas pela metade,
+    // entulho miúdo rarefeito, corte de distância mais curto
+    // preset low (na carga) também rarefaz entulho e encurta o corte dele
+    const detail = Math.min(quality.detail ?? 1, quality.level === 'low' ? 0.6 : 1);
+    const light = detail < 1 || quality.level === 'low' || quality.tier !== 'desktop';
+    setCanvasScale(detail < 1 ? 0.5 : 1);
+    setWeatherLite(light);
+
     // ── materiais ──
-    const { mats, genMs, sets } = createMaterials(quality, renderer);
+    const { mats, genMs, sets } = await createMaterials(quality, renderer, (k, f) => ctx.bootProgress?.('texturas', f * 0.4));
+    await phase('texturas', 0.4);
     this.sets = sets;
     const nrm = (t) => ({ map: t.map, normalMap: t.normalMap, normalScale: new THREE.Vector2(1.4, 1.4) });
     const decalMat = (map, extra = {}) =>
@@ -166,6 +189,7 @@ export default {
     mats.taillight = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.18, metalness: 0, emissive: 0x2a0402, vertexColors: true, envMapIntensity: 1.2 });
     // poça: água turva e lisa (espelho do céu), sem intemperismo
     mats.puddle = new THREE.MeshStandardMaterial({ color: 0x15120f, roughness: 0.02, metalness: 0, envMapIntensity: 1.4, vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
+    await phase('decalques', 0.43);
     mats.mesh = new THREE.MeshStandardMaterial({ map: meshTexture(), alphaTest: 0.35, side: THREE.DoubleSide, roughness: 0.45, metalness: 0.8, vertexColors: true });
     mats.fabricDS = mats.fabric.clone();
     mats.fabricDS.side = THREE.DoubleSide;
@@ -198,6 +222,7 @@ export default {
       LAYOUT.uWalk.value.set(6.0, 9.5);
     }
     this.mats = mats;
+    await phase('materiais', 0.45);
 
     // ── céu, névoa, luzes ──
     scene.background = ATMOS.horizon.clone();
@@ -226,8 +251,13 @@ export default {
 
     // ── geometria do mapa ──
     const W = {
-      B: new Builder(collision, { chunk: 64 }),
-      I: new Instancer(),
+      // camadas leves (preset low na carga, PC fraco, celular): blocos de
+      // mesclagem de 192 m centrados (~2 blocos por material na rua inteira) e
+      // entulho com menos variantes em células de 78 m: de ~600 para poucas
+      // centenas de draw calls (no menu/rua quase tudo já estava no frustum)
+      B: new Builder(collision, light ? { chunk: 192, centered: true } : { chunk: 64 }),
+      I: new Instancer(detail, light ? { cell: 78, variants: true } : {}),
+      tick: (label, f) => ctx.bootProgress?.(label, 0.47 + 0.28 * f),
       win: new WindowBatch(),
       rng: makeRng(20251),
       quality,
@@ -237,16 +267,21 @@ export default {
       trashSpots: [],
     };
     W.B.realShadows = quality.level === 'high' || quality.level === 'ultra';
-    MAP.build(W);
+    await phase('céu', 0.47);
+    await MAP.build(W);
+    await phase('geometria', 0.75);
     const tris = W.B.tris;
     const decals = new Set(['streaks', 'soot', 'cracks', 'bullets', 'bulletsM', 'chips', 'scorch', 'shards', 'posters', 'graffiti', 'paint', 'stains', 'trash', 'signs', 'contact']);
+    // camadas leves: props pequenos instanciados entram na malha mesclada
+    const bakedProps = light ? W.I.bakeInto(W.B) : 0;
     const meshes = W.B.build(root, mats, { noShadow: new Set([...decals, 'room', 'fglass', 'fsign', 'puddle']) });
     const inst = W.I.build(root, mats);
     // entulho miúdo partido em células (props.js): some além de uma
     // distância — um pedaço de 20 cm a 90 m ocupa menos de um pixel
     this.debris = inst.filter((m) => m.name.includes('#'));
-    this.debrisDist = quality.level === 'low' ? 50 : quality.level === 'medium' ? 70 : 95;
+    this.debrisDist = (quality.level === 'low' ? 50 : quality.level === 'medium' ? 70 : 95) * (detail < 1 ? 0.6 : 1);
     this.windows = W.win.build(root, { grime: this.sets.grime, quality });
+    await phase('malhas', 0.88);
 
     // ── colunas de fumaça de incêndios distantes ──
     if (quality.level !== 'low') {
@@ -261,7 +296,9 @@ export default {
     // O ambiente vai em scene.environment (todos os PBR recebem IBL difuso e
     // especular). A feature rendering troca pelo céu físico dela quando presente.
     let environment = null;
-    try {
+    // sem alvos half-float (quality.hdr false: modo leve ou GPU sem
+    // EXT_color_buffer_half_float) o PMREM sairia preto/com erro de GL
+    if (quality.hdr !== false) try {
       environment = createEnvironment(renderer, sky);
       if (!ctx.scene.environment) ctx.scene.environment = environment;
       mats.glass.envMapIntensity = 1.2;
@@ -269,6 +306,7 @@ export default {
     } catch (err) {
       console.warn('[world] envmap falhou', err);
     }
+    await phase('fogo/ambiente', 1);
 
     this.stats = {
       ms: Math.round(performance.now() - t0),
@@ -278,6 +316,10 @@ export default {
       windows: W.win.count,
       tris,
       colliders: collision.colliders.size,
+      phases,
+      detail,
+      skippedDebris: W.I.skipped,
+      bakedProps,
     };
 
     const shotPoses = JSON.parse(JSON.stringify(MAP.shotPoses));

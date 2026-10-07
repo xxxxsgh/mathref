@@ -46,6 +46,27 @@ html.il-touch, html.il-touch body, html.il-touch #app canvas {
 #il-touch .t-reload { --s: 52px; right: calc(210px * var(--ts) + env(safe-area-inset-right)); bottom: calc(var(--hb) + 2px * var(--ts)); }
 #il-touch .t-gren { --s: 46px; right: calc(150px * var(--ts) + env(safe-area-inset-right)); bottom: calc(var(--hb) + 114px * var(--ts)); }
 #il-touch .t-melee { --s: 46px; right: calc(90px * var(--ts) + env(safe-area-inset-right)); bottom: calc(var(--hb) + 124px * var(--ts)); }
+/* ações de movimento extras (services.movement.touchHints): DIVE/deitar acima
+   do SWAP na coluna da direita; lean Q/E em par no alto à direita, fora da
+   coluna e longe do tiro (o polegar sobe para "espiar" sem largar a mira) */
+#il-touch .t-prone { --s: 46px; right: calc(23px + env(safe-area-inset-right)); bottom: calc(var(--hb) + 199px * var(--ts)); }
+#il-touch .t-leanL, #il-touch .t-leanR { --s: 42px; border-radius: 12px; top: calc(12px + env(safe-area-inset-top)); }
+#il-touch .t-leanR { right: calc(76px * var(--ts) + env(safe-area-inset-right)); }
+#il-touch .t-leanL { right: calc(128px * var(--ts) + env(safe-area-inset-right)); }
+/* killstreaks prontas: fileira no alto, centro, abaixo da bússola */
+#il-touch .t-stk { --s: 46px; border-radius: 12px; top: calc(36px + env(safe-area-inset-top)); border-color: rgba(226,180,90,.85); color: #f6d58f; background: rgba(40,30,10,.42); }
+#il-touch .t-stk b { font-size: calc(7.5px * var(--ts)); letter-spacing: .08em; }
+#il-touch .t-stk0 { left: calc(50% - 110px * var(--ts)); }
+#il-touch .t-stk1 { left: calc(50% - 54px * var(--ts)); }
+#il-touch .t-stk2 { left: calc(50% + 2px * var(--ts)); }
+#il-touch .t-stk3 { left: calc(50% + 58px * var(--ts)); }
+/* execução: aparece só com alvo, entre a mira e o tiro */
+#il-touch .t-fin { --s: 64px; left: calc(50% + 70px * var(--ts)); top: calc(50% + 10px * var(--ts)); border-color: rgba(226,180,90,.95); background: rgba(60,40,10,.45); color: #fff; }
+/* designador do morteiro: some o combate, ficam CONFIRM (no lugar do tiro) e CANCEL */
+#il-touch .t-dconf { --s: 94px; right: calc(100px * var(--ts) + env(safe-area-inset-right)); bottom: calc(var(--hb) + 6px * var(--ts)); background: rgba(226,180,90,.36); border-color: rgba(226,180,90,.95); color: #fff; }
+#il-touch .t-dcancel { --s: 56px; right: calc(16px + env(safe-area-inset-right)); bottom: var(--hb); }
+#il-touch.desig .tb:not(.t-dconf):not(.t-dcancel):not(.t-util) { display: none; }
+#il-touch .tb.hide { display: none; }
 #il-touch .t-util { --s: 40px; border-radius: 9px; top: calc(10px + env(safe-area-inset-top)); }
 #il-touch .t-pause { left: calc(50% + 150px); }
 #il-touch .t-score { left: calc(50% - 190px); }
@@ -70,6 +91,11 @@ export const ICONS = {
   swap: '<svg viewBox="0 0 24 24"><path d="M4 8h14l-3.5-3.5M20 16H6l3.5 3.5"/></svg>',
   grenade: '<svg viewBox="0 0 24 24"><ellipse cx="11" cy="14.5" rx="5.5" ry="6.5"/><path d="M9 8V5.5h4V8M13 6.5h3.5l1.5 2M8 12.5h6M8 16.5h6"/></svg>',
   melee: '<svg viewBox="0 0 24 24"><path d="M4 20l3-3M6 15l3 3M8.5 15.5L19 5l.5 2.5L10 17z"/></svg>',
+  prone: '<svg viewBox="0 0 24 24"><path d="M12 4v9M8 9.5l4 4 4-4M4 19h16"/></svg>',
+  leanL: '<svg viewBox="0 0 24 24"><path d="M14 20V11a4 4 0 0 0-4-4H5M8 4L5 7l3 3"/></svg>',
+  leanR: '<svg viewBox="0 0 24 24"><path d="M10 20V11a4 4 0 0 1 4-4h5M16 4l3 3-3 3"/></svg>',
+  streak: '<svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg>',
+  cancel: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   pause: '<svg viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></svg>',
   score: '<svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></svg>',
   rotate: '<svg viewBox="0 0 48 48"><rect x="15" y="6" width="18" height="36" rx="3"/><path d="M21 37h6"/></svg>',

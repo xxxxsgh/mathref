@@ -17,27 +17,90 @@ export const QUALITY_PRESETS = {
     dprCap: 1, msaa: false, shadows: true, shadowMapSize: 1024, shadowCascades: 1, shadowScale: 1,
     anisotropy: 2, ssao: false, contactAO: true, ssr: false, bloom: false, taa: false, motionBlur: false,
     volumetrics: false, drawDistance: 220, particleBudget: 0.4, textureSize: 512, foliage: 0.3,
+    // resolução interna 75 % (o compositor reamostra e aplica nitidez CAS)
+    renderScale: 0.75,
   },
   medium: {
     dprCap: 1, msaa: true, shadows: true, shadowMapSize: 2048, shadowCascades: 2, shadowScale: 1,
     anisotropy: 4, ssao: true, contactAO: true, ssr: false, bloom: true, taa: false, motionBlur: false,
-    volumetrics: false, drawDistance: 350, particleBudget: 0.7, textureSize: 1024, foliage: 0.6,
+    volumetrics: false, drawDistance: 350, particleBudget: 0.7, textureSize: 1024, foliage: 0.6, renderScale: 1,
   },
   high: {
     // 1.0: o alvo é 60 fps num notebook intermediário — telas HiDPI
     // multiplicariam o custo do pós (AO, GI, volumétrico, TAA) por 2–4×
     dprCap: 1, msaa: true, shadows: true, shadowMapSize: 2048, shadowCascades: 3, shadowScale: 1,
     anisotropy: 8, ssao: true, contactAO: true, ssr: true, bloom: true, taa: true, motionBlur: true,
-    volumetrics: true, drawDistance: 500, particleBudget: 1, textureSize: 2048, foliage: 1,
+    volumetrics: true, drawDistance: 500, particleBudget: 1, textureSize: 2048, foliage: 1, renderScale: 1,
   },
   ultra: {
     dprCap: 2, msaa: true, shadows: true, shadowMapSize: 4096, shadowCascades: 4, shadowScale: 1,
     anisotropy: 16, ssao: true, contactAO: true, ssr: true, bloom: true, taa: true, motionBlur: true,
-    volumetrics: true, drawDistance: 800, particleBudget: 1.5, textureSize: 2048, foliage: 1.3,
+    volumetrics: true, drawDistance: 800, particleBudget: 1.5, textureSize: 2048, foliage: 1.3, renderScale: 1,
   },
 };
 
 export const QUALITY_LEVELS = ['low', 'medium', 'high', 'ultra'];
+
+/**
+ * CAMADAS de aparelho (`quality.tier`), aplicadas POR CIMA de qualquer
+ * preset/degrau — o preset diz "quão bonito", a camada diz "quanto o
+ * aparelho aguenta carregar". Desktop não tem patch (nada muda em high).
+ *
+ *   mobile  celular/tablet (classifyDevice → mobile): texturas 512, sombra
+ *           1024 sem cascatas, sem SSAO/SSR/volumétrico/TAA/motion blur,
+ *           MSAA off, distância de desenho curta e `detail` 0,5 (o mundo
+ *           pula entulho miúdo, props de fundo, janelas internas etc.).
+ *   lite    `?lite=1` (botão "Tentar modo leve") ou carga anterior que não
+ *           terminou: o mínimo que ainda é o jogo — `detail` 0,25, sem bloom
+ *           nem AO de contato, folhagem/partículas no chão.
+ *
+ * Campos novos (dicas): `detail` (0..1, detalhe geométrico do mundo, 1 =
+ * completo), `hdr` (false = o compositor usa caminho LDR/sem alvos float),
+ * `probes` (false = sem sondas/cubemaps de reflexo locais), `tier`.
+ */
+export const TIER_PATCHES = {
+  desktop: {},
+  mobile: {
+    dprCap: 1, msaa: false, shadowMapSize: 1024, shadowCascades: 1, anisotropy: 2, ssao: false, ssr: false,
+    taa: false, motionBlur: false, volumetrics: false, drawDistance: 240, textureSize: 512,
+    detail: 0.5, probes: false,
+  },
+  // PC fraco detectado (classifyDevice → weak): começa leve, mas é uma camada
+  // MACIA — escolher um preset manual (configurações ou ?q=) a remove.
+  'low-desktop': {
+    dprCap: 1, msaa: false, shadowMapSize: 1024, shadowCascades: 1, ssao: false, ssr: false, taa: false,
+    motionBlur: false, volumetrics: false, anisotropy: 4, drawDistance: 300, textureSize: 1024, detail: 0.6,
+    probes: false, renderScale: 0.75,
+  },
+  lite: {
+    dprCap: 1, msaa: false, shadowMapSize: 1024, shadowCascades: 1, shadowScale: 0.5, anisotropy: 1, ssao: false,
+    contactAO: false, ssr: false, bloom: false, taa: false, motionBlur: false, volumetrics: false, drawDistance: 180,
+    textureSize: 512, foliage: 0.15, particleBudget: 0.25, detail: 0.25, hdr: false, probes: false,
+  },
+};
+
+/**
+ * Aplica a camada como TETO: números ficam no mínimo (preset, camada),
+ * booleanos só continuam ligados se a camada não os desliga. Assim `low`
+ * num celular não "sobe" nada por causa da camada.
+ */
+export function applyTier(q, patch) {
+  for (const [k, v] of Object.entries(patch || {})) {
+    if (typeof v === 'number') q[k] = typeof q[k] === 'number' ? Math.min(q[k], v) : v;
+    else if (typeof v === 'boolean') q[k] = v ? !!q[k] || q[k] === undefined : false;
+    else q[k] = v;
+  }
+  return q;
+}
+
+/** Camada do aparelho: 'lite' (pedido/forçado), 'mobile' ou 'desktop'. */
+export function deviceTier(device, { lite = false } = {}) {
+  if (lite) return 'lite';
+  if (device?.mobile) return 'mobile';
+  return device?.weak ? 'low-desktop' : 'desktop';
+}
+/** Camadas que o jogador pode furar escolhendo um preset manual. */
+export const SOFT_TIERS = new Set(['low-desktop']);
 
 /**
  * Degraus do modo automático, do mais caro (0) ao mais barato. Cada degrau =
@@ -52,7 +115,7 @@ export const AUTO_LADDER = [
   { name: 'medium', level: 'medium', patch: {} },
   { name: 'medium-', level: 'medium', patch: { ssao: false, bloom: false, shadowScale: 0.5, foliage: 0.45, particleBudget: 0.5 } },
   { name: 'low', level: 'low', patch: {} },
-  { name: 'low-', level: 'low', patch: { shadowScale: 0.5, foliage: 0.15, particleBudget: 0.25 } },
+  { name: 'low-', level: 'low', patch: { shadowScale: 0.5, foliage: 0.15, particleBudget: 0.25, renderScale: 0.65, contactAO: false } },
 ];
 export const rungIndex = (name) => {
   const i = AUTO_LADDER.findIndex((r) => r.name === name);
@@ -109,25 +172,32 @@ export function classifyDevice(info = {}) {
     cls = 'nvidia';
     if (/rtx\s*[2-9]0\d0|rtx\s*a\d|rtx\s*\d{4}/.test(gpu)) score = 3;
     else if (/gtx\s*1[0-6]\d0|gtx\s*9[6-8]0/.test(gpu)) score = 2;
-    else if (/mx\s*\d{3}|gt\s*\d{3,4}|gtx\s*[5-9][0-5]0/.test(gpu)) score = 1;
+    // MX (notebook) e GT (entrada): na prática, integrada
+    else if (/\bmx\s*\d{2,3}|\bgt\s*\d{3,4}/.test(gpu)) score = 0;
+    else if (/gtx\s*[5-9][0-5]0/.test(gpu)) score = 1;
     else score = 2;
   } else if (/radeon|amd/.test(gpu)) {
     cls = 'amd';
     if (/rx\s*[5-9]\d{3}|rx\s*vega|radeon pro/.test(gpu)) score = 3;
     else if (/rx\s*\d{3}\b/.test(gpu)) score = 2;
-    else score = 1; // "AMD Radeon(TM) Graphics" — integrada (APU)
+    // APUs recentes (Radeon 680M/780M/880M): integrada boa
+    else if (/radeon\s*[6-9]\d0m/.test(gpu)) score = 1;
+    else score = 0; // "AMD Radeon(TM) Graphics", "Radeon Vega 8" — APU antiga
   } else if (/intel/.test(gpu)) {
     cls = 'intel';
     if (/arc/.test(gpu)) score = 2;
-    else if (/iris/.test(gpu)) score = 1;
-    else score = 0; // HD/UHD
+    else if (/iris\W*(\(r\))?\W*xe/.test(gpu)) score = 1;
+    else score = 0; // HD/UHD, Iris Plus/Pro antigas
   } else {
     // GPU desconhecida (renderer mascarado): decide por CPU/memória
     score = mobile ? (cores >= 8 && mem >= 6 ? 1 : 0) : cores >= 8 && mem >= 8 ? 2 : 1;
   }
   // aparelhos com pouca memória/CPU ficam no chão, qualquer que seja a GPU
   if (mem <= 2 || cores <= 2) score = Math.min(score, 0);
+  else if (!mobile && cores <= 4 && info.memory && info.memory <= 4) score = 0; // PC de 4 núcleos e ≤ 4 GB
   else if (mem <= 4 && !mobile) score = Math.min(score, 1);
+  // textura máxima < 8192: GPU antiga/limitada
+  if (info.maxTexture && info.maxTexture < 8192) score = Math.min(score, 0);
   // celular: tela pequena, térmica e bateria — nunca começa acima de medium
   if (mobile) score = Math.min(score, 1);
 
@@ -135,7 +205,7 @@ export function classifyDevice(info = {}) {
   const table = mobile
     ? [{ preset: 'low', ceiling: 'medium-' }, { preset: 'medium-', ceiling: 'medium' }]
     : [
-      { preset: 'low', ceiling: 'medium' },
+      { preset: 'low', ceiling: 'medium-' },
       { preset: 'medium', ceiling: 'high' },
       { preset: 'high', ceiling: 'high' },
       { preset: 'high', ceiling: 'ultra' },
@@ -149,6 +219,8 @@ export function classifyDevice(info = {}) {
     preset,
     ceiling: pick.ceiling,
     mobile,
+    /** PC fraco (GPU integrada/antiga/software, pouca CPU/memória) → camada 'low-desktop'. */
+    weak: !mobile && score === 0,
     gpuClass: cls,
     score,
     targetFps: mobile ? 30 : 60,
@@ -179,6 +251,7 @@ export function probeDevice(win = globalThis.window) {
     const c = win.document.createElement('canvas');
     const gl = c.getContext('webgl2') || c.getContext('webgl');
     if (gl) {
+      info.maxTexture = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 0;
       const ext = gl.getExtension('WEBGL_debug_renderer_info');
       info.gpu = String((ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || gl.getParameter(gl.RENDERER) || '');
       gl.getExtension('WEBGL_lose_context')?.loseContext();
@@ -193,13 +266,21 @@ export function probeDevice(win = globalThis.window) {
  * @param level 'auto' | 'low' | 'medium' | 'high' | 'ultra'
  * @param device resultado de classifyDevice() (usado por 'auto')
  */
-export function createQuality(level = 'high', bus = null, device = null) {
+export function createQuality(level = 'high', bus = null, device = null, { tier = 'desktop' } = {}) {
   const dev = device || classifyDevice({});
   const auto = level === 'auto';
   const start = auto ? rungSettings(rungIndex(dev.preset)) : QUALITY_PRESETS[level] ? { ...QUALITY_PRESETS[level], level } : { ...QUALITY_PRESETS.high, level: 'high' };
+  let patch = TIER_PATCHES[tier] || TIER_PATCHES.desktop;
+  const tier0 = TIER_PATCHES[tier] ? tier : 'desktop';
   const q = {
     level: start.level,
+    detail: 1,
+    renderScale: 1,
+    hdr: true,
+    probes: true,
     ...start,
+    /** Camada do aparelho ('desktop' | 'low-desktop' | 'mobile' | 'lite'), ver TIER_PATCHES. */
+    tier: TIER_PATCHES[tier] ? tier : 'desktop',
     /** 'auto' (governador escolhe degraus) ou 'manual' (preset fixo). */
     mode: auto ? 'auto' : 'manual',
     /** Degrau atual do modo automático (nome em AUTO_LADDER) ou null. */
@@ -212,12 +293,24 @@ export function createQuality(level = 'high', bus = null, device = null) {
      */
     set(levelOrPatch) {
       if (levelOrPatch === 'auto') {
+        // volta ao automático: a camada original (ex.: PC fraco) volta a valer
+        if (q.tier !== tier0) {
+          q.tier = tier0;
+          patch = TIER_PATCHES[tier0] || TIER_PATCHES.desktop;
+        }
         const i = rungIndex(q.device.preset);
         Object.assign(q, rungSettings(i), { mode: 'auto', rung: AUTO_LADDER[i].name });
       } else if (typeof levelOrPatch === 'string') {
         if (!QUALITY_PRESETS[levelOrPatch]) return q;
+        // preset manual escolhido pelo jogador: camada macia (PC fraco) sai
+        if (SOFT_TIERS.has(q.tier)) {
+          q.tier = 'desktop';
+          patch = TIER_PATCHES.desktop;
+        }
         Object.assign(q, QUALITY_PRESETS[levelOrPatch], { level: levelOrPatch, mode: 'manual', rung: null });
       } else Object.assign(q, levelOrPatch);
+      // a camada do aparelho é teto sobre qualquer preset/degrau
+      applyTier(q, patch);
       bus?.emit('quality:change', q);
       return q;
     },
@@ -226,5 +319,6 @@ export function createQuality(level = 'high', bus = null, device = null) {
       return q.mode === 'auto' ? 'auto' : q.level;
     },
   };
+  applyTier(q, patch);
   return q;
 }

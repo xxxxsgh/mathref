@@ -16,21 +16,74 @@ import { mulberry } from './noise.js';
 import { bevelBox, bevelCyl, atlasBox, vary, part, CRATE_RECT, treadTire } from './propkit.js';
 
 // ─── instanciamento ────────────────────────────────────────────────────
+/**
+ * Entulho miúdo (lascas, tijolos soltos, grãos, aglomerados): o que mais
+ * soma triângulos no mapa (~1,7 M dos ~2,4 M instanciados na rua). Nas
+ * camadas mobile/lite (`quality.detail` < 1) só uma fração entra.
+ */
+const MINOR = /^(rchunk|rgrit|rbrick|rclus|rpeb|rshard|glassbit|leafbit)/;
+
 export class Instancer {
-  constructor() {
+  /** @param detail 0..1 (`quality.detail`): fração do entulho miúdo mantida ≈ detail^1.5 */
+  constructor(detail = 1, { cell = 26, variants = false } = {}) {
+    this.cell = cell;
+    // variants: entulho miúdo com menos variantes de forma (rchunk0..7 → 2,
+    // rbrick/rgrit/rclus → 1): cada variante × célula era uma draw call
+    this.fewVariants = variants;
     this.sets = new Map();
+    this.keep = detail >= 1 ? 1 : Math.max(0.05, Math.pow(Math.max(0, detail), 1.5));
+    this.skipped = 0;
   }
   /** Registra uma instância de `geoKey` (geometria) com material `mat`. */
   add(geoKey, geo, mat, matrix, color = [1, 1, 1], opts = {}) {
+    if (this.fewVariants) {
+      const m = /^(rchunk|rbrick|rgrit|rclus)(\d+)$/.exec(geoKey);
+      if (m) geoKey = m[1] + (m[1] === 'rchunk' ? Number(m[2]) % 2 : 0);
+    }
     const key = `${geoKey}|${mat}|${opts.shadow === false ? 0 : 1}`;
     let s = this.sets.get(key);
     if (!s) {
-      s = { geo: withColor(geo), mat, mats: [], cols: [], shadow: opts.shadow !== false };
+      // camadas leves: entulho miúdo em low-poly (caixa / icosaedro do mesmo
+      // volume) — 108 → 12–20 triângulos por pedaço, milhares de pedaços
+      if (this.fewVariants && MINOR.test(geoKey)) geo = lowPoly(geoKey, geo);
+      s = { geo: withColor(geo), mat, mats: [], cols: [], shadow: opts.shadow !== false, seen: 0, minor: MINOR.test(geoKey) };
       this.sets.set(key, s);
+    }
+    // amostragem determinística (sequência de Weyl): mesma escolha em toda carga
+    if (s.minor && this.keep < 1 && ((s.seen++ * 0.6180339887) % 1) >= this.keep) {
+      this.skipped++;
+      return;
     }
     s.mats.push(matrix.clone());
     s.cols.push(color);
   }
+  /**
+   * Camadas leves: conjuntos PEQUENOS (≤ maxInstances, poucos triângulos no
+   * total) viram geometria estática mesclada no Builder — cada conjunto era
+   * uma draw call própria (centenas no mapa). Mantém cor por instância
+   * (vertex color) e UV da peça; o Builder agrupa por material/bloco.
+   */
+  bakeInto(B, { maxInstances = 32, maxTris = 40000 } = {}) {
+    let baked = 0;
+    const prevCast = B.cast;
+    for (const [key, s] of this.sets) {
+      if (!s.mats.length || s.mats.length > maxInstances || !s.geo.attributes.normal) continue;
+      const g = s.geo;
+      const tri = (g.index ? g.index.count : g.attributes.position.count) / 3;
+      if (tri * s.mats.length > maxTris) continue;
+      B.cast = s.shadow;
+      const _p = new THREE.Vector3();
+      s.mats.forEach((M, i) => {
+        _p.setFromMatrixPosition(M);
+        B.add(g, s.mat, M, { color: s.cols[i], worldUV: false, vcolor: true, at: [_p.x, _p.z] });
+      });
+      baked += s.mats.length;
+      this.sets.delete(key);
+    }
+    B.cast = prevCast;
+    return baked;
+  }
+
   /**
    * Cria os InstancedMesh. Conjuntos grandes (entulho espalhado pelo mapa
    * inteiro) são PARTIDOS em células de `CELL` m ao longo da rua: a esfera
@@ -40,10 +93,11 @@ export class Instancer {
    */
   build(root, mats) {
     const out = [];
-    const CELL = 26;
+    const CELL = this.cell; // 26 m; 52 m nas camadas leves (metade das draw calls de entulho)
     const SPLIT = 160; // só vale partir conjuntos grandes (cada parte = 1 draw call)
     const _p = new THREE.Vector3();
     for (const [key, s] of this.sets) {
+      if (!s.mats.length) continue;
       const groups = new Map();
       if (s.mats.length > SPLIT) {
         s.mats.forEach((M, i) => {
@@ -74,6 +128,25 @@ export class Instancer {
     }
     return out;
   }
+}
+
+const _lp = new Map();
+/** Versão low-poly de uma peça de entulho (mesma caixa envolvente). */
+function lowPoly(key, geo) {
+  const tri = (geo.index ? geo.index.count : geo.attributes.position.count) / 3;
+  if (tri <= 24) return geo;
+  let g = _lp.get(key);
+  if (g) return g;
+  geo.computeBoundingBox();
+  const b = geo.boundingBox;
+  const size = b.getSize(new THREE.Vector3());
+  const c = b.getCenter(new THREE.Vector3());
+  g = (/^rbrick/.test(key) ? new THREE.BoxGeometry(1, 1, 1) : new THREE.IcosahedronGeometry(0.62, 0)).toNonIndexed();
+  g.scale(size.x, size.y, size.z);
+  g.translate(c.x, c.y, c.z);
+  g.computeVertexNormals();
+  _lp.set(key, g);
+  return g;
 }
 
 function withColor(geo) {

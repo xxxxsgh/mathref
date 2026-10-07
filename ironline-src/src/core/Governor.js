@@ -47,6 +47,11 @@ export class Governor {
     this.grace = o.grace ?? 3; // s ignorados depois de uma troca de degrau
     this.backoffBase = o.backoffBase ?? 30; // s de bloqueio após subida que falhou (dobra a cada falha)
     this.failWindow = o.failWindow ?? 15; // s: descer antes disso = a subida falhou
+    // queda rápida: média acima de severe × orçamento (60 fps → < ~45 fps)
+    // desce degrau na hora, sem esperar a resolução chegar ao chão; acima de
+    // 2× (< 30 fps) desce dois. Carência curta depois.
+    this.severe = o.severe ?? 1.33;
+    this.fastGrace = o.fastGrace ?? 1.5;
     this.reset();
     this.clock = 0;
     this.blockedUntil = 0;
@@ -111,6 +116,20 @@ export class Governor {
     if (over) {
       this.good = 0;
       this.bad++;
+      if (this.auto && mean > B * this.severe && this.rung < this.floor) {
+        if (this.clock - this.lastUp < this.failWindow) {
+          this.failures++;
+          this.blockedUntil = this.clock + this.backoffBase * 2 ** (this.failures - 1);
+        }
+        const steps = mean > B * 2 ? 2 : 1;
+        this.rung = Math.min(this.floor, this.rung + steps);
+        this.bad = 0;
+        // resolução também cai junto (nunca sobe aqui)
+        const k = Math.max(0.8, Math.min(0.95, Math.sqrt(B / mean)));
+        this.scale = Math.max(this.minScale, Math.min(this.scale * k, 0.9));
+        this.graceUntil = this.clock + this.fastGrace;
+        return { rung: this.rung, scale: this.scale, reason: `severe ${mean.toFixed(1)}ms` };
+      }
       if (this.scale > this.minScale + 1e-3) {
         // pixels ∝ escala²: corrige ~metade do excesso por janela
         const k = Math.max(0.8, Math.min(0.95, Math.sqrt(B / mean)));

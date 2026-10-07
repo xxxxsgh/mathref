@@ -87,7 +87,8 @@ export class Photos {
   }
 
   grade(src) {
-    const W = 960, H = Math.round((960 * src.height) / src.width);
+    // fora do desktop a foto sai com metade da largura (gradação por pixel é cara)
+    const W = (this.ctx.quality?.tier || 'desktop') === 'desktop' ? 960 : 480, H = Math.round((W * src.height) / src.width);
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
     const g = cv.getContext('2d', { willReadFrequently: true });

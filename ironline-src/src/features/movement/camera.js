@@ -61,6 +61,8 @@ export class CameraMotion {
     this.roll = 0;
     this.slideTilt = 0;
     this.fov = 1;
+    this.fovPunch = 0; // pulso aditivo de FOV (decai)
+    this.steerRoll = 0;
     this.trauma = 0; // tremor (explosões)
     this.t = 0;
     const bus = ctx.bus;
@@ -83,8 +85,53 @@ export class CameraMotion {
       this.mantleRoll = (Math.random() < 0.5 ? -1 : 1) * (e?.vault ? 0.045 : 0.03);
     });
     bus.on('player:slide', (e) => {
-      if (e?.on) this.landY.impulse(-0.55);
-      else this.landY.impulse(0.25);
+      if (e?.on) {
+        this.landY.impulse(-0.55);
+        this.fovPunch = 0.045; // "estouro" de FOV na entrada do slide
+      } else if (e?.reason === 'impact') {
+        // bateu de frente num muro deslizando
+        this.landPitch.impulse(0.55);
+        this.landY.impulse(-0.3);
+        this.trauma = Math.min(1, this.trauma + 0.18);
+      } else this.landY.impulse(e?.reason === 'cancel' || e?.reason === 'jump' ? 0.4 : 0.25);
+    });
+    bus.on('player:slideKick', (e) => {
+      if (e?.hit) {
+        this.landPitch.impulse(-0.75);
+        this.flinchY.impulse((Math.random() - 0.5) * 0.6);
+        this.flinchR.impulse(0.5);
+        this.trauma = Math.min(1, this.trauma + 0.2);
+      } else this.landPitch.impulse(-0.3);
+    });
+    bus.on('player:dive', (e) => {
+      if (e?.phase === 'land') {
+        this.landY.impulse(-1.9);
+        this.landPitch.impulse(-1.0);
+        this.flinchR.impulse((Math.random() < 0.5 ? -1 : 1) * 0.6);
+        this.trauma = Math.min(1, this.trauma + 0.32);
+      } else {
+        this.landPitch.impulse(-0.5);
+        this.fovPunch = 0.06;
+      }
+    });
+    bus.on('player:mount', (e) => {
+      if (e?.on) {
+        this.landY.impulse(-0.22);
+        this.landPitch.impulse(-0.12);
+      }
+    });
+    bus.on('player:cover', () => {
+      this.landY.impulse(-0.45);
+      this.landPitch.impulse(0.35);
+    });
+    bus.on('player:hang', (e) => {
+      if (e?.phase === 'start') {
+        this.landY.impulse(-0.8);
+        this.landPitch.impulse(0.4);
+      } else if (e?.phase === 'drop') this.landY.impulse(0.3);
+    });
+    bus.on('player:tacSprint', (e) => {
+      if (e?.phase === 'start') this.fovPunch = Math.max(this.fovPunch, 0.03);
     });
     bus.on('player:damage', (e) => {
       const a = clamp((e?.amount || 10) / 40, 0.15, 1);
@@ -169,7 +216,9 @@ export class CameraMotion {
     const tiltSide = clamp(side / T.sprint, -1, 1);
     // slide: cabeça tomba ~5° para o lado da perna de apoio (como no slide real)
     // (~7°: o horizonte precisa ler inclinado no quadro, não só "sentir")
-    const rollT = -tiltSide * 0.018 * (sliding ? 0 : 1) + (sliding ? 0.125 : 0);
+    // no slide: inclina para dentro da curva (A/D ou girar o olhar)
+    this.steerRoll = damp(this.steerRoll, sliding ? clamp(c.slide.steer || 0, -1.5, 1.5) * 0.05 : 0, 8, dt);
+    const rollT = -tiltSide * 0.018 * (sliding ? 0 : 1) + (sliding ? 0.125 : 0) - this.steerRoll;
     this.roll = damp(this.roll, rollT, sliding ? 11 : 6, dt);
     roll += this.roll;
     if (c.mantle) {
@@ -184,6 +233,11 @@ export class CameraMotion {
       oy += wob(this.t * 38, 1.3) * 0.0035 * vib;
       roll += wob(this.t * 31, 2.1) * 0.003 * vib;
       pitch -= 0.06 * this.slideTilt;
+    }
+    // pendurado: balanço lento do corpo
+    if (c.hang) {
+      roll += Math.sin(this.t * 1.4) * 0.012;
+      pitch += Math.sin(this.t * 0.9 + 1) * 0.008;
     }
     roll += -lean * T.leanRoll;
     ox += lean * T.leanDist;
@@ -206,12 +260,16 @@ export class CameraMotion {
 
     // ─ FOV ─
     let f = 1;
-    if (sliding) f = 1.13;
+    // slide: FOV cresce com a velocidade (rampa/cadeia passam de 1.13)
+    if (sliding) f = 1.13 + clamp((c.slide.speed - 8) / 4, 0, 1) * 0.04;
+    else if (c.diving) f = 1.1;
     else if (sprint === 2 && hs > 5) f = 1.12;
     else if (sprint === 1 && hs > 3) f = 1.06;
     f = 1 + (f - 1) * (1 - ads);
     this.fov = damp(this.fov, f, f > this.fov ? (sliding ? 9 : 5.5) : 8, dt);
-    if (Math.abs(this.fov - 1) < 1e-4) p.fovFactors.delete('move');
-    else p.fovFactors.set('move', this.fov);
+    this.fovPunch = Math.max(0, this.fovPunch - dt * 0.25);
+    const fv = this.fov + this.fovPunch * (1 - ads);
+    if (Math.abs(fv - 1) < 1e-4) p.fovFactors.delete('move');
+    else p.fovFactors.set('move', fv);
   }
 }

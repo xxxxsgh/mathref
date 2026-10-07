@@ -66,7 +66,8 @@ export class Input {
   constructor(element, bus) {
     this.el = element;
     this.bus = bus;
-    this.bindings = structuredClone(DEFAULT_BINDINGS);
+    // cópia profunda via JSON (structuredClone não existe no iOS < 15.4)
+    this.bindings = JSON.parse(JSON.stringify(DEFAULT_BINDINGS));
     this.keys = new Set();
     this.prev = new Set();
     this.edgeDown = new Set();
@@ -214,6 +215,15 @@ export class Input {
   }
   released(name) {
     return (this.bindings[name] || []).some((c) => this.edgeUp.has(c));
+  }
+  /**
+   * Consome a borda de `pressed(name)` NESTE passo: quem lê depois (features
+   * de ordem maior) vê `pressed(name) === false`. A tecla continua segurada
+   * (`action(name)` não muda). Ex.: o movimento consome `melee` durante o
+   * slide (vira slide kick) para a arma não sacar a faca no mesmo toque.
+   */
+  consume(name) {
+    for (const c of this.bindings[name] || []) this.edgeDown.delete(c);
   }
   /** Lê e zera o delta de mouse (rad), já com sensibilidade. */
   consumeLook() {

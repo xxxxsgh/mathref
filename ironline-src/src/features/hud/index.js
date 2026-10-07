@@ -28,6 +28,10 @@ import * as Settings from './settings.js';
 import { Gunsmith, gunSilhouette } from './gunsmith.js';
 import { Hero } from './hero.js';
 import { Photos } from './photo.js';
+import { Arsenal } from './arsenal.js';
+import { ARS_CSS } from './arsenal-style.js';
+import { setArtDetail } from './itemart.js';
+import { setMinimapDetail } from './minimap.js';
 
 /**
  * Poses das "fotos de campo" (arte dos cartões): vistas do próprio mapa
@@ -54,6 +58,13 @@ function photoPoses(world) {
 }
 
 /** Descrições em inglês (a UI é em inglês) por id de mapa; reserva = a do mundo. */
+/** quadros do menu já rodaram (operador pode ser criado sem pesar no init) */
+const ctx_ready = (hud) => !!hud._deferDone || !!hud.ctx.shot;
+const htmlEl = (html) => { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstElementChild; };
+
+/** Medalhas que a partida (match.js) já concede — chegam também da feature streaks. */
+const DUP_MEDALS = { double: 1, triple: 1, head: 1, long: 1, payback: 1, streak: 1 };
+
 export const MAP_BLURB = {
   street: 'Ruined avenue in an old urban district — shattered facades, a crossroads, an alley, a checkpoint and the playable ground floor of block R4.',
   factory: 'Abandoned foundry — machine hall with an overhead crane, catwalks, two-story offices with blown-out glazing and a loading yard with dock, trailer and containers.',
@@ -63,7 +74,27 @@ export default {
   name: 'hud',
   order: 90,
 
-  init(ctx) {
+  /**
+   * init em blocos: entre os pesados `await ctx.bootProgress(...)` cede um
+   * quadro e move a barra da tela de carga (celular não trava). A silhueta
+   * 3D da arma e o operador do menu saem do init (feitos nos primeiros
+   * quadros do menu); no tier 'lite' não há operador nem fotos de campo.
+   */
+  async init(ctx) {
+    const bt = (this.bootTimes = []);
+    let _t = performance.now();
+    const step = async (label, f) => {
+      const n = performance.now();
+      bt.push([label, Math.round(n - _t)]);
+      _t = n;
+      await ctx.bootProgress?.(label, f);
+      _t = performance.now();
+    };
+    const mark = (label) => { const n = performance.now(); bt.push([label, Math.round(n - _t)]); _t = n; };
+    const tier = ctx.quality?.tier || 'desktop';
+    this.tier = tier;
+    setArtDetail(tier === 'desktop' ? 2 : 1);
+    setMinimapDetail(tier === 'desktop' ? 8 : 4);
     const world = ctx.services.world;
     this.mapName = world?.map?.name || 'MERIDIAN STREET';
     this.mapBlurb = MAP_BLURB;
@@ -71,7 +102,7 @@ export default {
     configureMode(ctx.params, ctx.params.get('mode') || savedMode || 'waves', this.mapName);
     const root = document.createElement('div');
     root.id = 'hud';
-    root.innerHTML = `<style>${CSS}${OBJ_CSS}</style><div class="fx"></div><div class="stage"></div>`;
+    root.innerHTML = `<style>${CSS}${OBJ_CSS}${ARS_CSS}</style><div class="fx"></div><div class="stage"></div>`;
     ctx.ui.appendChild(root);
     this.root = root;
     if (ctx.shot) root.classList.add('shot');
@@ -97,25 +128,35 @@ export default {
       this.profile.camo = fix.camo;
     }
     this.profile.mode = MODE.id;
+    this.applyLowFx();
+    await step('estilo', 0.1);
     this.play = new PlayHud(ctx, this.stage, root.querySelector('.fx'));
-    const gun = ctx.services.weapon?.gun;
-    this.gunIcon = gun ? gunSilhouette(ctx.THREE, gun, { h: 140 }) : null;
-    this.play.setGunIcon(this.gunIcon);
+    // silhueta da arma (render 3D num contexto próprio): no modo shot já
+    // aqui; fora dele, adiada para os primeiros quadros do menu
+    this.gunIcon = null;
+    if (ctx.shot) this.refreshGunIcon();
     this.play.setProfile(this.profile, Settings.levelOf(this.profile.xp).level);
+    await step('hud de combate', 0.3);
     this.obj = new ObjectiveHud(ctx, this.play.root);
     // camuflagem salva na arma (materiais publicados pela feature weapon)
     this.setCamo(this.profile.camo, false);
+    await step('camuflagem', 0.45);
     this.screens = new Screens(this, this.stage);
+    mark('telas:screens');
+    // ARSENAL (inventário/caixas/passe…): telas sobre services.inventory
+    this.arsenal = ctx.services.inventory ? new Arsenal(this) : null;
     // fotos do mundo para os cartões (só onde há telas de frontend)
+    mark('telas:arsenal');
     this.photos = new Photos(ctx);
     this.photos.onReady((key) => this.screens.photoReady(key));
-    if (!ctx.shot || ctx.shot.preset?.menu || ctx.params.get('ui')) {
+    if ((!ctx.shot || ctx.shot.preset?.menu || ctx.params.get('ui')) && tier !== 'lite') {
       for (const [k, pose] of Object.entries(photoPoses(world))) this.photos.want(k, pose);
     }
+    await step('telas', 0.55);
     this.match = new Match(ctx, {
       feed: (e) => this.play.feed(e, this.profile.callsign),
       xp: (l, t) => this.play.xp(l, t),
-      medal: (k, t, p) => this.play.medal(k, t, p),
+      medal: (k, t, p) => this.localMedal(k, t, p),
       // (o som do hitmarker é da feature audio, que escuta weapon:hit)
       hit: (h) => this.play.hitmarker(h),
       damage: (e) => this.play.damage(e),
@@ -146,7 +187,7 @@ export default {
       }),
       on('weapon:hit', (h) => this.match.onHit(h)),
       on('weapon:reload', (e) => (this.play.reloadDur = e?.duration || 2.2)),
-      on('enemy:death', (e) => this.match.onEnemyDeath(e)),
+      on('enemy:death', (e) => { this.match.onEnemyDeath(e); this.slideKill(e); }),
       on('enemy:fire', (e) => {
         if (e?.origin) this.play.ping(e.origin);
         this.virtualHit(e);
@@ -154,6 +195,16 @@ export default {
       on('player:damage', (e) => this.match.onPlayerDamage(e)),
       on('player:death', (e) => this.match.onPlayerDeath(e)),
       on('input:lock', (locked) => this.onLock(locked)),
+      // ── contrato v3: medalhas/killstreaks (streaks), deslize (movement) ──
+      on('medal:award', (e) => this.onMedalAward(e)),
+      on('streak:ready', (e) => this.play.streakEvent('ready', e)),
+      on('streak:used', (e) => this.play.streakEvent('used', e)),
+      on('player:respawn', () => this.play.resetStreaks()),
+      on('player:slide', (e) => {
+        if (e?.phase === 'start') this.sliding = true;
+        else if (e?.phase === 'end') { this.sliding = false; this.slideEnd = ctx.time.now; }
+      }),
+      on('inventory:unlock', (e) => { if (this.inMatch) this.play.medal('mastery', 'MAESTRIA: ' + (e?.def?.name || '').replace('MAESTRIA ', ''), 0); }),
       on('resize', () => this.layout()),
     ];
     this._key = (ev) => this.onKey(ev, true);
@@ -161,7 +212,18 @@ export default {
     addEventListener('keydown', this._key, true);
     addEventListener('keyup', this._keyUp, true);
     addEventListener('resize', (this._rs = () => this.layout()));
+    this._offs.push(on('quality:change', () => this.applyLowFx()));
+    // FPS: a opção espelha o estado real do contador (F7 também alterna)
+    this.settings.fps = !!ctx.perf?.visible;
+    this._offs.push(on('perf:overlay', (vis) => {
+      this.settings.fps = !!vis;
+      if (this.screens.cur === 'settings') { const fi = this.screens.focusIdx; this.screens.show('settings'); this.screens.focus(fi); }
+    }));
+    // campos de qualidade que só valem na próxima carga (comparados com os da carga)
+    const q0 = ctx.quality || {};
+    this._bootQ = { renderScale: q0.renderScale, detail: q0.detail, textureSize: q0.textureSize };
     this.layout();
+    await step('regras', 0.7);
     // remove a tela de carga do index.html quando o jogo começa
     const boot = document.getElementById('boot');
     if (boot) {
@@ -193,6 +255,9 @@ export default {
       this.toMenu();
       if (uiParam) this.screens.show(uiParam);
     }
+    this.inventoryQA(ctx.params);
+    await step('menu', 1);
+    if (ctx.params.get('bootlog') === '1') console.info('[hud] init por bloco (ms)', JSON.stringify(bt));
 
     ctx.provide('hud', {
       root,
@@ -204,11 +269,27 @@ export default {
       settings: this.settings,
       get loadout() { return this.__s?.profile.loadout; },
       banner: (t, s) => this.play.banner(t, s),
+      /** o minimapa desenha `streaks.revealed`/`uav` (o radar de reserva da streaks some) */
+      handlesReveal: true,
       deploy: () => this.action('deploy'),
       __s: this,
     });
   },
 
+  /**
+   * Sem backdrop-filter (blur/saturação de fundo) em qualidade baixa ou no
+   * tier 'lite' — é um dos efeitos de composição mais caros em GPU fraca.
+   */
+  applyLowFx() {
+    const q = this.ctx.quality;
+    this.root.classList.toggle('lowfx', q?.level === 'low' || q?.tier === 'lite' || q?.tier === 'mobile');
+  },
+  /** A qualidade escolhida mudou algo que só se aplica recarregando? */
+  needsReload() {
+    const q = this.ctx.quality, b = this._bootQ;
+    if (!q || !b || this.ctx.shot) return false;
+    return ['renderScale', 'detail', 'textureSize'].some((k) => b[k] !== undefined && q[k] !== undefined && b[k] !== q[k]);
+  },
   /** escala da prancheta para a janela */
   layout() {
     const w = this.root.clientWidth || innerWidth, h = this.root.clientHeight || innerHeight;
@@ -217,6 +298,9 @@ export default {
     this.stage.style.transform = `scale(${k})`;
     this.stage.style.width = w / k + 'px';
     this.stage.style.height = h / k + 'px';
+    // tamanho da prancheta guardado (nada de ler layout a cada quadro)
+    this.stageW = w / k;
+    this.stageH = h / k;
     this.k = k;
     this.play.resize(k * Math.min(2, devicePixelRatio || 1));
   },
@@ -225,6 +309,7 @@ export default {
   onScreen(name, el) {
     this.gs?.dispose();
     this.gs = null;
+    if (name !== 'arsenal') this.arsenal?.dispose();
     // menu principal: mundo desfocado/graduado ao fundo + operador nítido
     const canvas = this.ctx.canvas;
     // menu principal: cena 3D VIVA, nítida (o operador está no mundo); só
@@ -236,7 +321,9 @@ export default {
       // re-render do menu (troca de modo): o operador continua, só a
       // máscara de profundidade de campo é nova
       if (this.hero) this.hero.dof = el.querySelector('.dof') || this.hero.dof;
-      if (host && !this.hero) {
+      if (host && !this.hero && this.tier === 'lite') host.remove();
+      else if (host && !this.hero && !ctx_ready(this)) this._heroPending = true;
+      else if (host && !this.hero) {
         try {
           this.hero = new Hero(this.ctx, host);
           this.hero.render(1 / 60);
@@ -359,8 +446,108 @@ export default {
     if (m.zs?.captured) P.captures = (P.captures || 0) + m.zs.captured;
     const after = lvOf(P.xp).level;
     this.lastProgress = { before, after, bonus, unlocks: newUnlocks(this.unlocks(), before, after) };
+    // inventário: créditos + XP do passe (services.inventory escuta)
+    this.ctx.bus.emit('match:end', this.matchSummary(win));
     if (after > before) this.play.setProfile(P, after);
     this.saveProfile();
+  },
+  /** Estatísticas da partida para 'match:end' (créditos/passe do inventário). */
+  matchSummary(win) {
+    const m = this.match;
+    const medals = Object.values(m.medals || {}).reduce((a, v) => a + (v.n || 0), 0);
+    return {
+      mode: MODE.id, win: !!win, kills: m.kills, headshots: m.headshots, deaths: m.deaths,
+      captures: m.zs?.captured || 0, waves: Math.max(0, (m.wave || 0) - (win ? 0 : 1)), bossKilled: !!m.bossKilled,
+      medals, playTime: m.playTime || 0, xp: m.xpEarned || 0, score: m.score || 0,
+    };
+  },
+  /**
+   * 'medal:award' { id, name, xp, icon } (feature streaks): toast na fila de
+   * medalhas e soma no XP/medalhas da partida (aparece no relatório).
+   */
+  onMedalAward(e) {
+    if (!e) return;
+    const name = String(e.name || e.id || 'MEDAL').toUpperCase();
+    const key = String(e.icon || e.id || '').toLowerCase();
+    const kinds = ['kill', 'head', 'double', 'triple', 'long', 'streak', 'payback', 'slide', 'mastery', 'airstrike', 'uav', 'shield'];
+    const ALIAS = { mortar: 'airstrike', drone: 'uav', kamikaze: 'airstrike', sentry: 'shield', fury: 'triple', flank: 'long', blank: 'head', collateral: 'double', revenge: 'payback', first: 'kill' };
+    const kind = kinds.find((k) => key === k) || ALIAS[key] || kinds.find((k) => key.includes(k) || name.toLowerCase().includes(k)) || (/spree|kills/.test(key) ? 'streak' : 'kill');
+    if (/slide/i.test(key + name)) this._extSlide = this.ctx.time.now;
+    this._extMedals = true;
+    const xp = Math.max(0, Number(e.xp) || 0);
+    this.play.medal(kind, name, xp, true);
+    // as que a própria partida já conta (multiabate, headshot, longshot,
+    // payback, sequência) não somam XP de novo
+    if (DUP_MEDALS[kind]) return;
+    const m = this.match;
+    if (m && this.inMatch) {
+      m.xpEarned += xp;
+      m.score += xp;
+      const row = (m.medals[name] ||= { kind, n: 0 });
+      row.n++;
+    }
+  },
+  /**
+   * Medalha da própria partida (match.js). Com a feature streaks ativa, as
+   * equivalentes chegam por 'medal:award' — o toast local é omitido.
+   */
+  localMedal(kind, title, pts) {
+    if ((this._extMedals || this.ctx.services.streaks) && DUP_MEDALS[kind] && !this.ctx.shot) return;
+    this.play.medal(kind, title, pts);
+  },
+  /**
+   * Barra de killstreaks a partir do serviço da feature streaks (se publicar
+   * `slots()` ou `list`) — complementa os eventos 'streak:ready'/'streak:used'.
+   */
+  syncStreaks() {
+    const s = this.ctx.services.streaks;
+    if (!s) return;
+    let list = null;
+    try { list = typeof s.slots === 'function' ? s.slots() : s.slots || s.list || null; } catch { list = null; }
+    if (!Array.isArray(list)) return;
+    const sig = list.map((x) => `${x.id}:${x.ready ? 1 : 0}`).join(',');
+    if (sig === this._ksSig) return;
+    this._ksSig = sig;
+    this.play.setStreaks(list.map((x) => ({ id: x.id, name: x.name, kills: x.kills, key: x.key })));
+    for (const x of list) {
+      const cur = this.play.ks.get(x.id);
+      if (!cur) continue;
+      if (x.ready) cur.state = 'ready';
+      else if (cur.state === 'ready') cur.state = 'used';
+    }
+    this.play.renderStreaks();
+  },
+  /**
+   * "SLIDE KILL": abate durante o deslize ('player:slide' da feature
+   * movement / ctx.player.sliding) ou até 0,35 s depois. Se a feature streaks
+   * conceder a dela por 'medal:award', esta não aparece (sem duplicar).
+   */
+  slideKill(e) {
+    const ctx = this.ctx;
+    if (!this.inMatch || ctx.shot) return;
+    const src = e?.info?.source;
+    if (src && src !== 'player') return;
+    const now = ctx.time.now;
+    const sliding = this.sliding || ctx.player.sliding || (this.slideEnd != null && now - this.slideEnd < 0.35);
+    if (!sliding) return;
+    setTimeout(() => {
+      if (this._extSlide != null && Math.abs(this._extSlide - now) < 1) return;
+      const xp = 50;
+      this.play.medal('slide', 'SLIDE KILL', xp, true);
+      const m = this.match;
+      m.xpEarned += xp;
+      m.score += xp;
+      (m.medals['SLIDE KILL'] ||= { kind: 'slide', n: 0 }).n++;
+    }, 150);
+  },
+  /** Silhueta da arma ativa (após trocar a primária no loadout). */
+  refreshGunIcon() {
+    const gun = this.ctx.services.weapon?.gun;
+    if (!gun) return;
+    try {
+      this.gunIcon = gunSilhouette(this.ctx.THREE, gun, { h: 140 });
+      this.play.setGunIcon(this.gunIcon);
+    } catch {}
   },
   /** Tabela de desbloqueios com as armas publicadas pela weapon. */
   unlocks() {
@@ -409,6 +596,8 @@ export default {
   },
   setOption(id, v) {
     this.settings[id] = v;
+    // contador de FPS do núcleo (ctx.perf); o estado volta por 'perf:overlay'
+    if (id === 'fps') { if (!this.ctx.shot) this.ctx.perf?.show?.(!!v); return; }
     if (this.ctx.shot) return;
     Settings.save(this.settings);
     Settings.apply(this.ctx, this.settings);
@@ -498,6 +687,8 @@ export default {
       if (MODE.id === 'survival') { m.bossKilled = true; m.objectiveXP = 1000 + 150 * MODE.waves.length; }
       m.endReason = MODE.id === 'hardpoint' ? 'ZONE SECURED' : MODE.id === 'survival' ? 'JUGGERNAUT NEUTRALIZED' : 'HOSTILE CELL NEUTRALIZED';
       // subida de nível de demonstração (relatório + toast)
+      // créditos/passe do relatório (inventário de demonstração)
+      this.ctx.bus.emit('match:end', this.matchSummary(true));
       const lv = lvOf(this.profile.xp).level;
       if (this.ctx.params.get('lvup') !== '0') this.lastProgress = { before: lv - 1, after: lv, bonus: PXP.win, unlocks: newUnlocks(this.unlocks(), lv - 1, lv) };
     }
@@ -508,6 +699,12 @@ export default {
       this.play.feed({ killer: 'JUGGERNAUT', victim: 'self', head: false, weapon: 'hostile' }, cs);
       [...this.play.el.feed.children].forEach((r, i) => { r.style.animation = 'none'; r._t = [0.9, 3.6][i] ?? 5; });
       return;
+    }
+    if (preset?.combat && this.ctx.params.get('ks') === '1') {
+      // encenação da barra de killstreaks + medalha externa (contrato v3)
+      this.play.setStreaks([{ id: 'uav', name: 'UAV', kills: 3 }, { id: 'airstrike', name: 'AIRSTRIKE', kills: 5 }, { id: 'gunship', name: 'GUNSHIP', kills: 9 }]);
+      this.play.streakEvent('ready', { id: 'uav', name: 'UAV', kills: 3, key: '4' });
+      this.ctx.bus.emit('medal:award', { id: 'slide', name: 'SLIDE KILL', xp: 50, icon: 'slide' });
     }
     if (preset?.combat) {
       const cs = this.profile.callsign;
@@ -532,6 +729,19 @@ export default {
     }
   },
 
+  /**
+   * QA do inventário por URL: `?inv=open` (ou `&ui=arsenal`) abre o ARSENAL;
+   * `&arsenal=<aba>`, `&inspect=N`, `?case=1&seed=N[&reelt=s][&reveal=1]`,
+   * `&trade=1` (ver arsenal.js). `&ks=1` no preset combat encena a barra de
+   * killstreaks e uma medalha externa.
+   */
+  inventoryQA(P) {
+    if (!this.arsenal) return;
+    const want = P.get('inv') === 'open' || P.has('case') || P.has('arsenal') || P.has('inspect') || P.get('trade') === '1';
+    if (want && this.screens.cur !== 'arsenal') this.screens.show('arsenal');
+    if (this.screens.cur === 'arsenal') this.arsenal.qa(P);
+  },
+
   // ─── loop ─────────────────────────────────────────────────────────
   update(dt, ctx) {
     if (!ctx.shot) this.match.update(dt);
@@ -544,6 +754,16 @@ export default {
 
   frame(dt, ctx) {
     this.photos.pump();
+    // trabalho adiado do init: silhueta da arma e operador do menu
+    if (!ctx.shot && !this._deferDone && (this._df = (this._df || 0) + 1) > 2) {
+      this._deferDone = true;
+      this.screens.finishBoot();
+      if (!this.gunIcon) {
+        this.refreshGunIcon();
+        if (this.screens.cur === 'main') this.screens.el?.querySelector('.tile.wk')?.replaceWith(htmlEl(this.screens.weaponTile()));
+      }
+      if (this._heroPending && this.screens.cur === 'main') { this._heroPending = false; this.onScreen('main', this.screens.el); }
+    }
     // tempo real (as telas animam mesmo com a simulação pausada)
     const now = performance.now();
     const rdt = ctx.shot ? 1 / 60 : Math.min(0.05, (now - (this._lt || now)) / 1000);
@@ -580,11 +800,13 @@ export default {
       this.root.style.setProperty('--cross', cc);
     }
     if (showPlay) {
+      if (this.inMatch && (this._kst = (this._kst || 0) + rdt) > 0.25) { this._kst = 0; this.syncStreaks(); }
       this.play.frame(dt, ctx, this.match, st);
-      this.obj.frame(rdt, this.match, MODE, this.stage.offsetWidth || 1920, this.stage.offsetHeight || 1080);
+      this.obj.frame(rdt, this.match, MODE, this.stageW || 1920, this.stageH || 1080);
     } else if (this.obj.ring) this.obj.ring.update(this.match.zs, ctx.time.now);
     if (this.gs) this.gs.render(rdt);
     if (this.hero) this.hero.render(rdt);
+    if (scr === 'arsenal') this.arsenal?.frame(rdt);
     if (this.match.phase === 'dead') {
       const left = Math.max(0, 4 - this.match.deadT);
       const cd = this.play.el.death.querySelector('.cd');
