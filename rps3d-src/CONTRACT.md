@@ -167,3 +167,4 @@ Emita/escute com estes nomes e payloads. Novos eventos: documente aqui.
 
 ## Mudanças no núcleo
 (registre aqui: data, quem, o quê)
+- 2026-10-07, rendering: `tools/shot.mjs` — `page.screenshot` usa `--timeout` (antes 30 s fixos; cenas pesadas no SwiftShader passavam disso).

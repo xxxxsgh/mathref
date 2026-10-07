@@ -51,10 +51,10 @@ const starLayer = Fn(([d, N, prob, bright, pa, seed]) => {
   const s = cell.add(0.5).add(h.sub(0.5).mul(0.5));
   const sd = normalize(s);
   const ang = length(sd.sub(d));
-  const mag = pow(h2.x, float(9.0)).mul(bright.mul(8.0)).add(bright.mul(0.12)).mul(step(h.z, prob));
-  const sig = pa.mul(float(0.55).add(clamp(mag, 0.0, 6.0).mul(0.12)));
+  const mag = pow(h2.x, float(14.0)).mul(bright.mul(7.0)).add(pow(h2.z, float(3.0)).mul(bright.mul(0.16))).add(bright.mul(0.015)).mul(step(h.z, prob));
+  const sig = pa.mul(float(0.42).add(clamp(mag, 0.0, 6.0).mul(0.05)));
   const core = exp(ang.mul(ang).div(sig.mul(sig).mul(-2.0)));
-  const halo = exp(ang.div(pa.mul(2.2)).negate()).mul(clamp(mag.sub(1.5), 0.0, 8.0).mul(0.06));
+  const halo = exp(ang.div(pa.mul(1.6)).negate()).mul(clamp(mag.sub(1.5), 0.0, 8.0).mul(0.03));
   const col = starTint(h2.y.mul(h2.y.mul(0.6).add(0.4)));
   return col.mul(mag.mul(core).add(halo));
 }).setLayout({
@@ -67,11 +67,11 @@ const starLayer = Fn(([d, N, prob, bright, pa, seed]) => {
  * pa = ângulo de um pixel (rad); dens = densidade relativa (Via Láctea / nebulosa).
  */
 export const starField = Fn(([d, pa, dens]) => {
-  const dd = clamp(dens, 0.0, 4.0);
-  const c = starLayer(d, float(38), float(0.22), float(1.0), pa, vec3(1.3, 7.1, 3.7)).toVar();
-  c.addAssign(starLayer(d, float(105), clamp(dd.mul(0.18).add(0.12), 0.0, 0.6), float(0.22), pa, vec3(5.1, 2.3, 8.9)));
-  c.addAssign(starLayer(d, float(250), clamp(dd.mul(0.16).add(0.04), 0.0, 0.7), float(0.07), pa, vec3(9.4, 4.4, 1.2)));
-  c.addAssign(starLayer(d, float(520), clamp(dd.mul(0.12).sub(0.05), 0.0, 0.6), float(0.028), pa, vec3(2.8, 8.8, 6.6)));
+  const dd = clamp(dens, 0.0, 2.0);
+  const c = starLayer(d, float(38), float(0.16), float(1.0), pa, vec3(1.3, 7.1, 3.7)).toVar();
+  c.addAssign(starLayer(d, float(105), clamp(dd.mul(0.10).add(0.05), 0.0, 0.4), float(0.35), pa, vec3(5.1, 2.3, 8.9)));
+  c.addAssign(starLayer(d, float(250), clamp(dd.mul(0.08).add(0.012), 0.0, 0.3), float(0.14), pa, vec3(9.4, 4.4, 1.2)));
+  c.addAssign(starLayer(d, float(520), clamp(dd.mul(0.07).sub(0.01), 0.0, 0.25), float(0.06), pa, vec3(2.8, 8.8, 6.6)));
   return c;
 }).setLayout({ name: 'ds_starField', type: 'vec3', inputs: [{ name: 'd', type: 'vec3' }, { name: 'pa', type: 'float' }, { name: 'dens', type: 'float' }] });
 
@@ -84,3 +84,22 @@ export const fbmTex = Fn(([p]) => {
 }).setLayout({ name: 'ds_fbmTex', type: 'float', inputs: [{ name: 'p', type: 'vec3' }] });
 
 export { THREE, select, vec2, vec4, min };
+
+// ─── bump procedural (derivadas de tela) ─────────────────────────────────
+import { positionView, normalView, faceDirection } from 'three/tsl';
+
+/**
+ * Normal perturbada por uma altura PROCEDURAL (Mikkelsen, "bump mapping
+ * unparametrized surfaces"): usa dFdx/dFdy da própria altura, então serve
+ * para qualquer ruído — sem textura nem UV.
+ */
+export const bumpNormal = (H, scale) => {
+  const h = float(H);
+  const dHx = h.dFdx().mul(scale), dHy = h.dFdy().mul(scale);
+  const sx = positionView.dFdx(), sy = positionView.dFdy();
+  const vN = normalView;
+  const R1 = sy.cross(vN), R2 = vN.cross(sx);
+  const fDet = sx.dot(R1).mul(faceDirection);
+  const grad = fDet.sign().mul(dHx.mul(R1).add(dHy.mul(R2)));
+  return fDet.abs().mul(vN).sub(grad).normalize();
+};

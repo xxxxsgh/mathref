@@ -86,7 +86,7 @@ try {
     const info = await page.evaluate(() => ({ errors: window.__errors || [], backend: window.__ctx?.backend, stats: window.__ctx?.stats, mode: window.__ctx?.game?.mode }));
     const out = opt.out[i] || resolve(ROOT, `shot-${i}.png`);
     mkdirSync(dirname(out), { recursive: true });
-    const buf = await page.screenshot({ path: out });
+    const buf = await page.screenshot({ path: out, timeout: opt.timeout });
     const luma = await page.evaluate(async (b64) => {
       const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
       const t = document.createElement('canvas'); t.width = 64; t.height = 36;

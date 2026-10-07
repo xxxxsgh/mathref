@@ -2,9 +2,9 @@
 // Cada efeito liga/desliga por preset; overrides por URL para testes:
 //   ?aa=taa|smaa|fxaa|off   ?bloom=0  ?flare=0  ?mblur=0  ?grain=0  ?godrays=0  ?dof=1
 //
-// Anti-aliasing: TAA (TRAA do three) só no backend WebGPU por padrão — no WebGL2
-// a cópia de profundidade do histórico é frágil em alguns drivers (e o
-// SwiftShader dos screenshots), então ali usamos SMAA (alto/médio) ou FXAA (mobile).
+// Anti-aliasing: TAA próprio (post/TemporalAA.js — reprojeção por profundidade,
+// sem MRT de velocidade, funciona igual no WebGPU e no WebGL2) nos presets que
+// pedem `taa`; SMAA no médio; FXAA no mobile.
 
 const PER = {
   ultra: { fireballSteps: 26, godRaySamples: 48, mbSamples: 12, flashLights: 4, envSize: 256, envInterval: 1.0, flareGhosts: 6, sparkCap: 32768, smokeCap: 8192, debrisCap: 2048 },
@@ -21,7 +21,7 @@ export function makeFxConfig(q, backend, params) {
     if (v === null || v === undefined) return def;
     return v !== '0' && v !== 'false' && v !== 'off';
   };
-  let aa = q.taa && backend === 'webgpu' ? 'taa' : name === 'mobile' ? 'fxaa' : 'smaa';
+  let aa = q.taa ? 'taa' : name === 'mobile' ? 'fxaa' : 'smaa';
   const aaParam = params?.get('aa');
   if (aaParam && ['taa', 'smaa', 'fxaa', 'off'].includes(aaParam)) aa = aaParam;
   const budget = q.particleBudget || 40000;
@@ -47,7 +47,7 @@ export function makeFxConfig(q, backend, params) {
     godRaySamples: p.godRaySamples,
     chromatic: name !== 'mobile',
     heatDistortion: name !== 'mobile' || true,
-    shadows: !!q.shadows,
+    shadows: flag('shadows', !!q.shadows),
     shadowCascades: Math.max(1, q.shadowCascades || 1),
     shadowMapSize: q.shadowMapSize || 1024,
     fireballSteps: p.fireballSteps,

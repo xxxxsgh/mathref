@@ -10,10 +10,11 @@
 // atmosfera) e avermelhada perto do terminador — assim a nave pousada no lado
 // noturno não é iluminada "através" do planeta.
 import * as THREE from 'three/webgpu';
-import { uniform } from 'three/tsl';
+import { uniform, Fn, vec4, mix, smoothstep, positionView, select } from 'three/tsl';
 import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js';
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
+const SHADOW_MARGIN = 60000;
 
 export class Sun {
   constructor(ctx, fx) {
@@ -59,12 +60,28 @@ export class Sun {
     light.shadow.mapSize.set(fx.shadowMapSize, fx.shadowMapSize);
     light.shadow.bias = -0.0002;
     light.shadow.normalBias = 0.02;
+    // A câmera de cada cascata fica `lightMargin` metros na direção do sol.
+    // Receptores ENTRE ela e o sol (z < 0 no espaço da sombra) saíam pretos
+    // (com o buffer logarítmico o teste de profundidade vira NaN) — típico de
+    // olhar contra o sol no espaço. Margem enorme: tudo relevante fica atrás
+    // da câmera de sombra. Precisão OK porque a profundidade é logarítmica.
     light.shadow.camera.near = 1;
-    light.shadow.camera.far = 4000;
+    light.shadow.camera.far = SHADOW_MARGIN * 2.2;
     try {
-      this.csm = new CSMShadowNode(light, { cascades: fx.shadowCascades, maxFar: 220, mode: 'practical', lightMargin: 300 });
-      this.csm.fade = true;
-      light.shadow.shadowNode = this.csm;
+      this.csm = new CSMShadowNode(light, { cascades: fx.shadowCascades, maxFar: 220, mode: 'practical', lightMargin: SHADOW_MARGIN });
+      this.csm.fade = this.ctx.params.get('csmfade') === '1';
+      // Fora do alcance das cascatas o CSM do three devolve lixo (NaN → preto;
+      // medido nos screenshots: asteroides a 600 m pretos com alcance de 90 m).
+      // Envelopa com `select` (não `mix`, que propagaria o NaN): além de maxFar
+      // a luz passa inteira, com transição suave na borda.
+      this.shadowFar = uniform(220);
+      const csm = this.csm, far = this.shadowFar;
+      light.shadow.shadowNode = Fn(() => {
+        const d = positionView.z.negate();
+        const inside = smoothstep(far, far.mul(0.85), d);
+        if (this.ctx.params.get('csmdbg') === '6') return select(inside.greaterThan(2), vec4(csm), vec4(1));
+        return select(inside.greaterThan(0.001), mix(vec4(1), vec4(csm), inside), vec4(1));
+      })();
     } catch (e) {
       console.warn('[rendering] CSM indisponível, sombra simples', e);
       this.csm = null;
@@ -158,7 +175,7 @@ export class Sun {
       if (Math.abs(r - this._maxFar) > 1) {
         this._maxFar = r;
         this.csm.maxFar = r;
-        this.csm.lightMargin = Math.max(120, r * 0.8);
+        if (this.shadowFar) this.shadowFar.value = r;
         if (this.csm.camera) { try { this.csm.updateFrustums(); } catch {} }
       }
     }

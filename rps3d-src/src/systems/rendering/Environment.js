@@ -52,9 +52,11 @@ export class Environment {
       const n = fbm3(d.mul(2.2)).toVar();
       const band = exp(abs(d.y.add(d.x.mul(0.25))).mul(-5.0));
       const space = mix(u.nebB, u.nebA, smoothstep(0.35, 0.75, n)).mul(n.mul(0.9).add(0.25)).mul(u.nebStrength).add(vec3(0.05, 0.055, 0.07).mul(band)).toVar();
-      // halo do sol (lóbulo largo para o especular difuso)
+      // halo do sol: só a luz espalhada em volta (o disco/especular vêm da
+      // DirectionalLight — pôr o sol forte aqui contaria a luz duas vezes e,
+      // em PMREM pequeno (mobile), viraria luz difusa vinda de todo lado)
       const sd = max(dot(d, u.sunDir), 0);
-      const halo = u.sunColor.mul(pow(sd, 48).mul(40).add(pow(sd, 6).mul(0.6))).mul(u.sunPower);
+      const halo = u.sunColor.mul(pow(sd, 12).mul(0.25).add(pow(sd, 3).mul(0.04))).mul(u.sunPower);
       // planeta próximo: disco que rebate luz do sol
       const pd = dot(d, u.planetDir);
       const inPlanet = smoothstep(u.planetSize.sub(0.02), u.planetSize.add(0.01), pd).mul(u.planetSize.greaterThan(0.0).select(1.0, 0.0));
