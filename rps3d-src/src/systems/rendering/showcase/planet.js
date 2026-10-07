@@ -17,8 +17,9 @@ import {
 import { fbm5, fbm3, vnoise3 } from '../tslib.js';
 
 const PALETTES = {
-  lush: { deep: [0.004, 0.02, 0.05], shallow: [0.01, 0.07, 0.11], low: [0.05, 0.12, 0.05], mid: [0.08, 0.16, 0.09], high: [0.22, 0.18, 0.15], alien: [0.16, 0.07, 0.17], sea: 0.52, ray: [0.18, 0.42, 1.0], mie: [1.0, 0.85, 0.7], clouds: 0.55 },
-  desert: { deep: [0.17, 0.09, 0.05], shallow: [0.3, 0.16, 0.08], low: [0.45, 0.27, 0.13], mid: [0.58, 0.38, 0.2], high: [0.36, 0.2, 0.12], alien: [0.5, 0.22, 0.1], sea: -1, ray: [0.75, 0.48, 0.3], mie: [1.0, 0.75, 0.5], clouds: 0.2 },
+  lush: { deep: [0.004, 0.02, 0.05], shallow: [0.01, 0.07, 0.11], low: [0.05, 0.12, 0.05], mid: [0.08, 0.16, 0.09], high: [0.22, 0.18, 0.15], alien: [0.16, 0.07, 0.17], sea: 0.5, ray: [0.18, 0.42, 1.0], mie: [1.0, 0.85, 0.7], clouds: 0.42 },
+  desert: { deep: [0.12, 0.06, 0.035], shallow: [0.2, 0.11, 0.06], low: [0.3, 0.17, 0.08], mid: [0.4, 0.26, 0.13], high: [0.2, 0.11, 0.07], alien: [0.34, 0.13, 0.06], sea: -1, ray: [0.75, 0.48, 0.3], mie: [1.0, 0.75, 0.5], clouds: 0.2 },
+  ocean: { deep: [0.003, 0.016, 0.045], shallow: [0.01, 0.08, 0.12], low: [0.09, 0.13, 0.06], mid: [0.13, 0.15, 0.08], high: [0.28, 0.25, 0.22], alien: [0.06, 0.14, 0.1], sea: 0.6, ray: [0.16, 0.4, 1.0], mie: [1.0, 0.86, 0.72], clouds: 0.5 },
   ice: { deep: [0.05, 0.12, 0.2], shallow: [0.2, 0.32, 0.42], low: [0.55, 0.63, 0.7], mid: [0.75, 0.8, 0.86], high: [0.92, 0.94, 0.97], alien: [0.4, 0.55, 0.7], sea: 0.4, ray: [0.35, 0.55, 1.0], mie: [0.9, 0.9, 1.0], clouds: 0.6 },
 };
 
@@ -26,7 +27,7 @@ const PALETTES = {
  * @param {object} o {radius (m), type: lush|desert|ice, sun: uniforms do sol, seed}
  * @returns THREE.Group (posicione com world.add no centro do planeta)
  */
-export function makeShowcasePlanet({ radius = 38000, type = 'lush', sun, seed = 3, clouds } = {}) {
+export function makeShowcasePlanet({ radius = 38000, type = 'lush', sun, seed = 3, clouds, cities = false } = {}) {
   const P = PALETTES[type] || PALETTES.lush;
   const g = new THREE.Group();
   g.name = 'rps.showcase.planet';
@@ -39,7 +40,9 @@ export function makeShowcasePlanet({ radius = 38000, type = 'lush', sun, seed = 
   const warp = fbm3(n.mul(2.2).add(sd));
   const h = fbm5(n.mul(3.1).add(warp.mul(1.4)).add(sd));
   const ridge = float(1).sub(abs(vnoise3(n.mul(9).add(sd)).mul(2).sub(1)));
-  const detail = fbm3(n.mul(38).add(sd));
+  const detail = fbm3(n.mul(38).add(sd)).mul(0.6).add(fbm3(n.mul(140).add(sd)).mul(0.4));
+  const ridgeFine = float(1).sub(abs(vnoise3(n.mul(60).add(warp.mul(3))).mul(2).sub(1)));
+  const canyon = smoothstep(0.82, 0.97, ridgeFine).mul(smoothstep(0.3, 0.6, vnoise3(n.mul(11).add(sd))));
   const lat = abs(n.y);
   const sea = float(P.sea);
   const land = smoothstep(sea, sea.add(0.012), h);
@@ -51,9 +54,17 @@ export function makeShowcasePlanet({ radius = 38000, type = 'lush', sun, seed = 
   // calotas polares
   const ice = smoothstep(0.78, 0.9, lat.add(detail.mul(0.12)).add(elev.mul(0.1)));
   const base = mix(water, ground, type === 'desert' ? float(1) : land);
-  surf.colorNode = mix(base, vec3(0.85, 0.88, 0.92), type === 'desert' ? ice.mul(0.4) : ice);
+  surf.colorNode = mix(base, vec3(0.85, 0.88, 0.92), type === 'desert' ? float(0) : ice);
   surf.roughnessNode = type === 'desert' ? float(0.95) : mix(float(0.22), float(0.92), max(land, ice.mul(0.6)));
   surf.metalnessNode = float(0);
+  if (cities) {
+    // colônia: luzes de cidades no lado noturno, aglomeradas perto da costa
+    const coast = smoothstep(0.06, 0.0, abs(h.sub(sea).sub(0.02)));
+    const cl = smoothstep(0.55, 0.8, vnoise3(n.mul(16).add(sd))).mul(coast.mul(0.7).add(0.3));
+    const dots = smoothstep(0.6, 0.9, vnoise3(n.mul(420))).mul(0.7).add(smoothstep(0.5, 0.8, vnoise3(n.mul(110))).mul(0.5));
+    const night = smoothstep(0.06, -0.12, dot(normalWorld, sun.dir));
+    surf.emissiveNode = vec3(1.0, 0.62, 0.28).mul(cl.mul(dots).mul(land).mul(night).mul(2.2));
+  }
   g.add(new THREE.Mesh(new THREE.SphereGeometry(radius, 256, 128), surf));
 
   // ── nuvens ──
@@ -110,7 +121,7 @@ export function makeShowcasePlanet({ radius = 38000, type = 'lush', sun, seed = 
     const mie = pow(max(cosT, 0), 18).mul(2.2).add(pow(max(cosT, 0), 3).mul(0.25));
     const phaseR = cosT.mul(cosT).mul(0.35).add(0.75);
     const col = rayC.mul(phaseR).add(vec3(...P.mie).mul(mie).mul(mix(float(1), vec3(1.0, 0.55, 0.3), sunset)));
-    const I = float(1).sub(exp(depth.mul(-1.1)));
+    const I = float(1).sub(exp(depth.mul(-1.1))).mul(select(hitG, float(0.45), float(1)));
     return vec4(col.mul(I).mul(lit).mul(sun.intensity.mul(sun.visibility).mul(0.55)), 1);
   })();
   g.add(new THREE.Mesh(new THREE.SphereGeometry(radius * Ra, 160, 80), am));

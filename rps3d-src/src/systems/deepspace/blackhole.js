@@ -59,7 +59,7 @@ export class BlackHole {
       const edge = smoothstep(inR.mul(0.92), inR.mul(1.12), rho).mul(smoothstep(outR, outR.mul(0.55), rho));
       // perfil de temperatura (Shakura–Sunyaev): pico logo depois da borda interna
       const xin = inR.div(rho);
-      const temp = pow(rho.div(inR), -0.75).mul(pow(max(float(1).sub(sqrt(xin.mul(0.96))), 0.0), 0.25)).mul(1.25).toVar();
+      const temp = pow(rho.div(inR), -0.75).mul(pow(max(float(1).sub(sqrt(xin.mul(0.96))), 0.0), 0.25)).mul(1.6).toVar();
       // velocidade orbital (β) e Doppler relativístico
       const beta = clamp(sqrt(float(0.5).div(rho)), 0.0, 0.7);
       const tang = normalize(cross(u.n, hit));
@@ -81,14 +81,14 @@ export class BlackHole {
         return a.mul(0.62).add(b2.mul(0.5));
       };
       const turb = mix(tex(tb, float(0.37)), tex(ta, float(0.0)), wa).toVar();
-      const dens = edge.mul(smoothstep(0.3, 0.85, turb).mul(0.7).add(0.3)).toVar();
+      const dens = edge.mul(smoothstep(0.25, 0.85, turb).mul(0.55).add(0.45)).toVar();
       // cor de corpo negro deslocada pelo Doppler
       const tt = temp.mul(g).toVar();
       const col = mix(vec3(0.9, 0.16, 0.03), vec3(1.0, 0.55, 0.2), smoothstep(0.2, 0.55, tt)).toVar();
       col.assign(mix(col, vec3(1.0, 0.86, 0.66), smoothstep(0.55, 0.95, tt)));
       col.assign(mix(col, vec3(0.9, 0.93, 1.0), smoothstep(0.95, 1.4, tt)));
       col.assign(mix(col, vec3(0.6, 0.72, 1.0), smoothstep(1.4, 2.2, tt)));
-      const I = pow(g, 5.0).mul(pow(temp, 2.2)).mul(dens).mul(turb.mul(1.3).add(0.25)).mul(4.5).mul(u.gain);
+      const I = pow(g, 5.0).mul(pow(temp, 2.2)).mul(dens).mul(turb.mul(0.9).add(0.45)).mul(4.5).mul(u.gain);
       const alpha = clamp(dens.mul(0.95), 0.0, 0.97);
       if (globalThis.__bhdbg) return vec4(vec3(smoothstep(1.0, 1.3, g), smoothstep(0.5, 1.0, temp).mul(0.3), smoothstep(1.0, 0.7, g)), 1.0);
       return vec4(col.mul(I), alpha);

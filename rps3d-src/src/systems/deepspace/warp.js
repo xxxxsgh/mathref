@@ -70,7 +70,14 @@ export class Warp {
       // névoa azul que converge ao ponto de fuga + pulsos de distorção
       const pulse = exp(abs(fract(z.mul(0.0007).sub(t.mul(0.9))).sub(0.5)).mul(-14.0)).mul(0.35);
       const haze = mix(u.colA, vec3(0.3, 0.55, 1.2), 0.5).mul(pow(zf.clamp(0, 1), 1.6).mul(0.35).add(pulse.mul(zf.clamp(0, 1))));
-      const quantum = lines.add(haze).mul(u.q.mul(float(1).sub(u.hyper)));
+      // bainha de energia: véus de plasma correndo pelas paredes do túnel
+      const wp = vec3(cos(ang).mul(1.6), sin(ang).mul(1.6), z.mul(0.0019).sub(t.mul(2.4)));
+      const wv = n3(wp).a;
+      const wv2 = n3(wp.mul(2.2).add(vec3(1.3, 0, t.mul(-1.1)))).r;
+      const veil = pow(wv, 4.0).mul(1.6).add(smoothstep(0.55, 0.8, wv2).mul(0.25));
+      const veilCol = mix(vec3(0.18, 0.42, 1.3), vec3(0.75, 0.3, 1.4), smoothstep(0.4, 0.7, wv2));
+      const sheath = veilCol.mul(veil).mul(smoothstep(TUN_LEN * 0.5, 120.0, z)).mul(0.9);
+      const quantum = lines.add(haze).add(sheath).mul(u.q.mul(float(1).sub(u.hyper)));
       // ── modo hiperespaço: vórtice de nebulosa em espiral ──
       const tw = ang.add(z.mul(0.0012)).add(t.mul(0.9));
       const sp = vec3(cos(tw).mul(0.7), sin(tw).mul(0.7), z.mul(0.0011).sub(t.mul(1.6)));

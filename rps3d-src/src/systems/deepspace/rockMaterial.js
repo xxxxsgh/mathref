@@ -31,6 +31,10 @@ export function makeRockMaterial(quality = 'high') {
   const mid = n3(P.mul(1.7)).g.toVar();          // regolito
   const cell = n3(P.mul(1.1)).b.toVar();         // células (crateras/blocos)
   const veinN = n3(P.mul(1.3).add(5.1)).a.toVar(); // veios (ridged)
+  // detalhe fino: crateras pequenas e grãos (some com a distância via derivadas)
+  const hi = quality !== 'mobile';
+  const crat2 = hi ? n3(P.mul(6.2).add(1.7)).b.toVar() : float(0.5);
+  const grain = hi ? n3(P.mul(19.0).add(4.4)).g.toVar() : float(0.5);
 
   m.colorNode = Fn(() => {
     const t = lo.mul(0.6).add(mid.mul(0.4)).toVar();
@@ -46,6 +50,14 @@ export function makeRockMaterial(quality = 'high') {
     c.mulAssign(mix(float(0.22), float(1.18), pow(ao, 1.3)));
     // poeira escura acumulada nas crateras / clara nas bordas
     c.mulAssign(mix(float(0.62), float(1.12), smoothstep(0.25, 0.7, cell)));
+    // crateras pequenas: fundo escuro, borda clara (material fresco exposto)
+    const rimC = smoothstep(0.5, 0.6, crat2).mul(smoothstep(0.7, 0.6, crat2));
+    c.mulAssign(mix(float(1.0), float(0.72), smoothstep(0.66, 0.9, crat2)));
+    c.mulAssign(float(1).add(rimC.mul(0.3)));
+    // grão do regolito
+    c.mulAssign(grain.mul(0.35).add(0.83));
+    // intemperismo espacial: manchas frescas mais claras e frias
+    c.assign(mix(c, c.mul(vec3(1.25, 1.3, 1.4)), smoothstep(0.62, 0.8, lo).mul(m0.add(m1).mul(0.6))));
     // gelo: sujeira escura em faixas
     c.assign(mix(c, vec3(0.12, 0.11, 0.1), m3.mul(smoothstep(0.55, 0.75, veinN)).mul(0.7)));
     // veios minerais: dourados no metálico, ferrugem no silicato
@@ -70,6 +82,12 @@ export function makeRockMaterial(quality = 'high') {
   const H = Fn(() => {
     const h = mid.mul(0.5).add(cell.mul(0.6)).add(veinN.mul(0.15)).toVar();
     if (fine) h.addAssign(fine.mul(0.35));
+    if (hi) {
+      // bacia + borda das crateras pequenas, e grão bem fino
+      const rimH = smoothstep(0.5, 0.6, crat2).mul(smoothstep(0.7, 0.6, crat2));
+      h.addAssign(smoothstep(0.62, 0.9, crat2).mul(-0.22).add(rimH.mul(0.1)));
+      h.addAssign(grain.mul(0.06));
+    }
     return h;
   })();
   // escala do relevo em METROS (proporcional ao raio da rocha)

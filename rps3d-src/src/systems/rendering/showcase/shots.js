@@ -7,6 +7,10 @@
 //   rendering-explosion  explosões próximas: bola de fogo volumétrica,
 //                        destroços incandescentes, anel de choque, fumaça
 //   rendering-pbr        nave iluminada de frente (PBR, clearcoat, reflexos)
+//   rendering-shadows    sombras em cascata (nave sobre rocha, sol rasante)
+//   rendering-motion     motion blur de câmera (giro rápido)
+//   rendering-battle     Halden: batalha da abertura, nascer do sol sobre a
+//                        colônia Aurora, raios de pulso, nave capital explodindo
 //
 // Parâmetros de URL úteis: ?rtime=0.6 (segundos de explosão já decorridos).
 import * as THREE from 'three/webgpu';
@@ -18,9 +22,9 @@ import { asteroidField, asteroidGeometry, asteroidMaterial } from './asteroids.j
 const UP = new THREE.Vector3(0, 1, 0);
 const _m = new THREE.Matrix4();
 
-function basis(dir) {
+function basis(dir, up = UP) {
   const F = dir.clone().normalize();
-  const R = new THREE.Vector3().crossVectors(F, UP).normalize();
+  const R = new THREE.Vector3().crossVectors(F, up).normalize();
   const U = new THREE.Vector3().crossVectors(R, F).normalize();
   return { F, R, U };
 }
@@ -60,9 +64,13 @@ function setupCommon(ctx, S, systemId = 'kessa') {
 }
 
 /** Planeta de vitrine no lugar do corpo real (só sem o sistema `planets`). */
-function showcasePlanet(ctx, S, body, type) {
+function showcasePlanet(ctx, S, body, type, extra = {}) {
   if (ctx.services.planets || ctx.params.get('rplanet') === '0') return null;
-  const g = makeShowcasePlanet({ radius: body.radius, type, sun: S.sun.uniforms, seed: (body.seed ?? 3) % 97 });
+  // o impostor distante do deepspace (se houver) cede lugar ao de vitrine
+  ctx.params.set('farbodies', '0');
+  const g = makeShowcasePlanet({ radius: body.radius, type, sun: S.sun.uniforms, seed: (body.seed ?? 3) % 97, ...extra });
+  // eixo inclinado: os polos não ficam de frente para as câmeras dos presets
+  g.rotation.set(1.25, 0.3, 0.55);
   ctx.world.add(g, body.pos);
   return g;
 }
@@ -102,7 +110,7 @@ export function registerShots(ctx, api, S) {
     // nave em primeiro plano (direita, cruzando para a esquerda)
     if (!ctx.services.ships) {
       const ship = buildShowcaseShip();
-      const sp = C.clone().addScaledVector(F, 30).addScaledVector(R, 6.5).addScaledVector(U, -3.6);
+      const sp = C.clone().addScaledVector(F, 30).addScaledVector(R, 1.5).addScaledVector(U, -4.6);
       const dir = R.clone().multiplyScalar(-0.7).addScaledVector(F, -0.45).addScaledVector(U, 0.1).normalize();
       ship.quaternion.copy(noseQuat(dir, U.clone().addScaledVector(R, 0.3).addScaledVector(F, -0.3).normalize()));
       ctx.world.add(ship, sp);
@@ -120,7 +128,7 @@ export function registerShots(ctx, api, S) {
       ctx.world.add(m, C.clone().addScaledVector(toSun, d).add(off));
     }
     // explosão entre a nave e o planeta
-    const ep = C.clone().addScaledVector(F, 420).addScaledVector(R, 95).addScaledVector(U, -55);
+    const ep = C.clone().addScaledVector(F, 420).addScaledVector(R, 150).addScaledVector(U, 20);
     api.explosion(ep, 40, 'ship');
     api.explosion(ep.clone().addScaledVector(R, -70).addScaledVector(U, 30), 14, 'missile');
     advance(S, ctx, Number(ctx.params.get('rtime') ?? 0.75));
@@ -244,6 +252,83 @@ export function registerShots(ctx, api, S) {
     ctx.world.add(field, C.clone().addScaledVector(F, 900));
     api.explosion(C.clone().addScaledVector(F, 300).addScaledVector(R, 40), 24, 'ship');
     advance(S, ctx, 0.5);
+    S.shake.trauma = 0; S.flash.v = 0;
+  });
+
+  // ── 6. Halden: a batalha da abertura (nascer do sol sobre Aurora) ───────
+  // Ala da Hegemonia em formação contra a luz, sol nascendo atrás do limbo da
+  // colônia (cidades acesas no lado noturno), raios de pulso cruzando, uma
+  // explosão próxima e uma nave capital se desfazendo ao longe.
+  ctx.shots.register('rendering-battle', async (ctx) => {
+    setupCommon(ctx, S, 'halden');
+    const sys = ctx.universe.system;
+    const aur = sys.bodies.find((b) => b.name === 'Aurora') || sys.bodies[0];
+    const rad = THREE.MathUtils.degToRad;
+    const alpha = rad(27), sep = rad(Number(ctx.params.get('rsep') ?? 30.5));
+    const dist = aur.radius / Math.sin(alpha);
+    let toSun = aur.pos.clone().negate().normalize();
+    let C = new THREE.Vector3();
+    for (let it = 0; it < 3; it++) {
+      const b = basis(toSun);
+      const D = toSun.clone().multiplyScalar(Math.cos(sep)).addScaledVector(b.U.clone().multiplyScalar(-0.94).addScaledVector(b.R, 0.34).normalize(), Math.sin(sep)).normalize();
+      C = aur.pos.clone().addScaledVector(D, -dist);
+      toSun = C.clone().negate().normalize();
+    }
+    const D = aur.pos.clone().sub(C).normalize();
+    const theta = D.angleTo(toSun);
+    const t = rad(19) / theta;
+    const F = D.clone().multiplyScalar(Math.sin((1 - t) * theta)).addScaledVector(toSun, Math.sin(t * theta)).divideScalar(Math.sin(theta)).normalize();
+    const upV = toSun.clone().addScaledVector(F, -F.dot(toSun)).normalize();
+    const sideV = new THREE.Vector3().crossVectors(F, upV).normalize();
+    const camUp = upV.clone().addScaledVector(sideV, 0.22).normalize();
+    placeCamera(ctx, S, C, lookQuat(F, camUp));
+    ctx.camera.fov = 58; ctx.camera.updateProjectionMatrix();
+    S.sun.update(ctx, 0);
+    showcasePlanet(ctx, S, aur, 'ocean', { cities: true, clouds: 0.45 });
+    const { R, U } = basis(F, camUp);
+    const at = (f, r, u) => C.clone().addScaledVector(F, f).addScaledVector(R, r).addScaledVector(U, u);
+    // ala da Hegemonia: rumo ao planeta, levemente picando
+    const heading = F.clone().addScaledVector(U, -0.12).addScaledVector(R, 0.05).normalize();
+    const slots = [[24, -6.5, -4.2, 0.18], [62, 15, -1.5, -0.1], [120, -27, 7, 0.25], [210, 40, -10, -0.2], [330, -70, 18, 0.1], [480, 95, 4, 0.3]];
+    const ships = [];
+    if (!ctx.services.ships) {
+      for (const [f, r, u, roll] of slots) {
+        const ship = buildShowcaseShip();
+        const up = U.clone().applyAxisAngle(heading, roll);
+        ship.quaternion.copy(noseQuat(heading, up));
+        const p = at(f, r, u);
+        ctx.world.add(ship, p);
+        ships.push(p);
+      }
+    }
+    // explosão próxima (caça abatido) e nave capital ao longe
+    api.explosion(at(560, 170, 60), 34, 'ship', { vel: heading.clone().multiplyScalar(40) });
+    api.explosion(at(3800, -900, 260), 150, 'capital');
+    advance(S, ctx, Number(ctx.params.get('rtime') ?? 0.9));
+    // raios de pulso: dourados (Hegemonia) saindo da ala, vermelhos (defesa da colônia) vindo de frente
+    const rng = (a, b) => a + Math.random() * (b - a);
+    for (let i = 0; i < 16; i++) {
+      const src = ships.length ? ships[i % ships.length] : at(rng(40, 300), rng(-60, 60), rng(-20, 20));
+      const d = heading.clone().addScaledVector(R, rng(-0.06, 0.06)).addScaledVector(U, rng(-0.04, 0.04)).normalize();
+      api.particles.bolt(src.clone().addScaledVector(d, rng(20, 240)).addScaledVector(R, (i % 2 ? 1 : -1) * 8.5), d, { color: 'gold', length: 22, width: 0.5, brightness: 36 });
+    }
+    for (let i = 0; i < 12; i++) {
+      const p = at(rng(150, 900), rng(-260, 260), rng(-80, 140));
+      const d = F.clone().negate().addScaledVector(R, rng(-0.5, 0.5)).addScaledVector(U, rng(-0.3, 0.3)).normalize();
+      api.particles.bolt(p, d, { color: 'red', length: 30, width: 0.8, brightness: 30 });
+    }
+    // rastro de míssil em curva
+    const m0 = at(90, -40, -20), m1 = at(380, 60, 30);
+    const ctrl = at(240, -80, 70);
+    for (let i = 0; i < 40; i++) {
+      const u = i / 39;
+      const p = m0.clone().multiplyScalar((1 - u) * (1 - u)).addScaledVector(ctrl, 2 * u * (1 - u)).addScaledVector(m1, u * u);
+      api.particles.emit('smoke', p, 1, (k, o) => {
+        o.life = 6; o.s0 = 1.2 + (1 - u) * 3.5; o.s1 = 4 + (1 - u) * 8; o.drag = 1; o.a = 0.16; o.b = 0.16; o.c = 0.17; o.w = u > 0.9 ? 1 : 0;
+        o.delay = -(1 - u) * 2.5;
+      });
+    }
+    api.particles.glow(m1, 3.5, [8, 5, 2.5], 3);
     S.shake.trauma = 0; S.flash.v = 0;
   });
 }

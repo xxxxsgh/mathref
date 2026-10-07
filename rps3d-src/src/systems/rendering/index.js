@@ -190,6 +190,22 @@ const api = {
         o.a = color[0]; o.b = color[1]; o.c = color[2]; o.w = 0;
       });
     },
+    /**
+     * Raio de energia (laser/pulso) visual: risco esticado pela velocidade,
+     * núcleo branco + halo da cor. color: 'red'|'blue'|'green'|'gold'.
+     * pos/dir em MUNDO. Retorna a âncora (o raio vive `life` s).
+     */
+    bolt(pos, dir, { speed = 900, length = 14, color = 'gold', width = 0.35, life = 1.2, brightness = 30, vel = null } = {}) {
+      const id = { red: 11, blue: 12, green: 13, gold: 14 }[color] ?? 14;
+      const a = S.anchors.alloc(pos, vel, life + 0.5, S.now);
+      const d = dir.clone().normalize();
+      S.particles.layers.spark.emit(1, a, (k, o) => {
+        o.vx = d.x * speed; o.vy = d.y * speed; o.vz = d.z * speed;
+        o.life = life; o.s0 = width; o.s1 = width; o.drag = 0; o.g = 0;
+        o.a = 1; o.b = brightness; o.c = id; o.spin = length / speed;
+      });
+      return a;
+    },
     /** Brilho único (clarão de disparo, plasma). color em HDR linear. */
     glow(pos, size, color = [4, 2, 1], life = 0.15, vel = null) {
       const a = S.anchors.alloc(pos, vel, life + 0.5, S.now);

@@ -95,7 +95,7 @@ function onSystem(ctx, sys) {
   state.dome.setNeighbors(state.params.neighbors);
   buildStars(ctx, sys);
   state.field?.setSystem(sys);
-  state.far?.setSystem(sys);
+  state.far?.setSystem(sys, state.params);
   state.ring?.setSystem(sys);
   state.debris?.setSystem(sys);
   state.storms?.setSystem(sys);

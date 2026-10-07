@@ -102,14 +102,14 @@ export class DebrisSystem {
     } else {
       // painel metálico chamuscado: base clara com fuligem, linhas de painel
       const panel = smoothstep(0.92, 0.97, fract(positionLocal.x.mul(2.2)).max(fract(positionLocal.y.mul(2.2))));
-      const soot = smoothstep(0.35, 0.75, n);
-      const base = mix(vec3(0.55, 0.56, 0.58), vec3(0.05, 0.045, 0.04), soot);
+      const soot = smoothstep(0.25, 0.6, n);
+      const base = mix(vec3(0.42, 0.43, 0.45), vec3(0.025, 0.022, 0.02), soot);
       m.colorNode = base.mul(float(1).sub(panel.mul(0.5)));
       m.roughnessNode = mix(float(0.35), float(0.85), soot);
       m.metalnessNode = mix(float(0.85), float(0.2), soot);
     }
     // bordas e fendas incandescentes que esfriam
-    const crack = smoothstep(0.62, 0.78, n);
+    const crack = smoothstep(0.6, 0.74, n);
     m.emissiveNode = blackbody(heat.mul(0.85)).mul(pow(heat, 2.5).mul(crack.add(heat.mul(0.04))).mul(9));
     return m;
   }
@@ -133,7 +133,7 @@ export class DebrisSystem {
         vel: v,
         q: new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 6, Math.random() * 6, Math.random() * 6)),
         w: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(6 + Math.random() * 6),
-        scale: size * (0.08 + Math.random() ** 2 * 0.35),
+        scale: size * (0.035 + Math.random() ** 3 * 0.17),
         heat: hot * (0.6 + Math.random() * 0.4),
         age: 0, life: 6 + Math.random() * 8,
         trail: hot > 0.3 && Math.random() < 0.35,
@@ -147,6 +147,7 @@ export class DebrisSystem {
     const g = this.particles.u.gravity.value;
     this.trailTimer += dt;
     const doTrail = this.trailTimer > 0.05;
+    const span = this.trailTimer;
     if (doTrail) this.trailTimer = 0;
     const origin = ctx.world.origin;
     for (const b of Object.values(this.batches)) {
@@ -162,12 +163,20 @@ export class DebrisSystem {
         it.q.premultiply(_q);
         it.heat *= Math.exp(-dt * 0.9);
         if (doTrail && it.trail && it.heat > 0.12) {
+          // rastro contínuo: vários puffs espalhados ao longo do trecho
+          // percorrido desde o último (sem "contas de colar" em peças rápidas)
           const a = it.anchor;
           const o = it.off;
-          this.particles.layers.smoke.emit(1, a, (k, e) => {
-            e.x = o.x; e.y = o.y; e.z = o.z; e.vx = it.vel.x * 0.1; e.vy = it.vel.y * 0.1; e.vz = it.vel.z * 0.1;
-            e.life = 2.5 + Math.random() * 2; e.s0 = it.scale * 1.5; e.s1 = it.scale * 7; e.drag = 0.6; e.g = -0.05;
-            e.a = 0.08; e.b = 0.075; e.c = 0.07; e.w = it.heat * 0.9; e.spin = (Math.random() - 0.5) * 0.6;
+          const seg = it.vel.length() * span;
+          const k = Math.min(6, 1 + Math.floor(seg / Math.max(0.2, it.scale * 2)));
+          const s0 = Math.max(it.scale * 1.2, (seg / k) * 1.6);
+          this.particles.layers.smoke.emit(k, a, (j, e) => {
+            const back = (j / k) * span;
+            e.x = o.x - it.vel.x * back; e.y = o.y - it.vel.y * back; e.z = o.z - it.vel.z * back;
+            e.vx = it.vel.x * 0.08; e.vy = it.vel.y * 0.08; e.vz = it.vel.z * 0.08;
+            e.life = 1.8 + Math.random() * 1.6; e.s0 = s0; e.s1 = s0 * 4 + it.scale * 3; e.drag = 0.8; e.g = -0.05;
+            e.a = 0.07; e.b = 0.065; e.c = 0.06; e.w = it.heat * 1.1; e.spin = (Math.random() - 0.5) * 0.6;
+            e.delay = -back;
           });
         }
       }

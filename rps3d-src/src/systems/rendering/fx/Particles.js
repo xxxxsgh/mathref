@@ -101,9 +101,18 @@ export class ParticleLayer {
         const across = exp(q.x.mul(q.x).mul(-5.5));
         const along = smoothstep(1.0, 0.2, abs(q.y)).mul(q.y.mul(0.35).add(0.65));
         const temp = D.x.mul(pow(float(1).sub(t), 1.3));
-        const col = blackbody(temp).mul(pow(temp, 1.5).mul(D.y).add(0.02));
+        const fire = blackbody(temp).mul(pow(temp, 1.5).mul(D.y).add(0.02));
+        // D.z ≥ 10 → raio de energia colorido (id = D.z − 10): núcleo branco,
+        // halo da cor da facção, brilho constante (não esfria)
+        const id = D.z.sub(10);
+        const tint = select(id.lessThan(1.5), vec3(1.0, 0.16, 0.07),
+          select(id.lessThan(2.5), vec3(0.22, 0.55, 1.0),
+            select(id.lessThan(3.5), vec3(0.3, 1.0, 0.4), vec3(1.0, 0.68, 0.22))));
+        const core = pow(across, 6.0);
+        const bolt = mix(tint, vec3(1.0, 0.97, 0.92), core.mul(0.75)).mul(D.y).mul(across.add(core.mul(2)));
+        const col = select(D.z.greaterThan(9.5), bolt, fire.mul(across));
         const fade = smoothstep(1.0, 0.75, t);
-        return vec4(col.mul(across).mul(along).mul(fade), 1);
+        return vec4(col.mul(along).mul(fade), 1);
       })();
     } else if (kind === 'glow') {
       mat.colorNode = Fn(() => {

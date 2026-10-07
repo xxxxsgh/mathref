@@ -82,20 +82,20 @@ export class FireballPool {
         const p = ro.add(rd.mul(t));
         const r = length(p);
         // ruído "piroclástico": bulbos grandes + turbulência que sobe com a idade
-        const q = p.mul(1.7).add(vec3(uSeed, uSeed.mul(0.7), a.mul(-1.1)));
+        const q = p.mul(2.1).add(vec3(uSeed, uSeed.mul(0.7), a.mul(-1.1)));
         const n1 = vnoise3(q);
         const n2 = vnoise3(q.mul(2.4).add(n1.mul(2.1)));
         const n3 = vnoise3(q.mul(5.3).sub(n2.mul(1.3)));
         const n = n1.mul(0.55).add(n2.mul(0.3)).add(n3.mul(0.15));
         const shape = R.mul(n.mul(0.7).add(0.55)).sub(r);
-        const dens = clamp(shape.div(R).mul(5), 0, 1).mul(fadeOut).toVar();
+        const dens = clamp(shape.div(R).mul(8), 0, 1).mul(fadeOut).toVar();
         If(dens.greaterThan(0.002), () => {
           const core = smoothstep(R.mul(1.05), R.mul(0.15), r);
           const heat = core.mul(0.8).add(n2.sub(0.42).mul(0.8)).add(n3.sub(0.5).mul(0.3)).add(early.mul(0.35)).mul(cool).clamp(0, 1.1);
           // fogo é opticamente fino; fuligem fria é espessa
           const sigma = dens.mul(mix(float(1.6), float(7.5), a)).mul(uSmoke).mul(mix(float(1), float(0.3), heat.min(1))).max(1e-3);
           const st = exp(sigma.mul(dt).negate());
-          const glow = blackbody(heat.min(1)).mul(pow(heat, 2.4).mul(46)).mul(dens);
+          const glow = blackbody(heat.min(1)).mul(pow(heat, 2.4).mul(58)).mul(dens);
           // fumaça: espalhamento simples do sol (luz de borda + ambiente)
           const lit = dot(normalize(p), sunL).mul(0.5).add(0.5);
           const smoke = vec3(0.05, 0.043, 0.038).mul(S.color.mul(S.intensity.mul(S.visibility).mul(lit.mul(lit).mul(0.35))).add(0.02));

@@ -50,6 +50,7 @@ function makeUniforms(body, sysSeed) {
     time: uniform(0),
     fade: uniform(1),
     relief: uniform(Math.max(600, body.terrainAmplitude || 2000)),
+    amb: uniform(new THREE.Color(0.012, 0.01, 0.016)),
   };
 }
 
@@ -175,7 +176,8 @@ function rockyMaterial(u, mobile) {
       const cl = fbm3(cq).mul(0.75).add(n3(cq.mul(4.3)).a.mul(0.25));
       // faixas de latitude (células de Hadley)
       const band = sin(nL.y.mul(9.0).add(cl.mul(4.0))).mul(0.08);
-      const cov = smoothstep(float(1).sub(u.clouds).sub(0.02), float(1).sub(u.clouds).add(0.3), cl.add(band));
+      const thr = mix(float(0.7), float(0.46), u.clouds);
+      const cov = smoothstep(thr, thr.add(0.14), cl.add(band)).mul(smoothstep(0.0, 0.25, n3(cq.mul(0.35).add(2.0)).r.sub(0.25)).mul(0.5).add(0.5));
       const cLit = smoothstep(-0.18, 0.25, NLs).mul(clamp(NLs.mul(0.8).add(0.35), 0.0, 1.0));
       const cCol = sunTint.mul(cLit).mul(u.sunI).mul(0.82);
       lit.assign(mix(lit, cCol, cov.mul(0.92)));
@@ -193,8 +195,10 @@ function rockyMaterial(u, mobile) {
     });
     // espalhamento atmosférico sobre a superfície (azulado no limbo iluminado)
     const mu = max(dot(normalView, V), 0.0);
-    const haze = pow(float(1).sub(mu), 2.5).mul(u.atmoDen.min(1.4)).mul(smoothstep(-0.2, 0.4, NLs));
-    lit.addAssign(u.atmoCol.mul(haze).mul(u.sunI).mul(0.45));
+    const haze = pow(float(1).sub(mu), 4.0).mul(u.atmoDen.min(1.4)).mul(smoothstep(-0.2, 0.4, NLs));
+    lit.addAssign(u.atmoCol.mul(haze).mul(u.sunI).mul(0.3));
+    // luz ambiente do céu (nebulosa/Via Láctea) no lado noturno
+    lit.addAssign(col.mul(u.amb));
     return vec4(lit.add(emis).mul(u.fade), 1);
   })();
   return m;
@@ -235,7 +239,7 @@ function gasMaterial(u) {
     const V = normalize(positionView.negate());
     const mu = max(dot(N, V), 0.0);
     const limb = pow(mu, 0.35); // escurecimento de limbo de atmosfera profunda
-    const lit = c.mul(u.sunCol).mul(diff).mul(limb).mul(u.sunI).toVar();
+    const lit = c.mul(u.sunCol).mul(diff).mul(limb).mul(u.sunI).add(c.mul(u.amb)).toVar();
     const haze = pow(float(1).sub(mu), 3.0).mul(smoothstep(-0.2, 0.5, NL));
     lit.addAssign(u.atmoCol.mul(haze).mul(u.sunI).mul(0.25));
     return vec4(lit.mul(u.fade), 1);
@@ -280,7 +284,9 @@ function atmoMaterial(u) {
     const g = 0.76;
     const mieP = float(1 - g * g).div(pow(float(1 + g * g).sub(cosT.mul(2 * g)), 1.5)).mul(0.08);
     col.addAssign(u.sunCol.mul(mieP).mul(u.mie).mul(scat).mul(smoothstep(-0.35, 0.1, NL)));
-    return vec4(col.mul(u.sunI).mul(0.9).mul(u.fade), 1);
+    // sobre o disco do planeta a camada é fina: só um véu (o limbo é que brilha)
+    const k = hitPlanet.select(float(0.28), float(1.0));
+    return vec4(col.mul(u.sunI).mul(0.75).mul(k).mul(u.fade), 1);
   })();
   return m;
 }
@@ -325,7 +331,10 @@ export class FarBodies {
     this.visible = true;
   }
 
-  setSystem(sys) {
+  setSystem(sys, params = null) {
+    // ambiente do céu: tom da nebulosa (ou da Via Láctea) bem fraco
+    const n = params?.nebula;
+    this.amb = n?.on ? n.colorA.clone().lerp(n.colorB, 0.5).multiplyScalar(0.03) : new THREE.Color(0.01, 0.01, 0.013);
     for (const it of this.items) it.dispose();
     this.items = [];
     if (!sys) return;
@@ -335,6 +344,7 @@ export class FarBodies {
   makeBody(body, sys) {
     const ctx = this.ctx;
     const u = derive(makeUniforms(body, sys.seed));
+    if (this.amb) u.amb.value.copy(this.amb);
     const group = new THREE.Group();
     group.name = 'corpo-distante:' + body.name;
     const spin = new THREE.Group();

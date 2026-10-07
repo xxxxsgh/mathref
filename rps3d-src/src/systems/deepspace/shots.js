@@ -49,12 +49,12 @@ export function registerShots(ctx, state, api) {
     const toStar = sys.star.pos.clone().sub(ver.pos).normalize();
     // câmera atrás do terminador: Verídia em crescente gordo, sol na outra ponta do quadro
     const k = c.params;
-    const ang = THREE.MathUtils.degToRad(Number(k.get('ang') || 118));
-    const dist = Number(k.get('dist') || 3.1);
+    const ang = THREE.MathUtils.degToRad(Number(k.get('ang') || 110));
+    const dist = Number(k.get('dist') || 3.8);
     const camDir = toStar.clone().applyAxisAngle(up, ang).normalize();
     const from = ver.pos.clone().addScaledVector(camDir, R * dist).addScaledVector(up, R * Number(k.get('up') || 0.55));
     const toPlanet = ver.pos.clone().sub(from).normalize();
-    const mixK = Number(k.get('mix') || 0.5);
+    const mixK = Number(k.get('mix') || 0.36);
     const lookDir = toPlanet.clone().multiplyScalar(1 - mixK).addScaledVector(toStar, mixK).normalize();
     hold(state, c, from, from.clone().add(lookDir), up, Number(k.get('roll') || 0.12));
   });
@@ -84,9 +84,11 @@ export function registerShots(ctx, state, api) {
     const hero = near.filter((x) => x.radius > 700).sort((x, y) => y.radius - x.radius)[0] || near[0];
     const toStar = hero.pos.clone().negate().normalize();
     const side = new THREE.Vector3().crossVectors(toStar, new THREE.Vector3(0, 1, 0)).normalize();
-    // câmera ao lado (o sol fica de lado/atrás do herói → terminador dramático)
-    const from = hero.pos.clone().addScaledVector(side, hero.radius * 3.3).addScaledVector(toStar, hero.radius * 0.9).add(new THREE.Vector3(0, hero.radius * 0.55, 0));
-    const look = hero.pos.clone().addScaledVector(toStar, hero.radius * 1.3).addScaledVector(side, -hero.radius * 0.2);
+    // câmera do lado do sol (fase ~45°): faces iluminadas com sombras longas,
+    // o campo atrás do herói aceso e sumindo na névoa do cinturão
+    const Rh = hero.radius;
+    const from = hero.pos.clone().addScaledVector(toStar, Rh * 2.5).addScaledVector(side, Rh * 2.3).add(new THREE.Vector3(0, Rh * 0.7, 0));
+    const look = hero.pos.clone().addScaledVector(side, -Rh * 0.9).addScaledVector(toStar, -Rh * 1.2);
     hold(state, c, from, look, new THREE.Vector3(0, 1, 0), -0.1);
   });
 

@@ -74,21 +74,28 @@ export class IonStorms {
         const warp = n3(p.mul(0.6).add(u.seed).add(vec3(0, tt.mul(0.004), 0))).rgb.sub(0.5);
         const q = p.mul(1.5).add(warp.mul(1.1)).add(u.seed);
         const base = n3(q).r.mul(0.65).add(n3(q.mul(2.6).add(vec3(tt.mul(0.01), 0, 0))).g.mul(0.35));
-        // contorno irregular, achatado (bigorna)
-        const rr = length(p.mul(vec3(1.0, 1.7, 1.0))).add(warp.x.mul(0.55));
-        const shape = smoothstep(0.95, 0.3, rr);
-        const dens = shape.mul(smoothstep(0.5, 0.78, base)).toVar();
-        // filamentos de plasma (ridged), pulsando
-        const fil = pow(n3(q.mul(3.3).add(vec3(0, 0, tt.mul(0.03)))).a, 5.0).mul(smoothstep(1.0, 0.4, rr)).mul(float(0.5).add(abs(fract(tt.mul(0.37).add(base)).sub(0.5))));
+        // contorno irregular, achatado (bigorna), com lóbulos erodidos
+        const lobes = n3(p.mul(0.9).add(u.seed.zxy)).r;
+        const rr = length(p.mul(vec3(1.0, 1.8, 1.0))).add(warp.x.mul(0.6)).add(lobes.sub(0.5).mul(0.7));
+        const shape = smoothstep(0.92, 0.25, rr);
+        const dens = shape.mul(smoothstep(0.52, 0.8, base)).toVar();
+        // filamentos de plasma (ridged), finos e pulsando
+        const fr = n3(q.mul(3.3).add(vec3(0, 0, tt.mul(0.03)))).a;
+        const fil = pow(fr, 14.0).mul(smoothstep(1.0, 0.35, rr)).mul(float(0.45).add(abs(fract(tt.mul(0.37).add(base)).sub(0.5))));
         // relâmpago: ilumina em volta do ponto da descarga
         const bd = length(p.sub(u.boltPos));
         const flash = exp(bd.mul(bd).mul(-9.0)).mul(u.bolt);
         const arc = smoothstep(0.93, 0.985, n3(q.mul(4.5).add(u.boltPos.mul(7.0))).a).mul(exp(bd.mul(-5.0))).mul(u.bolt).mul(14.0);
-        const glow = vec3(0.04, 0.09, 0.3).mul(dens.mul(0.6)).add(vec3(0.25, 0.55, 1.4).mul(fil.mul(2.2)));
-        const lit = vec3(0.6, 0.75, 1.5).mul(flash.mul(dens).mul(5.0)).add(vec3(0.85, 0.92, 1.8).mul(arc));
-        const sunlit = vec3(0.35, 0.36, 0.45).mul(dens.mul(0.05));
+        // cor: núcleo índigo profundo, filamentos ciano → violeta
+        const hue = smoothstep(0.35, 0.75, n3(q.mul(0.7).add(2.2)).g);
+        const filCol = mix(vec3(0.15, 0.75, 1.6), vec3(0.9, 0.35, 1.7), hue);
+        const glow = mix(vec3(0.006, 0.012, 0.04), vec3(0.03, 0.01, 0.05), hue).mul(dens).add(filCol.mul(fil.mul(0.7)));
+        const lit = vec3(0.6, 0.75, 1.5).mul(flash.mul(dens).mul(3.0)).add(vec3(0.85, 0.92, 1.8).mul(arc));
+        // borda iluminada pelo sol (poeira fria do plasma)
+        const sunF = clamp(dot(normalize(p), u.sun).mul(0.6).add(0.4), 0.0, 1.0);
+        const sunlit = vec3(0.3, 0.3, 0.38).mul(dens.mul(0.04).mul(sunF));
         col.addAssign(glow.add(lit).add(sunlit).mul(T).mul(dt).mul(4.0));
-        T.mulAssign(exp(dens.mul(dt).mul(-9.0)));
+        T.mulAssign(exp(dens.mul(dt).mul(-14.0)));
         If(T.lessThan(0.02), () => { Break(); });
       });
       return vec4(col, float(1).sub(T));
@@ -120,6 +127,7 @@ export class IonStorms {
       if (!it.mesh.visible) continue;
       u.camRel.value.copy(cam).sub(s.pos).divideScalar(s.radius);
       u.time.value = ctx.time.world;
+      ctx.universe.system?.sunDir(s.pos, u.sun.value);
       // relâmpagos: descargas aleatórias com decaimento rápido e repique
       it.boltT -= dt;
       if (it.boltT <= 0 && (it.nextBolt -= dt) <= 0) {
