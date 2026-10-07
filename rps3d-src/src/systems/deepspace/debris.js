@@ -12,6 +12,7 @@ import {
 import { Rng, mix as mixSeed } from '../../core/Rng.js';
 import { makeDebrisGeometries } from './rockGeo.js';
 import { n3, bumpNormal } from './tsl.js';
+import { rockFill } from './rockMaterial.js';
 
 const PER_FIELD = { ultra: 420, high: 300, medium: 180, mobile: 100 };
 const PAINT = {
@@ -44,7 +45,7 @@ function hullMaterial(quality) {
   const n1 = n3(P.mul(0.9)).r, n2 = n3(P.mul(3.7)).g, n3b = n3(P.mul(1.6).add(4.0)).a;
   const burn = smoothstep(0.3, 0.7, n1.mul(0.6).add(n3b.mul(0.5)).add(a.z.mul(0.6)).sub(0.2));
   const edgeWear = smoothstep(0.6, 0.85, n2).mul(0.6);
-  m.colorNode = Fn(() => {
+  const hullCol = Fn(() => {
     const paint = b.rgb.toVar();
     // faixa de cor secundária (listra da facção)
     const stripe = smoothstep(0.08, 0.06, abs(fract(P.x.mul(0.35).add(a.x)).sub(0.5)));
@@ -59,11 +60,13 @@ function hullMaterial(quality) {
     c.assign(mix(c, vec3(0.025, 0.02, 0.018), burn.mul(0.92)));
     return c;
   })();
+  const hullV = hullCol.toVar('hullAlbedo');
+  m.colorNode = hullV;
   m.metalnessNode = mix(float(0.55), float(0.95), edgeWear).mul(float(1).sub(burn.mul(0.7)));
   m.roughnessNode = mix(float(0.3), float(0.85), burn).add(n2.mul(0.12)).add(panelT.mul(0.15));
   // brasas: metal ainda incandescente nas bordas queimadas
   const ember = b.w.mul(smoothstep(0.6, 0.85, burn.mul(n3(P.mul(5.0).add(1.0)).r.mul(1.6))));
-  m.emissiveNode = vec3(1.0, 0.32, 0.06).mul(ember.mul(4.0));
+  m.emissiveNode = vec3(1.0, 0.32, 0.06).mul(ember.mul(4.0)).add(hullV.mul(rockFill).mul(0.6));
   m.normalNode = bumpNormal(seam.mul(-0.6).add(n2.mul(0.25)).add(rivet.mul(0.25)), a.w.mul(0.04));
   m.fog = false;
   return m;

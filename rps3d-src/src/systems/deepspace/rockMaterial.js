@@ -5,7 +5,7 @@
 //   3 gelo, 4 cristalino raro)  ·  w = raio (m)
 import * as THREE from 'three/webgpu';
 import {
-  Fn, vec3, vec4, float, mix, smoothstep, clamp, pow, abs, attribute, positionGeometry, normalGeometry, select, max, fwidth, length,
+  Fn, vec3, vec4, float, mix, uniform, smoothstep, clamp, pow, abs, attribute, positionGeometry, normalGeometry, select, max, fwidth, length,
 } from 'three/tsl';
 import { n3, bumpNormal } from './tsl.js';
 
@@ -16,6 +16,13 @@ export const ROCK_TYPES = [
   { id: 'gelo', name: 'Gelo', resources: ['água', 'deutério'] },
   { id: 'cristalino', name: 'Cristalino', resources: ['cristal', 'irídio'] },
 ];
+
+/**
+ * Luz de preenchimento (céu/nebulosa refletidos pela poeira do cinturão):
+ * sem ela, o lado escuro das rochas vira um buraco preto — o espaço real é
+ * assim, mas a leitura da forma some. Ajustada por sistema (index.js).
+ */
+export const rockFill = uniform(new THREE.Color(0.02, 0.018, 0.024));
 
 export function makeRockMaterial(quality = 'high') {
   const m = new THREE.MeshStandardNodeMaterial();
@@ -40,7 +47,7 @@ export function makeRockMaterial(quality = 'high') {
   const crat2 = hi ? mix(float(0.5), n3(P.mul(6.2).add(1.7)).b, fadeC).toVar() : float(0.5);
   const grain = hi ? mix(float(0.5), n3(P.mul(19.0).add(4.4)).g, fadeG).toVar() : float(0.5);
 
-  m.colorNode = Fn(() => {
+  const albedo = Fn(() => {
     const t = lo.mul(0.6).add(mid.mul(0.4)).toVar();
     // paletas por tipo (albedo linear)
     const c0 = mix(vec3(0.07, 0.064, 0.058), vec3(0.17, 0.15, 0.125), t);
@@ -51,15 +58,15 @@ export function makeRockMaterial(quality = 'high') {
     const c = c0.mul(m0).add(c1.mul(m1)).add(c2.mul(m2)).add(c3.mul(m3)).add(c4.mul(m4)).toVar();
     // oclusão de cavidade (bake por vértice)
     const ao = attribute('aAO', 'float');
-    c.mulAssign(mix(float(0.22), float(1.18), pow(ao, 1.3)));
+    c.mulAssign(mix(float(0.45), float(1.12), pow(ao, 1.3)));
     // poeira escura acumulada nas crateras / clara nas bordas
-    c.mulAssign(mix(float(0.62), float(1.12), smoothstep(0.25, 0.7, cell)));
+    c.mulAssign(mix(float(0.82), float(1.08), smoothstep(0.25, 0.7, cell)));
     // crateras pequenas: fundo escuro, borda clara (material fresco exposto)
     const rimC = smoothstep(0.5, 0.6, crat2).mul(smoothstep(0.7, 0.6, crat2));
-    c.mulAssign(mix(float(1.0), float(0.72), smoothstep(0.66, 0.9, crat2)));
+    c.mulAssign(mix(float(1.0), float(0.85), smoothstep(0.66, 0.9, crat2)));
     c.mulAssign(float(1).add(rimC.mul(0.3)));
     // grão do regolito
-    c.mulAssign(grain.mul(0.35).add(0.83));
+    c.mulAssign(grain.mul(0.2).add(0.9));
     // intemperismo espacial: manchas frescas mais claras e frias
     c.assign(mix(c, c.mul(vec3(1.25, 1.3, 1.4)), smoothstep(0.62, 0.8, lo).mul(m0.add(m1).mul(0.6))));
     // gelo: sujeira escura em faixas
@@ -70,6 +77,8 @@ export function makeRockMaterial(quality = 'high') {
     c.assign(mix(c, vec3(0.42, 0.18, 0.08), vein.mul(m1).mul(0.6)));
     return c;
   })();
+  const albedoV = albedo.toVar('rockAlbedo');
+  m.colorNode = albedoV;
   m.roughnessNode = Fn(() => {
     const r = float(0.92).toVar();
     r.assign(mix(r, float(0.42), m2.mul(smoothstep(0.5, 0.8, veinN).mul(0.8).add(0.3))));
@@ -79,7 +88,7 @@ export function makeRockMaterial(quality = 'high') {
   })();
   m.metalnessNode = m2.mul(smoothstep(0.55, 0.8, veinN)).mul(0.85).add(m4.mul(0.1));
   // cristais: veios que brilham (fluorescência ciano)
-  m.emissiveNode = vec3(0.1, 0.9, 1.0).mul(m4.mul(smoothstep(0.7, 0.9, veinN)).mul(2.5));
+  m.emissiveNode = vec3(0.1, 0.9, 1.0).mul(m4.mul(smoothstep(0.7, 0.9, veinN)).mul(2.5)).add(albedoV.mul(rockFill).mul(attribute('aAO', 'float').mul(0.6).add(0.4)));
 
   // relevo fino: crateras pequenas + grãos
   const fine = quality === 'mobile' ? null : n3(P.mul(5.3).add(2.2)).r;
@@ -95,7 +104,7 @@ export function makeRockMaterial(quality = 'high') {
     return h;
   })();
   // escala do relevo em METROS (proporcional ao raio da rocha)
-  m.normalNode = bumpNormal(H, a.w.mul(quality === 'mobile' ? 0.025 : 0.035));
+  m.normalNode = bumpNormal(H, a.w.mul(quality === 'mobile' ? 0.016 : 0.021));
   m.fog = false;
   return m;
 }

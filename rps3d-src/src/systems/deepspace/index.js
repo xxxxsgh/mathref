@@ -16,6 +16,7 @@ import { skyParams } from './skyParams.js';
 import { Star } from './star.js';
 import { BlackHole } from './blackhole.js';
 import { AsteroidField } from './belt.js';
+import { rockFill } from './rockMaterial.js';
 import { BeltRing } from './beltRing.js';
 import { DebrisFields } from './debris.js';
 import { Dust } from './dust.js';
@@ -60,6 +61,10 @@ function buildStars(ctx, sys) {
 
 function applyEnvironment(ctx) {
   const p = state.params;
+  // preenchimento das rochas/destroços: tom do céu local
+  const nb = p.nebula;
+  if (nb.on) rockFill.value.copy(nb.colorA).lerp(nb.colorB, 0.4).multiplyScalar(0.55);
+  else rockFill.value.setRGB(0.1, 0.1, 0.12);
   const r = ctx.services.rendering;
   const env = r?.environment;
   if (env?.setNebula) {
