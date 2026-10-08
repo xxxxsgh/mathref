@@ -247,7 +247,7 @@ export function registerShots(ctx, api, st) {
     setup(ctx, 'kessa', 64);
     const b = body(ctx, 'Brasa');
     const v = api.view(b);
-    const d = search(api, b, 9, (d, h, T) => {
+    const d = search(api, b, P(ctx, 'elev', 4), (d, h, T) => {
       const s = T.sample(d.x, d.y, d.z, {});
       if (s.s > 0.3) return -Infinity;
       const { tan } = sunTangent(api, b, d, ctx);
@@ -266,11 +266,13 @@ export function registerShots(ctx, api, st) {
       let l = 0;
       for (const k of [200, 500, 900, 1500]) { const p = d.clone().addScaledVector(dir, k / b.radius).normalize(); l += T.sample(p.x, p.y, p.z, {}).s; }
       l += Math.max(0, profile(T, b, d, dir, [2500, 4000, 6000]) - 200) / 300;
+      if (dir.dot(tan) > 0.3) l -= 6; // nunca contra o sol: a lava brilha no contraluz do crepúsculo
       if (l > bl) { bl = l; look = dir; }
     }
     const h = T.height(d.x, d.y, d.z);
     localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + 45), look.clone().addScaledVector(d, -0.12).normalize(), d);
-    api.weather.force('ash', 0.35);
+    ctx.services.rendering?.setExposure?.(P(ctx, 'exp', 0.9), { speed: 200 });
+    api.weather.force('ash', P(ctx, 'storm', 0.4));
     api.settle();
   });
 

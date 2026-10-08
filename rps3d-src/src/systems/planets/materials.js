@@ -173,7 +173,7 @@ function surface(type, P, U, S, I) {
     const molten = river.mul(streaks.mul(0.45).add(0.6));
     const crustGlow = lake.mul(lavaHot).mul(crack.add(smoothstep(0.7, 0.95, macro2.r).mul(0.35)));
     const heat = max(molten, crustGlow).add(lavaHot.mul(float(1).sub(lavaHot)).mul(0.5));
-    emissive = mix(vec3(1.0, 0.1, 0.008), vec3(1.0, 0.6, 0.16), clamp(heat.sub(0.2), 0, 1)).mul(pow(clamp(heat, 0, 1.2), 2.2).mul(9.0));
+    emissive = mix(vec3(1.0, 0.08, 0.005), vec3(1.0, 0.42, 0.08), clamp(heat.sub(0.25), 0, 1)).mul(pow(clamp(heat, 0, 1.2), 2.4).mul(6.0));
     albedo = mix(g, vec3(0.025, 0.02, 0.018).mul(flow2.r.add(0.6)), lavaHot);
     rough = mix(float(0.75), float(0.92), ash);
     bump = vFine.mul(0.8).add(vMicro.mul(3.5)).sub(crack.mul(lavaHot).mul(0.6));

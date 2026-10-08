@@ -12,7 +12,7 @@
 import * as THREE from 'three/webgpu';
 import {
   Fn, vec3, vec4, float, attribute, uniform, fract, normalize, cross, length, smoothstep, mix, max, abs, positionLocal,
-  select, dot, clamp, uv, vec2,
+  select, dot, clamp, uv, vec2, varying, pow,
 } from 'three/tsl';
 import { Noise } from '../../core/Rng.js';
 
@@ -107,7 +107,7 @@ export class Weather {
       color: uniform(new THREE.Vector3(1, 1, 1)), alpha: uniform(0), box: uniform(BOX), count: uniform(1),
     };
     const aSeed = attribute('aSeed', 'vec4'), aCorner = attribute('aCorner', 'vec2');
-    const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
+    const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
     m.fog = false;
     // posição presa ao mundo: fract(seed + deslocamento acumulado / caixa)
     const jitter = vec3(aSeed.w.mul(0.37), aSeed.w.mul(0.71), aSeed.w.mul(0.13)).sub(0.3).mul(0.25);
@@ -123,9 +123,9 @@ export class Weather {
     m.positionNode = pos.mul(alive);
     const dist = length(center);
     const fadeN = smoothstep(0.4, 1.6, dist).mul(smoothstep(U.box.mul(0.5), U.box.mul(0.3), dist));
-    const edge = float(1).sub(abs(aCorner.x));
+    const edge = float(1).sub(abs(varying(aCorner.x))); // perfil macio através do risco
     m.colorNode = U.color;
-    m.opacityNode = U.alpha.mul(fadeN).mul(edge.mul(0.7).add(0.3)).mul(alive);
+    m.opacityNode = U.alpha.mul(fadeN).mul(pow(edge, 0.8)).mul(alive);
     this.mesh = new THREE.Mesh(g, m);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 5;
