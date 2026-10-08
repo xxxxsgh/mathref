@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#03060c" />
+    <meta name="description" content="EXOSFERA — exploração espacial procedural em Three.js: planetas, atmosferas e voo contínuo do solo à órbita." />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <title>EXOSFERA</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: #e8e8e8; -webkit-text-size-adjust: 100%; overscroll-behavior: none;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+      #app, #app canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+      #ui { position: fixed; inset: 0; pointer-events: none; user-select: none; }
+      #ui .interactive { pointer-events: auto; }
+      /* tela de carga (removida pelo núcleo quando a cena fica pronta, ou pelo serviço hud) */
+      #boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+        background: radial-gradient(ellipse at 50% 120%, #10314a 0%, #050a14 55%, #010205 100%); color: #e6eef8; z-index: 10; transition: opacity .5s; }
+      #boot b { font: 600 34px/1 'Bahnschrift', 'DIN Alternate', 'Roboto Condensed', 'Arial Narrow', sans-serif; letter-spacing: .42em; padding-left: .42em; }
+      #boot i { display: block; width: 220px; height: 2px; background: rgba(242,244,239,.12); overflow: hidden; position: relative; }
+      #boot i::after { content: ''; position: absolute; inset: 0; width: 40%; background: #7fd8ff; animation: bootbar 1.1s ease-in-out infinite; }
+      @keyframes bootbar { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+      /* progresso real (core/BootScreen.js): a barra animada some quando o 1º passo chega */
+      #boot i s { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #7fd8ff; transition: width .25s; }
+      #boot.progress i::after { display: none; }
+      #boot small { font: 500 12px/1.4 system-ui, sans-serif; letter-spacing: .08em; color: rgba(242,244,239,.6); text-align: center; max-width: 86vw; min-height: 1.4em; }
+      #boot-err { max-width: min(92vw, 460px); text-align: center; font: 14px/1.45 system-ui, sans-serif; }
+      #boot-err p { margin: 0 0 8px; font-weight: 600; color: #ffd27a; }
+      #boot-err code { display: block; margin: 0 0 14px; font: 12px/1.4 ui-monospace, monospace; color: rgba(242,244,239,.55); word-break: break-word; }
+      #boot-err button { font: 600 14px system-ui, sans-serif; letter-spacing: .06em; margin: 0 6px; padding: 12px 18px; border: 0; border-radius: 3px; background: #7fd8ff; color: #06121c; cursor: pointer; }
+      #boot-err button.ghost { background: transparent; color: #f2f4ef; outline: 1px solid rgba(242,244,239,.35); }
+      #boot.failed i, #boot.failed #boot-msg { display: none; }
+    </style>
+  </head>
+  <body>
+    <!-- Controles: WASD andar/empuxo · mouse olhar · Espaço pular/subir · Ctrl/C descer · Shift correr/pós-combustor
+         Q/E rolar · V 1ª/3ª pessoa · G a pé→nave→espaço (sem sistema de nave) · F interagir · F3 telemetria · F7 desempenho · Esc pausa.
+         Parâmetros: ?seed= ?system= ?planet= ?q=low|medium|high|ultra ?shot=<preset> ?depth=log ?telemetry=1 (ver CONTRACT.md) -->
+    <div id="app"></div>
+    <div id="ui"></div>
+    <div id="boot"><b>EXOSFERA</b><i><s id="boot-bar"></s></i><small id="boot-msg">carregando…</small></div>
+    <script>
+      // Tela de carga — o progresso real vem de src/core/BootScreen.js.
+      // Este script (ES5, roda até em navegador antigo) cuida do que o
+      // módulo não alcança: capturas (?shot=) sem tela de carga; erro de
+      // script antes do jogo (módulo não carregou / sintaxe não suportada);
+      // detector de queda — se a carga anterior não terminou (no iOS a aba
+      // cai por memória e o Safari recarrega), esta força o modo leve; e um
+      // vigia que oferece o modo leve se nada avançar por 25 s.
+      (function () {
+        var b = document.getElementById('boot');
+        if (/[?&]shot=/.test(location.search)) { b.remove(); return; }
+        try {
+          var prev = Number(sessionStorage.getItem('exosfera.boot') || 0);
+          if (prev && Date.now() - prev < 600000) window.__bootRetry = true;
+          sessionStorage.setItem('exosfera.boot', String(Date.now()));
+        } catch (e) {}
+        function liteUrl() {
+          var q = location.search.replace(/^\?/, '').split('&').filter(function (kv) { return kv && !/^(q|lite)=/.test(kv); });
+          q.push('q=low', 'lite=1');
+          return location.pathname + '?' + q.join('&') + location.hash;
+        }
+        window.__bootFailUI = function (title, detail, soft) {
+          var box = document.getElementById('boot-err');
+          if (!b.isConnected) { document.body.appendChild(b); b.style.opacity = 1; }
+          if (!box) { box = document.createElement('div'); box.id = 'boot-err'; b.appendChild(box); }
+          if (!soft) b.className += ' failed';
+          box.innerHTML = '';
+          var p = document.createElement('p'); p.textContent = title;
+          var c = document.createElement('code'); c.textContent = String(detail || '').slice(0, 300);
+          var r = document.createElement('div');
+          var l = document.createElement('button'); l.textContent = 'Tentar modo leve';
+          l.onclick = function () { location.assign(liteUrl()); };
+          var a = document.createElement('button'); a.textContent = 'Recarregar'; a.className = 'ghost';
+          a.onclick = function () { location.reload(); };
+          r.appendChild(l); r.appendChild(a);
+          box.appendChild(p); if (detail) box.appendChild(c); box.appendChild(r);
+        };
+        addEventListener('error', function (e) {
+          if (window.__bootDone || window.__bootFailed) return;
+          var t = e.target;
+          var scriptFail = t && t.tagName === 'SCRIPT';
+          if (scriptFail || (e.error && (e.error.name === 'SyntaxError' || !window.__bootStarted))) {
+            window.__bootFailed = true;
+            window.__bootFailUI('Não foi possível iniciar o jogo neste navegador.', scriptFail ? 'falha ao baixar ' + (t.src || 'script') : (e.message || e.error));
+          }
+        }, true);
+        var t0 = Date.now();
+        var iv = setInterval(function () {
+          if (window.__bootDone || window.__bootFailed || !b.isConnected) return clearInterval(iv);
+          var beat = window.__bootBeat ? Date.now() - (performance.now() - window.__bootBeat) : t0;
+          if (Date.now() - beat > 25000 && !window.__bootSlow) {
+            window.__bootSlow = true;
+            window.__bootFailUI('Está demorando mais que o normal…', 'Aparelhos mais modestos carregam melhor no modo leve.', true);
+          }
+        }, 2000);
+      })();
+    </script>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
