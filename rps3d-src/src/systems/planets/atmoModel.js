@@ -1,0 +1,105 @@
+// Modelo físico da atmosfera de cada corpo: dispersão de Rayleigh (∝ cor do
+// céu do bioma, normalizada para profundidade óptica vertical terrestre) e
+// Mie (poeira/aerossóis: mais forte e colorida em desertos e vulcões), escalas
+// de altura proporcionais ao raio do planeta (planetas de 22–48 km), mais a
+// versão CPU da integração de dispersão simples (usada para a cor do céu no
+// IBL, neblina, reflexo da água e para decidir quando o céu "apaga" as
+// estrelas). A versão GPU (scatter.js) usa exatamente as mesmas fórmulas.
+
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+
+export const MIE_TINT = {
+  lush: [1, 1, 1], ocean: [1, 1, 1], ice: [0.95, 0.98, 1.0], desert: [1.0, 0.78, 0.55],
+  volcanic: [0.75, 0.62, 0.55], toxic: [0.8, 1.0, 0.45], dead: [1, 1, 1], gas: [1.0, 0.9, 0.75],
+};
+
+/** Parâmetros da atmosfera (ou null). Unidades: metros. */
+export function atmoParams(body) {
+  const at = body.atmosphere;
+  if (!at) return null;
+  const R = body.radius;
+  const gas = body.kind === 'gas_giant';
+  const HR = gas ? R * 0.012 : R * 0.03;
+  const HM = HR * 0.2;
+  const top = R + HR * 9.5;
+  const hint = at.rayleigh.map((c) => Math.max(0.02, c));
+  const ex = hint[2] >= hint[0] ? 2.0 : 1.0;
+  const mx = Math.max(...hint.map((c) => c ** ex));
+  const dens = at.density;
+  const tauR = 0.2 * dens;
+  const betaR = hint.map((c) => (c ** ex / mx) * tauR / HR);
+  const tint = MIE_TINT[body.type] || [1, 1, 1];
+  const tauM = 0.005 * at.mie * (body.type === 'desert' ? 2.4 : body.type === 'volcanic' ? 3.2 : body.type === 'toxic' ? 2.6 : 1) * dens;
+  const betaM = tint.map((c) => (c * tauM) / HM);
+  return {
+    R, top, HR, HM, betaR, betaM, mieExt: 1.11, g: body.type === 'desert' || body.type === 'volcanic' ? 0.7 : 0.78,
+    density: dens,
+  };
+}
+
+/** Função de Chapman (Schüler): profundidade óptica para o espaço, em unidades de H. */
+export function chapman(X, h, mu) {
+  const c = Math.sqrt(X + h);
+  if (mu >= 0) return (c / (c * mu + 1)) * Math.exp(-h);
+  const x0 = Math.sqrt(Math.max(0, 1 - mu * mu)) * (X + h);
+  const c0 = Math.sqrt(x0);
+  return 2 * c0 * Math.exp(Math.min(80, X - x0)) - (c / (1 - c * mu)) * Math.exp(-h);
+}
+
+/** Transmitância do sol num ponto (raio r, cos do zênite solar mu). → [r,g,b] */
+export function sunTransmittance(A, r, mu, out = [0, 0, 0]) {
+  const h = r - A.R;
+  const odR = A.HR * chapman(A.R / A.HR, h / A.HR, mu);
+  const odM = A.HM * chapman(A.R / A.HM, h / A.HM, mu);
+  for (let c = 0; c < 3; c++) out[c] = Math.exp(-(A.betaR[c] * odR + A.betaM[c] * A.mieExt * odM));
+  return out;
+}
+
+/**
+ * Dispersão simples ao longo de um raio (referencial local, metros).
+ * ro, rd, L (direção do sol) = [x,y,z]. Retorna {I:[r,g,b] (×sunI), T:[r,g,b]}.
+ */
+export function scatterCPU(A, ro, rd, L, tMax = Infinity, steps = 10, out = { I: [0, 0, 0], T: [1, 1, 1] }) {
+  out.I[0] = out.I[1] = out.I[2] = 0; out.T[0] = out.T[1] = out.T[2] = 1;
+  const b = ro[0] * rd[0] + ro[1] * rd[1] + ro[2] * rd[2];
+  const c = ro[0] ** 2 + ro[1] ** 2 + ro[2] ** 2 - A.top * A.top;
+  const disc = b * b - c;
+  if (disc <= 0) return out;
+  const s = Math.sqrt(disc);
+  let t0 = Math.max(0, -b - s), t1 = -b + s;
+  // chão
+  const cg = ro[0] ** 2 + ro[1] ** 2 + ro[2] ** 2 - A.R * A.R;
+  const dg = b * b - cg;
+  if (dg > 0) { const tg = -b - Math.sqrt(dg); if (tg > 0) t1 = Math.min(t1, tg); }
+  t1 = Math.min(t1, tMax);
+  if (t1 <= t0) return out;
+  const ds = (t1 - t0) / steps;
+  let odR = 0, odM = 0;
+  const sR = [0, 0, 0], sM = [0, 0, 0], Ts = [0, 0, 0];
+  for (let i = 0; i < steps; i++) {
+    const t = t0 + ds * (i + 0.5);
+    const px = ro[0] + rd[0] * t, py = ro[1] + rd[1] * t, pz = ro[2] + rd[2] * t;
+    const r = Math.sqrt(px * px + py * py + pz * pz), h = r - A.R;
+    const dR = Math.exp(-h / A.HR) * ds, dM = Math.exp(-h / A.HM) * ds;
+    odR += dR * 0.5; odM += dM * 0.5;
+    const mu = (px * L[0] + py * L[1] + pz * L[2]) / r;
+    const lR = A.HR * chapman(A.R / A.HR, h / A.HR, mu), lM = A.HM * chapman(A.R / A.HM, h / A.HM, mu);
+    for (let k = 0; k < 3; k++) {
+      Ts[k] = Math.exp(-(A.betaR[k] * (odR + lR) + A.betaM[k] * A.mieExt * (odM + lM)));
+      sR[k] += Ts[k] * dR; sM[k] += Ts[k] * dM;
+    }
+    odR += dR * 0.5; odM += dM * 0.5;
+  }
+  const mu = rd[0] * L[0] + rd[1] * L[1] + rd[2] * L[2];
+  const pR = (3 / (16 * Math.PI)) * (1 + mu * mu);
+  const g = A.g, g2 = g * g;
+  const pM = (3 / (8 * Math.PI)) * ((1 - g2) * (1 + mu * mu)) / ((2 + g2) * Math.pow(Math.max(1e-4, 1 + g2 - 2 * g * mu), 1.5));
+  for (let k = 0; k < 3; k++) {
+    out.I[k] = sR[k] * A.betaR[k] * pR + sM[k] * A.betaM[k] * pM;
+    out.T[k] = Math.exp(-(A.betaR[k] * odR + A.betaM[k] * A.mieExt * odM));
+  }
+  return out;
+}
+
+/** Densidade relativa (0..1+) num raio r. */
+export function densityAt(A, r) { return clamp(Math.exp(-(r - A.R) / A.HR), 0, 10); }

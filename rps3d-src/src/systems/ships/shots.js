@@ -1,0 +1,311 @@
+// Presets de screenshot do sistema ships.
+//
+//   ships-cockpit-space       abertura em Halden: dentro do caça do Rafael,
+//                             ala da Hegemonia à frente, porta-caças ao longe,
+//                             Aurora e o nascer do sol, ordem de bombardeio no HUD
+//   ships-cockpit-planet-rain pousado em Verídia sob chuva: gotas no vidro
+//   ships-lineup              todas as classes × facções lado a lado
+//   ships-capital             destróier e porta-caças da Hegemonia sobre Aurora,
+//                             caças saindo do hangar
+//   ships-interior-walk       corredor do cargueiro até a baia e o reator
+import * as THREE from 'three/webgpu';
+
+const _m = new THREE.Matrix4();
+const D2R = Math.PI / 180;
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+
+/** Quaternion de câmera/nave: −Z aponta para dir. */
+function look(dir, up) { _m.lookAt(new THREE.Vector3(), dir, up); return new THREE.Quaternion().setFromRotationMatrix(_m); }
+function body(ctx, name, i = 0) { return ctx.universe.system.bodies.find((b) => b.name === name) || ctx.universe.system.bodies[i]; }
+function setup(ctx, sysId, fov = 60) {
+  if (ctx.universe.systemId !== sysId) ctx.universe.setSystem(sysId);
+  ctx.game.setMode('cinematic');
+  ctx.camera.fov = fov; ctx.camera.updateProjectionMatrix();
+}
+/** Câmera fixa em mundo, reaplicada todo frame. */
+function worldCam(ctx, st, pos, quat) {
+  const p = pos.clone(), q = quat.clone();
+  st.shotCam = (c) => { c.player.camWorld.copy(p); c.player.pos.copy(p); c.camera.quaternion.copy(q); };
+  st.shotCam(ctx);
+}
+/** Base ortonormal a partir de uma frente e um "cima" aproximado. */
+function basis(F, up) {
+  const f = F.clone().normalize();
+  const R = new THREE.Vector3().crossVectors(f, up).normalize();
+  const U = new THREE.Vector3().crossVectors(R, f).normalize();
+  return { F: f, R, U };
+}
+function rotToward(a, b, ang) {
+  // gira o vetor unitário a em direção a b (no plano a-b) por ang rad
+  const n = new THREE.Vector3().crossVectors(a, b).normalize();
+  return a.clone().applyAxisAngle(n, ang).normalize();
+}
+function sunDir(ctx, from) { return ctx.universe.system.star.pos.clone().sub(from).normalize(); }
+
+/** Contatos/alvo do cockpit a partir de naves criadas (direções no referencial da nave). */
+function feedContacts(cp, shipPos, shipQuat, list, targetIdx = -1) {
+  const inv = shipQuat.clone().invert();
+  const contacts = list.map((o, i) => {
+    const d = o.pos.clone().sub(shipPos);
+    const dist = d.length();
+    return { dir: d.normalize().applyQuaternion(inv), dist, rel: o.rel, capital: o.capital, selected: i === targetIdx, name: o.name };
+  });
+  const t = targetIdx >= 0 ? contacts[targetIdx] : null;
+  cp.setData({
+    contacts,
+    target: t ? { name: list[targetIdx].name, faction: list[targetIdx].faction, rel: t.rel, dist: t.dist, speed: 212, hull: 0.62, shield: 0.25, dirLocal: t.dir, leadLocal: t.dir.clone().add(V(0.035, 0.012, 0)).normalize(), locked: true } : null,
+  });
+}
+
+export function registerShots(ctx, api, st) {
+  // ── 1. cockpit no espaço: a abertura em Halden ───────────────────────────
+  ctx.shots.register('ships-cockpit-space', async (ctx) => {
+    setup(ctx, 'halden', 72);
+    const aur = body(ctx, 'Aurora');
+    // posição: Aurora com raio angular `alpha` e o sol a `sep` do centro dela
+    // (nasce logo acima do limbo); depois a câmera é orientada para que o
+    // planeta fique embaixo à direita e o sol no alto à esquerda.
+    const alpha = Number(ctx.params.get('alpha') ?? 30) * D2R, sep = Number(ctx.params.get('sep') ?? 33.5) * D2R;
+    const dist = aur.radius / Math.sin(alpha);
+    let toS = sunDir(ctx, aur.pos), C = new THREE.Vector3();
+    for (let it = 0; it < 4; it++) {
+      const b0 = basis(toS, V(0, 1, 0));
+      const D = toS.clone().multiplyScalar(Math.cos(sep)).addScaledVector(b0.U.clone().multiplyScalar(-0.94).addScaledVector(b0.R, 0.34).normalize(), Math.sin(sep)).normalize();
+      C = aur.pos.clone().addScaledVector(D, -dist);
+      toS = sunDir(ctx, C);
+    }
+    const toP = aur.pos.clone().sub(C).normalize();
+    // direções desejadas na tela (graus: guinada +dir, arfagem +cima)
+    const dirCam = (yaw, pit) => V(Math.sin(yaw * D2R) * Math.cos(pit * D2R), Math.sin(pit * D2R), -Math.cos(yaw * D2R) * Math.cos(pit * D2R));
+    const pc = dirCam(Number(ctx.params.get('py') ?? 14), Number(ctx.params.get('pp') ?? -23));
+    const angPS = Math.acos(THREE.MathUtils.clamp(toP.dot(toS), -1, 1));
+    // sol: na direção (−18°, +4°) ajustada para manter a separação real
+    let sc = dirCam(-18, 4);
+    const ax = new THREE.Vector3().crossVectors(pc, sc).normalize();
+    sc = pc.clone().applyAxisAngle(ax, angPS);
+    const frame = (a, b) => { const e1 = a.clone().normalize(); const e2 = b.clone().addScaledVector(e1, -b.dot(e1)).normalize(); return new THREE.Matrix4().makeBasis(e1, e2, new THREE.Vector3().crossVectors(e1, e2)); };
+    const Rm = frame(toP, toS).multiply(frame(pc, sc).invert());
+    const camQ = new THREE.Quaternion().setFromRotationMatrix(Rm);
+    const head = new THREE.Quaternion().setFromEuler(new THREE.Euler(Number(ctx.params.get('hp') ?? -10) * D2R, Number(ctx.params.get('hy') ?? 0) * D2R, 0, 'YXZ'));
+    const shipQ = camQ.clone().multiply(head.clone().invert());
+    worldCam(ctx, st, C, camQ);
+    const B = { F: V(0, 0, -1).applyQuaternion(shipQ) };
+    const up = V(0, 1, 0).applyQuaternion(shipQ);
+    const R = V(1, 0, 0).applyQuaternion(shipQ);
+    const roll = 0;
+    const at = (f, r, u) => C.clone().addScaledVector(B.F, f).addScaledVector(R, r).addScaledVector(up, u);
+    const heading = B.F.clone();
+    const objs = [];
+    const place = (cls, fac, pos, dir, upv, opts = {}) => {
+      const s = api.create(cls, fac, { throttle: 0.7, ...opts });
+      s.group.quaternion.copy(look(dir, upv || up));
+      ctx.world.add(s.group, pos);
+      objs.push({ pos, rel: fac === 'hegemonia' ? 'friendly' : 'hostile', faction: fac === 'hegemonia' ? 'Hegemonia Solar' : 'Frente Livre', capital: cls === 'carrier' || cls === 'destroyer', name: s.model.toUpperCase() });
+      return s;
+    };
+    // ala da Hegemonia
+    place('fighter', 'hegemonia', at(42, 16, -4.5), heading.clone().addScaledVector(R, -0.04), up.clone().applyAxisAngle(heading, 0.1));
+    place('fighter', 'hegemonia', at(75, -26, 3.5), heading.clone().addScaledVector(R, 0.03), up.clone().applyAxisAngle(heading, -0.15));
+    place('interceptor', 'hegemonia', at(150, 48, 9), heading.clone().addScaledVector(up, -0.05), up);
+    // porta-caças ao longe, sobre o planeta
+    const car = place('carrier', 'hegemonia', at(2600, -900, -420), heading.clone().addScaledVector(R, 0.55).normalize(), up, { throttle: 0.4 });
+    // defensores da colônia vindo de frente
+    const enemy = place('fighter', 'frente', at(260, 70, 26), B.F.clone().negate().addScaledVector(R, -0.6).addScaledVector(up, -0.1).normalize(), up.clone().applyAxisAngle(B.F, 0.6), { throttle: 1 });
+    place('fighter', 'frente', at(520, -120, 60), B.F.clone().negate().addScaledVector(R, 0.4).normalize(), up, { throttle: 1 });
+    // fogo cruzado e uma explosão
+    const r = ctx.services.rendering;
+    if (r?.particles) {
+      for (let i = 0; i < 10; i++) {
+        const src = at(60 + i * 30, (i % 2 ? 1 : -1) * (12 + i * 3), -2 + i);
+        r.particles.bolt(src, heading.clone().addScaledVector(R, (i % 3 - 1) * 0.02).normalize(), { color: 'gold', length: 16, width: 0.35, brightness: 34 });
+      }
+      for (let i = 0; i < 6; i++) r.particles.bolt(at(380 + i * 70, -60 + i * 25, 20 + i * 5), B.F.clone().negate().addScaledVector(R, 0.1 * (i - 3)).normalize(), { color: 'red', length: 22, width: 0.6 });
+      r.explosion?.(at(700, 160, 90), 26, 'ship');
+    }
+    // cockpit: dados da cena (a ordem de bombardeio)
+    const cp = api.cockpit;
+    cp.show(true);
+    cp.setData({
+      speed: 186, throttle: 0.62, boost: 0, heading: 1.2, pitch: -0.05, roll: -roll, altitude: aur.altitudeOf(C), mode: 'COMBATE',
+      shields: { f: 0.92, b: 0.8, l: 0.55, r: 0.95 }, hull: 0.94, heat: 0.38, fuel: 0.86, energy: { shield: 0.5, engine: 0.375, weapons: 0.75 },
+      radarRange: 3000, missiles: 4, lock: 1, warnings: ['ORDEM: BOMBARDEAR AURORA'], message: 'COMANDO SOLAR · CANAL 1 — "LANÇA-7, CONFIRME O ATAQUE À COLÔNIA."',
+      location: 'HALDEN · ÓRBITA DE AURORA', velLocal: V(0.02, -0.03, -1).normalize(), stick: { x: 0.15, y: -0.2, roll: 0.2, yaw: 0 },
+    });
+    cp.setGlass({ rain: 0, dust: 0.04, ice: 0, fire: 0 });
+    cp.setData({ head });
+    feedContacts(cp, C, shipQ, objs, 4);
+    cp.redraw(true);
+    st.cockpitShot = { shipQ, head };
+  });
+
+  // ── 2. pousado em Verídia sob chuva ───────────────────────────────────────
+  ctx.shots.register('ships-cockpit-planet-rain', async (ctx) => {
+    setup(ctx, 'kessa', 72);
+    const b = body(ctx, 'Verídia');
+    const pl = ctx.services.planets;
+    const cp = api.cockpit;
+    cp.show(true);
+    let local, upL, fwdL;
+    if (pl) {
+      const d = pl.dirForSun(b, Number(ctx.params.get('elev') ?? 14), Number(ctx.params.get('az') ?? 40));
+      const spot = pl.findLandingSpot(b, d, { maxSlope: 0.08, radius: 4000 }) || { dir: d, normal: d, local: pl.placeOnSurface(b, d, 0) };
+      upL = spot.normal.clone().lerp(spot.dir, 0.5).normalize();
+      // frente: olhando para o relevo mais alto ao redor
+      const ref = Math.abs(upL.y) < 0.9 ? V(0, 1, 0) : V(1, 0, 0);
+      const t1 = new THREE.Vector3().crossVectors(upL, ref).normalize();
+      let best = t1, bh = -Infinity;
+      for (let a = 0; a < 360; a += 20) {
+        const t = t1.clone().applyAxisAngle(upL, a * D2R);
+        let h = 0;
+        for (const k of [800, 1600, 3000]) { const p = spot.dir.clone().addScaledVector(t, k / b.radius).normalize(); h = Math.max(h, pl.heightAtLocal(b, p)); }
+        // evita olhar direto para o sol
+        if (h > bh) { bh = h; best = t; }
+      }
+      fwdL = best;
+      local = spot.local.clone().addScaledVector(upL, 2.05);
+      pl.weather?.force?.('rain', 0.85);
+    } else {
+      upL = b.pos.clone().negate().normalize(); fwdL = new THREE.Vector3().crossVectors(upL, V(0, 0, 1)).normalize();
+      local = upL.clone().multiplyScalar(b.radius + 30);
+    }
+    const shipQL = look(fwdL, upL);
+    const head = new THREE.Quaternion().setFromEuler(new THREE.Euler(-6 * D2R, 0, 0, 'YXZ'));
+    const eyeL = cp.eye.clone().applyQuaternion(shipQL).add(local);
+    st.shotCam = (c) => {
+      const t = c.time.world;
+      b.localToWorld(eyeL, t, c.player.camWorld);
+      c.player.pos.copy(c.player.camWorld);
+      c.camera.quaternion.copy(b.rotationAt(t, new THREE.Quaternion()).multiply(shipQL).multiply(head));
+    };
+    st.shotCam(ctx);
+    ctx.player.altitude = 2;
+    pl?.settle?.();
+    cp.setData({
+      speed: 0, throttle: 0.05, altitude: 0, mode: 'POUSADO', gear: true, heading: 0.4, pitch: 0, roll: 0,
+      shields: { f: 1, b: 1, l: 1, r: 1 }, hull: 0.78, heat: 0.02, fuel: 0.41, energy: { shield: 0.25, engine: 0.25, weapons: 0.0 },
+      warnings: [], message: 'VERÍDIA · CHUVA FORTE · TEMP. 17 °C · ATMOSFERA RESPIRÁVEL', location: 'VERÍDIA — SUPERFÍCIE', contacts: [], target: null, radarRange: 2000,
+    });
+    cp.setGlass({ rain: Number(ctx.params.get('rain') ?? 0.9), dust: 0.05, ice: 0, fire: 0, wind: 0 });
+    cp.setData({ head });
+    cp.redraw(true);
+  });
+
+  // ── 3. todas as classes e facções ─────────────────────────────────────────
+  ctx.shots.register('ships-lineup', async (ctx) => {
+    setup(ctx, 'kessa', 48);
+    const ver = body(ctx, 'Verídia');
+    const toSun0 = sunDir(ctx, ver.pos);
+    const perp = new THREE.Vector3().crossVectors(toSun0, V(0, 1, 0)).normalize();
+    const sa = Number(ctx.params.get('sa') ?? 115) * D2R;
+    const Dp = toSun0.clone().multiplyScalar(Math.cos(sa)).addScaledVector(perp, Math.sin(sa)).normalize();
+    const C = ver.pos.clone().addScaledVector(Dp, -ver.radius * 3.0);
+    const upG = new THREE.Vector3().crossVectors(perp, Dp).normalize();
+    // horizonte: o centro do planeta fica abaixo
+    const Fh = Dp.clone().applyAxisAngle(perp, -Number(ctx.params.get('pt') ?? 17) * D2R).normalize();
+    const B = basis(Fh, upG.y >= 0 ? upG : upG.negate());
+    const U = B.U, R = B.R;
+    const camF = Fh.clone().applyAxisAngle(R, -7 * D2R);
+    const cam = C.clone().addScaledVector(U, 30);
+    worldCam(ctx, st, cam, look(camF, U));
+    const factions = ['hegemonia', 'frente', 'corsarios', 'guilda', 'vigilantes'];
+    const rows = [['fighter', 62, 19], ['interceptor', 100, 25], ['explorer', 170, 44], ['freighter', 265, 64], ['frigate', 600, 160]];
+    const nose = R.clone().multiplyScalar(-0.75).addScaledVector(Fh, -0.66).normalize();
+    for (const [cls, dist, sp] of rows) {
+      factions.forEach((fac, i) => {
+        const s = api.create(cls, fac, { throttle: 0.25, gear: 0 });
+        const p = C.clone().addScaledVector(Fh, dist + (i % 2) * sp * 0.15).addScaledVector(R, (i - 2) * sp);
+        s.group.quaternion.copy(look(nose, U));
+        ctx.world.add(s.group, p);
+      });
+    }
+  });
+
+  // ── 4. naves capitais ─────────────────────────────────────────────────────
+  ctx.shots.register('ships-capital', async (ctx) => {
+    setup(ctx, 'halden', 50);
+    const aur = body(ctx, 'Aurora');
+    const toSun0 = sunDir(ctx, aur.pos);
+    const perp = new THREE.Vector3().crossVectors(toSun0, V(0, 1, 0)).normalize();
+    const sa = Number(ctx.params.get('sa') ?? 105) * D2R;
+    const Dp = toSun0.clone().multiplyScalar(Math.cos(sa)).addScaledVector(perp, Math.sin(sa)).normalize();
+    const C = aur.pos.clone().addScaledVector(Dp, -aur.radius * 2.6);
+    const upG = new THREE.Vector3().crossVectors(perp, Dp).normalize();
+    const Fh = Dp.clone().applyAxisAngle(perp, -Number(ctx.params.get('pt') ?? 22) * D2R).normalize();
+    const B = basis(Fh, upG.y >= 0 ? upG : upG.negate());
+    const U = B.U, R = B.R;
+    // destróier passando em 3/4 frontal, levemente acima da câmera
+    const dPos = C.clone().addScaledVector(Fh, 900).addScaledVector(R, -120).addScaledVector(U, 70);
+    const dDir = R.clone().multiplyScalar(0.62).addScaledVector(Fh, -0.78).normalize();
+    const des = api.create('destroyer', 'hegemonia', { throttle: 0.45 });
+    des.group.quaternion.copy(look(dDir, U.clone().applyAxisAngle(dDir, 0.05)));
+    ctx.world.add(des.group, dPos);
+    // porta-caças atrás, à direita
+    const cPos = C.clone().addScaledVector(Fh, 2600).addScaledVector(R, 1250).addScaledVector(U, 260);
+    const cDir = R.clone().multiplyScalar(0.25).addScaledVector(Fh, -0.97).normalize();
+    const car = api.create('carrier', 'hegemonia', { throttle: 0.4 });
+    car.group.quaternion.copy(look(cDir, U));
+    ctx.world.add(car.group, cPos);
+    // caças saindo do hangar esquerdo do porta-caças
+    const cq = car.group.quaternion;
+    const hg = car.hangars.find((h) => h.id === 'hangar_e') || car.hangars[0];
+    if (hg) {
+      const hp = hg.pos.clone().applyQuaternion(cq).add(cPos);
+      const hd = hg.dir.clone().applyQuaternion(cq);
+      for (let i = 0; i < 4; i++) {
+        const f = api.create('fighter', 'hegemonia', { throttle: 1 });
+        const p = hp.clone().addScaledVector(hd, 40 + i * 70).addScaledVector(cDir, -i * 35).addScaledVector(U, i * 6);
+        const dir = hd.clone().addScaledVector(cDir, 0.5 + i * 0.2).normalize();
+        f.group.quaternion.copy(look(dir, U));
+        ctx.world.add(f.group, p);
+      }
+    }
+    // escolta em primeiro plano
+    const esc = api.create('fighter', 'hegemonia', { throttle: 0.8 });
+    esc.group.quaternion.copy(look(dDir, U.clone().applyAxisAngle(dDir, -0.25)));
+    ctx.world.add(esc.group, C.clone().addScaledVector(Fh, 70).addScaledVector(R, 24).addScaledVector(U, -9));
+    const camF = Fh.clone().applyAxisAngle(R, 4 * D2R).applyAxisAngle(U, 6 * D2R);
+    worldCam(ctx, st, C, look(camF, U));
+    // torres apontando para longe
+    for (const t of des.turrets) t.aimLocal(V(-0.6, 0.25, -1).normalize());
+  });
+
+  // ── auxiliar: close de uma nave (?cls=&fac=&yaw=&pitch=&dist=) ─────────
+  ctx.shots.register('ships-closeup', async (ctx) => {
+    setup(ctx, 'kessa', 40);
+    const ver = body(ctx, 'Verídia');
+    const toSun = sunDir(ctx, ver.pos);
+    const C = ver.pos.clone().addScaledVector(toSun, ver.radius * 3);
+    const cls = ctx.params.get('cls') || 'fighter', fac = ctx.params.get('fac') || 'hegemonia';
+    const s = api.create(cls, fac, { throttle: Number(ctx.params.get('thr') ?? 0.5), gear: Number(ctx.params.get('gear') ?? 0) });
+    // nave com o nariz perpendicular ao sol; câmera em 3/4
+    const perp = new THREE.Vector3().crossVectors(toSun, V(0, 1, 0)).normalize();
+    const up = new THREE.Vector3().crossVectors(perp, toSun).normalize();
+    s.group.quaternion.copy(look(perp, up));
+    ctx.world.add(s.group, C);
+    const yaw = Number(ctx.params.get('yaw') ?? 140) * D2R, pit = Number(ctx.params.get('pitch') ?? 22) * D2R;
+    const dist = Number(ctx.params.get('dist') ?? 1.9) * s.length;
+    const dir = perp.clone().applyAxisAngle(up, yaw);
+    const side = new THREE.Vector3().crossVectors(dir, up).normalize();
+    dir.applyAxisAngle(side, pit);
+    const cam = C.clone().addScaledVector(dir, dist);
+    worldCam(ctx, st, cam, look(C.clone().sub(cam).normalize(), up));
+    if (ctx.params.get('sr')) ctx.services.rendering?.sun?.setShadowRange?.(Number(ctx.params.get('sr')));
+  });
+
+  // ── 5. interior do cargueiro ──────────────────────────────────────────────
+  ctx.shots.register('ships-interior-walk', async (ctx) => {
+    setup(ctx, 'kessa', 74);
+    const ver = body(ctx, 'Verídia');
+    const C = ver.pos.clone().addScaledVector(sunDir(ctx, ver.pos), ver.radius * 4).addScaledVector(V(0, 1, 0), 9000);
+    const ship = api.create('freighter', 'frente', { throttle: 0.2, gear: 0 });
+    const q = new THREE.Quaternion();
+    ship.group.quaternion.copy(q);
+    ctx.world.add(ship.group, C);
+    const frame = { pos: C.clone(), quat: q.clone() };
+    const inter = api.attachInterior(ship, frame);
+    ctx.services.rendering?.sun?.setShadowRange?.(80);
+    const eye = V(Number(ctx.params.get('ix') ?? 0.55), inter.floorY + 1.66, Number(ctx.params.get('iz') ?? -10.5));
+    const dir = V(-0.12, -0.06, 1).normalize();
+    worldCam(ctx, st, C.clone().add(eye), look(dir, V(0, 1, 0)));
+  });
+}
