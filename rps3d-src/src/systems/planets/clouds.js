@@ -110,7 +110,7 @@ export function makeCloudMaterials(body, U, S, opts) {
     // luz do sol nas nuvens: transmitância avaliada perto do chão (≈350 m) para
     // que os pores do sol tinjam as nuvens como numa atmosfera "grande"
     const pm0 = ro.add(rd.mul(tStart.add(seg.mul(0.3))));
-    const pm = normalize(pm0).mul(U.R.add(350.0));
+    const pm = normalize(pm0).mul(min(length(pm0), U.R.add(900.0)));
     const sunC = S.sunCol.mul(body.atmosphere ? sunTrans(U, pm, S.sunL) : vec3(1)).mul(C.tint).toVar();
     const ambC = S.amb.mul(2.4).add(S.skyZ.mul(0.25)).mul(C.tint).toVar();
     const sigma = C.density;

@@ -375,7 +375,37 @@ export function makeSkyMaterial(body, U, S, opts) {
   const r = scat(S.cam, rd, float(1e12));
   // brilho do disco/halo do sol visto através do ar (Mie forte) já sai do integrador;
   // relâmpago ilumina as nuvens/céu por um instante
-  mat.colorNode = r.xyz.add(S.skyZ.mul(S.flash).mul(0.6));
-  mat.opacityNode = clamp(r.w, 0, 1);
+  let col = r.xyz.add(S.skyZ.mul(S.flash).mul(0.6));
+  let op = clamp(r.w, 0, 1);
+  if (opts.clouds && S.wtex) {
+    // cirros: véu fino e fibroso numa casca alta (≈ +6,5 km), do mapa de clima
+    const ro = S.cam;
+    const Rc = U.R.add(body.type === 'desert' ? 7500 : 6500);
+    const b = dot(ro, rd);
+    const perp = ro.sub(rd.mul(b));
+    const p2 = dot(perp, perp);
+    const disc = Rc.mul(Rc).sub(p2);
+    const sq = sqrt(max(disc, 0.0));
+    const inside = length(ro).lessThan(Rc);
+    const t = select(inside, b.negate().add(sq), b.negate().sub(sq));
+    // o chão (raio médio) bloqueia
+    const dg = U.R.mul(U.R).sub(p2);
+    const tg = select(dg.greaterThan(0.0).and(b.lessThan(0.0)), b.negate().sub(sqrt(max(dg, 0.0))), float(1e12));
+    const ok = disc.greaterThan(0.0).and(t.greaterThan(0.0)).and(t.lessThan(tg));
+    const pc = ro.add(rd.mul(t));
+    const w = weatherAt(S, normalize(pc));
+    const q = pc.mul(1 / 9000).add(S.wind.mul(1.3));
+    const n1 = N3(q).r;
+    const n2 = N3(vec3(q.x.mul(5.0), q.y.mul(1.2), q.z.mul(5.0)).add(n1.mul(0.6))).g; // fibras
+    const dens = w.w.mul(smoothstep(0.42, 0.78, n1.mul(0.55).add(n2.mul(0.55)))).mul(0.55).mul(select(ok, float(1), float(0)));
+    const mu = dot(rd, S.sunL);
+    const sunC = S.sunCol.mul(sunTrans(U, normalize(pc).mul(U.R.add(1500.0)), S.sunL));
+    const ph = float(0.35).add(pow(max(mu, 0.0), 8.0).mul(1.6));
+    const cc = sunC.mul(ph).mul(0.32).add(S.skyZ.mul(1.2)).add(S.skyH.mul(0.3));
+    col = mix(col, cc, dens);
+    op = op.mul(float(1).sub(dens));
+  }
+  mat.colorNode = col;
+  mat.opacityNode = op;
   return mat;
 }

@@ -14,7 +14,7 @@
 //   q  crista/estrato 0..1 (rocha exposta, camadas)
 //
 // Sem dependências de three: roda no Web Worker.
-import { Noise } from '../../core/Rng.js';
+import { SNoise as Noise } from './noise.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -118,7 +118,7 @@ export class Terrain {
     if (c < 0) {
       // plataforma continental rasa → talude → planície abissal
       const sh = sstep(0, 0.1, -c);
-      h = -6 - sh * 700 - Math.max(0, -c - 0.1) * 2600;
+      h = -6 * sstep(0, 0.012, -c) - sh * 700 - Math.max(0, -c - 0.1) * 2600; // contínuo na linha da costa
     } else {
       land = sstep(0, 0.05, c);
       h = c * (ocean ? 380 : 520);
@@ -129,7 +129,7 @@ export class Terrain {
     // montanhas (cordilheiras ao longo de cristas)
     const mm = sstep(0.14, 0.42, c + this.fbm(n2, X * 0.05 + 3, Y * 0.05, Z * 0.05, 3) * 0.3) * (ocean ? 0.6 : 1);
     let ridge = 0;
-    if (mm > 0.001) {
+    if (mm > 1e-7) {
       ridge = this.ridged(n, Xw * 0.075, Yw * 0.075, Zw * 0.075, 7);
       const r = Math.pow(ridge, toxic ? 1.2 : 1.45);
       h += r * amp * mm * (toxic ? 0.8 : 1.25);
@@ -150,9 +150,9 @@ export class Terrain {
     // praias suaves
     if (h > 0 && h < 30) h = h * (0.45 + 0.55 * sstep(0, 30, h)); // praia sem vinco (derivada contínua em 30 m)
     // pináculos tóxicos (fungos petrificados)
-    if (toxic && h > 20) {
+    if (toxic && h > 10) {
       this.cell(X * 1.6, Y * 1.6, Z * 1.6, 77, _c);
-      if (_c.d1 < 0.22) h += (1 - _c.d1 / 0.22) ** 2 * 60 * (0.5 + _c.id);
+      if (_c.d1 < 0.22) h += (1 - _c.d1 / 0.22) ** 2 * 60 * (0.5 + _c.id) * sstep(10, 30, h);
     }
     // detalhe fino (escala de caminhada)
     const det = this.fbm(n, X * 2.4, Y * 2.4, Z * 2.4, 3) * (8 + mm * 26);
@@ -187,11 +187,11 @@ export class Terrain {
     // cordilheiras esparsas
     const mm = sstep(0.18, 0.42, this.fbm(n2, X * 0.025 + 11, Y * 0.025, Z * 0.025, 3));
     let ridge = 0;
-    if (mm > 0.001) { ridge = this.ridged(n, Xw * 0.09, Yw * 0.09, Zw * 0.09, 6); h += Math.pow(ridge, 1.8) * amp * 0.85 * mm; }
+    if (mm > 1e-7) { ridge = this.ridged(n, Xw * 0.09, Yw * 0.09, Zw * 0.09, 6); h += Math.pow(ridge, 1.8) * amp * 0.85 * mm; }
     // campos de dunas nas áreas baixas
     const field = (1 - plateau) * sstep(-0.35, -0.02, -t + 0.02) * (1 - mm * 0.8) * (1 - canyon * 0.5);
     let sand = 0;
-    if (field > 0.01) {
+    if (field > 1e-5) {
       const W = this.W, W2 = this.W2;
       const warp = this.fbm(n2, X * 0.12, Y * 0.12, Z * 0.12, 2) * 2.4;
       const a = (X * W[0] + Y * W[1] + Z * W[2]) / 0.62 + warp;
@@ -226,7 +226,7 @@ export class Terrain {
     let h = c * 420;
     const mm = sstep(0.02, 0.32, c + this.fbm(n2, X * 0.06, Y * 0.06, Z * 0.06, 3) * 0.22);
     let ridge = 0;
-    if (mm > 0.001) { ridge = this.ridged(n, Xw * 0.095, Yw * 0.095, Zw * 0.095, 7); h += Math.pow(ridge, 1.9) * amp * 1.05 * mm; }
+    if (mm > 1e-7) { ridge = this.ridged(n, Xw * 0.095, Yw * 0.095, Zw * 0.095, 7); h += Math.pow(ridge, 1.9) * amp * 1.05 * mm; }
     // mantos de gelo: planícies achatadas com ondulação suave
     const g = 1 - sstep(60, 520, h);
     const sheet = 90 + this.fbm(n, X * 0.25, Y * 0.25, Z * 0.25, 3) * 30;
@@ -285,7 +285,7 @@ export class Terrain {
     let h = this.fbm(n, X * 0.035, Y * 0.035, Z * 0.035, 5) * 420;
     const mm = sstep(0.1, 0.35, this.fbm(n2, X * 0.03, Y * 0.03, Z * 0.03, 3));
     let ridge = 0;
-    if (mm > 0.001) { ridge = this.ridged(n, X * 0.08, Y * 0.08, Z * 0.08, 6); h += ridge * ridge * amp * 0.55 * mm; }
+    if (mm > 1e-7) { ridge = this.ridged(n, X * 0.08, Y * 0.08, Z * 0.08, 6); h += ridge * ridge * amp * 0.55 * mm; }
     // crateras em 4 escalas
     let ej = 0;
     const scales = [[0.028, 650, 0.5], [0.11, 190, 0.45], [0.45, 45, 0.4], [1.9, 8, 0.38]];

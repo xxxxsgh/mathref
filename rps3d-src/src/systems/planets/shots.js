@@ -182,7 +182,7 @@ export function registerShots(ctx, api, st) {
     const look = tan.clone().applyAxisAngle(d, 70 * D2R).addScaledVector(d, 0.08).normalize();
     const h = v.terrain.height(d.x, d.y, d.z);
     localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + 2.2), look, d);
-    api.weather.force('blizzard', P(ctx, 'storm', 0.6));
+    api.weather.force('blizzard', P(ctx, 'storm', 0.45));
     api.settle();
   });
 
