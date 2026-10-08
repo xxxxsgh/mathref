@@ -126,7 +126,7 @@ export function registerShots(ctx, api, st) {
     const { tan, sunL } = sunTangent(api, b, d, ctx);
     const h = Math.max(0, v.terrain.height(d.x, d.y, d.z));
     const pos = d.clone().multiplyScalar(b.radius + h + P(ctx, 'alt', 28));
-    const look = tan.clone().applyAxisAngle(d, P(ctx, 'yaw', 50) * D2R).addScaledVector(d, P(ctx, 'pitch', 0.03)).normalize();
+    const look = tan.clone().applyAxisAngle(d, P(ctx, 'yaw', 72) * D2R).addScaledVector(d, P(ctx, 'pitch', 0.03)).normalize();
     localCam(ctx, st, b, pos, look, d);
     ctx.services.rendering?.setExposure?.(P(ctx, 'exp', 0.6), { speed: 200 });
     api.weather.force('rain', 0);
@@ -265,7 +265,7 @@ export function registerShots(ctx, api, st) {
       const dir = tan.clone().applyAxisAngle(d, a * D2R);
       let l = 0;
       for (const k of [200, 500, 900, 1500]) { const p = d.clone().addScaledVector(dir, k / b.radius).normalize(); l += T.sample(p.x, p.y, p.z, {}).s; }
-      l += Math.max(0, profile(T, b, d, dir, [2500, 4000, 6000]) - 200) / 300;
+      l += Math.max(0, profile(T, b, d, dir, [2500, 4000, 6000]) - 150) / 110;
       if (dir.dot(tan) > 0.3) l -= 6; // nunca contra o sol: a lava brilha no contraluz do crepúsculo
       if (l > bl) { bl = l; look = dir; }
     }

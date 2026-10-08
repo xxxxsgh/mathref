@@ -31,6 +31,9 @@ export class PlanetView {
     this.S.axis.value.copy(this.axis);
     this.S.city.value = body.colony ? 1 : 0;
     this.S.cloudCov.value = 0;
+    // neblina de altura por bioma: densidade no nível do mar (1/m) e escala (m)
+    const HF = { lush: [1 / 26000, 160], ocean: [1 / 30000, 140], toxic: [1 / 3500, 260], volcanic: [1 / 9000, 380], ice: [1 / 22000, 200], desert: [1 / 30000, 300] }[body.type];
+    if (HF && body.atmosphere && body.kind !== 'gas_giant') { this.S.hfA.value = HF[0]; this.S.hfH.value = HF[1]; }
     this.group = new THREE.Group();
     this.group.name = 'pl.' + body.name;
     this.group.matrixWorldAutoUpdate = true;
@@ -103,6 +106,7 @@ export class PlanetView {
     const r = this.camLocal.length();
     this.altitude = r - b.radius;
     this.dominant = info.dominant === b;
+    S.cloudFar.value = THREE.MathUtils.smoothstep(this.altitude, b.radius * 0.25, b.radius * 1.2);
 
     // céu na CPU (no ponto sob a câmera): IBL, reflexo da água, neblina, nuvens
     this.updateSkyColors(r);
@@ -155,6 +159,10 @@ export class PlanetView {
     const mu = this.sunLocal.dot(up);
     sunTransmittance(A, Math.max(rr, A.R + 2), mu, this.sunT);
     S.amb.value.set(this.zen[0] * 1.6 + hz[0] * 0.6, this.zen[1] * 1.6 + hz[1] * 0.6, this.zen[2] * 1.6 + hz[2] * 0.6);
+    // cor da névoa: horizonte + luz do sol filtrada espalhada na névoa (dispersão para a frente)
+    const st = this.sunT, sc = S.sunCol.value, su = Math.max(0, mu + 0.1);
+    const tint = { toxic: [0.85, 1.0, 0.55], volcanic: [0.8, 0.7, 0.65] }[this.body.type] || [1, 1, 1];
+    S.hfCol.value.set((hz[0] * 0.8 + sc.x * st[0] * su * 0.05) * tint[0], (hz[1] * 0.8 + sc.y * st[1] * su * 0.05) * tint[1], (hz[2] * 0.8 + sc.z * st[2] * su * 0.05) * tint[2]);
   }
 
   dispose() {

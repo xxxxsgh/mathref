@@ -62,11 +62,12 @@ export function makeCloudMaterials(body, U, S, opts) {
     const topLim = mix(float(0.32), float(1.0), w.y);
     const grad = smoothstep(0.0, 0.08, hn).mul(smoothstep(topLim, topLim.mul(0.45), hn));
     const n = N3(p.mul(1 / 2600).add(S.wind.mul(3.1)));
-    const shape = n.r.mul(0.6).add(n.b.mul(0.55));
+    // de longe (órbita) as formas finas viram "pipoca": suaviza com a distância
+    const shape = mix(n.r.mul(0.6).add(n.b.mul(0.55)), n.r.mul(0.5).add(0.3), S.cloudFar.mul(0.5));
     const base = remap(shape.mul(grad), float(1).sub(cov), float(1)).mul(cov);
     // erosão: fiapos no topo, bordas enroladas na base
     const det = N3(p.mul(1 / 540).add(S.wind.mul(6.0)).add(vec3(0, S.time.mul(0.0008), 0))).a;
-    const mod = mix(det, float(1).sub(det), clamp(hn.mul(3.0), 0.0, 1.0)).mul(0.36);
+    const mod = mix(det, float(1).sub(det), clamp(hn.mul(3.0), 0.0, 1.0)).mul(float(0.36).sub(S.cloudFar.mul(0.2)));
     return remap(base, mod, float(1)).mul(mix(float(1.2), float(2.2), cov));
   };
 
@@ -111,7 +112,7 @@ export function makeCloudMaterials(body, U, S, opts) {
     // que os pores do sol tinjam as nuvens como numa atmosfera "grande"
     const pm0 = ro.add(rd.mul(tStart.add(seg.mul(0.3))));
     const pm = normalize(pm0).mul(min(length(pm0), U.R.add(900.0)));
-    const sunC = S.sunCol.mul(body.atmosphere ? sunTrans(U, pm, S.sunL) : vec3(1)).mul(C.tint).toVar();
+    const sunC = S.sunCol.mul(body.atmosphere ? sunTrans(U, pm, S.sunL) : vec3(1)).mul(C.tint).mul(0.8).toVar();
     const ambC = S.amb.mul(2.4).add(S.skyZ.mul(0.25)).mul(C.tint).toVar();
     const sigma = C.density;
     const k = float(curve);

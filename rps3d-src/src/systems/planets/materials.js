@@ -37,6 +37,20 @@ export function bumpView(H, scale) {
 /** Desvanecimento de um detalhe de comprimento de onda λ (m) pela distância. */
 const fade = (dist, lambda) => float(1).sub(smoothstep(lambda * 40, lambda * 220, dist));
 
+/**
+ * Neblina de altura (densidade a·e^(−h/H)) integrada analiticamente ao longo
+ * do raio câmera→ponto: vales e baixadas enchem de névoa, cumes ficam limpos.
+ * hp = altura do ponto (m sobre o nível do mar), dist em metros.
+ */
+export function heightFog(U, S, hp, dist) {
+  const hc = length(S.cam).sub(U.R);
+  const H = S.hfH;
+  const ec = exp(hc.div(H).negate().min(0.0).max(-40.0)), ep = exp(hp.div(H).negate().min(0.0).max(-40.0));
+  const dh = hp.sub(hc).div(H);
+  const avg = select(abs(dh).lessThan(1e-3), ec, ec.sub(ep).div(dh));
+  return float(1).sub(exp(S.hfA.mul(dist).mul(max(avg, 0.0)).negate()));
+}
+
 /** Mapa de clima (vec4: cobertura, tipo, umidade, cirros) numa direção local. */
 export function weatherAt(S, dir) {
   const u = atan(dir.z, dir.x).mul(1 / (2 * Math.PI)).add(0.5).add(S.wmapU);
@@ -137,7 +151,7 @@ function surface(type, P, U, S, I) {
     const iceMask = smoothstep(0.55, 0.75, s.mul(0.5).add(macro2.b.mul(0.6)).add(vMeso.mul(0.5))).mul(smoothstep(0.02, 0.12, slope).mul(0.6).add(0.4));
     const iceCol = mix(C3(P.forest), C3(P.alien), smoothstep(0.3, 0.8, micro.g)).mul(vFine.mul(0.2).add(1));
     const crev = smoothstep(0.45, 0.8, q).mul(s);
-    const rockMask = smoothstep(0.3, 0.5, slope.add(vMicro.mul(0.2)));
+    const rockMask = smoothstep(0.45, 0.65, slope.add(vMicro.mul(0.08)));
     const rockCol = mix(C3(P.rock), C3(P.rock2), micro.r).mul(vFine.mul(0.6).add(1));
     let g = mix(snowCol, iceCol, iceMask);
     g = mix(g, C3(P.wet).mul(0.6), crev);
@@ -146,7 +160,7 @@ function surface(type, P, U, S, I) {
     rough = mix(mix(float(0.62), float(0.18), iceMask), float(0.8), rockMask);
     // sastrugi: cristas de neve esculpidas pelo vento (ruído esticado)
     const sast = N3(det.mul(vec3(fq(1.5), fq(7), fq(1.5)))).r.sub(0.5).mul(fade(dist, 3));
-    bump = vFine.mul(0.08).add(vMicro.mul(0.7)).add(sast.mul(0.18)).add(rockMask.mul(vMicro.mul(3)));
+    bump = vFine.mul(0.05).add(vMicro.mul(0.3)).add(sast.mul(0.1)).add(rockMask.mul(vMicro.mul(3)));
     // cristais: brilho especular pontual
     metal = smoothstep(0.86, 0.95, fine.b).mul(fFine).mul(0.4);
   } else if (type === 'volcanic') {
@@ -162,8 +176,11 @@ function surface(type, P, U, S, I) {
     const flow2 = N3(det.mul(fq(2.5)).add(vec3(S.time.mul(0.004), 0, 0)));
     // crosta escura fraturada (Worley) — fendas incandescentes, mais quentes nas bordas e nos canais
     // fendas = linhas de nível do ruído (rede de rachaduras entre placas de crosta)
-    const c1 = float(1).sub(smoothstep(0.0, 0.045, abs(flow.r.sub(0.5))));
-    const c2 = float(1).sub(smoothstep(0.0, 0.06, abs(flow2.g.sub(0.5)))).mul(fFine.mul(0.6).add(0.4));
+    // placas grandes (~30 m) e fissuras finas que somem com a distância (sem "purpurina")
+    const flowL = N3(det.mul(fq(34)).add(vec3(0, S.time.mul(0.002), 0)));
+    const wc = dist.mul(0.00004);
+    const c1 = float(1).sub(smoothstep(0.0, wc.add(0.03), abs(flowL.r.sub(0.5))));
+    const c2 = float(1).sub(smoothstep(0.0, 0.05, abs(flow.g.sub(0.5)))).mul(fMicro).mul(0.6);
     const crack = max(c1, c2.mul(0.75)).mul(fMicro.mul(0.4).add(0.6));
     const lavaHot = clamp(s.mul(1.3).sub(0.15), 0, 1);
     // lago (plano no nível da lava) = crosta; canal descendo a encosta = rio derretido
@@ -207,7 +224,8 @@ export function stateUniforms() {
     cloudCov: uniform(0), wind: uniform(new THREE.Vector3()), wmapU: uniform(0), wtex: null,
     cloudMid: uniform(3000),
     amb: uniform(new THREE.Vector3(0.03, 0.04, 0.06)),
-    lodK: uniform(1000),
+    lodK: uniform(1000), cloudFar: uniform(0),
+    hfA: uniform(0), hfH: uniform(200), hfCol: uniform(new THREE.Vector3(0.5, 0.55, 0.6)),
     skyZ: uniform(new THREE.Vector3(0.1, 0.2, 0.5)), skyH: uniform(new THREE.Vector3(0.4, 0.5, 0.6)),
     axis: uniform(new THREE.Vector3(0, 1, 0)),
     city: uniform(0),
@@ -283,6 +301,7 @@ export function makeTerrainMaterials(body, P, U, S, opts) {
       mat.emissiveNode = surf.emissive.add(selfDirect.mul(S.comp)).add(night);
       let o = output.rgb.mul(float(1).sub(cShadow.mul(0.62)));
       if (ap) o = o.mul(ap.w).add(ap.xyz);
+      o = mix(o, S.hfCol, heightFog(U, S, max(h, 0.0), dist));
       const fogF = float(1).sub(exp(dist.mul(S.fogD).negate()));
       o = mix(o, S.fogCol, fogF);
       mat.outputNode = vec4(o, output.a);
@@ -342,7 +361,7 @@ export function makeWaterMaterial(body, P, U, S, opts) {
   const lit = body0.mul(sunDiff.mul(0.9).add(S.amb.mul(day.mul(0.8).add(0.2))));
   // espuma: arrebentação na costa + cristas
   const foamN = N3(aDet.mul(fq(5)).add(vec3(T.mul(0.03), 0, 0))).b;
-  const shore = smoothstep(1.6, 0.0, depth).mul(smoothstep(0.35, 0.75, foamN.add(sin(depth.mul(3.0).sub(T.mul(1.6))).mul(0.25))));
+  const shore = smoothstep(1.2, 0.15, depth).mul(smoothstep(0.0, 0.1, depth)).mul(smoothstep(0.5, 0.8, foamN.add(sin(depth.mul(4.0).sub(T.mul(1.6))).mul(0.25)))).mul(0.7);
   const crest = smoothstep(0.55, 0.95, w0).mul(S.fogD.mul(400).add(0.2)).mul(fade(dist, 20));
   const foam = clamp(shore.add(crest), 0, 1);
   const foamCol = vec3(0.9, 0.93, 0.95).mul(sunDiff.add(S.amb));
@@ -353,6 +372,7 @@ export function makeWaterMaterial(body, P, U, S, opts) {
   alpha = max(alpha, smoothstep(0.5, 3.0, depth).mul(0.6));
   let o = col;
   if (hasAtmo) { const ap = varying(aerial(U, S, scat, pL)); o = o.mul(ap.w).add(ap.xyz); }
+  o = mix(o, S.hfCol, heightFog(U, S, float(0.0), dist));
   const fogF = float(1).sub(exp(dist.mul(S.fogD).negate()));
   o = mix(o, S.fogCol, fogF);
   mat.colorNode = o;
@@ -396,8 +416,8 @@ export function makeSkyMaterial(body, U, S, opts) {
     const w = weatherAt(S, normalize(pc));
     const q = pc.mul(1 / 9000).add(S.wind.mul(1.3));
     const n1 = N3(q).r;
-    const n2 = N3(vec3(q.x.mul(5.0), q.y.mul(1.2), q.z.mul(5.0)).add(n1.mul(0.6))).g; // fibras
-    const dens = w.w.mul(smoothstep(0.42, 0.78, n1.mul(0.55).add(n2.mul(0.55)))).mul(0.55).mul(select(ok, float(1), float(0)));
+    const n2 = N3(vec3(q.x.mul(3.0), q.y.mul(0.8), q.z.mul(3.0)).add(n1.mul(0.8))).r; // fibras
+    const dens = w.w.mul(smoothstep(0.48, 0.95, n1.mul(0.55).add(n2.mul(0.5)))).mul(0.3).mul(select(ok, float(1), float(0)));
     const mu = dot(rd, S.sunL);
     const sunC = S.sunCol.mul(sunTrans(U, normalize(pc).mul(U.R.add(1500.0)), S.sunL));
     const ph = float(0.35).add(pow(max(mu, 0.0), 8.0).mul(1.6));
