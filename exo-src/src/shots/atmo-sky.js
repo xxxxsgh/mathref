@@ -12,11 +12,11 @@ export default [
     mode: 'ship',
     cockpit: false,
     camera: {
-      lat: 45.6, lon: -83.1, alt: 70, pitch: 9, fov: 72,
+      lat: 45.6, lon: -83.1, alt: 400, pitch: 6, fov: 72,
       anchor: { body: 'moon', elevation: 15, azimuth: 345 },
       look: { body: 'sun', offset: 25 },
     },
-    timeOfDay: 0.292,
+    timeOfDay: 0.31,
     weather: 'clear',
     params: { atmoBiome: 'exotic', atmoCompanion: { az: -11, el: 6, temperature: 3300, intensity: 0.5, size: 1.0 } },
   },
