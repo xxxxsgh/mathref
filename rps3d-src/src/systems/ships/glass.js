@@ -18,7 +18,7 @@ const dropLayer = Fn(([q, dens, sd]) => {
   const f = fract(q).sub(0.5);
   const h = hash33(vec3(c, sd));
   const ctr = h.xy.sub(0.5).mul(0.55);
-  const r = mix(float(0.1), float(0.32), h.z.mul(h.z)).mul(step(h.z.mul(0.7).add(h.x.mul(0.3)), dens));
+  const r = mix(float(0.08), float(0.24), h.z.mul(h.z).mul(h.z)).mul(step(h.z.mul(0.7).add(h.x.mul(0.3)), dens));
   const dv = f.sub(ctr);
   const d = length(dv.mul(vec2(1.0, 0.85)));
   const m = float(1).sub(smoothstep(r.mul(0.72), r, d)).mul(step(0.001, r));

@@ -21,7 +21,7 @@ const STYLE = {
 const SPEC = {
   freighter: { floor: -1.5, ceil: 1.75, halfW: 1.65, z0: -23.2, z1: 21.5, bridge: [-23.2, -17], hold: [-3, 13], engine: [13.6, 21.5], seat: V(-0.9, -0.6, -21.2) },
   explorer: { floor: -1.35, ceil: 1.6, halfW: 1.5, z0: -15.5, z1: 11, bridge: [-15.5, -10.5], hold: [-4, 4], engine: [5, 11], seat: V(0, -0.5, -13.6) },
-  frigate: { floor: -3.0, ceil: 0.6, halfW: 2.2, z0: -40, z1: 44, bridge: [-40, -32], hold: [-12, 18], engine: [30, 44], seat: V(0, -2.2, -36) },
+  frigate: { floor: -3.0, ceil: 0.6, halfW: 2.2, z0: -40, z1: 44, bridge: [-40, -32], hold: [-12, 18], engine: [30, 44], seat: V(0, -2.2, -36), crew: [['sit', 0.9, -37.6, 0], ['sit', -0.9, -37.6, 0], ['stand', 1.2, -20, -1.4], ['stand', -1.1, 22, 1.9], ['stand', 0.6, 33, 3.1]] },
 };
 
 export function buildInterior(ctx, classId) {
@@ -126,6 +126,9 @@ export function buildInterior(ctx, classId) {
     P.add(box(0.12, H, 0.3), Z.SECONDARY, { m: M(s * 0.66, midY, b1) });
     P.glowPart(box(0.02, H * 0.8, 0.02), [1.0, 0.65, 0.2], 3, { m: M(s * 0.6, midY, b1 - 0.16) });
   }
+  // ── tripulação (fragata): figuras em traje de bordo, sentadas nos consoles
+  // da ponte ou em pé nos corredores (cor do uniforme por facção do dono)
+  for (const [pose, x, z, yaw] of sp.crew || []) crewMember(P, V(x, F, z), yaw, pose, rng);
   // ── baia de carga: caixotes, contêiner, guindaste ──
   const [h0, h1] = sp.hold;
   for (let i = 0; i < 9; i++) {
@@ -196,7 +199,7 @@ export function buildInterior(ctx, classId) {
   mk(lit, makeLightsMaterial());
   // cones de luz (poeira em suspensão) sob as luminárias — aditivos, baratos
   if (!lite) {
-    const coneMat = makeConeMaterial([1.0, 0.86, 0.66], 0.06);
+    const coneMat = makeConeMaterial([1.0, 0.86, 0.66], 0.035);
     const cg = new THREE.CylinderGeometry(0.42, 1.25, H - 0.12, 20, 1, true);
     for (let z = z0 + 2.0; z < z1 - 0.6; z += 3.2) {
       const c = new THREE.Mesh(cg, coneMat);
@@ -212,7 +215,7 @@ export function buildInterior(ctx, classId) {
   // ── luzes reais: um pequeno conjunto de PointLights que segue o jogador e
   // ocupa as luminárias mais próximas (fora do mobile, que fica só no falso)
   const lamps = [];
-  for (let z = z0 + 2.0; z < z1 - 0.6; z += 3.2) lamps.push({ pos: V(0, C - 0.25, z), color: new THREE.Color(1.0, 0.8, 0.6), intensity: 1.3 });
+  for (let z = z0 + 2.0; z < z1 - 0.6; z += 3.2) lamps.push({ pos: V(0, C - 0.25, z), color: new THREE.Color(1.0, 0.8, 0.6), intensity: 2.0 });
   lamps.push({ pos: V(0, midY, (sp.engine[0] + sp.engine[1]) / 2), color: new THREE.Color(0.45, 0.8, 1.0), intensity: 5 });
   lamps.push({ pos: V(0, F + 1.3, b0 + 1.2), color: new THREE.Color(0.4, 0.75, 1.0), intensity: 1.2 });
   // As luzes NÃO entram na cena (não custam nada aos outros materiais): só o
@@ -252,6 +255,38 @@ export function buildInterior(ctx, classId) {
     floorY: F, ceilY: C,
     bounds: { min: V(-W, F, z0), max: V(W, C, z1) },
   };
+}
+
+/** Tripulante low-poly (≈1,75 m): botas, pernas, tronco com colete, braços, capacete aberto. */
+function crewMember(P, base, yaw, pose, rng) {
+  const sit = pose === 'sit';
+  const R = new THREE.Matrix4().makeRotationY(yaw).setPosition(base);
+  const at = (x, y, z, rx = 0, ry = 0, rz = 0) => R.clone().multiply(M(x, y, z, rx, ry, rz));
+  const suit = rng() < 0.5 ? Z.PRIMARY : Z.SECONDARY;
+  const hipY = sit ? 0.5 : 0.95;
+  for (const s of [1, -1]) {
+    if (sit) {
+      P.add(box(0.15, 0.15, 0.46, 0.05), suit, { m: at(s * 0.11, hipY, -0.2) });       // coxa
+      P.add(box(0.13, 0.46, 0.14, 0.05), suit, { m: at(s * 0.11, hipY - 0.25, -0.43) }); // canela
+      P.add(box(0.13, 0.08, 0.26, 0.03), Z.DARK, { m: at(s * 0.11, 0.04, -0.5) });       // bota
+    } else {
+      P.add(box(0.15, 0.48, 0.16, 0.05), suit, { m: at(s * 0.11, 0.7, 0) });
+      P.add(box(0.13, 0.42, 0.14, 0.05), suit, { m: at(s * 0.11, 0.27, 0.01) });
+      P.add(box(0.13, 0.09, 0.27, 0.03), Z.DARK, { m: at(s * 0.11, 0.045, -0.05) });
+    }
+    // braços (apoiados no console quando sentado)
+    P.add(box(0.11, 0.32, 0.12, 0.04), suit, { m: at(s * 0.25, hipY + 0.42, sit ? -0.08 : 0, sit ? -0.6 : 0.05, 0, s * 0.08) });
+    P.add(box(0.1, 0.3, 0.1, 0.04), suit, { m: at(s * 0.27, hipY + 0.2, sit ? -0.3 : 0.02, sit ? -1.2 : 0, 0, 0) });
+    P.add(box(0.08, 0.1, 0.08, 0.03), Z.DARK, { m: at(s * 0.27, hipY + (sit ? 0.12 : 0.02), sit ? -0.45 : 0.03) }); // luva
+  }
+  P.add(box(0.36, 0.22, 0.22, 0.06), suit, { m: at(0, hipY + 0.06, 0.02) });   // quadril
+  P.add(box(0.4, 0.42, 0.24, 0.07), suit, { m: at(0, hipY + 0.36, 0) });        // tronco
+  P.add(box(0.42, 0.3, 0.27, 0.05), Z.TRIM, { m: at(0, hipY + 0.4, 0.005) });   // colete
+  P.add(box(0.3, 0.06, 0.05), Z.DARK, { m: at(0, hipY + 0.32, -0.14) });       // painel peitoral
+  P.glowPart(box(0.05, 0.02, 0.01), [0.3, 1.0, 0.5], 2.5, { m: at(0.08, hipY + 0.33, -0.17) });
+  P.add(sphere(0.115, 12, 10), Z.RUBBER, { m: at(0, hipY + 0.71, 0) });          // cabeça (balaclava)
+  P.add(sphere(0.135, 14, 10, Math.PI * 2, Math.PI * 0.62), Z.PRIMARY, { m: at(0, hipY + 0.73, 0.02, -0.25, 0, 0) }); // capacete aberto
+  P.add(box(0.2, 0.12, 0.2, 0.04), Z.DARK, { m: at(0, hipY + 0.42, 0.18) });     // mochila de O₂
 }
 
 /** Cone de luz volumétrica falsa: aditivo, some nas bordas (fresnel) e para baixo. */

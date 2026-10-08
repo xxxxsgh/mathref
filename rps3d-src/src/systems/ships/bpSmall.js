@@ -66,7 +66,7 @@ export function buildFighter(bp, style, rng, faction) {
 
   // canopy
   const cz0 = -5.15, cz1 = -1.2;
-  canopy(bp, { z0: cz0, z1: cz1, w: 0.62 * W, h: 0.6, y: 0.42, ribs: faction === 'corsarios' ? 4 : 2, ribAt: faction === 'corsarios' ? null : [0.12, 0.7], r: 0.055, frameZone: faction === 'hegemonia' ? Z.TRIM : Z.DARK });
+  canopy(bp, { z0: cz0, z1: cz1, w: 0.62 * W, h: 0.6, y: 0.42, ribs: faction === 'corsarios' ? 4 : 2, ribAt: faction === 'corsarios' ? null : [0.7], r: 0.055, frameZone: faction === 'hegemonia' ? Z.TRIM : Z.DARK });
   bp.eye = V(0, 0.74, -3.05);
 
   // entradas de ar

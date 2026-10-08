@@ -330,8 +330,8 @@ export function registerShots(ctx, api, st) {
     if (dbg === '3') { inter.material.userData.U.realLight.value = 0; inter.group.traverse((o) => { if (o.isMesh && o.material.blending === THREE.AdditiveBlending) o.visible = false; }); }
     if (dbg === '2' || dbg === '3') { inter.material.userData.U.rowCol.value.setRGB(0, 0, 0); inter.material.userData.U.fillAmb.value.setRGB(0, 0, 0); inter.material.userData.U.lamps.array.forEach((l) => l.set(0, 0, 0, 0)); }
     ctx.services.rendering?.sun?.setShadowRange?.(80);
-    const eye = V(Number(ctx.params.get('ix') ?? 0.55), inter.floorY + 1.66, Number(ctx.params.get('iz') ?? -10.5));
-    const dir = V(-0.12, -0.06, 1).normalize();
+    const eye = V(Number(ctx.params.get('ix') ?? -0.75), inter.floorY + 1.66, Number(ctx.params.get('iz') ?? 1.2));
+    const dir = V(Number(ctx.params.get('dx') ?? 0.16), -0.1, 1).normalize();
     worldCam(ctx, st, C.clone().add(eye), look(dir, V(0, 1, 0)));
   });
 }
