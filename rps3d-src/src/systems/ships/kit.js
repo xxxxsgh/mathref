@@ -46,7 +46,7 @@ export function engine(bp, { x = 0, y = 0, z0, z1, r, style, mirror = false, nac
 }
 
 /** Canopy: vidro (loft achatado embaixo) + nervuras + trilho do peitoril. */
-export function canopy(bp, { z0, z1, w, h, y, x = 0, ribs = 3, frameZone = Z.TRIM, r = 0.045, e = 2.2, bubble = 0.15 }) {
+export function canopy(bp, { z0, z1, w, h, y, x = 0, ribs = 3, frameZone = Z.TRIM, r = 0.045, e = 2.2, bubble = 0.15, ribAt = null }) {
   const P = bp.parts;
   const st = [
     { z: z0, w: w * 0.2, h: h * 0.15, hb: 0.02, e },
@@ -58,7 +58,8 @@ export function canopy(bp, { z0, z1, w, h, y, x = 0, ribs = 3, frameZone = Z.TRI
   const c = loft(st.map((s) => ({ ...s, y, x })), { seg: 36, sub: 4 });
   P.glassPart(c.geo);
   const zs = [];
-  for (let i = 0; i < ribs; i++) zs.push(z0 + (z1 - z0) * (0.22 + (i / Math.max(1, ribs - 1)) * 0.62));
+  if (ribAt) for (const f of ribAt) zs.push(z0 + (z1 - z0) * f);
+  else for (let i = 0; i < ribs; i++) zs.push(z0 + (z1 - z0) * (0.22 + (i / Math.max(1, ribs - 1)) * 0.62));
   for (const z of zs) {
     const pts = [];
     for (let k = 0; k <= 14; k++) { const a = (k / 14) * Math.PI; const q = c.at(z, a); pts.push(q.pos.addScaledVector(q.normal, r * 0.6)); }

@@ -25,7 +25,9 @@ import { buildInterior } from './interior.js';
 import { FACTION_STYLES, CLASS_INFO, MODEL_NAMES, PAINTS, FACTION_IDS, CLASS_IDS } from './factions.js';
 import { registerShots } from './shots.js';
 
-const st = { ctx: null, ships: new Set(), byId: new Map(), cockpit: null, nextId: 1, shotCam: null };
+const st = { ctx: null, ships: new Set(), byId: new Map(), cockpit: null, nextId: 1, shotCam: null, interiors: new Set() };
+
+const _eye = new THREE.Vector3();
 
 const api = {
   create(classId = 'fighter', faction = 'hegemonia', opts = {}) {
@@ -47,7 +49,9 @@ const api = {
     if (!inter) return null;
     ship.group.add(inter.group);
     const shapes = inter.colliders.map((c) => st.ctx.collision.addBox({ frame, center: c.center, half: c.half, tag: 'interior:' + ship.id }));
-    inter.remove = () => { shapes.forEach((s) => s.remove()); inter.group.removeFromParent(); };
+    inter.remove = () => { shapes.forEach((s) => s.remove()); inter.group.removeFromParent(); st.interiors.delete(inter); };
+    inter.ship = ship;
+    st.interiors.add(inter);
     return inter;
   },
   byId(id) { return st.byId.get(id) || null; },
@@ -87,6 +91,14 @@ export default {
       s.frame(dt, d);
     }
     st.cockpit?.frame(dt, ctx);
+    // luzes dos interiores seguem o olho (posição da câmera no referencial da nave)
+    for (const inter of st.interiors) {
+      const g = inter.ship.group;
+      if (!g.parent) continue;
+      g.updateWorldMatrix(true, false);
+      _eye.set(0, 0, 0); g.worldToLocal(_eye);
+      if (_eye.lengthSq() < inter.ship.radius * inter.ship.radius * 4) inter.update(_eye);
+    }
   },
   dispose() {
     for (const s of [...st.ships]) s.dispose();

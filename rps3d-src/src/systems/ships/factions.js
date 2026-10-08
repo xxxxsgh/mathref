@@ -49,9 +49,9 @@ export const FACTION_STYLES = {
   },
   vigilantes: {
     label: 'Os Vigilantes',
-    primary: [0.018, 0.022, 0.032], secondary: [0.04, 0.07, 0.12], trim: [0.55, 0.7, 0.9],
-    metal: [0.4, 0.5, 0.6], dark: [0.01, 0.012, 0.02], glow: [0.4, 0.75, 1.0],
-    paint: { metal: 0.7, rough: 0.14, clearcoat: 1.0 },
+    primary: [0.075, 0.085, 0.11], secondary: [0.12, 0.17, 0.26], trim: [0.62, 0.74, 0.9],
+    metal: [0.45, 0.55, 0.65], dark: [0.015, 0.018, 0.028], glow: [0.4, 0.75, 1.0],
+    paint: { metal: 0.85, rough: 0.2, clearcoat: 1.0 },
     wear: 0, patch: 0, hazard: 0, teeth: 0, circuits: 1, iridescence: 1,
     engine: [0.45, 0.8, 1.0], canopy: [0.1, 0.3, 0.6],
     nav: { left: [0.4, 0.75, 1.0], right: [0.4, 0.75, 1.0], strobe: [0.7, 0.9, 1.0] },

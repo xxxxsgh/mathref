@@ -8,7 +8,7 @@
 import * as THREE from 'three/webgpu';
 import {
   Fn, vec2, vec3, vec4, float, uniform, positionLocal, mix, smoothstep, step, abs, max, min, floor, fract, pow, exp, sin, clamp,
-  time, length, dot, normalize, positionView, atan,
+  time, length, dot, normalize, positionView, atan, viewportSharedTexture, screenUV,
 } from 'three/tsl';
 import { hash13, hash33, vnoise, fbm } from './tsl.js';
 
@@ -52,7 +52,7 @@ export function makeCockpitGlass(base = { y: -0.3 }) {
     rain: uniform(0), dust: uniform(0), ice: uniform(0), fire: uniform(0),
     wind: uniform(0),            // 0 parado (gotas descem) … 1 em voo (escorrem para trás)
     sunDirV: uniform(new THREE.Vector3(0, 0, -1)), sunColor: uniform(new THREE.Color(1, 0.95, 0.88)), sunVis: uniform(1),
-    smudge: uniform(1), light: uniform(1),
+    smudge: uniform(1), light: uniform(1), refr: uniform(1), dash: uniform(1),
   };
   const m = new THREE.MeshPhysicalNodeMaterial({ transparent: true, side: THREE.DoubleSide, depthWrite: false });
   m.userData.U = U;
@@ -94,23 +94,34 @@ export function makeCockpitGlass(base = { y: -0.3 }) {
   const fl = fbm(vec3(s.mul(5.0), z.mul(3.0).add(time.mul(5.0)), time.mul(0.7)));
   const fire = U.fire.mul(smoothstep(0.38, 0.8, fl.add(front.mul(0.35)).add(low.mul(0.15)))).mul(front.mul(0.7).add(0.3));
 
-  // cor do vidro
-  const dropCol = mix(vec3(0.03, 0.035, 0.04), vec3(0.42, 0.46, 0.5), smoothstep(-1.0, 0.8, dn.y.negate())).mul(smoothstep(1.05, 0.6, length(dn)).mul(0.8).add(0.2));
+  // cor do vidro: gotas são lentes — mostram a cena refratada (invertida e
+  // comprimida), com borda escura (reflexão interna total) e um brilho especular
+  const lens = dn.mul(smoothstep(1.15, 0.2, length(dn)));
+  const refrUV = screenUV.sub(lens.mul(vec2(0.045, -0.06)).mul(U.refr)).clamp(0.001, 0.999);
+  const scene = viewportSharedTexture(refrUV).rgb;
+  const rim = smoothstep(0.55, 1.05, length(dn));
+  const dropCol = scene.mul(float(0.9).sub(rim.mul(0.75))).add(vec3(0.02, 0.025, 0.03).mul(rim));
+  // filme d'água: leve escurecimento/desfoque (amostra deslocada) onde choveu
+  const wet = U.rain.mul(0.35);
+  const dustA = clamp(dust.mul(1.4), 0, 1);
   let col = vec3(0.01, 0.012, 0.014);
-  col = mix(col, dropCol, dm);
-  col = mix(col, vec3(0.42, 0.34, 0.25), clamp(dust.mul(1.4), 0, 1));
+  col = mix(col, vec3(0.42, 0.34, 0.25), dustA);
   col = mix(col, vec3(0.72, 0.82, 0.9), frost);
-  m.colorNode = col;
-  m.opacityNode = clamp(float(0.03).add(dm.mul(0.55)).add(dust.mul(0.6)).add(frost.mul(0.82)).add(dirt.mul(0.04)), 0, 0.95);
+  const dropE = dropCol.mul(dm).mul(float(1).sub(dustA)).mul(float(1).sub(frost));
+  m.colorNode = col.mul(float(1).sub(dm.mul(0.85)));
+  m.opacityNode = clamp(float(0.025).add(wet.mul(0.04)).add(dm.mul(0.96)).add(dust.mul(0.6)).add(frost.mul(0.82)).add(dirt.mul(0.04)), 0, 0.97);
   m.metalnessNode = float(0);
   m.roughnessNode = clamp(float(0.03).add(frost.mul(0.6)).add(dust.mul(0.5)).add(dirt.mul(0.08)), 0.02, 1);
   m.ior = 1.5;
-  m.specularIntensityNode = float(1);
+  m.specularIntensityNode = float(1).sub(dm.mul(0.6));
   // realce especular da gota + brilho nas manchas + plasma
-  const hl = float(1).sub(smoothstep(0.08, 0.32, length(dn.sub(vec2(-0.3, 0.38))))).mul(dm);
-  m.emissiveNode = vec3(U.sunColor).mul(dirt.mul(glare).mul(0.35).add(hl.mul(0.12).mul(U.light)))
+  const hl = float(1).sub(smoothstep(0.06, 0.26, length(dn.sub(vec2(-0.32, 0.4))))).mul(dm);
+  m.emissiveNode = dropE
+    .add(vec3(U.sunColor).mul(dirt.mul(glare).mul(0.35).add(hl.mul(0.35).mul(U.light))))
     .add(vec3(3.2, 1.1, 0.25).mul(fire.mul(5.0)))
-    .add(vec3(0.6, 0.7, 0.8).mul(frost.mul(0.02).mul(U.light)));
+    .add(vec3(0.6, 0.7, 0.8).mul(frost.mul(0.02).mul(U.light)))
+    // reflexo fraco do painel (MFDs/anunciadores) na parte baixa e frontal do vidro
+    .add(vec3(0.18, 0.55, 0.42).mul(U.dash).mul(low.mul(front).mul(fbm(P.mul(vec3(3.0, 9.0, 3.0))).mul(0.6).add(0.4))).mul(0.02));
   return m;
 }
 

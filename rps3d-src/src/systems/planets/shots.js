@@ -115,7 +115,7 @@ export function registerShots(ctx, api, st) {
     setup(ctx, 'kessa', 64);
     const b = body(ctx, 'Verídia');
     const v = api.view(b);
-    const d = search(api, b, P(ctx, 'elev', 3.5), (d, h, T) => {
+    const d = search(api, b, P(ctx, 'elev', 1.8), (d, h, T) => {
       if (h < 18 || h > 120) return -Infinity;
       const { tan } = sunTangent(api, b, d, ctx);
       const side = new THREE.Vector3().crossVectors(d, tan).normalize();
@@ -126,43 +126,45 @@ export function registerShots(ctx, api, st) {
     const { tan, sunL } = sunTangent(api, b, d, ctx);
     const h = Math.max(0, v.terrain.height(d.x, d.y, d.z));
     const pos = d.clone().multiplyScalar(b.radius + h + P(ctx, 'alt', 28));
-    const look = tan.clone().applyAxisAngle(d, P(ctx, 'yaw', 22) * D2R).addScaledVector(d, P(ctx, 'pitch', -0.02)).normalize();
+    const look = tan.clone().applyAxisAngle(d, P(ctx, 'yaw', 50) * D2R).addScaledVector(d, P(ctx, 'pitch', 0.03)).normalize();
     localCam(ctx, st, b, pos, look, d);
+    ctx.services.rendering?.setExposure?.(P(ctx, 'exp', 0.6), { speed: 200 });
     api.weather.force('rain', 0);
     api.settle();
   });
 
-  // ── Ashar: dunas diante de mesetas ──
+  // ── Ashar: mar de dunas com mesetas no horizonte, sol lateral baixo ──
   ctx.shots.register('planets-ashar-surface', async (ctx) => {
-    setup(ctx, 'kessa', 64);
+    setup(ctx, 'kessa', 60);
     const b = body(ctx, 'Ashar');
     const v = api.view(b);
-    let bestTan = null;
-    const d = search(api, b, 16, (d, h, T) => {
-      const s = T.sample(d.x, d.y, d.z, {});
-      if (s.s < 0.5) return -Infinity;
-      const { tan } = sunTangent(api, b, d, ctx);
-      const side = new THREE.Vector3().crossVectors(d, tan).normalize();
-      let best = -Infinity;
-      for (const dir of [side, side.clone().negate(), tan.clone().applyAxisAngle(d, 60 * D2R), tan.clone().applyAxisAngle(d, -60 * D2R)]) {
-        const m = profile(T, b, d, dir, [1500, 2500, 4000]) - h;
-        if (m > best) best = m;
-      }
-      return Math.min(best, 700) + s.s * 200;
-    }, { tries: 300 });
-    const { tan } = sunTangent(api, b, d, ctx);
     const T = v.terrain;
+    const far = [3000, 4500, 6500, 9000];
+    const dirsFor = (d) => {
+      const { tan } = sunTangent(api, b, d, ctx);
+      return [70, 100, -70, -100].map((a) => tan.clone().applyAxisAngle(d, a * D2R));
+    };
+    const d = search(api, b, P(ctx, 'elev', 11), (d, h) => {
+      const s = T.sample(d.x, d.y, d.z, {});
+      if (s.s < 0.6) return -Infinity;
+      let best = -Infinity;
+      for (const dir of dirsFor(d)) {
+        // primeiro plano de areia (perto baixo) e paredões longe
+        const near = profile(T, b, d, dir, [300, 800, 1500]) - h;
+        const m = profile(T, b, d, dir, far) - h;
+        best = Math.max(best, Math.min(m, 900) - Math.max(0, near - 60) * 3);
+      }
+      return best + s.s * 100;
+    }, { tries: 360 });
     let look = null, bm = -Infinity;
-    for (let a = 0; a < 360; a += 15) {
-      const dir = tan.clone().applyAxisAngle(d, a * D2R);
-      const m = profile(T, b, d, dir, [1500, 2500, 4000]);
-      const backlit = Math.cos(a * D2R) > 0.85 ? -300 : 0; // não olhar direto para o sol
-      if (m + backlit > bm) { bm = m + backlit; look = dir; }
-    }
     const h = T.height(d.x, d.y, d.z);
-    const pos = d.clone().multiplyScalar(b.radius + h + 14);
-    localCam(ctx, st, b, pos, look.clone().addScaledVector(d, 0.04).normalize(), d);
-    api.weather.force('sandstorm', 0.12);
+    for (const dir of dirsFor(d)) {
+      const m = profile(T, b, d, dir, far) - h - Math.max(0, profile(T, b, d, dir, [300, 800, 1500]) - h - 60) * 3;
+      if (m > bm) { bm = m; look = dir; }
+    }
+    const pos = d.clone().multiplyScalar(b.radius + h + P(ctx, 'alt', 35));
+    localCam(ctx, st, b, pos, look.clone().applyAxisAngle(d, P(ctx, 'yaw', 0) * D2R).addScaledVector(d, P(ctx, 'pitch', -0.02)).normalize(), d);
+    api.weather.force('sandstorm', P(ctx, 'storm', 0.0));
     api.settle();
   });
 
@@ -180,7 +182,7 @@ export function registerShots(ctx, api, st) {
     const look = tan.clone().applyAxisAngle(d, 70 * D2R).addScaledVector(d, 0.08).normalize();
     const h = v.terrain.height(d.x, d.y, d.z);
     localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + 2.2), look, d);
-    api.weather.force('blizzard', 0.8);
+    api.weather.force('blizzard', P(ctx, 'storm', 0.6));
     api.settle();
   });
 
@@ -194,7 +196,8 @@ export function registerShots(ctx, api, st) {
     const axisW = b.dirToWorld(axisL, ctx.time.world, new THREE.Vector3());
     const perp = new THREE.Vector3().crossVectors(sunW, axisW).normalize();
     // de lado em relação ao sol, um pouco acima do plano dos anéis
-    const D = sunW.clone().multiplyScalar(Math.cos(62 * D2R)).addScaledVector(perp, Math.sin(62 * D2R)).normalize();
+    const ph = P(ctx, 'phase', 100) * D2R;
+    const D = sunW.clone().multiplyScalar(Math.cos(ph)).addScaledVector(perp, Math.sin(ph)).normalize();
     D.addScaledVector(axisW, 0.2).normalize();
     const cam = b.pos.clone().addScaledVector(D, b.radius * P(ctx, 'dist', 3.6));
     const toC = b.pos.clone().sub(cam).normalize();
@@ -206,16 +209,35 @@ export function registerShots(ctx, api, st) {
 
   // ── reentrada: câmera atravessando as nuvens de Verídia ──
   ctx.shots.register('planets-entry-clouds', async (ctx) => {
-    setup(ctx, 'kessa', 70);
+    setup(ctx, 'kessa', 72);
     const b = body(ctx, 'Verídia');
     const v = api.view(b);
-    const d = api.dirForSun(b, P(ctx, 'elev', 20), P(ctx, 'az', 140));
+    const smp = v.S.wtex.sampler;
+    const a = v.wmapAt(ctx.time.world) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+    const cov = (d) => smp(d.x * ca - d.z * sa, d.y, d.x * sa + d.z * ca).cov;
+    // ponto dentro de um banco de nuvens com uma abertura à frente (vê-se o chão)
+    let best = null, bs = -Infinity, bestLook = null;
+    for (let i = 0; i < 500; i++) {
+      const el = P(ctx, 'elev', 24) + (i % 5) * 3;
+      const d = api.dirForSun(b, el, i * 0.73 * 57.3);
+      const c0 = cov(d);
+      if (c0 < 0.45) continue;
+      const { tan } = sunTangent(api, b, d, ctx);
+      for (const yaw of [120, 150, -120, -150]) {
+        const dir = tan.clone().applyAxisAngle(d, yaw * D2R);
+        const ahead = cov(d.clone().addScaledVector(dir, 4000 / b.radius).normalize());
+        const far = cov(d.clone().addScaledVector(dir, 12000 / b.radius).normalize());
+        const sc = -Math.abs(c0 - 0.5) * 2 - Math.abs(ahead - 0.4) * 1.5 + far * 0.5;
+        if (sc > bs) { bs = sc; best = d; bestLook = dir; }
+      }
+    }
+    const d = best || api.dirForSun(b, 24, 140);
+    const look = (bestLook || sunTangent(api, b, d, ctx).tan).clone().addScaledVector(d, P(ctx, 'pitch', -0.16)).normalize();
     const L = v.cloud.layer;
-    const r = L.base + (L.top - L.base) * P(ctx, 'hn', 0.9);
-    const { tan } = sunTangent(api, b, d, ctx);
-    const look = tan.clone().applyAxisAngle(d, P(ctx, 'yaw', 125) * D2R).addScaledVector(d, P(ctx, 'pitch', -0.5)).normalize();
+    const r = L.base + (L.top - L.base) * P(ctx, 'hn', 0.92);
     localCam(ctx, st, b, d.clone().multiplyScalar(r), look, d);
-    v.cloudBoost = P(ctx, 'boost', 0.12);
+    ctx.services.rendering?.setExposure?.(P(ctx, 'exp', 0.85), { speed: 200 });
+    v.cloudBoost = P(ctx, 'boost', 0.0);
     api.weather.force('rain', 0.0);
     api.settle();
   });
@@ -275,6 +297,21 @@ export function registerShots(ctx, api, st) {
     const look = gT.clone().addScaledVector(d, 0.3).normalize();
     const h = v.terrain.height(d.x, d.y, d.z);
     localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + 30), look, d);
+    api.settle();
+  });
+
+  // ── Aurora (Halden) vista do ponto da batalha de abertura ──
+  ctx.shots.register('planets-aurora-orbit', async (ctx) => {
+    setup(ctx, 'halden', 60);
+    const sys = ctx.universe.system;
+    const b = body(ctx, 'Aurora');
+    const poi = sys.pois.find((p) => p.kind === 'opening_battle');
+    const cam = poi ? poi.pos.clone() : b.pos.clone().add(new THREE.Vector3(-b.radius * 2.4, b.radius * 0.5, b.radius * 1.2));
+    const toC = b.pos.clone().sub(cam).normalize();
+    const up = new THREE.Vector3(0, 1, 0);
+    const right = new THREE.Vector3().crossVectors(toC, up).normalize();
+    const look = toC.clone().applyAxisAngle(up, P(ctx, 'yaw', 14) * D2R).applyAxisAngle(right, P(ctx, 'pitch', 6) * D2R);
+    worldCam(ctx, st, cam, look, up);
     api.settle();
   });
 

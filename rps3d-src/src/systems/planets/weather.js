@@ -19,8 +19,8 @@ import { Noise } from '../../core/Rng.js';
 export const KINDS = {
   lush: { kind: 'rain', fog: 1 / 900, color: [0.55, 0.6, 0.66], fall: 11, wind: 6, len: 0.9, width: 0.012, alpha: 0.32, p: [0.75, 0.8, 0.88], clouds: 0.45 },
   ocean: { kind: 'rain', fog: 1 / 800, color: [0.55, 0.62, 0.7], fall: 12, wind: 10, len: 1.0, width: 0.012, alpha: 0.32, p: [0.75, 0.82, 0.9], clouds: 0.45 },
-  desert: { kind: 'sandstorm', fog: 1 / 160, color: [0.86, 0.55, 0.3], fall: 0.6, wind: 26, len: 0.35, width: 0.02, alpha: 0.45, p: [1.0, 0.72, 0.45], clouds: 0.1 },
-  ice: { kind: 'blizzard', fog: 1 / 120, color: [0.82, 0.88, 0.96], fall: 2.2, wind: 18, len: 0.1, width: 0.06, alpha: 1.0, p: [1, 1, 1], clouds: 0.4 },
+  desert: { kind: 'sandstorm', fog: 1 / 300, color: [0.86, 0.55, 0.3], fall: 0.6, wind: 26, len: 0.35, width: 0.02, alpha: 0.45, p: [1.0, 0.72, 0.45], clouds: 0.1 },
+  ice: { kind: 'blizzard', fog: 1 / 260, color: [0.82, 0.88, 0.96], fall: 2.2, wind: 18, len: 0.12, width: 0.1, alpha: 1.0, p: [1, 1, 1], clouds: 0.4 },
   volcanic: { kind: 'ash', fog: 1 / 420, color: [0.32, 0.29, 0.28], fall: 1.1, wind: 4, len: 0.04, width: 0.04, alpha: 0.7, p: [0.35, 0.33, 0.32], clouds: 0.3 },
   toxic: { kind: 'acid', fog: 1 / 260, color: [0.55, 0.68, 0.25], fall: 6, wind: 5, len: 0.5, width: 0.014, alpha: 0.3, p: [0.75, 0.95, 0.35], clouds: 0.35 },
   dead: { kind: 'electric', fog: 1 / 3000, color: [0.3, 0.32, 0.38], fall: 0, wind: 9, len: 0.2, width: 0.02, alpha: 0.25, p: [0.6, 0.7, 0.8], clouds: 0 },
@@ -56,6 +56,16 @@ export class Weather {
     const s = (body.seed % 1000) * 0.137;
     const n = this.noise.noise3(dirLocal.x * 2.2 + s, dirLocal.y * 2.2 + t / 900, dirLocal.z * 2.2 - s);
     const n2 = this.noise.noise3(t / 2600 + s, s * 0.3, 1.7);
+    // onde o mapa de clima tem nuvens úmidas, chove/neva de verdade
+    const v = this.planets.view?.(body);
+    const smp = v?.S?.wtex?.sampler;
+    if (smp) {
+      // o mapa deriva em longitude (S.wmapU): desfaz a deriva para consultar
+      const a = v.wmapAt(t) * Math.PI * 2;
+      const c = Math.cos(a), si = Math.sin(a);
+      const w = smp(dirLocal.x * c - dirLocal.z * si, dirLocal.y, dirLocal.x * si + dirLocal.z * c);
+      return THREE.MathUtils.smoothstep(w.wet * 0.9 + w.cov * 0.25 + n * 0.25 + n2 * 0.15, 0.45, 0.95);
+    }
     return THREE.MathUtils.smoothstep(n * 0.7 + n2 * 0.5, 0.18, 0.62);
   }
 
@@ -157,8 +167,8 @@ export class Weather {
       (amb.y * 0.55 + sc.y * sT[1] * sunUp * 0.07) * W.color[1] * 1.6,
       (amb.z * 0.55 + sc.z * sT[2] * sunUp * 0.07) * W.color[2] * 1.6);
     S.fogCol.value.copy(fogCol);
-    S.fogD.value = W.fog * I * I * 1.2;
-    S.cloudCov.value = Math.min(1, (body.clouds || 0) + I * W.clouds + (view.cloudBoost || 0)) * (view.cloud ? 1 : 0);
+    S.fogD.value = W.fog * Math.pow(I, 3.5) * 1.2;
+    S.cloudCov.value = Math.min(1, I * W.clouds + (view.cloudBoost || 0)) * (view.cloud ? 1 : 0);
 
     // partículas
     const show = I > 0.02 && W.fall + W.wind > 0 && kind !== 'electric';
@@ -168,14 +178,15 @@ export class Weather {
       const vel = this.windW.clone().addScaledVector(upW, -W.fall * (0.8 + I * 0.4));
       // acumula deslocamento (mundo − câmera) módulo caixa, em double
       if (this.prevCam) {
-        const dc = cam.clone().sub(this.prevCam);
+        // deslocamento da câmera em relação ao AR (que gira com o planeta)
+        const dc = this.prevLocal ? body.dirToWorld(view.camLocal.clone().sub(this.prevLocal), t, new THREE.Vector3()) : new THREE.Vector3();
         if (dc.length() > BOX * 4) dc.set(0, 0, 0);
         this.offset.addScaledVector(vel, dt).sub(dc);
       }
       for (const k of ['x', 'y', 'z']) this.offset[k] = ((this.offset[k] % BOX) + BOX) % BOX;
       U.off.value.copy(this.offset);
       // velocidade relativa à câmera dá o rastro (corrida/voo estica as gotas)
-      const camVel = this.prevCam && dt > 0 ? cam.clone().sub(this.prevCam).divideScalar(dt) : new THREE.Vector3();
+      const camVel = this.prevLocal && dt > 0 ? body.dirToWorld(view.camLocal.clone().sub(this.prevLocal), t, new THREE.Vector3()).divideScalar(dt) : new THREE.Vector3();
       if (camVel.length() > 400) camVel.set(0, 0, 0);
       U.vel.value.copy(vel).sub(camVel);
       const speed = U.vel.value.length();
@@ -187,6 +198,7 @@ export class Weather {
       U.count.value = Math.min(1, 0.15 + I);
     }
     this.prevCam = cam.clone();
+    this.prevLocal = view.camLocal.clone();
 
     // relâmpagos (tempestade elétrica e chuva forte)
     if ((kind === 'electric' && I > 0.15) || (kind === 'rain' && I > 0.7)) {

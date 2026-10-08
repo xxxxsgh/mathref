@@ -9,7 +9,7 @@ import * as THREE from 'three/webgpu';
 import {
   vec2, vec3, float, uniform, texture, uv, mix, smoothstep, sin, time, fract, abs, pow, dot, normalize, normalView, positionView, max, positionLocal, length,
 } from 'three/tsl';
-import { Z, M, Parts, box, cyl, cylZ, sphere, plate, pipe, vent, latheZ } from './geo.js';
+import { Z, M, Parts, box, cyl, cylZ, sphere, plate, pipe, vent, latheZ, cutBox } from './geo.js';
 import { makeHullMaterial, makeLightsMaterial } from './materials.js';
 import { blueprint, hullMaterial } from './ship.js';
 import { makeCockpitGlass } from './glass.js';
@@ -292,8 +292,12 @@ export class Cockpit {
       { z: c.z1, w: c.w * 0.7, h: c.h * 0.3, hb: 0.02, e: 2.2 },
     ].map((s0) => ({ ...s0, y: c.y - eye.y, z: s0.z - eye.z, w: s0.w * 0.985, h: s0.h * 0.985 }));
     const gl2 = loft(cst, { seg: 48, sub: 6, capStart: false, capEnd: false });
+    // o loft é um tubo fechado: remove o "piso" de vidro sob o peitoril (senão
+    // as gotas/geada apareceriam por cima do painel)
+    const glassGeo = cutBox(gl2.geo.toNonIndexed(), { min: V(-5, -5, -10), max: V(5, sill + 0.004, 10) });
+    glassGeo.computeVertexNormals();
     this.glassMat = makeCockpitGlass({ y: sill });
-    this.glass = new THREE.Mesh(gl2.geo, this.glassMat);
+    this.glass = new THREE.Mesh(glassGeo, this.glassMat);
     this.glass.renderOrder = 10;
     this.cabin.add(this.glass);
 

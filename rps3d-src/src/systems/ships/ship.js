@@ -11,6 +11,8 @@ import { buildFreighter, buildExplorer, buildFrigate } from './bpLarge.js';
 import { buildVigilant } from './vigilant.js';
 import { buildCapital } from './capital.js';
 import { Rng } from '../../core/Rng.js';
+import { decalGeometry, decalMaterial } from './decals.js';
+import { mergeGeometries } from './geo.js';
 
 const BUILDERS = { fighter: buildFighter, interceptor: buildInterceptor, freighter: buildFreighter, explorer: buildExplorer, frigate: buildFrigate };
 const PANEL = { fighter: 1.5, interceptor: 1.6, freighter: 2.4, explorer: 2.2, frigate: 3.2, destroyer: 6, carrier: 7 };
@@ -27,7 +29,7 @@ export function hullMaterial(faction, classId, lite = false) {
   const key = `${faction}:${PANEL[classId] || 2}:${lite ? 1 : 0}`;
   if (!matCache.has(key)) {
     const st = FACTION_STYLES[faction];
-    matCache.set(key, makeHullMaterial(st, { panel: PANEL[classId] || 2, lite, iridescent: st.iridescence > 0 }));
+    matCache.set(key, makeHullMaterial(st, { panel: PANEL[classId] || 2, lite, iridescent: st.iridescence > 0, fine: (PANEL[classId] || 2) >= 3 }));
   }
   return matCache.get(key);
 }
@@ -57,8 +59,30 @@ export function blueprint(classId, faction, seed = 1, opts = {}) {
     const box = { min: new THREE.Vector3(-c.w * 0.97, c.y - 0.22, c.z0 + 0.05), max: new THREE.Vector3(c.w * 0.97, c.y + c.h + 0.5, c.z1 - 0.05) };
     bp.parts.hull = bp.parts.hull.map((g) => (g.userData.cut ? cutBox(g, box) : g));
   }
+  // decalques (insígnia + matrícula): pontos da planta ou padrão pelo casco
+  let decals = null;
+  if (faction !== 'vigilantes') {
+    let spots = bp.decalSpots;
+    if (!spots && bp.hullLoft) {
+      const Lh = bp.hullLoft, S0 = Lh.stations[0].z, S1 = Lh.stations[Lh.stations.length - 1].z, len = S1 - S0;
+      const ze = S0 + len * 0.42, zi = S0 + len * 0.2;
+      const pe = Lh.params(ze), pi = Lh.params(zi);
+      const se = Math.min(pe.h, pe.hb) * 0.95, si = Math.min(pi.h, pi.hb) * 0.6;
+      spots = [];
+      for (const sd of [1, -1]) {
+        const qe = Lh.at(ze, sd > 0 ? 0.05 : Math.PI - 0.05); spots.push({ pos: qe.pos, normal: qe.normal, w: se, h: se, kind: 'emblem' });
+        const qi = Lh.at(zi, sd > 0 ? 0.05 : Math.PI - 0.05); spots.push({ pos: qi.pos, normal: qi.normal, w: si * 4, h: si, kind: 'id' });
+      }
+    }
+    if (spots?.length) {
+      const k = Math.floor(rng.next() * 6);
+      decals = mergeGeometries(spots.map((d) => decalGeometry(d.pos, d.normal, d.w, d.h, d.kind, k, d.up)));
+      decals.computeBoundingSphere();
+    }
+  }
   const out = {
     ...bp,
+    decals,
     geos: mergeParts(bp.parts),
     gear: bp.gear.map((g) => ({ ...g, geos: mergeParts(g.parts), doorList: g.doorList.map((d) => ({ ...d, geos: mergeParts(d.parts) })) })),
     spinners: bp.spinners.map((s) => ({ ...s, geos: mergeParts(s.parts) })),
@@ -114,6 +138,11 @@ export class ShipInstance {
       glass: mk(bp.geos.glass, canopyMaterial(this.faction, lite)),
       lights: mk(bp.geos.lights, S.lights, false),
     };
+    if (bp.decals && !opts.noDecals) {
+      const dm = new THREE.Mesh(bp.decals, decalMaterial(this.faction, this.style.wear * 0.7));
+      dm.renderOrder = 1; dm.receiveShadow = shadows;
+      this.meshes.decals = dm;
+    }
     for (const k in this.meshes) if (this.meshes[k]) this.group.add(this.meshes[k]);
 
     // propulsores: núcleo + pluma
@@ -213,7 +242,7 @@ export class ShipInstance {
   }
   _ownMaterial() {
     if (this.hull.userData.own) return;
-    const mat = makeHullMaterial(this.style, { panel: PANEL[this.classId] || 2, lite: this.lite, iridescent: this.style.iridescence > 0 });
+    const mat = makeHullMaterial(this.style, { panel: PANEL[this.classId] || 2, lite: this.lite, iridescent: this.style.iridescence > 0, fine: (PANEL[this.classId] || 2) >= 3 });
     mat.userData.own = true;
     const old = this.hull;
     this.hull = mat;

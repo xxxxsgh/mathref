@@ -33,6 +33,7 @@ export function buildFreighter(bp, style, rng, faction) {
     { z: -12, w: 3.4, h: 2.6, hb: 2.4, y: 0.4, e },
   ], { seg: 40, sub: 4 });
   P.add(cab.geo, Z.PRIMARY, { wear: 0.6 });
+  bp.hullLoft = cab;
   canopy(bp, { z0: -24.6, z1: -19.0, w: 2.6, h: 1.6, y: 1.6, ribs: 4, frameZone: Z.DARK, r: 0.09, e: 2.6 });
   bp.eye = V(-0.9, 2.4, -21.6);
   // quilha / espinha treliçada

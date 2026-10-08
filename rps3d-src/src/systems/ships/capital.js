@@ -87,16 +87,88 @@ export function buildCapital(bp, style, rng, classId, faction) {
       P.add(box(3.2, 2.2, len * 0.9), Z.DARK, { m: M((x0 + x1) / 2 + s * 1.6, y0 + 4.2 * S, (z0 + z1) / 2, 0, Math.atan2(x1 - x0, len), 0), detail: true });
     }
   }
-  // superestruturas em blocos no dorso (cidade de greebles)
-  const nBlocks = carrier ? 140 : 110;
-  for (let i = 0; i < nBlocks; i++) {
-    const z = rng.range(zMin + 80, zMax - 20);
-    const a = Math.PI / 2 + rng.range(-0.9, 0.9);
-    const q = L.at(z, a);
-    const w = rng.range(4, 16) * S, h = rng.range(1.5, 8) * (1 - Math.abs(a - Math.PI / 2)), d = rng.range(6, 26);
-    const zone = rng.pick([Z.PRIMARY, Z.PRIMARY, Z.DARK, Z.METAL, Z.SECONDARY]);
-    P.add(box(w, h, d), zone, { m: onSurface(q.pos, q.normal).multiply(M(0, h / 2 - 0.5, 0)), wear: 0.5, detail: i % 3 === 0 });
-    if (rng.chance(0.3)) P.add(vent(w * 0.7, d * 0.5, 6, 0.6), Z.DARK, { m: onSurface(q.pos, q.normal).multiply(M(0, h, 0)), detail: true });
+  // conveses em degraus (terraços) sobre o dorso: a silhueta em camadas que
+  // dá escala; cada terraço tem friso, janelas corridas e luzes de borda
+  const tierDefs = carrier ? [[0.62, -260, 0.24], [0.36, -60, 0.24]] : [[0.62, -95, 0.3], [0.4, -5, 0.3], [0.22, 95, 0.34]];
+  const surfs = [{ L, a0: 0.62, a1: 1.0, w: 1 }];
+  let prevTop = (z) => { const p = L.params(z); return (p.y || 0) + p.h; };
+  const tiers = [];
+  for (const [ws, zs, hk] of tierDefs) {
+    const base = prevTop;
+    const tst = st.filter((q) => q.z >= zs - 1).map((q) => {
+      const p = L.params(q.z);
+      const th = p.h * hk;
+      return { z: q.z, w: p.w * ws, h: th, hb: th * 0.9, y: base(q.z) - th * 0.15, e: 7 };
+    });
+    tst.unshift({ ...tst[0], z: zs, w: tst[0].w * 0.25, h: tst[0].h * 0.2 });
+    const T = loft(tst, { seg: 40, sub: 4 });
+    P.add(T.geo, Z.PRIMARY, { wear: 0.35 });
+    tiers.push(T);
+    surfs.push({ L: T, a0: 0.0, a1: 0.5, w: 0.6 });
+    // friso de acabamento nas quinas superiores e faixa escura na base
+    for (const ang of [0.42, Math.PI - 0.42]) {
+      const pts = [];
+      for (let k = 0; k <= 16; k++) { const z = zs + 4 + (zMax - zs - 6) * k / 16; const q = T.at(z, ang); pts.push(q.pos.addScaledVector(q.normal, 0.25)); }
+      P.add(pipe(pts, 0.55, 48), Z.TRIM, { wear: 0.1 });
+    }
+    // faixa escura recuada no flanco do terraço (onde ficam as janelas)
+    for (const sd of [1, -1]) for (let z = zs + 10; z < zMax - 8; z += 6) {
+      const q = T.at(z + 3, sd > 0 ? 0.02 : Math.PI - 0.02);
+      const th = T.params(z + 3).h;
+      P.add(box(0.5, th * 0.5, 6.05), Z.DARK, { m: M(q.pos.x, q.pos.y + th * 0.08, z + 3, 0, 0, 0), wear: 0.3 });
+    }
+    // janelas corridas no flanco do terraço
+    for (const ang of [0.02, Math.PI - 0.02]) for (let z = zs + 14; z < zMax - 8; z += 3.1) {
+      if (rng.chance(0.22)) continue;
+      const q = T.at(z, ang);
+      const m = onSurface(q.pos.addScaledVector(q.normal, 0.3), q.normal);
+      bp.parts.glowPart(box(1.6, 0.06, 0.55).applyMatrix4(m), rng.chance(0.15) ? [0.7, 0.85, 1.0] : [1.0, 0.8, 0.5], rng.range(2.5, 5));
+    }
+    prevTop = (z) => { const p = T.params(z); return z < zs ? base(z) : (p.y || 0) + p.h; };
+  }
+  bp.tiers = tiers;
+  const topAt = prevTop;
+  // superestruturas em aglomerados (cidade de greebles) nos conveses e no dorso:
+  // um bloco-mãe, satélites menores, radiadores em pente, canos e luzes
+  const nClusters = carrier ? 46 : 40;
+  for (let i = 0; i < nClusters; i++) {
+    const sf = rng.chance(0.4) ? surfs[0] : surfs[1 + Math.floor(rng.next() * (surfs.length - 1))];
+    const zLo = sf.L.stations[0].z + 14, zHi = zMax - 16;
+    const zc = rng.range(zLo, zHi);
+    const side = rng.chance(0.5) ? 1 : -1;
+    const ac = Math.PI / 2 - side * rng.range(sf.a0, sf.a1);
+    const n = rng.int(3, 7);
+    for (let k = 0; k < n; k++) {
+      const z = zc + (k === 0 ? 0 : rng.range(-14, 14) * sf.w);
+      const a = ac + (k === 0 ? 0 : rng.range(-0.08, 0.08));
+      const q = sf.L.at(z, a);
+      const big = k === 0;
+      const w = (big ? rng.range(8, 16) : rng.range(2, 7)) * S * sf.w, h = (big ? rng.range(3, 7) : rng.range(1, 4)) * sf.w, d = (big ? rng.range(12, 26) : rng.range(3, 10)) * sf.w;
+      const zone = big ? rng.pick([Z.PRIMARY, Z.PRIMARY, Z.SECONDARY]) : rng.pick([Z.PRIMARY, Z.DARK, Z.METAL, Z.PRIMARY]);
+      const bm = onSurface(q.pos, q.normal, rng.chance(0.25) ? Math.PI / 2 : 0);
+      P.add(box(w, h, d, Math.min(0.8, h * 0.18)), zone, { m: bm.clone().multiply(M(0, h / 2 - 0.4, 0)), wear: 0.5, detail: !big });
+      if (big) {
+        // degrau superior e friso
+        P.add(box(w * 0.7, h * 0.4, d * 0.6, 0.3), Z.PRIMARY, { m: bm.clone().multiply(M(0, h + h * 0.2 - 0.4, -d * 0.1)), wear: 0.4 });
+        P.add(box(w + 0.3, 0.35, d + 0.3), Z.TRIM, { m: bm.clone().multiply(M(0, h - 0.4, 0)), detail: true });
+        // janelas na face
+        for (let j = 0; j < Math.floor(d / 3); j++) P.glowPart(box(0.25, 0.5, 1.4).applyMatrix4(bm.clone().multiply(M(w / 2 + 0.05, h * 0.55, -d / 2 + 1.5 + j * 3))), [1.0, 0.82, 0.55], 4);
+      } else if (rng.chance(0.4)) {
+        // radiador em pente
+        const fins = rng.int(4, 9);
+        for (let f = 0; f < fins; f++) P.add(box(w, h * 1.4, 0.25), Z.METAL, { m: bm.clone().multiply(M(0, h * 0.7, -d / 2 + (f + 0.5) * d / fins)), detail: true });
+      }
+      if (rng.chance(0.3)) P.add(vent(w * 0.7, d * 0.5, 6, 0.5), Z.DARK, { m: bm.clone().multiply(M(0, h - 0.1, 0)), detail: true });
+      if (rng.chance(0.15)) P.light(q.pos.clone().addScaledVector(q.normal, h + 0.4), rng.chance(0.5) ? [1.0, 0.3, 0.1] : style.glow, 30, 0.45, rng.chance(0.4) ? -0.5 : 0);
+      if (rng.chance(0.12)) P.add(antenna(rng.range(4, 12), 0.18), Z.METAL, { m: bm.clone().multiply(M(w * 0.3, h - 0.3, 0)), detail: true });
+    }
+  }
+  // espinha central: canaleta escura com luzes de pista no dorso principal
+  for (let z = zMin + 70; z < zMax - 30; z += 9) {
+    if (z > -100) break;
+    const q = L.at(z, Math.PI / 2);
+    P.add(box(5, 1.2, 9.2), Z.DARK, { m: onSurface(q.pos, q.normal) });
+    P.light(q.pos.clone().addScaledVector(q.normal, 0.8), style.glow, 20, 0.35, 0);
   }
   // placas de blindagem no flanco inferior
   for (let i = 0; i < 70; i++) {
@@ -106,7 +178,7 @@ export function buildCapital(bp, style, rng, classId, faction) {
   }
   // ponte de comando
   const bz = zMax - (carrier ? 160 : 110);
-  const top = L.at(bz, Math.PI / 2).pos.y;
+  const top = topAt(bz) - 1;
   const tower = loft([
     { z: bz - 40, w: 6, h: 2, hb: 1, y: top + 2, e: 4 },
     { z: bz - 28, w: 16, h: 18, hb: 1, y: top + 2, e: 5 },

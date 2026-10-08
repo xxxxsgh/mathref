@@ -139,15 +139,16 @@ export class Terrain {
     if (h > -10) {
       const rv = Math.abs(this.fbm(n2, Xw * 0.05 + 11, Yw * 0.05, Zw * 0.05, 3));
       const valley = 1 - sstep(0, 0.13, rv);
-      const chan = 1 - sstep(0.008, 0.024, rv);
+      const chan = 1 - sstep(0.01, 0.03, rv);
       const low = 1 - sstep(200, 1100, h);
       h -= valley * low * Math.max(0, h) * 0.65;
-      const cut = chan * low * land;
+      // canais d'água só nas planícies costeiras (estuários/deltas), não como trincheiras nas encostas
+      const cut = chan * land * (1 - sstep(8, 45, h));
       h = lerp(h, -5, cut);
       wet = Math.max(valley * low * 0.8, chan * low);
     }
     // praias suaves
-    if (h > 0 && h < 30) h = h * (0.45 + 0.55 * h / 30);
+    if (h > 0 && h < 30) h = h * (0.45 + 0.55 * sstep(0, 30, h)); // praia sem vinco (derivada contínua em 30 m)
     // pináculos tóxicos (fungos petrificados)
     if (toxic && h > 20) {
       this.cell(X * 1.6, Y * 1.6, Z * 1.6, 77, _c);

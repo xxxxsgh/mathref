@@ -72,6 +72,8 @@ export class QuadTree {
     g.setAttribute('aUp', new THREE.BufferAttribute(r.up, 3));
     g.setAttribute('aDet', new THREE.BufferAttribute(r.det, 3));
     g.setAttribute('aDat', new THREE.BufferAttribute(r.dat, 4));
+    g.setAttribute('aMorph', new THREE.BufferAttribute(r.morph, 3));
+    g.setAttribute('aLod', new THREE.BufferAttribute(r.lod, 1));
     g.setIndex(new THREE.BufferAttribute(r.index, 1));
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), r.boundR);
     const m = new THREE.Mesh(g, this.material);
@@ -90,7 +92,7 @@ export class QuadTree {
       w.setAttribute('aDet', new THREE.BufferAttribute(r.water.det, 3));
       w.setAttribute('aDepth', new THREE.BufferAttribute(r.water.depth, 1));
       w.setIndex(new THREE.BufferAttribute(r.water.index, 1));
-      w.boundingSphere = new THREE.Sphere(new THREE.Vector3(), r.boundR);
+      w.computeBoundingSphere(); // a água fica a |midH| do centro do chunk: esfera própria
       const wm = new THREE.Mesh(w, this.waterMaterial);
       wm.position.copy(n.center);
       wm.matrixAutoUpdate = false; wm.updateMatrix();
@@ -153,6 +155,9 @@ export class QuadTree {
     const Rmin = this.R - this.amp * 0.5;
     this.cosH = camD > Rmin ? Math.acos(Math.min(1, Rmin / camD)) : 0;
     this.extraH = Math.acos(Math.min(1, Rmin / (this.R + this.amp * 1.2)));
+    // de longe (órbita) a silhueta e o litoral pedem mais detalhe relativo
+    this.thr = camD > this.R * 1.5 ? this.errPx * 0.45 : this.errPx;
+    this.lodK = K / this.thr; // distância de divisão = espaçamento × lodK (usada na geomorfose)
     this.stats.visible = 0; this.stats.tris = 0; this.stats.nodes = 0;
     for (const r of this.roots) {
       if (r.state === 'none') this.request(r, -1);
@@ -172,8 +177,7 @@ export class QuadTree {
     this.stats.nodes++;
     const d = Math.max(1, n.center.distanceTo(cam) - n.boundR);
     const px = (n.spacing / d) * this.K;
-    // de longe (órbita) a silhueta e o litoral pedem mais detalhe relativo
-    const thr = this.camD > this.R * 1.5 ? this.errPx * 0.45 : this.errPx;
+    const thr = this.thr;
     const want = px > thr && n.level < this.maxLevel;
     const cull = n.level > 0 && this.culled(n);
     if (want && !cull) {

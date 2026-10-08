@@ -19,20 +19,37 @@ export function atmoParams(body) {
   if (!at) return null;
   const R = body.radius;
   const gas = body.kind === 'gas_giant';
-  const HR = gas ? R * 0.012 : R * 0.03;
-  const HM = HR * 0.2;
-  const top = R + HR * 9.5;
+  // escala de altura menor que a "proporcional" da Terra: planetas de 22–48 km
+  // precisam de massa de ar suficiente no horizonte para pores do sol quentes
+  const HR = gas ? R * 0.005 : R * 0.04;
+  const HM = HR * 0.3;
+  const top = R + HR * 10;
   const hint = at.rayleigh.map((c) => Math.max(0.02, c));
-  const ex = hint[2] >= hint[0] ? 2.0 : 1.0;
-  const mx = Math.max(...hint.map((c) => c ** ex));
+  const blue = hint[2] >= hint[0];
   const dens = at.density;
-  const tauR = 0.2 * dens;
-  const betaR = hint.map((c) => (c ** ex / mx) * tauR / HR);
+  let betaR, mieTint;
   const tint = MIE_TINT[body.type] || [1, 1, 1];
-  const tauM = 0.005 * at.mie * (body.type === 'desert' ? 2.4 : body.type === 'volcanic' ? 3.2 : body.type === 'toxic' ? 2.6 : 1) * dens;
-  const betaM = tint.map((c) => (c * tauM) / HM);
+  if (blue || gas) {
+    // céu azulado: a dica de cor do bioma vira a lei de Rayleigh (∝ dica^2,2)
+    const ex = gas ? 1.1 : 2.2;
+    const mx = Math.max(...hint.map((c) => c ** ex));
+    const tauR = gas ? 0.05 : 0.3 * dens;
+    betaR = hint.map((c) => (c ** ex / mx) * tauR / HR);
+    mieTint = tint;
+  } else {
+    // céu de poeira (deserto/vulcão): Rayleigh físico mais fraco + poeira que
+    // espalha na cor da dica e absorve o azul (céu caramelo, sol alaranjado)
+    const tauR = 0.16 * dens;
+    betaR = [0.18, 0.42, 1.0].map((c) => c * tauR / HR);
+    const mx = Math.max(...hint);
+    mieTint = hint.map((c, i) => (c / mx) * tint[i] ** 0.5);
+  }
+  const tauM = (gas ? 0.003 : 0.007) * at.mie * (body.type === 'desert' ? 4.2 : body.type === 'volcanic' ? 3.6 : body.type === 'toxic' ? 2.6 : 1) * dens;
+  const betaM = mieTint.map((c) => (c * tauM) / HM);
+  // extinção da poeira neutra (o que não espalha na cor da dica é absorvido)
+  const betaMe = [0, 1, 2].map(() => (tauM / HM) * 1.11);
   return {
-    R, top, HR, HM, betaR, betaM, mieExt: 1.11, g: body.type === 'desert' || body.type === 'volcanic' ? 0.7 : 0.78,
+    R, top, HR, HM, betaR, betaM, betaMe, mieExt: 1.11, g: body.type === 'desert' || body.type === 'volcanic' ? 0.7 : 0.78,
     density: dens,
   };
 }
@@ -51,7 +68,7 @@ export function sunTransmittance(A, r, mu, out = [0, 0, 0]) {
   const h = r - A.R;
   const odR = A.HR * chapman(A.R / A.HR, h / A.HR, mu);
   const odM = A.HM * chapman(A.R / A.HM, h / A.HM, mu);
-  for (let c = 0; c < 3; c++) out[c] = Math.exp(-(A.betaR[c] * odR + A.betaM[c] * A.mieExt * odM));
+  for (let c = 0; c < 3; c++) out[c] = Math.exp(-(A.betaR[c] * odR + A.betaMe[c] * odM));
   return out;
 }
 
@@ -85,7 +102,7 @@ export function scatterCPU(A, ro, rd, L, tMax = Infinity, steps = 10, out = { I:
     const mu = (px * L[0] + py * L[1] + pz * L[2]) / r;
     const lR = A.HR * chapman(A.R / A.HR, h / A.HR, mu), lM = A.HM * chapman(A.R / A.HM, h / A.HM, mu);
     for (let k = 0; k < 3; k++) {
-      Ts[k] = Math.exp(-(A.betaR[k] * (odR + lR) + A.betaM[k] * A.mieExt * (odM + lM)));
+      Ts[k] = Math.exp(-(A.betaR[k] * (odR + lR) + A.betaMe[k] * (odM + lM)));
       sR[k] += Ts[k] * dR; sM[k] += Ts[k] * dM;
     }
     odR += dR * 0.5; odM += dM * 0.5;
@@ -96,7 +113,7 @@ export function scatterCPU(A, ro, rd, L, tMax = Infinity, steps = 10, out = { I:
   const pM = (3 / (8 * Math.PI)) * ((1 - g2) * (1 + mu * mu)) / ((2 + g2) * Math.pow(Math.max(1e-4, 1 + g2 - 2 * g * mu), 1.5));
   for (let k = 0; k < 3; k++) {
     out.I[k] = sR[k] * A.betaR[k] * pR + sM[k] * A.betaM[k] * pM;
-    out.T[k] = Math.exp(-(A.betaR[k] * odR + A.betaM[k] * A.mieExt * odM));
+    out.T[k] = Math.exp(-(A.betaR[k] * odR + A.betaMe[k] * odM));
   }
   return out;
 }

@@ -66,7 +66,7 @@ export function buildFighter(bp, style, rng, faction) {
 
   // canopy
   const cz0 = -5.15, cz1 = -1.2;
-  canopy(bp, { z0: cz0, z1: cz1, w: 0.62 * W, h: 0.6, y: 0.42, ribs: faction === 'corsarios' ? 4 : 2, frameZone: faction === 'hegemonia' ? Z.TRIM : Z.DARK });
+  canopy(bp, { z0: cz0, z1: cz1, w: 0.62 * W, h: 0.6, y: 0.42, ribs: faction === 'corsarios' ? 4 : 2, ribAt: faction === 'corsarios' ? null : [0.12, 0.7], r: 0.055, frameZone: faction === 'hegemonia' ? Z.TRIM : Z.DARK });
   bp.eye = V(0, 0.74, -3.05);
 
   // entradas de ar
@@ -117,6 +117,13 @@ export function buildFighter(bp, style, rng, faction) {
     tipX = 4.8; tipZ = 3.4;
   }
   const wingM = (s) => M(0, wingY, 0, 0, 0, -s * 0.05);
+  // insígnias nas asas (dorso) e matrícula no nariz
+  {
+    const [dx, dz, ds] = { delta: [3.9, 4.2, 1.5], straight: [3.6, 3.95, 1.4], forward: [3.4, 2.7, 1.2], stub: [2.9, 3.4, 1.3] }[F.wing] || [3.6, 3.8, 1.3];
+    bp.decalSpots = [];
+    for (const s of [1, -1]) bp.decalSpots.push({ pos: V(s * dx, wingY + 0.135 - dx * 0.05, dz), normal: V(s * 0.05, 1, 0), w: ds, h: ds, kind: 'emblem', up: V(0, 0, -1) });
+    for (const s of [1, -1]) { const q = L.at(-6.25, s > 0 ? 0.12 : Math.PI - 0.12); bp.decalSpots.push({ pos: q.pos, normal: q.normal, w: 1.25, h: 0.31, kind: 'id' }); }
+  }
   const gInner = plate(inner, 0.26, { bevel: 0.07 });
   const gOuter = plate(outer, 0.22, { bevel: 0.06 });
   P.add(gInner, Z.PRIMARY, { m: wingM(1), mirror: true, wear: 0.6 });

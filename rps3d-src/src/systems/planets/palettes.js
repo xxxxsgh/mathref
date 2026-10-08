@@ -46,10 +46,11 @@ const BASE = {
     lowA: '#5f5a55', lowB: '#7e7870', forest: '#3a3633', alien: '#4c4741',
     rock: '#433f3b', rock2: '#6a645d', high: '#9a948a', snow: '#c4beb4', wet: '#262422', glow: '#6fd0ff',
   },
+  // gigante gasoso: zonas creme, cinturões ferrugem/caramelo, festões cinza-azulados
   gas: {
-    deep: '#c9a27a', shallow: '#8a5a3a', sand: '#e8d2b0', seabed: '#6a7fa8',
-    lowA: '#f2e6d0', lowB: '#b0784c', forest: '#5a3a2a', alien: '#d9b98a',
-    rock: '#7a5236', rock2: '#e0c8a0', high: '#a8b8d0', snow: '#fff4e0', wet: '#4a2f22', glow: '#ffffff',
+    deep: '#c79a6c', shallow: '#7a4528', sand: '#ead8b8', seabed: '#8a94a0',
+    lowA: '#f4ead6', lowB: '#a8673c', forest: '#5a3220', alien: '#d9b98a',
+    rock: '#9a4a2a', rock2: '#d8c4a4', high: '#b8c0c8', snow: '#fff8ec', wet: '#4a2f22', glow: '#ffffff',
   },
 };
 

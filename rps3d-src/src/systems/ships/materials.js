@@ -32,7 +32,7 @@ const panelProj = Fn(([u, v, sd]) => {
  * Material do casco. style = FACTION_STYLES[x] (+ pintura opcional).
  * opts.panel = tamanho do painel (m); opts.iridescent; opts.lite (sem clearcoat).
  */
-export function makeHullMaterial(style, { panel = 1.6, lite = false, iridescent = false, fill = false } = {}) {
+export function makeHullMaterial(style, { panel = 1.6, lite = false, iridescent = false, fill = false, fine = false, isolate = false } = {}) {
   const m = lite ? new THREE.MeshStandardNodeMaterial() : new THREE.MeshPhysicalNodeMaterial();
   const U = {
     primary: uniform(C(style.primary)), secondary: uniform(C(style.secondary)), trim: uniform(C(style.trim)),
@@ -41,7 +41,7 @@ export function makeHullMaterial(style, { panel = 1.6, lite = false, iridescent 
     fx: uniform(new THREE.Vector4(style.patch, style.hazard, style.teeth, style.circuits)),
     panel: uniform(panel),
     damage: uniform(0),
-    glowPower: uniform(style.circuits > 0 ? 5 : 3.5),
+    glowPower: uniform(style.circuits > 0 ? 2.4 : 3.5),
     hits: uniformArray([new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()], 'vec4'),
   };
   m.userData.U = U;
@@ -53,6 +53,12 @@ export function makeHullMaterial(style, { panel = 1.6, lite = false, iridescent 
     U.rowCol = uniform(new THREE.Color(0, 0, 0));
     U.row = uniform(new THREE.Vector4(3, 1.6, 0, 0)); // período (m), altura do teto, x0, raio
     U.rowPh = uniform(0); // fase (m): luminárias em z = rowPh + (k + ½)·período
+    U.box = uniform(new THREE.Vector4(10, -10, 10, 0)); // meia-largura, piso, teto, centro x
+    U.aoK = uniform(0);
+    U.realLight = uniform(1); // quanto da luz real (sol/IBL) chega ao interior
+    U.envCol = uniform(new THREE.Color(0.012, 0.013, 0.016));
+    // interiores fechados: o IBL do céu/planeta não entra — ambiente constante escuro
+    if (isolate) m.envNode = U.envCol;
   }
 
   const P = positionLocal;
@@ -67,7 +73,19 @@ export function makeHullMaterial(style, { panel = 1.6, lite = false, iridescent 
   const id = select(w.x.greaterThan(max(w.y, w.z)), px.y, select(w.y.greaterThan(w.z), py.y, pz.y));
   const lw = float(0.007);
   const aa = fwidth(d).add(1e-5);
-  const line = float(1).sub(smoothstep(lw, lw.add(aa.mul(1.5)), d)).mul(clamp(lw.mul(2.5).div(aa), 0, 1));
+  let line = float(1).sub(smoothstep(lw, lw.add(aa.mul(1.5)), d)).mul(clamp(lw.mul(2.5).div(aa), 0, 1));
+  // naves grandes: segunda grade de subpainéis (4× mais fina, mais suave) —
+  // dá escala ao casco de centenas de metros sem sumir à distância
+  let subId = float(0);
+  if (fine && !lite) {
+    const q = p.mul(4.0);
+    const sx = panelProj(q.z, q.y, float(4)), sy = panelProj(q.z, q.x, float(5)), sz = panelProj(q.x, q.y, float(6));
+    const d2 = sx.x.mul(w.x).add(sy.x.mul(w.y)).add(sz.x.mul(w.z));
+    subId = select(w.x.greaterThan(max(w.y, w.z)), sx.y, select(w.y.greaterThan(w.z), sy.y, sz.y));
+    const aa2 = fwidth(d2).add(1e-5);
+    const line2 = float(1).sub(smoothstep(lw, lw.add(aa2.mul(1.5)), d2)).mul(clamp(lw.mul(2.5).div(aa2), 0, 1));
+    line = max(line, line2.mul(0.45));
+  }
 
   const info = attribute('aInfo', 'vec3');
   const zone = info.x;
@@ -85,8 +103,11 @@ export function makeHullMaterial(style, { panel = 1.6, lite = false, iridescent 
   const belly = smoothstep(-0.35, -0.8, n.y);
   let paintCol = mix(U.primary, U.secondary, zS);
   paintCol = paintCol.mul(float(1).sub(belly.mul(0.18)));
-  const tone = id.sub(0.5).mul(float(0.07).add(U.fx.x.mul(0.25)));
+  const tone = id.sub(0.5).mul(float(0.07).add(U.fx.x.mul(0.25))).add(subId.sub(0.5).mul(0.05));
   paintCol = paintCol.mul(tone.add(1));
+  // painéis trocados (tom mais escuro/claro) — leitura de escala nas naves grandes
+  const swap = step(0.9, hash13(vec3(id.mul(53.1), subId.mul(7.3), 2.9)));
+  paintCol = mix(paintCol, paintCol.mul(select(hash13(vec3(id, 4.4, 1.0)).greaterThan(0.5), float(0.72), float(1.12))), swap.mul(fine ? 1 : 0.5));
   // remendos (Frente Livre): painéis trocados por primer, verde-oliva ou metal nu
   const h2 = hash13(vec3(id.mul(91.7), 3.1, 1.7));
   const patchCol = select(h2.lessThan(0.34), vec3(0.30, 0.085, 0.05), select(h2.lessThan(0.67), vec3(0.24, 0.25, 0.18), vec3(0.42, 0.41, 0.39)));
@@ -139,8 +160,14 @@ export function makeHullMaterial(style, { panel = 1.6, lite = false, iridescent 
   const circ = exp(d.mul(-38.0)).mul(step(0.35, id)).mul(U.fx.w).mul(pulse);
   const ember = smoothstep(0.82, 0.98, scorch.mul(g2.mul(0.5).add(0.6))).mul(sin(time.mul(7.0).add(g1.mul(20.0))).mul(0.3).add(0.7));
   let fillE = vec3(0, 0, 0);
+  let fillAO = float(1);
   if (fill) {
-    let acc = vec3(U.fillAmb);
+    // oclusão falsa nas quinas piso/teto × paredes (caixa da cabine em U.box)
+    const ex = U.box.x.sub(abs(P.x.sub(U.box.w)));
+    const ey = min(P.y.sub(U.box.y), U.box.z.sub(P.y));
+    fillAO = smoothstep(-0.05, 0.55, ex).mul(0.55).add(0.45).mul(smoothstep(-0.05, 0.5, ey).mul(0.5).add(0.5));
+    fillAO = mix(float(1), fillAO, U.aoK);
+    let acc = vec3(U.fillAmb).mul(fillAO);
     for (let i = 0; i < 3; i++) {
       const L = U.lamps.element(i);
       const dv = L.xyz.sub(P);
@@ -148,14 +175,22 @@ export function makeHullMaterial(style, { panel = 1.6, lite = false, iridescent 
       const lam = max(dot(n, dv.div(dd.add(1e-4))), 0.0).mul(0.75).add(0.25);
       acc = acc.add(vec3(U.lampCol.element(i)).mul(lam.div(dd.mul(dd).div(L.w.mul(L.w).add(1e-4)).add(1.0))));
     }
+    // fileira de luminárias no teto: cone para baixo (poças de luz no piso)
     const lz = fract(P.z.sub(U.rowPh).div(U.row.x)).sub(0.5).mul(U.row.x);
     const dr = vec3(P.x.sub(U.row.z), P.y.sub(U.row.y), lz);
     const rd = length(dr);
-    const rl = max(dot(n, dr.negate().div(rd.add(1e-4))), 0.0).mul(0.7).add(0.3);
-    acc = acc.add(vec3(U.rowCol).mul(rl.div(rd.mul(rd).div(U.row.w.mul(U.row.w).add(1e-4)).add(1.0))));
+    const ldir = dr.negate().div(rd.add(1e-4));
+    const rl = max(dot(n, ldir), 0.0).mul(0.8).add(0.2);
+    const cone = smoothstep(0.15, 0.75, ldir.y).mul(0.85).add(0.15);
+    acc = acc.add(vec3(U.rowCol).mul(rl.mul(cone).div(rd.mul(rd).div(U.row.w.mul(U.row.w).add(1e-4)).add(1.0))).mul(fillAO.mul(0.5).add(0.5)));
     fillE = col.mul(acc);
+    // brilho rasante falso (fresnel) nas superfícies lisas sob as luminárias
+    const V = normalize(positionView).negate();
+    const nv = normalize(normalView);
+    const fres = pow(float(1).sub(max(dot(nv, V), 0.0)), 5.0);
+    fillE = fillE.add(vec3(U.rowCol).mul(0.03).mul(fres).mul(float(1).sub(rough.clamp(0, 1))).mul(cone));
   }
-  m.colorNode = col;
+  m.colorNode = fill ? col.mul(U.realLight) : col;
   m.metalnessNode = clamp(metal, 0, 1);
   m.roughnessNode = clamp(rough, 0.05, 1);
   m.emissiveNode = U.glow.mul(zG.mul(U.glowPower).add(circ.mul(U.glowPower.mul(1.4)))).add(vec3(2.4, 0.7, 0.15).mul(ember.mul(4.0))).add(fillE);

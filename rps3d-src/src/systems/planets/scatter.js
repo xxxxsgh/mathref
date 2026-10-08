@@ -17,11 +17,11 @@ export const PI = Math.PI;
 
 /** Uniforms de atmosfera de um corpo (valores atualizados por planetView). */
 export function atmoUniforms(body) {
-  const A = atmoParams(body) || { R: body.radius, top: body.radius * 1.001, HR: 1, HM: 1, betaR: [0, 0, 0], betaM: [0, 0, 0], mieExt: 1.1, g: 0.76 };
+  const A = atmoParams(body) || { R: body.radius, top: body.radius * 1.001, HR: 1, HM: 1, betaR: [0, 0, 0], betaM: [0, 0, 0], betaMe: [0, 0, 0], mieExt: 1.1, g: 0.76 };
   return {
     A,
     R: uniform(A.R), top: uniform(A.top), HR: uniform(A.HR), HM: uniform(A.HM),
-    betaR: uniform(new THREE.Vector3(...A.betaR)), betaM: uniform(new THREE.Vector3(...A.betaM)),
+    betaR: uniform(new THREE.Vector3(...A.betaR)), betaM: uniform(new THREE.Vector3(...A.betaM)), betaMe: uniform(new THREE.Vector3(...A.betaMe)),
     mieExt: uniform(A.mieExt), g: uniform(A.g),
   };
 }
@@ -42,7 +42,7 @@ export function sunTrans(U, p, L) {
   const mu = dot(p, L).div(r);
   const odR = U.HR.mul(chap(U.R.div(U.HR), h.div(U.HR), mu));
   const odM = U.HM.mul(chap(U.R.div(U.HM), h.div(U.HM), mu));
-  return exp(U.betaR.mul(odR).add(U.betaM.mul(U.mieExt.mul(odM))).negate());
+  return exp(U.betaR.mul(odR).add(U.betaMe.mul(odM)).negate());
 }
 
 /** Fases (Rayleigh e Cornette-Shanks). */
@@ -88,14 +88,14 @@ export function makeScatter(U, S, steps, ground, name) {
       const mu = dot(p, S.sunL).div(r);
       const lR = U.HR.mul(chap(XR, h.div(U.HR), mu));
       const lM = U.HM.mul(chap(XM, h.div(U.HM), mu));
-      const Ts = exp(U.betaR.mul(odR.add(lR)).add(U.betaM.mul(U.mieExt).mul(odM.add(lM))).negate());
+      const Ts = exp(U.betaR.mul(odR.add(lR)).add(U.betaMe.mul(odM.add(lM))).negate());
       sR.addAssign(Ts.mul(dR)); sM.addAssign(Ts.mul(dM));
       odR.addAssign(dR.mul(0.5)); odM.addAssign(dM.mul(0.5));
     });
     const mu = dot(rd, S.sunL);
     const { pR, pM } = phases(mu, U.g);
     const I = sR.mul(U.betaR).mul(pR).add(sM.mul(U.betaM).mul(pM)).mul(S.skyI);
-    const T = exp(U.betaR.mul(odR).add(U.betaM.mul(U.mieExt).mul(odM)).negate());
+    const T = exp(U.betaR.mul(odR).add(U.betaMe.mul(odM)).negate());
     return vec4(I, dot(T, vec3(0.3, 0.45, 0.25)));
   });
 }

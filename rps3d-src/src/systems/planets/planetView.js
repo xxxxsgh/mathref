@@ -12,6 +12,7 @@ import { makeCloudMaterials } from './clouds.js';
 import { makeGasGiant } from './gasGiant.js';
 import { paletteFor } from './palettes.js';
 import { QuadTree } from './quadtree.js';
+import { weatherTexture } from './weatherMap.js';
 
 const _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _w = new THREE.Vector3();
 const SKY_SCALE = 8;     // intensidade do sol para a dispersão (calibrada com o pipeline AgX)
@@ -29,7 +30,7 @@ export class PlanetView {
     this.axis = new THREE.Vector3(Math.sin(tilt), Math.cos(tilt), 0).normalize();
     this.S.axis.value.copy(this.axis);
     this.S.city.value = body.colony ? 1 : 0;
-    this.S.cloudCov.value = body.clouds || 0;
+    this.S.cloudCov.value = 0;
     this.group = new THREE.Group();
     this.group.name = 'pl.' + body.name;
     this.group.matrixWorldAutoUpdate = true;
@@ -38,7 +39,9 @@ export class PlanetView {
     this.sunLocal = new THREE.Vector3(1, 0, 0);
     this.dominant = false;
     this.altitude = Infinity;
-    this.opts = { atmoSteps: Q.atmosphereSteps || 10, cloudSteps: Q.cloudSteps || 32, clouds: true };
+    const hasClouds = !!body.atmosphere && (body.clouds || 0) > 0.05 && body.kind !== 'gas_giant';
+    this.opts = { atmoSteps: Q.atmosphereSteps || 10, cloudSteps: Q.cloudSteps || 32, clouds: hasClouds };
+    if (hasClouds) this.S.wtex = weatherTexture(body, Q.name === 'mobile' ? 256 : 512);
     this.skyCPU = { I: [0, 0, 0], T: [1, 1, 1] };
     this.zen = [0, 0, 0]; this.hor = [0, 0, 0]; this.sunT = [1, 1, 1];
 
@@ -60,16 +63,18 @@ export class PlanetView {
       this.sky = new THREE.Mesh(new THREE.SphereGeometry(this.A.top, 128, 64), this.skyMat);
       this.sky.renderOrder = -4; this.sky.frustumCulled = false; this.sky.name = 'pl.sky';
       this.group.add(this.sky);
-      if ((body.clouds || 0) > 0.05 && body.kind !== 'gas_giant') {
+      if (hasClouds) {
         this.cloud = makeCloudMaterials(body, this.U, this.S, this.opts);
         this.S.cloudMid.value = (this.cloud.layer.base + this.cloud.layer.top) / 2 - body.radius;
         this.cloudMesh = new THREE.Mesh(new THREE.SphereGeometry(this.cloud.layer.top, 160, 80), this.cloud.outer);
         this.cloudMesh.renderOrder = -3; this.cloudMesh.frustumCulled = false; this.cloudMesh.name = 'pl.clouds';
         this.group.add(this.cloudMesh);
-      } else this.opts.clouds = false;
+      }
     }
-    if (!this.cloud) this.S.cloudCov.value = 0;
   }
+
+  /** Deriva do mapa de clima em longitude (fração de volta) no tempo t. */
+  wmapAt(t) { return (t / 14000 + (this.body.seed % 100) / 100) % 1; }
 
   /** Altura do terreno (m) numa direção local. */
   heightAt(dir) { return this.terrain ? this.terrain.height(dir.x, dir.y, dir.z) : 0; }
@@ -92,6 +97,8 @@ export class PlanetView {
     // vento das nuvens (período 10 mantém continuidade com os multiplicadores)
     const w = S.wind.value;
     w.set((t * 0.0011) % 10, (t * 0.0002) % 10, (t * 0.0007) % 10);
+    // o padrão de clima inteiro deriva devagar em longitude (ventos zonais)
+    S.wmapU.value = this.wmapAt(t);
 
     const r = this.camLocal.length();
     this.altitude = r - b.radius;
@@ -103,6 +110,7 @@ export class PlanetView {
     if (this.tree) {
       this.tree.setMaterials(this.dominant && info.lit ? this.mats.near : this.mats.far, this.waterMat);
       this.tree.update(this.camLocal, info.K);
+      S.lodK.value = this.tree.lodK;
     }
     if (this.cloudMesh) {
       const L = this.cloud.layer;

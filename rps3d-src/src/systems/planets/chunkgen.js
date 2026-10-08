@@ -87,6 +87,8 @@ export function buildChunk(job) {
   const total = V + nSkirt;
   const pos = new Float32Array(total * 3), nrm = new Float32Array(total * 3), up = new Float32Array(total * 3);
   const det = new Float32Array(total * 3), dat = new Float32Array(total * 4);
+  const morph = new Float32Array(total * 3); // delta até a posição do nível pai (geomorfose sem fendas)
+  const lod = new Float32Array(total);
   let br = 0;
   const vi = (i, j) => j * (N + 1) + i;
   for (let j = 0; j <= N; j++) {
@@ -108,6 +110,27 @@ export function buildChunk(job) {
       dat[v * 4] = D[k * 4]; dat[v * 4 + 1] = D[k * 4 + 1]; dat[v * 4 + 2] = D[k * 4 + 2]; dat[v * 4 + 3] = D[k * 4 + 3];
     }
   }
+  // geomorfose: vértices ímpares vão para onde o triângulo do PAI passaria
+  // (média dos vizinhos pares na mesma triangulação), então a malha encaixa
+  // exatamente no nível mais grosso quando o fator de morph chega a 1
+  const parentFlip = (I, J) => ((I + (job.ix & 1) * (N / 2) + J + (job.iy & 1) * (N / 2)) & 1);
+  for (let j = 0; j <= N; j++) {
+    for (let i = 0; i <= N; i++) {
+      const v = vi(i, j), oi = i & 1, oj = j & 1;
+      if (!oi && !oj) continue;
+      let a, b;
+      if (oi && !oj) { a = vi(i - 1, j); b = vi(i + 1, j); }
+      else if (!oi && oj) { a = vi(i, j - 1); b = vi(i, j + 1); }
+      else {
+        // centro de uma célula do pai: na diagonal escolhida pelo pai
+        const I = (i - 1) >> 1, J = (j - 1) >> 1;
+        if (parentFlip(I, J)) { a = vi(i - 1, j - 1); b = vi(i + 1, j + 1); }
+        else { a = vi(i + 1, j - 1); b = vi(i - 1, j + 1); }
+      }
+      for (let c = 0; c < 3; c++) morph[v * 3 + c] = (pos[a * 3 + c] + pos[b * 3 + c]) * 0.5 - pos[v * 3 + c];
+    }
+  }
+  lod.fill((size * QP * R) / N);
   // saias: cópia das bordas afundada ao longo da radial
   const spacing = (size * QP * R) / N;
   const skirt = Math.max(2, spacing * 1.5 + (maxH - minH) * 0.02);
@@ -122,6 +145,7 @@ export function buildChunk(job) {
       pos[v * 3 + c] = pos[s * 3 + c] - up[s * 3 + c] * skirt;
       det[v * 3 + c] = det[s * 3 + c] - up[s * 3 + c] * skirt;
       nrm[v * 3 + c] = nrm[s * 3 + c]; up[v * 3 + c] = up[s * 3 + c];
+      morph[v * 3 + c] = morph[s * 3 + c];
     }
     for (let c = 0; c < 4; c++) dat[v * 4 + c] = dat[s * 4 + c];
   }
@@ -147,7 +171,7 @@ export function buildChunk(job) {
 
   const out = {
     key: job.key, center: C, boundR: Math.sqrt(br) + skirt, minH, maxH, spacing,
-    pos, nrm, up, det, dat, index, water: null,
+    pos, nrm, up, det, dat, morph, lod, index, water: null,
   };
 
   // água: só se há mar e parte do chunk está abaixo dele
@@ -174,7 +198,7 @@ export function buildChunk(job) {
 
 /** Lista de buffers transferíveis do resultado. */
 export function transferables(r) {
-  const l = [r.pos.buffer, r.nrm.buffer, r.up.buffer, r.det.buffer, r.dat.buffer, r.index.buffer];
+  const l = [r.pos.buffer, r.nrm.buffer, r.up.buffer, r.det.buffer, r.dat.buffer, r.morph.buffer, r.lod.buffer, r.index.buffer];
   if (r.water) l.push(r.water.pos.buffer, r.water.up.buffer, r.water.det.buffer, r.water.depth.buffer, r.water.index.buffer);
   return l;
 }
