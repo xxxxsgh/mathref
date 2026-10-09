@@ -22,7 +22,7 @@ import { vnoise } from './tsl.js';
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 const STYLE = {
-  primary: [0.2, 0.215, 0.235], secondary: [0.035, 0.037, 0.042], trim: [0.85, 0.42, 0.05],
+  primary: [0.215, 0.21, 0.2], secondary: [0.04, 0.04, 0.042], trim: [0.85, 0.42, 0.05],
   metal: [0.3, 0.3, 0.31], dark: [0.016, 0.017, 0.02], glow: [0.45, 0.85, 1.0],
   paint: { metal: 0.3, rough: 0.45, clearcoat: 0.1 }, wear: 0.65, patch: 0, hazard: 1, teeth: 0, circuits: 0, iridescence: 0,
 };
@@ -287,9 +287,13 @@ function wallProp(P, s, W, F, C, z, rng, col) {
   } else {
     // traje pendurado num nicho (capacete + mochila)
     P.add(box(0.28, 1.6, 0.8, 0.03), Z.SECONDARY, { m: M(x, F + 1.0, z + 0.8) });
-    P.add(sphere(0.15, 14, 10), Z.PRIMARY, { m: M(x - s * 0.1, F + 1.55, z + 0.8) });
-    P.glowPart(sphere(0.1, 12, 8, Math.PI * 2, Math.PI * 0.5).rotateZ(s * Math.PI / 2), [0.2, 0.5, 0.7], 0.6, { m: M(x - s * 0.2, F + 1.55, z + 0.8) });
-    P.add(box(0.2, 0.7, 0.42, 0.05), Z.TRIM, { m: M(x - s * 0.1, F + 1.05, z + 0.8), wear: 0.7 });
+    P.add(sphere(0.15, 16, 12), Z.PRIMARY, { m: M(x - s * 0.1, F + 1.58, z + 0.8, 0, 0, 0, 1, 1.08, 1.05) });
+    P.add(sphere(0.115, 14, 10, Math.PI * 2, Math.PI * 0.42).rotateZ(s * Math.PI / 2), Z.DARK, { m: M(x - s * 0.17, F + 1.59, z + 0.8) });
+    P.add(box(0.26, 0.12, 0.3, 0.05), Z.PRIMARY, { m: M(x - s * 0.1, F + 1.4, z + 0.8) });           // colar
+    P.add(box(0.22, 0.55, 0.42, 0.07), Z.PRIMARY, { m: M(x - s * 0.12, F + 1.08, z + 0.8), wear: 0.7 }); // tronco
+    P.add(box(0.16, 0.42, 0.34, 0.05), Z.TRIM, { m: M(x - s * 0.02, F + 1.12, z + 0.8), wear: 0.7 });    // mochila
+    for (const k of [-1, 1]) P.add(box(0.1, 0.55, 0.11, 0.04), Z.PRIMARY, { m: M(x - s * 0.12, F + 0.98, z + 0.8 + k * 0.26) }); // braços
+    P.glowPart(box(0.012, 0.03, 0.08), [0.3, 1.0, 0.5], 2, { m: M(x - s * 0.235, F + 1.2, z + 0.8) });
   }
 }
 

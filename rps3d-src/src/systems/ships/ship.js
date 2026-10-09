@@ -233,6 +233,15 @@ export class ShipInstance {
   /** Trem: true/false ou 0..1. instant = sem animação. */
   setGear(v, instant = false) { this.gearTarget = typeof v === 'boolean' ? (v ? 1 : 0) : v; if (instant) { this.gearT = this.gearTarget; this.applyGear(true); } }
   setLights(on) { this.lightsOn = on; if (this.meshes.lights) this.meshes.lights.visible = on; }
+  /** Mostra/esconde tudo do lado de fora (casco, trem, torres…) exceto `keep` (o interior). */
+  setExterior(on, keep = null) {
+    if (this._extOn === on) return;
+    this._extOn = on;
+    for (const c of this.group.children) if (c !== keep) c.visible = on;
+    if (on) { if (this.meshes.lights) this.meshes.lights.visible = this.lightsOn; this.applyGear(true); }
+  }
+  /** Decalques (insígnia/matrícula) visíveis ou não (customização). */
+  setDecals(on) { if (this.meshes.decals) this.meshes.decals.visible = !!on; }
   /** Pintura: id de PAINTS ou {primary, secondary, trim...}. */
   setPaint(p) {
     const pal = typeof p === 'string' ? PAINTS[p] : p;

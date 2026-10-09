@@ -319,7 +319,7 @@ export function registerShots(ctx, api, st) {
     setup(ctx, 'kessa', 74);
     const ver = body(ctx, 'Verídia');
     const C = ver.pos.clone().addScaledVector(sunDir(ctx, ver.pos), ver.radius * 4).addScaledVector(V(0, 1, 0), 9000);
-    const ship = api.create('freighter', 'frente', { throttle: 0.2, gear: 0 });
+    const ship = api.create(ctx.params.get('cls') || 'freighter', ctx.params.get('fac') || 'frente', { throttle: 0.2, gear: 0 });
     const q = new THREE.Quaternion();
     ship.group.quaternion.copy(q);
     ctx.world.add(ship.group, C);
@@ -328,10 +328,18 @@ export function registerShots(ctx, api, st) {
     const dbg = ctx.params.get('dbgint');
     if (dbg === '1') inter.material.userData.U.realLight.value = 0;
     if (dbg === '3') { inter.material.userData.U.realLight.value = 0; inter.group.traverse((o) => { if (o.isMesh && o.material.blending === THREE.AdditiveBlending) o.visible = false; }); }
+    if (dbg === '4') inter.group.traverse((o) => { if (o.isMesh && o.material.blending === THREE.AdditiveBlending) o.visible = false; });
+    if (dbg === '5') { inter.lamps.forEach((l) => l.color.setRGB(1, 1, 1)); inter.material.lightsNode = null; }
+    if (dbg === '6') { inter.material.envNode = null; ctx.scene.environment = null; }
+    if (dbg === '7') { inter.material.userData.U.envCol.value.setRGB(0, 0, 0); }
+    if (dbg === '8') { const sm = new THREE.MeshStandardNodeMaterial({ color: 0x808080, roughness: 0.5 }); inter.group.children[0].material = sm; }
+    if (dbg === '9') { inter.material.emissiveNode = null; inter.material.needsUpdate = true; }
+    if (dbg === '10') inter.group.children[2].visible = false;
+    if (dbg === '11') { inter.group.children.forEach((c, i) => { if (i > 0) c.visible = false; }); ctx.scene.traverse((o) => { if (o.isMesh && !inter.group.children.includes(o) && o.name !== 'cockpit') o.visible = false; }); }
     if (dbg === '2' || dbg === '3') { inter.material.userData.U.rowCol.value.setRGB(0, 0, 0); inter.material.userData.U.fillAmb.value.setRGB(0, 0, 0); inter.material.userData.U.lamps.array.forEach((l) => l.set(0, 0, 0, 0)); }
     ctx.services.rendering?.sun?.setShadowRange?.(80);
     const eye = V(Number(ctx.params.get('ix') ?? -0.75), inter.floorY + 1.66, Number(ctx.params.get('iz') ?? 1.2));
-    const dir = V(Number(ctx.params.get('dx') ?? 0.16), -0.1, 1).normalize();
+    const dir = V(Number(ctx.params.get('dx') ?? 0.16), Number(ctx.params.get('dy') ?? -0.1), Number(ctx.params.get('dz') ?? 1)).normalize();
     worldCam(ctx, st, C.clone().add(eye), look(dir, V(0, 1, 0)));
   });
 }

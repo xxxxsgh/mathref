@@ -77,6 +77,7 @@ export function makeHullMaterial(style, { panel = 1.6, lite = false, iridescent 
   // naves grandes: segunda grade de subpainéis (4× mais fina, mais suave) —
   // dá escala ao casco de centenas de metros sem sumir à distância
   let subId = float(0);
+  let macroId = float(0.5);
   if (fine && !lite) {
     const q = p.mul(4.0);
     const sx = panelProj(q.z, q.y, float(4)), sy = panelProj(q.z, q.x, float(5)), sz = panelProj(q.x, q.y, float(6));
@@ -85,6 +86,13 @@ export function makeHullMaterial(style, { panel = 1.6, lite = false, iridescent 
     const aa2 = fwidth(d2).add(1e-5);
     const line2 = float(1).sub(smoothstep(lw, lw.add(aa2.mul(1.5)), d2)).mul(clamp(lw.mul(2.5).div(aa2), 0, 1));
     line = max(line, line2.mul(0.45));
+    // macro-chapas (≈6 painéis): tom em grande escala, legível de longe
+    const r = p.mul(0.17);
+    const mx = panelProj(r.z, r.y, float(7)), my = panelProj(r.z, r.x, float(8)), mz = panelProj(r.x, r.y, float(9));
+    macroId = select(w.x.greaterThan(max(w.y, w.z)), mx.y, select(w.y.greaterThan(w.z), my.y, mz.y));
+    const dm = mx.x.mul(w.x).add(my.x.mul(w.y)).add(mz.x.mul(w.z));
+    const aa3 = fwidth(dm).add(1e-5);
+    line = max(line, float(1).sub(smoothstep(lw.mul(0.8), lw.mul(0.8).add(aa3.mul(1.5)), dm)).mul(clamp(lw.mul(2.0).div(aa3), 0, 1)).mul(0.8));
   }
 
   const info = attribute('aInfo', 'vec3');
@@ -103,7 +111,7 @@ export function makeHullMaterial(style, { panel = 1.6, lite = false, iridescent 
   const belly = smoothstep(-0.35, -0.8, n.y);
   let paintCol = mix(U.primary, U.secondary, zS);
   paintCol = paintCol.mul(float(1).sub(belly.mul(0.18)));
-  const tone = id.sub(0.5).mul(float(0.07).add(U.fx.x.mul(0.25))).add(subId.sub(0.5).mul(0.05));
+  const tone = id.sub(0.5).mul(float(0.07).add(U.fx.x.mul(0.25))).add(subId.sub(0.5).mul(0.05)).add(macroId.sub(0.5).mul(0.22));
   paintCol = paintCol.mul(tone.add(1));
   // painéis trocados (tom mais escuro/claro) — leitura de escala nas naves grandes
   const swap = step(0.9, hash13(vec3(id.mul(53.1), subId.mul(7.3), 2.9)));

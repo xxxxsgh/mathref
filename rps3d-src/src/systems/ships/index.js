@@ -10,9 +10,11 @@
 //       colliders[{center,half}], radius, length, eye, gearHeight, localToWorld(v), dispose() }
 //     classId: fighter | interceptor | freighter | explorer | frigate | destroyer | carrier
 //     faction: hegemonia | frente | corsarios | guilda | vigilantes
-//     opts: { seed, paint, gear, throttle, lite, modules: {cargo}, shadows, id }
+//     opts: { seed, paint, gear, throttle, lite, modules: {cargo}, shadows, id, noDecals }
+//     (decalques: insígnia da facção + matrícula; setDecals(bool) liga/desliga)
 //   cockpit: { group, setData({...}), setGlass({rain,dust,ice,fire}), show('auto'|true|false), eye }
-//   interior(classId) → { group, colliders, spawn, seat, eyeHeight, bounds } | null
+//   interior(classId) → { group, colliders, spawn, seat, eyeHeight, bounds, segments,
+//       lamps, update(eyeLocal) } | null   (segmentos: ponte/corredor/baia/máquinas)
 //   attachInterior(ship, frame) → registra colisores no frame {pos, quat} da nave
 //   classes, factions, paints, info(classId, faction)
 //
@@ -98,6 +100,10 @@ export default {
       g.updateWorldMatrix(true, false);
       _eye.set(0, 0, 0); g.worldToLocal(_eye);
       if (_eye.lengthSq() < inter.ship.radius * inter.ship.radius * 4) inter.update(_eye);
+      // dentro do interior o casco externo (que atravessa o volume andável) some
+      const b = inter.bounds;
+      const inside = _eye.x > b.min.x - 0.3 && _eye.x < b.max.x + 0.3 && _eye.y > b.min.y - 0.3 && _eye.y < b.max.y + 0.3 && _eye.z > b.min.z - 0.3 && _eye.z < b.max.z + 0.3;
+      inter.ship.setExterior(!inside, inter.group);
     }
   },
   dispose() {

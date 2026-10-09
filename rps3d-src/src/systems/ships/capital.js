@@ -6,7 +6,7 @@
 // com campo de contenção e torres independentes (base + berço com canos)
 // que o combate pode mirar e destacar uma a uma.
 import * as THREE from 'three/webgpu';
-import { Z, M, onSurface, loft, plate, fin, box, cyl, cylZ, sphere, latheZ, vent, rcs, antenna, pipe, gunBarrel, dish, Parts } from './geo.js';
+import { Z, M, onSurface, loft, plate, fin, box, cyl, cylZ, sphere, latheZ, vent, rcs, antenna, pipe, gunBarrel, dish, Parts, torusZ } from './geo.js';
 import { engine, navLights, V } from './kit.js';
 
 /** Torre: base giratória (yaw) + berço (pitch) com 1–3 canos. Origem na base, +Y = normal do casco. */
@@ -130,7 +130,7 @@ export function buildCapital(bp, style, rng, classId, faction) {
   const topAt = prevTop;
   // superestruturas em aglomerados (cidade de greebles) nos conveses e no dorso:
   // um bloco-mãe, satélites menores, radiadores em pente, canos e luzes
-  const nClusters = carrier ? 46 : 40;
+  const nClusters = carrier ? 72 : 46;
   for (let i = 0; i < nClusters; i++) {
     const sf = rng.chance(0.4) ? surfs[0] : surfs[1 + Math.floor(rng.next() * (surfs.length - 1))];
     const zLo = sf.L.stations[0].z + 14, zHi = zMax - 16;
@@ -161,6 +161,29 @@ export function buildCapital(bp, style, rng, classId, faction) {
       if (rng.chance(0.3)) P.add(vent(w * 0.7, d * 0.5, 6, 0.5), Z.DARK, { m: bm.clone().multiply(M(0, h - 0.1, 0)), detail: true });
       if (rng.chance(0.15)) P.light(q.pos.clone().addScaledVector(q.normal, h + 0.4), rng.chance(0.5) ? [1.0, 0.3, 0.1] : style.glow, 30, 0.45, rng.chance(0.4) ? -0.5 : 0);
       if (rng.chance(0.12)) P.add(antenna(rng.range(4, 12), 0.18), Z.METAL, { m: bm.clone().multiply(M(w * 0.3, h - 0.3, 0)), detail: true });
+    }
+  }
+  // placas de blindagem sobrepostas no dorso (relevo em grande escala)
+  for (let i = 0; i < (carrier ? 90 : 60); i++) {
+    const sf = rng.chance(0.55) ? surfs[0] : surfs[1 + Math.floor(rng.next() * (surfs.length - 1))];
+    const z = rng.range(sf.L.stations[0].z + 20, zMax - 20);
+    const a = Math.PI / 2 + rng.range(-1, 1) * (sf === surfs[0] ? 1.0 : 0.45);
+    const q = sf.L.at(z, a);
+    const pz = rng.next(); P.add(box(rng.range(8, 22) * sf.w, 1.4, rng.range(10, 34) * sf.w, 0.4), pz < 0.62 ? Z.PRIMARY : pz < 0.9 ? Z.SECONDARY : Z.METAL, { m: onSurface(q.pos, q.normal), wear: 0.6 });
+  }
+  if (carrier) {
+    // pista de pouso no convés de proa: faixas escuras, luzes de aproximação e círculos de pouso
+    for (const x of [-26, 26]) {
+      for (let z = zMin + 60; z < -262; z += 6) {
+        const q = L.at(z, Math.PI / 2 - x / 140);
+        P.add(box(14, 0.25, 6.2), Z.DARK, { m: onSurface(q.pos, q.normal) });
+        if (Math.round(z / 6) % 2 === 0) for (const sx of [-6.5, 6.5]) P.light(q.pos.clone().add(V(sx, 0.4, 0)), [1.0, 0.75, 0.35], 25, 0.35, 0);
+      }
+    }
+    for (let k = 0; k < 4; k++) {
+      const z = -240 + k * 120, q = L.at(z, Math.PI / 2 - (k % 2 ? 0.8 : -0.8));
+      P.add(torusZ(9, 0.5, 32).rotateX(Math.PI / 2), Z.TRIM, { m: onSurface(q.pos, q.normal).multiply(M(0, 0.3, 0)) });
+      bp.parts.glowPart(torusZ(7.6, 0.18, 32).rotateX(Math.PI / 2), [1.0, 0.7, 0.3], 3, { m: onSurface(q.pos, q.normal).multiply(M(0, 0.45, 0)) });
     }
   }
   // espinha central: canaleta escura com luzes de pista no dorso principal
