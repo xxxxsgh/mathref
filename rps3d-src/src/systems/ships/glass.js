@@ -97,10 +97,12 @@ export function makeCockpitGlass(base = { y: -0.3 }) {
   // cor do vidro: gotas são lentes — mostram a cena refratada (invertida e
   // comprimida), com borda escura (reflexão interna total) e um brilho especular
   const lens = dn.mul(smoothstep(1.15, 0.2, length(dn)));
-  const refrUV = screenUV.sub(lens.mul(vec2(0.045, -0.06)).mul(U.refr)).clamp(0.001, 0.999);
+  // (deslocamento grande: a gota é uma lente olho-de-peixe — mostra o céu
+  // claro invertido sobre o chão escuro e vice-versa, o que a torna legível)
+  const refrUV = screenUV.sub(lens.mul(vec2(0.11, -0.19)).mul(U.refr)).clamp(0.001, 0.999);
   const scene = viewportSharedTexture(refrUV).rgb;
   const rim = smoothstep(0.55, 1.05, length(dn));
-  const dropCol = scene.mul(float(0.9).sub(rim.mul(0.75))).add(vec3(0.02, 0.025, 0.03).mul(rim));
+  const dropCol = scene.mul(float(1.05).sub(rim.mul(0.92))).add(vec3(0.01, 0.012, 0.014).mul(rim));
   // filme d'água: leve escurecimento/desfoque (amostra deslocada) onde choveu
   const wet = U.rain.mul(0.35);
   const dustA = clamp(dust.mul(1.4), 0, 1);
@@ -117,7 +119,7 @@ export function makeCockpitGlass(base = { y: -0.3 }) {
   // realce especular da gota + brilho nas manchas + plasma
   const hl = float(1).sub(smoothstep(0.06, 0.26, length(dn.sub(vec2(-0.32, 0.4))))).mul(dm);
   m.emissiveNode = dropE
-    .add(vec3(U.sunColor).mul(dirt.mul(glare).mul(0.35).add(hl.mul(0.35).mul(U.light))))
+    .add(vec3(U.sunColor).mul(dirt.mul(glare).mul(0.35).add(hl.mul(0.8).mul(U.light))))
     .add(vec3(3.2, 1.1, 0.25).mul(fire.mul(5.0)))
     .add(vec3(0.6, 0.7, 0.8).mul(frost.mul(0.02).mul(U.light)))
     // reflexo fraco do painel (MFDs/anunciadores) na parte baixa e frontal do vidro

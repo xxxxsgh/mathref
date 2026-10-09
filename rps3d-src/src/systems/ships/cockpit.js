@@ -41,7 +41,9 @@ function screenMaterial(tex, gain) {
   m.fog = false;
   const u = uv();
   const c = texture(tex, u).rgb;
-  const px = smoothstep(0.0, 0.25, abs(fract(u.mul(256.0)).sub(0.5))).mul(0.18).add(0.82);
+  // retícula de subpixels (vec2 → escalar: multiplicar vec3 por vec2 zerava o azul)
+  const pxy = smoothstep(0.0, 0.25, abs(fract(u.mul(256.0)).sub(0.5)));
+  const px = pxy.x.mul(pxy.y).mul(0.18).add(0.82);
   const scan = sin(u.y.mul(800.0).sub(time.mul(3.0))).mul(0.03).add(0.97);
   const vig = smoothstep(0.85, 0.35, length(u.sub(0.5)));
   const fres = pow(float(1).sub(abs(dot(normalize(normalView), normalize(positionView.negate())))), 4.0);
@@ -259,7 +261,7 @@ export class Cockpit {
     if (gl) this.cabin.add(new THREE.Mesh(gl, this.lightsMat));
 
     // ── manche ────────────────────────────────────────────────────────────
-    this.stick = new THREE.Group(); this.stick.position.set(0, -0.86, -0.36);
+    this.stick = new THREE.Group(); this.stick.position.set(0, -0.8, -0.37);
     const S = new Parts(77);
     S.add(cyl(0.05, 0.065, 0.1, 14), Z.RUBBER, { m: M(0, 0.04, 0) });
     S.add(cyl(0.012, 0.014, 0.3, 10), Z.METAL, { m: M(0, 0.2, 0) });

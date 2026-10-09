@@ -48,11 +48,11 @@ export function buildVigilant(bp, style, rng, classId) {
   P.add(crystal(1.6 * s * wide, 1.1 * s, 13 * s * long, 6, 0.45), Z.PRIMARY, { wear: 0 });
   P.add(crystal(1.15 * s * wide, 1.5 * s, 9 * s * long, 4, 0.5), Z.SECONDARY, { m: M(0, 0, 0.6 * s, 0, 0, Math.PI / 4) });
   // coração luminoso (visível entre as placas)
-  P.glowPart(crystal(0.7 * s * wide, 0.7 * s, 6 * s * long, 6, 0.5), style.glow, 3, { m: M(0, 0, 1.2 * s) });
+  P.glowPart(crystal(0.7 * s * wide, 0.7 * s, 6 * s * long, 6, 0.5), style.glow, 1.6, { m: M(0, 0, 1.2 * s) });
   // olho na proa
   P.add(sphere(0.62 * s, 20, 14), Z.DARK, { m: M(0, 0.15 * s, -5.6 * s * long) });
-  P.glowPart(sphere(0.42 * s, 20, 14), [0.6, 0.85, 1.0], 9, { m: M(0, 0.15 * s, -5.85 * s * long) });
-  P.glowPart(torusZ(0.78 * s, 0.05 * s, 32), style.glow, 3.5, { m: M(0, 0.15 * s, -5.5 * s * long) });
+  P.glowPart(sphere(0.42 * s, 20, 14), [0.6, 0.85, 1.0], 3.6, { m: M(0, 0.15 * s, -5.85 * s * long) });
+  P.glowPart(torusZ(0.78 * s, 0.05 * s, 32), style.glow, 2, { m: M(0, 0.15 * s, -5.5 * s * long) });
   // lâminas (aletas) — estilhaços longos para trás
   const nBlades = big ? 8 : 5;
   for (let i = 0; i < nBlades; i++) {
@@ -77,7 +77,7 @@ export function buildVigilant(bp, style, rng, classId) {
       ring.add(facet(t.toNonIndexed()), Z.PRIMARY, { wear: 0 });
       // nó luminoso em cada segmento
       const am = a0 + (Math.PI * 2 / segs) * 0.36;
-      ring.glowPart(box(0.3 * s, 0.3 * s, 0.5 * s), style.glow, 3.5, { m: M(Math.cos(am) * R, Math.sin(am) * R, 0, 0, 0, am) });
+      ring.glowPart(box(0.2 * s, 0.2 * s, 0.4 * s), style.glow, 1.8, { m: M(Math.cos(am) * R, Math.sin(am) * R, 0, 0, 0, am) });
     }
     bp.spinners.push({ pivot: V(0, 0, (1.0 + r * 2.4) * s * long), parts: ring, axis: 'z', speed: (r % 2 ? -0.35 : 0.5) / (1 + r) });
   }
@@ -87,7 +87,7 @@ export function buildVigilant(bp, style, rng, classId) {
     const sh = new Parts(bp.seed * 53 + i);
     const g = crystal(0.35 * s, 0.25 * s, rng.range(1.6, 3.2) * s, 4, 0.5);
     sh.add(g, Z.PRIMARY, { wear: 0 });
-    sh.glowPart(box(0.06 * s, 0.06 * s, 1.2 * s), style.glow, 2.5, { m: M(0, 0.26 * s, 0) });
+    sh.glowPart(box(0.06 * s, 0.06 * s, 1.2 * s), style.glow, 1.3, { m: M(0, 0.26 * s, 0) });
     const a = (i / nSh) * Math.PI * 2;
     const rr = rng.range(2.4, 3.2) * s * wide;
     bp.spinners.push({ pivot: V(Math.cos(a) * rr, Math.sin(a) * rr * 0.8, rng.range(-4, 3) * s * long), parts: sh, axis: 'z', speed: rng.range(-0.3, 0.3), bob: 0.25 * s });
@@ -96,7 +96,7 @@ export function buildVigilant(bp, style, rng, classId) {
   const zt = 7.6 * s * long;
   for (const [x, y] of big ? [[0, 0], [1.4, 0], [-1.4, 0]] : [[0, 0]]) {
     bp.thrusters.push({ pos: V(x * s, y * s, zt + 0.3 * s), dir: V(0, 0, 1), r: 0.55 * s, len: 8 * s, core: 0.5 * s, coreZ: zt });
-    P.glowPart(torusZ(0.62 * s, 0.07 * s, 24), style.glow, 4, { m: M(x * s, y * s, zt - 0.1 * s) });
+    P.glowPart(torusZ(0.62 * s, 0.07 * s, 24), style.glow, 2.4, { m: M(x * s, y * s, zt - 0.1 * s) });
   }
   if (classId === 'destroyer' || classId === 'carrier' || classId === 'frigate') {
     // pilares-antena (torres "vivas")
@@ -115,7 +115,7 @@ export function buildVigilant(bp, style, rng, classId) {
 function vigTurret(bp, pos, up, size, style) {
   const P = new Parts(bp.seed + 999);
   P.add(crystal(size * 0.6, size * 0.6, size * 2.4, 4, 0.5).rotateX(Math.PI / 2), Z.PRIMARY, { m: M(0, size, 0) });
-  P.glowPart(sphere(size * 0.25, 10, 8), style.glow, 5, { m: M(0, size * 2.0, 0) });
+  P.glowPart(sphere(size * 0.25, 10, 8), style.glow, 3, { m: M(0, size * 2.0, 0) });
   const B = new Parts(bp.seed + 1999);
   B.add(crystal(size * 0.18, size * 0.18, size * 2, 4, 0.2), Z.TRIM, { m: M(0, 0, -size * 0.6) });
   return { pos, up: up.clone().normalize(), size, kind: 'beam', parts: P, barrel: B, barrelPivot: V(0, size * 1.6, 0) };

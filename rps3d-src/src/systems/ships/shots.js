@@ -166,7 +166,7 @@ export function registerShots(ctx, api, st) {
         let h = 0;
         for (const k of [800, 1600, 3000]) { const p = spot.dir.clone().addScaledVector(t, k / b.radius).normalize(); h = Math.max(h, pl.heightAtLocal(b, p)); }
         // evita olhar para o sol (o clarão lava a chuva no vidro): sol de lado/atrás
-        const score = h - Math.max(0, t.dot(sunL)) * 400;
+        const score = h - Math.max(0, t.dot(sunL) + 0.3) * 3000;
         if (score > bh) { bh = score; best = t; }
       }
       fwdL = best;
@@ -202,34 +202,36 @@ export function registerShots(ctx, api, st) {
 
   // ── 3. todas as classes e facções ─────────────────────────────────────────
   ctx.shots.register('ships-lineup', async (ctx) => {
-    setup(ctx, 'kessa', 48);
+    const fov = Number(ctx.params.get('fov') ?? 48);
+    setup(ctx, 'kessa', fov);
     const ver = body(ctx, 'Verídia');
-    const toSun0 = sunDir(ctx, ver.pos);
-    const perp = new THREE.Vector3().crossVectors(toSun0, V(0, 1, 0)).normalize();
-    const sa = Number(ctx.params.get('sa') ?? 140) * D2R;
-    const Dp = toSun0.clone().multiplyScalar(Math.cos(sa)).addScaledVector(perp, Math.sin(sa)).normalize();
-    const C = ver.pos.clone().addScaledVector(Dp, -ver.radius * 3.0);
-    const upG = new THREE.Vector3().crossVectors(perp, Dp).normalize();
-    // horizonte: o centro do planeta fica abaixo
-    const Fh = Dp.clone().applyAxisAngle(perp, -Number(ctx.params.get('pt') ?? 17) * D2R).normalize();
-    const B = basis(Fh, upG.y >= 0 ? upG : upG.negate());
-    const U = B.U, R = B.R;
-    const camF = Fh.clone().applyAxisAngle(R, -7 * D2R);
-    const cam = C.clone().addScaledVector(U, 30);
-    worldCam(ctx, st, cam, look(camF, U));
+    const toS = sunDir(ctx, ver.pos);
+    // câmera: sol atrás, à esquerda e acima (luz de 3/4 nos cascos); Verídia
+    // embaixo como um horizonte curvo iluminado; espaço aberto em cima
+    const sunCam = V(Number(ctx.params.get('sx') ?? -0.55), Number(ctx.params.get('sy') ?? 0.5), Number(ctx.params.get('sz') ?? 0.68)).normalize();
+    const camQ = camFromDir(toS, sunCam, V(0, 1, 0));
+    const cv = (x, y, z) => V(x, y, z).applyQuaternion(camQ);
+    const toP = cv(Number(ctx.params.get('px') ?? 0.1), Number(ctx.params.get('py') ?? -0.62), -0.8).normalize();
+    const C = ver.pos.clone().addScaledVector(toP, -ver.radius * Number(ctx.params.get('dr') ?? 2.1));
+    worldCam(ctx, st, C, camQ);
     const factions = ['hegemonia', 'frente', 'corsarios', 'guilda', 'vigilantes'];
-    const rows = [['fighter', 62, 19], ['interceptor', 100, 25], ['explorer', 170, 44], ['freighter', 265, 64], ['frigate', 600, 160]];
-    const nose = R.clone().multiplyScalar(-0.75).addScaledVector(Fh, -0.66).normalize();
-    for (const [cls, dist, sp] of rows) {
+    // fileiras: mais perto embaixo (caças) → mais longe em cima (fragatas);
+    // cada nave ocupa ~o mesmo ângulo na tela (distância ∝ comprimento)
+    const rows = [['fighter', -14.5], ['interceptor', -6.5], ['explorer', 1.0], ['freighter', 8.5], ['frigate', 16]];
+    const span = Number(ctx.params.get('span') ?? 7.2) * D2R;
+    const nose = cv(-0.72, -0.08, 0.69).normalize();
+    const upS = cv(0, 1, 0);
+    rows.forEach(([cls, el], r) => {
       factions.forEach((fac, i) => {
-        const s = api.create(cls, fac, { throttle: 0.25, gear: 0 });
-        const p = C.clone().addScaledVector(Fh, dist + (i % 2) * sp * 0.15).addScaledVector(R, (i - 2) * sp);
-        s.group.quaternion.copy(look(nose, U));
-        ctx.world.add(s.group, p);
+        const s = api.create(cls, fac, { throttle: 0.3, gear: 0 });
+        const dist = s.length / Math.tan(span);
+        const az = ((i - 2) * 12.5 + (r % 2 ? 3 : -3)) * D2R;
+        const dir = cv(Math.sin(az) * Math.cos(el * D2R), Math.sin(el * D2R), -Math.cos(az) * Math.cos(el * D2R)).normalize();
+        s.group.quaternion.copy(look(nose, upS.clone().applyAxisAngle(nose, (i - 2) * 0.04)));
+        ctx.world.add(s.group, C.clone().addScaledVector(dir, dist));
       });
-    }
-    // cascatas de sombra cobrindo a fileira inteira (o padrão no espaço é só a cabine)
-    if (ctx.params.get('sr')) ctx.services.rendering?.sun?.setShadowRange?.(Number(ctx.params.get('sr')));
+    });
+    ctx.services.rendering?.sun?.setShadowRange?.(Number(ctx.params.get('sr') ?? 1500));
   });
 
   // ── 4. naves capitais ─────────────────────────────────────────────────────

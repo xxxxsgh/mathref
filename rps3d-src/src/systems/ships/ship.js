@@ -307,7 +307,7 @@ export class ShipInstance {
       const legT = smooth(0.22, 1.0, t);
       const a = g.stow * (1 - legT);
       g.pivotObj.rotation.x = a;
-      g.pivotObj.visible = t > 0.02;
+      g.pivotObj.visible = t > 0.02 && this._extOn !== false;
       for (const d of g.doors) {
         const open = smooth(0.0, 0.3, t);
         d.obj.rotation.z = d.open * open;
@@ -324,12 +324,14 @@ export class ShipInstance {
     }
     // LOD barato: greebles e trem somem longe
     const far = camDist > this.radius * 45;
-    if (this.meshes.detail) this.meshes.detail.visible = !far;
+    // (com o casco escondido — jogador no interior — nada do exterior volta a aparecer)
+    const ext = this._extOn !== false;
+    if (this.meshes.detail) this.meshes.detail.visible = !far && ext;
     // plumas: comprimento ∝ acelerador
     const thr = this.U.throttle.value + this.U.boost.value * 0.6;
     for (const th of this.thrusters) {
       th.plume.scale.z = th.len * (0.25 + thr * 0.9);
-      th.plume.visible = thr > 0.02;
+      th.plume.visible = thr > 0.02 && ext;
     }
     for (const s of this.spinners) {
       s.obj.rotation[s.axis || 'z'] += (s.speed || 0) * dt;
