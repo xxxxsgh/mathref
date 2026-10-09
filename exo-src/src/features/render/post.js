@@ -658,6 +658,7 @@ export class GodRaysPass {
     this.sunUv = new THREE.Vector2();
     this.intensity = 0;
     this._v = new THREE.Vector3();
+    this._qi = new THREE.Quaternion();
     this.strength = 1;
   }
   /** Posição do sol na tela e intensidade (0 = não desenha). */
@@ -667,7 +668,7 @@ export class GodRaysPass {
     const dir = sky?.sunDirection;
     if (!dir) return 0;
     const cam = ctx.camera;
-    const v = this._v.copy(dir).applyQuaternion(cam.quaternion.clone().invert());
+    const v = this._v.copy(dir).applyQuaternion(this._qi.copy(cam.quaternion).invert());
     if (v.z > -0.05) return (this.intensity = 0);
     const tanY = Math.tan(THREE.MathUtils.degToRad(cam.fov * 0.5));
     const sx = (v.x / -v.z) / (tanY * cam.aspect);

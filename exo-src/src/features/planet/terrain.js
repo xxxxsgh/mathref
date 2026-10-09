@@ -41,14 +41,15 @@ function terrace(h, step) {
   const t = h / step;
   const k = Math.floor(t);
   const f = t - k;
-  return (k + 0.12 * f + 0.88 * smoothstep(0.62, 0.94, f)) * step;
+  // parede larga o bastante para a malha (sem dente de serra nos LODs médios)
+  return (k + 0.12 * f + 0.88 * smoothstep(0.52, 0.95, f)) * step;
 }
 /** Degraus em [0,1] (paredes de cânion). */
 function terrace01(t, n) {
   const x = t * n;
   const k = Math.floor(x);
   const f = x - k;
-  return Math.min(1, (k + 0.1 * f + 0.9 * smoothstep(0.7, 0.96, f)) / n);
+  return Math.min(1, (k + 0.1 * f + 0.9 * smoothstep(0.6, 0.96, f)) / n);
 }
 
 export function createTerrain(cfg) {

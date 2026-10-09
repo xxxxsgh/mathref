@@ -99,6 +99,7 @@ uniform float uTime;
 uniform float uSSR;           // 0/1
 uniform int uSSRSteps;
 uniform float uUnder;         // câmera submersa
+uniform vec3 uFogInscat;      // luz espalhada na água à profundidade da câmera
 uniform float uFoamAmt;
 uniform float uCaustics;
 varying vec3 vP;
@@ -210,11 +211,11 @@ void main() {
       fr = 0.02 + 0.98 * pow(1.0 - c, 5.0);
       col = skyRad(T, 0.0) * (1.0 - fr);
     } else col = vec3(0.0);
-    vec3 deepL = uScatter * (uSunE * sunUp * 0.25 / PI + ambUp) * 0.6;
-    col += deepL * fr;
-    // névoa da coluna d'água até a superfície
-    vec3 tr = exp(-uSigma * dist);
-    col = col * tr + deepL * (1.0 - tr);
+    // reflexão interna total: a própria água (mesma luz da névoa submersa)
+    col += uFogInscat * fr;
+    // névoa da coluna d'água até a superfície (igual à passada de névoa)
+    vec3 tr = exp(-(uSigma + 0.012) * min(dist, 1e5));
+    col = col * tr + uFogInscat * (1.0 - tr);
     gl_FragColor = vec4(col, 1.0);
     return;
   }
@@ -367,6 +368,7 @@ export class Ocean {
       uSSR: { value: 1 },
       uSSRSteps: { value: 20 },
       uUnder: { value: 0 },
+      uFogInscat: { value: new THREE.Color() },
       uFoamAmt: { value: 1 },
       uCaustics: { value: 1 },
     };

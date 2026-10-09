@@ -302,6 +302,7 @@ export default {
       this.inscat.g *= Math.exp(-this.sigma.y * d);
       this.inscat.b *= Math.exp(-this.sigma.z * d);
       this.uFog.uInscat.value.copy(this.inscat);
+      U.uFogInscat.value.copy(this.inscat);
     }
   },
 
