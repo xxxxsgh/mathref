@@ -7,7 +7,7 @@
 // (veiling glare) e reflexo físico do ambiente (material físico transparente).
 import * as THREE from 'three/webgpu';
 import {
-  Fn, vec2, vec3, vec4, float, uniform, positionLocal, mix, smoothstep, step, abs, max, min, floor, fract, pow, exp, sin, clamp,
+  Fn, vec2, vec3, vec4, float, uniform, positionLocal, normalLocal, mix, smoothstep, step, abs, max, min, floor, fract, pow, exp, sin, clamp,
   time, length, dot, normalize, positionView, atan, viewportSharedTexture, screenUV,
 } from 'three/tsl';
 import { hash13, hash33, vnoise, fbm } from './tsl.js';
@@ -57,11 +57,18 @@ export function makeCockpitGlass(base = { y: -0.3 }) {
   const m = new THREE.MeshPhysicalNodeMaterial({ transparent: true, side: THREE.DoubleSide, depthWrite: false });
   m.userData.U = U;
   const P = positionLocal;
-  // coordenadas de superfície: arco em torno do eixo longitudinal (s) e comprimento (z), em metros
-  const ang = atan(P.x, P.y.sub(base.y).max(0.02));
-  const s = ang.mul(0.55);
+  // coordenadas de superfície (metros) por projeção dominante: para-brisa
+  // frontal → (x, y); laterais → (z, y); teto → (x, z). (O arco em volta do
+  // eixo esticava as gotas no para-brisa quase vertical.)
+  const nA = abs(normalLocal);
+  const frontF = step(max(nA.x, nA.y), nA.z);
+  const sideF = step(max(nA.y, nA.z), nA.x).mul(float(1).sub(frontF));
+  const topF = float(1).sub(frontF).sub(sideF).max(0);
+  const ua = P.x.mul(frontF.add(topF)).add(P.z.mul(sideF));
+  const ub = P.y.mul(frontF.add(sideF)).add(P.z.mul(topF));
+  const s = ua;
   const z = P.z;
-  const uvS = vec2(s, z);
+  const uvS = vec2(ua, ub);
   // altura acima do peitoril → bordas baixas acumulam poeira/gelo
   const low = float(1).sub(smoothstep(0.0, 0.32, P.y.sub(base.y)));
   const front = smoothstep(-0.3, -1.3, z);
@@ -72,8 +79,9 @@ export function makeCockpitGlass(base = { y: -0.3 }) {
   const d2 = dropLayer(uvS.mul(52.0).add(vec2(0.37, 0.71)), rainA.mul(0.9), float(2.0));
   const d3 = dropLayer(uvS.mul(110.0).add(vec2(0.13, 0.29)), rainA.mul(0.95), float(3.0));
   // escorrimento: com vento as gotas correm para trás (+z); paradas, descem pelas laterais (|s| cresce)
-  const flowQ = mix(vec2(abs(s).mul(-1.0), z.mul(0.25)).yx, vec2(s, z.negate()), U.wind);
-  const run = runLayer(flowQ.mul(vec2(18.0, 6.0)).mul(vec2(1.0, 1.0)), mix(float(0.35), float(3.5), U.wind), rainA.mul(0.55), time);
+  // parado: escorrem para baixo; em voo: o vento as empurra para cima/para trás
+  const flowQ = vec2(ua, mix(ub, ub.negate(), U.wind));
+  const run = runLayer(flowQ.mul(vec2(18.0, 6.0)), mix(float(0.35), float(3.5), U.wind), rainA.mul(0.55), time);
   const dm = max(max(d1.x, d2.x), max(d3.x, run.x));
   const dn = select3(d1, d2, d3, run);
   // ── geada ──

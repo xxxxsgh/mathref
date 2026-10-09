@@ -217,15 +217,15 @@ export function registerShots(ctx, api, st) {
     const factions = ['hegemonia', 'frente', 'corsarios', 'guilda', 'vigilantes'];
     // fileiras: mais perto embaixo (caças) → mais longe em cima (fragatas);
     // cada nave ocupa ~o mesmo ângulo na tela (distância ∝ comprimento)
-    const rows = [['fighter', -14.5], ['interceptor', -6.5], ['explorer', 1.0], ['freighter', 8.5], ['frigate', 16]];
-    const span = Number(ctx.params.get('span') ?? 7.2) * D2R;
+    const rows = [['fighter', -15], ['interceptor', -7], ['explorer', 1], ['freighter', 8.5], ['frigate', 15.5]];
+    const span = Number(ctx.params.get('span') ?? 9.5) * D2R;
     const nose = cv(-0.72, -0.08, 0.69).normalize();
     const upS = cv(0, 1, 0);
     rows.forEach(([cls, el], r) => {
       factions.forEach((fac, i) => {
         const s = api.create(cls, fac, { throttle: 0.3, gear: 0 });
         const dist = s.length / Math.tan(span);
-        const az = ((i - 2) * 12.5 + (r % 2 ? 3 : -3)) * D2R;
+        const az = ((i - 2) * 11.5 + (r % 2 ? 2 : -2)) * D2R;
         const dir = cv(Math.sin(az) * Math.cos(el * D2R), Math.sin(el * D2R), -Math.cos(az) * Math.cos(el * D2R)).normalize();
         s.group.quaternion.copy(look(nose, upS.clone().applyAxisAngle(nose, (i - 2) * 0.04)));
         ctx.world.add(s.group, C.clone().addScaledVector(dir, dist));
@@ -243,7 +243,7 @@ export function registerShots(ctx, api, st) {
     const aur = body(ctx, 'Aurora');
     const toS = sunDir(ctx, aur.pos);
     // orientação da câmera: o sol em (esq., cima, atrás) no referencial dela
-    const sunCam = V(Number(ctx.params.get('sx') ?? -0.5), Number(ctx.params.get('sy') ?? 0.42), Number(ctx.params.get('sz') ?? 0.75)).normalize();
+    const sunCam = V(Number(ctx.params.get('sx') ?? -0.95), Number(ctx.params.get('sy') ?? 0.16), Number(ctx.params.get('sz') ?? -0.2)).normalize();
     const camQ = camFromDir(toS, sunCam, V(0, 1, 0));
     const F = V(0, 0, -1).applyQuaternion(camQ), U = V(0, 1, 0).applyQuaternion(camQ), R = V(1, 0, 0).applyQuaternion(camQ);
     const cv = (x, y, z) => V(x, y, z).applyQuaternion(camQ);
@@ -261,7 +261,7 @@ export function registerShots(ctx, api, st) {
     ctx.world.add(des.group, dPos);
     for (const t of des.turrets) t.aimLocal(V(0.5, 0.35, -1).normalize());
     // porta-caças ao fundo, à direita
-    const cPos = C.clone().addScaledVector(F, 2300).addScaledVector(R, 1350).addScaledVector(U, 120);
+    const cPos = C.clone().addScaledVector(F, Number(ctx.params.get('cf') ?? 1600)).addScaledVector(R, Number(ctx.params.get('cr') ?? 900)).addScaledVector(U, 90);
     const cNose = cv(-0.35, 0.02, 0.94).normalize();
     const car = api.create('carrier', 'hegemonia', { throttle: 0.4 });
     car.group.quaternion.copy(look(cNose, U));

@@ -14,15 +14,85 @@
 // próximas), sem o sol e sem o IBL do céu (ambiente constante escuro). No
 // mobile fica só a luz falsa no emissivo (fileira de luminárias + 3 pontos).
 import * as THREE from 'three/webgpu';
-import { Z, M, Parts, box, cyl, cylZ, sphere, pipe, vent, torusZ } from './geo.js';
+import { Z, M, Parts, box, cyl, cylZ, sphere, pipe, vent, torusZ, mergeGeometries } from './geo.js';
 import { makeHullMaterial, makeLightsMaterial } from './materials.js';
-import { vec3, float, abs, dot, normalize, normalView, positionView, positionLocal, uv, time, lights as tslLights } from 'three/tsl';
+import { vec3, float, abs, dot, normalize, normalView, positionView, positionLocal, uv, time, texture, smoothstep, lights as tslLights } from 'three/tsl';
 import { vnoise } from './tsl.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
+// ── sinalização pintada (estêncil) ─────────────────────────────────────────
+// Atlas 1024×1024 em 8 faixas de 1024×128; cada placa é um plano fino colado
+// na superfície, todos fundidos numa malha (um draw call), iluminados pelas
+// mesmas luzes do interior.
+const SIGN_ROWS = 8;
+let SIGNS = null;
+/** kind: índice da faixa; n: normal (para fora da parede); w×h em metros. */
+function sign(kind, pos, n, w, h, spin = 0) {
+  if (SIGNS) SIGNS.push({ kind, pos: pos.clone(), n: n.clone().normalize(), w, h, spin });
+}
+let signAtlasTex = null;
+function signAtlas() {
+  if (signAtlasTex) return signAtlasTex;
+  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 1024;
+  const g = cv.getContext('2d');
+  const RH = 1024 / SIGN_ROWS;
+  const font = (px, w = 800) => `${w} ${px}px "DejaVu Sans Condensed", "Arial Narrow", "Helvetica", sans-serif`;
+  const stripes = (x, y, w, h, a = '#d9a21c', b = '#121212', k = 36) => {
+    g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+    g.fillStyle = a; g.fillRect(x, y, w, h); g.fillStyle = b;
+    for (let i = -h; i < w + h; i += k * 2) { g.beginPath(); g.moveTo(x + i, y + h); g.lineTo(x + i + h, y); g.lineTo(x + i + h + k, y); g.lineTo(x + i + k, y + h); g.fill(); }
+    g.restore();
+  };
+  const text = (t, row, { col = '#e9e4d6', px = 84, x = 512, align = 'center', w = 800 } = {}) => {
+    g.font = font(px, w); g.fillStyle = col; g.textAlign = align; g.textBaseline = 'middle';
+    g.fillText(t, x, row * RH + RH / 2 + 4);
+  };
+  // 0: identificação da baia (estêncil claro)
+  text('BAIA DE CARGA  02', 0, { px: 92 });
+  // 1: aviso de carga suspensa (placa amarela com faixas)
+  g.fillStyle = '#d9a21c'; g.fillRect(0, RH * 1 + 8, 1024, RH - 16);
+  stripes(0, RH * 1 + 8, 150, RH - 16); stripes(874, RH * 1 + 8, 150, RH - 16);
+  text('CARGA SUSPENSA', 1, { col: '#141414', px: 70 });
+  // 2: convés (grande, para piso e anteparas)
+  text('CONVÉS  B · 02', 2, { px: 104 });
+  // 3: direções
+  text('◄ PONTE        MÁQUINAS ►', 3, { px: 72, col: '#cfe6ee' });
+  // 4: perigo do reator
+  g.fillStyle = '#c8301e'; g.fillRect(0, RH * 4 + 8, 1024, RH - 16);
+  text('PERIGO · REATOR · RADIAÇÃO', 4, { col: '#f4ede0', px: 66 });
+  // 5: capacidade
+  text('MÁX. 12 t  ·  AMARRE A CARGA', 5, { px: 64, col: '#d8d2c2', w: 700 });
+  // 6: faixa de perigo pura
+  stripes(0, RH * 6 + 8, 1024, RH - 16, '#d4a019', '#151515', 46);
+  // 7: saída de emergência
+  g.fillStyle = '#1f7a3a'; g.fillRect(0, RH * 7 + 8, 1024, RH - 16);
+  text('SAÍDA DE EMERGÊNCIA  ►', 7, { col: '#f0f6ee', px: 68 });
+  signAtlasTex = new THREE.CanvasTexture(cv);
+  signAtlasTex.colorSpace = THREE.SRGBColorSpace; signAtlasTex.anisotropy = 8;
+  return signAtlasTex;
+}
+function signGeometry(list) {
+  const geos = [];
+  const up = V(0, 1, 0), m = new THREE.Matrix4(), q = new THREE.Quaternion();
+  for (const sg of list) {
+    const g = new THREE.PlaneGeometry(sg.w, sg.h);
+    const uvA = g.attributes.uv;
+    const v0 = 1 - (sg.kind + 1) / SIGN_ROWS, v1 = 1 - sg.kind / SIGN_ROWS;
+    for (let i = 0; i < uvA.count; i++) uvA.setY(i, v0 + uvA.getY(i) * (v1 - v0) * 0.98 + (v1 - v0) * 0.01);
+    const ref = Math.abs(sg.n.y) > 0.9 ? V(0, 0, -1) : up;
+    m.lookAt(V(0, 0, 0), sg.n.clone().negate(), ref);
+    q.setFromRotationMatrix(m);
+    g.rotateZ(sg.spin);
+    g.applyQuaternion(q);
+    g.translate(sg.pos.x + sg.n.x * 0.012, sg.pos.y + sg.n.y * 0.012, sg.pos.z + sg.n.z * 0.012);
+    geos.push(g);
+  }
+  return geos.length ? mergeGeometries(geos) : null;
+}
+
 const STYLE = {
-  primary: [0.215, 0.21, 0.2], secondary: [0.04, 0.04, 0.042], trim: [0.85, 0.42, 0.05],
+  primary: [0.17, 0.168, 0.162], secondary: [0.035, 0.036, 0.04], trim: [0.62, 0.34, 0.05],
   metal: [0.3, 0.3, 0.31], dark: [0.016, 0.017, 0.02], glow: [0.45, 0.85, 1.0],
   paint: { metal: 0.3, rough: 0.45, clearcoat: 0.1 }, wear: 0.65, patch: 0, hazard: 1, teeth: 0, circuits: 0, iridescence: 0,
 };
@@ -58,6 +128,7 @@ export function buildInterior(ctx, classId) {
   const lamps = [];   // luminárias reais (posição local, cor, intensidade)
   const cones = [];   // cones de luz volumétrica falsa {x, y, z, h, r0, r1, col}
 
+  SIGNS = [];
   for (const s of segs) buildSegment(P, s, F, col, lamps, cones, rng);
   // anteparas entre segmentos (porta central 1,3 × 2,1 m)
   for (let i = 0; i < segs.length - 1; i++) bulkhead(P, segs[i], segs[i + 1], F, col);
@@ -66,6 +137,7 @@ export function buildInterior(ctx, classId) {
   if (a.kind !== 'bridge') endWall(P, a, F, a.z0, col);
   endWall(P, b, F, b.z1, col);
   for (const [pose, x, z, yaw] of sp.crew || []) crewMember(P, V(x, F, z), yaw, pose, rng);
+  const signList = SIGNS; SIGNS = null;
 
   // ── material ────────────────────────────────────────────────────────────
   const mat = makeHullMaterial(STYLE, { panel: 0.8, lite, fill: true, isolate: true });
@@ -127,6 +199,20 @@ export function buildInterior(ctx, classId) {
       pool.push(l);
     }
     mat.lightsNode = tslLights(pool);
+  }
+  // sinalização: mesmas luzes do interior, desgaste no alfa
+  const sgGeo = signGeometry(signList);
+  if (sgGeo) {
+    const sm = new THREE.MeshStandardNodeMaterial({ transparent: true, depthWrite: false, roughness: 0.62, metalness: 0.05, polygonOffset: true, polygonOffsetFactor: -2 });
+    const tx = texture(signAtlas(), uv());
+    const wearN = vnoise(positionLocal.mul(9.0)).mul(0.6).add(vnoise(positionLocal.mul(37.0)).mul(0.4));
+    sm.colorNode = tx.rgb;
+    sm.opacityNode = tx.a.mul(smoothstep(0.18, 0.42, wearN)).mul(0.92);
+    if (pool.length) sm.lightsNode = mat.lightsNode;
+    sm.envNode = U.envCol;
+    // sem luzes reais (mobile): leve emissivo para não sumir no escuro
+    if (!pool.length) sm.emissiveNode = tx.rgb.mul(0.25);
+    const sgm = new THREE.Mesh(sgGeo, sm); sgm.renderOrder = 3; sgm.receiveShadow = true; group.add(sgm);
   }
   const syncLights = () => {
     group.updateWorldMatrix(true, false);
@@ -216,12 +302,15 @@ function buildSegment(P, sg, F, col, lamps, cones, rng) {
   if (kind === 'corridor') {
     lampRow(0, 3.2, 2.0, 8, 0.035);
     for (let z = z0 + 1.6; z < z1 - 0.8; z += 1.6) for (const s of [1, -1]) wallProp(P, s, W, F, C, z, rng, col);
+    for (const s of [1, -1]) sign(3, V(s * W, F + 1.95, midZ), V(-s, 0, 0), 1.7, 0.21);
+    sign(7, V(W, F + 0.35, z1 - 1.2), V(-1, 0, 0), 0.9, 0.11);
   } else if (kind === 'hold') {
     for (const x of [-W * 0.5, W * 0.5]) lampRow(x, 4, 5, 11, 0.045);
     holdContents(P, sg, F, col, rng);
   } else if (kind === 'engine') {
     lampRow(0, 4, 1.6, 7, 0.03);
     reactor(P, sg, F, col, lamps);
+    for (const s of [1, -1]) sign(4, V(s * W, F + 1.7, z0 + 1.3), V(-s, 0, 0), 1.6, 0.2);
   } else if (kind === 'bridge') {
     bridge(P, sg, F, col, lamps);
   }
@@ -243,6 +332,10 @@ function bulkhead(P, a, b, F, col) {
     // painel de acesso da porta
     P.add(box(0.16, 0.24, 0.05, 0.01), Z.DARK, { m: M(s * (dw + 0.3), F + 1.3, z - 0.14) });
     P.glowPart(box(0.1, 0.12, 0.01), [0.3, 1.0, 0.5], 2.2, { m: M(s * (dw + 0.3), F + 1.33, z - 0.17) });
+  }
+  for (const fz of [-1, 1]) {
+    sign(2, V(0, F + dh + 0.3, z + fz * 0.125), V(0, 0, fz), 1.5, 0.19);
+    for (const s of [1, -1]) sign(6, V(s * (dw + 0.07), F + dh / 2, z + fz * 0.185), V(0, 0, fz), dh * 0.92, 0.1, Math.PI / 2);
   }
   // verga sobre a porta
   const top = H - dh;
@@ -302,8 +395,22 @@ function holdContents(P, sg, F, col, rng) {
   const { z0, z1, W, C } = sg;
   const midZ = (z0 + z1) / 2;
   // marcação de piso: faixa de perigo em volta da área de carga
-  for (const s of [1, -1]) P.add(box(0.12, 0.012, z1 - z0 - 1.6), Z.TRIM, { m: M(s * 0.95, F + 0.07, midZ), wear: 0.9 });
-  for (let z = z0 + 1; z < z1 - 0.8; z += 0.5) P.add(box(0.5, 0.012, 0.18), Z.TRIM, { m: M(0, F + 0.07, z, 0, 0.6, 0), wear: 1, detail: true });
+  for (const s of [1, -1]) P.add(box(0.12, 0.004, z1 - z0 - 1.6), Z.TRIM, { m: M(s * 0.95, F + 0.044, midZ), wear: 0.9 });
+  // sinalização: identificação da baia, capacidade, convés pintado no piso
+  for (const s of [1, -1]) {
+    sign(0, V(s * W, F + 3.2, z0 + 4.2), V(-s, 0, 0), 3.4, 0.43);
+    sign(5, V(s * W, F + 3.05, z0 + 10.5), V(-s, 0, 0), 2.6, 0.32);
+  }
+  sign(2, V(0, F + 0.045, midZ + 2.2), V(0, 1, 0), 3.2, 0.4, Math.PI / 2);
+  // feixes de tubos ao longo das paredes, acima das pilhas, com braçadeiras
+  for (const s of [1, -1]) {
+    const x = s * (W - 0.14);
+    [[2.55, 0.07, Z.METAL], [2.72, 0.05, Z.TRIM], [2.42, 0.045, Z.RUBBER]].forEach(([y, r, zn]) => {
+      if (F + y + r < C - 0.3) P.add(cylZ(r, r, z1 - z0 - 0.3, 12), zn, { m: M(x - s * r * 1.2, F + y, midZ), wear: 0.7 });
+    });
+    for (let z = z0 + 0.8; z < z1 - 0.3; z += 1.6) P.add(box(0.26, 0.42, 0.06, 0.01), Z.DARK, { m: M(x - s * 0.06, F + 2.58, z + 0.4) });
+  }
+  for (let z = z0 + 1; z < z1 - 0.8; z += 0.5) P.add(box(0.5, 0.004, 0.18), Z.TRIM, { m: M(0, F + 0.044, z, 0, 0.6, 0), wear: 1, detail: true });
   // trilhos de amarração nas paredes
   for (const s of [1, -1]) for (const y of [0.55, 1.6]) P.add(box(0.05, 0.05, z1 - z0 - 0.8), Z.METAL, { m: M(s * (W - 0.3), F + y, midZ) });
   // pilhas ao longo das paredes
@@ -348,6 +455,8 @@ function holdContents(P, sg, F, col, rng) {
   P.add(cyl(0.012, 0.012, 1.0, 4), Z.METAL, { m: M(0.1, C - 1.7, gz) });
   P.add(box(0.36, 0.1, 0.24, 0.02), Z.TRIM, { m: M(0.1, C - 2.25, gz) });
   P.glowPart(box(0.05, 0.05, 0.02), [1.0, 0.25, 0.08], 6, { m: M(0.35, C - 1.0, gz - 0.29), blink: 1.2 });
+  sign(1, V(0, C - 0.78, gz - 0.205), V(0, 0, -1), 1.3, 0.16);
+  sign(6, V(0, C - 0.66, gz - 0.205), V(0, 0, -1), 1.55, 0.06);
 }
 
 /** Caixote: corpo, cantoneiras metálicas, nervuras, etiqueta e alças. */

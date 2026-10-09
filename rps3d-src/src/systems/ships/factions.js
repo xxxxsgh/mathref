@@ -5,9 +5,9 @@
 export const FACTION_STYLES = {
   hegemonia: {
     label: 'Hegemonia Solar',
-    primary: [0.80, 0.80, 0.78], secondary: [0.045, 0.06, 0.09], trim: [1.0, 0.70, 0.30],
+    primary: [0.66, 0.66, 0.645], secondary: [0.045, 0.06, 0.09], trim: [1.0, 0.70, 0.30],
     metal: [0.62, 0.62, 0.64], dark: [0.05, 0.055, 0.065], glow: [1.0, 0.72, 0.32],
-    paint: { metal: 0.04, rough: 0.26, clearcoat: 0.85 },
+    paint: { metal: 0.04, rough: 0.3, clearcoat: 0.6 },
     wear: 0.06, patch: 0, hazard: 0, teeth: 0, circuits: 0, iridescence: 0,
     engine: [0.55, 0.72, 1.0], canopy: [0.55, 0.42, 0.18],
     nav: { left: [1.0, 0.08, 0.04], right: [0.1, 1.0, 0.3], strobe: [1, 1, 1] },

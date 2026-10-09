@@ -296,6 +296,31 @@ export class Cockpit {
     const gl2 = loft(cst, { seg: 48, sub: 6, capStart: false, capEnd: false });
     // o loft é um tubo fechado: remove o "piso" de vidro sob o peitoril (senão
     // as gotas/geada apareceriam por cima do painel)
+    // arco do para-brisa (moldura escura com friso dourado) — emoldura a vista
+    {
+      const L = cz1 - cz0;
+      // logo à frente do olho, onde o canopy já é quase da largura total:
+      // a moldura fica na periferia da vista, não na frente do HUD
+      const zb = Math.min(-0.5, cz0 + L * 0.3) > cz0 + 0.05 ? Math.max(cz0 + L * 0.3, -0.52) : cz0 + 0.05;
+      const F = new Parts(4343);
+      const pts = [], pts2 = [];
+      for (let k = 0; k <= 24; k++) {
+        const a = (k / 24) * Math.PI;
+        const r = gl2.at(zb, a);
+        if (r.pos.y < sill - 0.01) continue;
+        pts.push(r.pos.clone().addScaledVector(r.normal, -0.028).toArray());
+        pts2.push(r.pos.clone().addScaledVector(r.normal, -0.05).add(V(0, 0, 0.022)).toArray());
+      }
+      if (pts.length > 3) {
+        F.add(pipe(pts, 0.03, 48), Z.DARK, { wear: 0.25 });
+        F.add(pipe(pts2, 0.008, 48), Z.TRIM, { wear: 0.1 });
+        // espelho retrovisor no topo do arco
+        const top = gl2.at(zb, Math.PI / 2).pos;
+        F.add(box(0.16, 0.035, 0.012, 0.006), Z.DARK, { m: M(0, top.y - 0.07, zb + 0.03, -0.25, 0, 0) });
+        const fg = Parts.merge(F.hull);
+        if (fg) { const fm = new THREE.Mesh(fg, this.intMat); fm.castShadow = true; this.cabin.add(fm); }
+      }
+    }
     const glassGeo = cutBox(gl2.geo.toNonIndexed(), { min: V(-5, -5, -10), max: V(5, sill + 0.004, 10) });
     glassGeo.computeVertexNormals();
     this.glassMat = makeCockpitGlass({ y: sill });
