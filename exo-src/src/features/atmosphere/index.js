@@ -213,15 +213,28 @@ export default {
       // fundo estelar coerente com a galáxia: paleta da galáxia, plano do sistema
       const gr = rngFrom(ctx.seed.hash('galaxy', ctx.start.galaxy, 'skybox'));
       const sr = rngFrom(ctx.seed.hash('galaxy', ctx.start.galaxy, 'system', sys?.index ?? ctx.start.systemIndex, 'skybox'));
-      const hue0 = gr.next();
-      const hsl = (h, s, l) => {
-        const col = new THREE.Color().setHSL(((h % 1) + 1) % 1, s, l);
+      // paletas de nebulosa curadas (gás ionizado: azul/magenta/ciano/âmbar),
+      // escolhidas pela galáxia e levemente variadas por sistema
+      const NEB = [
+        [[0.12, 0.32, 1.0], [0.9, 0.18, 0.72], [0.15, 0.85, 0.95]],
+        [[0.5, 0.18, 1.0], [1.0, 0.3, 0.28], [0.18, 0.5, 1.0]],
+        [[0.08, 0.7, 0.92], [0.42, 0.22, 1.0], [1.0, 0.55, 0.22]],
+        [[1.0, 0.28, 0.5], [0.25, 0.3, 1.0], [1.0, 0.72, 0.32]],
+        [[0.2, 0.9, 0.6], [0.3, 0.35, 1.0], [0.85, 0.25, 0.9]],
+      ];
+      const nebPal = NEB[Math.floor(gr.next() * NEB.length) % NEB.length];
+      const shift = sr.range(-0.04, 0.04);
+      const vary = (c) => {
+        const col = new THREE.Color(c[0], c[1], c[2]);
+        const h = {};
+        col.getHSL(h);
+        col.setHSL((((h.h + shift) % 1) + 1) % 1, h.s, h.l);
         return new THREE.Vector3(col.r, col.g, col.b);
       };
       const du = dome.uniforms;
-      du.uNebA.value.copy(hsl(hue0, 0.75, 0.45));
-      du.uNebB.value.copy(hsl(hue0 + gr.range(0.25, 0.45), 0.8, 0.5));
-      du.uNebC.value.copy(hsl(hue0 + gr.range(0.55, 0.75), 0.7, 0.5));
+      du.uNebA.value.copy(vary(nebPal[0]));
+      du.uNebB.value.copy(vary(nebPal[1]));
+      du.uNebC.value.copy(vary(nebPal[2]));
       const gn = new THREE.Vector3(sr.range(-1, 1), sr.range(0.4, 1.4), sr.range(-1, 1)).normalize();
       du.uGalN.value.copy(gn);
       du.uNebSeed.value = sr.range(0, 50);
@@ -435,6 +448,9 @@ export default {
     du.uEast.value.copy(fr.east);
     du.uNorth.value.copy(fr.north);
     du.uInside.value = inside ? 1 : 0;
+    // nebulosa mais viva no espaço; no chão à noite, mais contida
+    const tAlt = Math.min(1, Math.max(0, (rl - p.Rb) / Math.max(1e-3, p.Rt - p.Rb)));
+    du.uNebGain.value = 0.6 + 1.6 * tAlt * tAlt;
     const steps = Math.max(8, Math.min(32, ctx.quality.atmosphereSamples || 16));
     du.uSteps.value = steps + 4;
     const H = ctx.pipeline.height || renderer_h(ctx);

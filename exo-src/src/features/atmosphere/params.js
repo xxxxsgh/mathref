@@ -50,9 +50,9 @@ const BIOME_SKY = {
     mie: [1.2, [0.86, 1.0, 0.55]], density: [1.0, 1.4], g: [0.72, 0.8],
   },
   exotic: {
-    shapes: [[0.62, 0.24, 1.0], [0.72, 0.28, 1.0], [0.55, 0.22, 0.95]],
-    absorb: [[0.0, 1.0, 0.3], 4.5],
-    mie: [1.1, [1.0, 0.82, 0.9]], density: [0.8, 1.05], g: [0.74, 0.82],
+    shapes: [[0.95, 0.36, 1.0], [1.0, 0.42, 0.85], [0.85, 0.3, 1.0]],
+    absorb: [[0.0, 1.0, 0.35], 2.6],
+    mie: [1.6, [1.0, 0.8, 0.86]], density: [0.85, 1.1], g: [0.74, 0.82],
   },
   scorched: {
     shapes: [[1.0, 0.6, 0.3], [1.0, 0.5, 0.22], [1.0, 0.7, 0.42]],
@@ -119,7 +119,7 @@ export function deriveAtmosphere({ radius = 120000, atmosphere = null, biome = '
   // escalas de altura: no mínimo ~30% (Rayleigh) e ~8% (Mie) da espessura —
   // planetas pequenos com H curto demais virariam um "nevoeiro de chão"
   const thick0 = Rt - Rb;
-  const Hr = Math.max(0.2, (atmo.rayleighHeight || radius * 0.025) / 1000, thick0 * 0.3);
+  const Hr = Math.max(0.2, (atmo.rayleighHeight || radius * 0.025) / 1000, thick0 * 0.22);
   const Hm = Math.max(0.05, (atmo.mieHeight || radius * 0.005) / 1000, thick0 * 0.08);
 
   // forma espectral do Rayleigh: mistura de duas candidatas do bioma

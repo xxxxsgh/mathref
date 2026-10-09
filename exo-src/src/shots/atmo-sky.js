@@ -16,7 +16,7 @@ export default [
       anchor: { body: 'moon', elevation: 15, azimuth: 345 },
       look: { body: 'sun', offset: 25 },
     },
-    timeOfDay: 0.31,
+    timeOfDay: 0.335,
     weather: 'clear',
     params: { atmoBiome: 'exotic', atmoCompanion: { az: -11, el: 6, temperature: 3300, intensity: 0.5, size: 1.0 } },
   },

@@ -103,6 +103,7 @@ uniform vec3 uNebB;
 uniform vec3 uNebC;
 uniform float uNebSeed;
 uniform float uStarGain;
+uniform float uNebGain;   // ganho da nebulosa (maior no espaço)
 // aurora
 uniform float uAurora;
 uniform vec3 uAurLow;
@@ -151,9 +152,11 @@ vec3 starLayer(vec3 p, float cells, float prob, float gain, float seed, float ba
       vec2 o = id + 0.15 + 0.7 * vec2(hash13(key + 11.1), hash13(key + 23.7));
       float d = length(g - o) * cellAng;
       float m = hash13(key + 5.3);
-      float b = 0.018 + 0.22 * pow(m, 6.0) + 3.5 * pow(m, 60.0);
-      float rad = uPixelAngle * (0.36 + 0.6 * pow(m, 24.0));
-      float tw = 1.0 + 0.4 * sin(uTime * (2.0 + 5.0 * m) + h * 61.0) * uStarGain;
+      // distribuição de magnitudes íngreme: a maioria quase no limite da
+      // visão, poucas brilhantes (não viram "flocos" no bloom)
+      float b = 0.004 + 0.04 * pow(m, 6.0) + 0.3 * pow(m, 40.0) + 3.0 * pow(m, 160.0);
+      float rad = uPixelAngle * (0.32 + 0.45 * pow(m, 40.0));
+      float tw = 1.0 + 0.45 * sin(uTime * (2.0 + 5.0 * m) + h * 61.0) * uStarGain;
       acc += starColor(hash13(key + 41.9)) * b * tw * exp(-0.5 * d * d / (rad * rad));
     }
   }
@@ -161,20 +164,27 @@ vec3 starLayer(vec3 p, float cells, float prob, float gain, float seed, float ba
 }
 
 vec3 nebula(vec3 p, float band) {
-  vec3 q = p * 1.6 + uNebSeed;
-  float w = fbm3(q * 0.8, 3);
-  float n = fbm3(q * 1.2 + w * 1.6, 5);
-  float n2 = fbm3(q * 2.1 - w, 3);
-  // nuvens grandes e macias, mais densas na faixa galáctica
-  float cl = smoothstep(0.45, 0.8, n) * (0.25 + 0.75 * band);
-  vec3 c = mix(uNebA, uNebB, smoothstep(0.35, 0.65, n2));
-  c = mix(c, uNebC, smoothstep(0.6, 0.85, fbm3(q * 0.9 + 7.0, 3)) * 0.7);
-  // faixa: brilho difuso de estrelas não resolvidas + poeira escura
-  float dust = smoothstep(0.5, 0.72, fbm3(q * 2.6 + 3.0, 4)) * band;
-  vec3 neb = c * cl * 0.9;
-  neb += mix(vec3(0.75, 0.78, 1.0), c, 0.35) * band * (0.25 + 0.5 * n) * 0.6;
-  neb *= 1.0 - 0.8 * dust;
-  return neb * 0.09;
+  vec3 q = p * 1.3 + uNebSeed;
+  // domínio deformado: nuvens grandes com filamentos e bordas irregulares
+  vec3 w = vec3(fbm3(q * 0.9, 3), fbm3(q * 0.9 + 5.2, 3), fbm3(q * 0.9 + 9.7, 3)) - 0.5;
+  float n = fbm3(q * 1.5 + w * 2.6, 6);
+  float big = smoothstep(0.36, 0.74, n);
+  float fil = 1.0 - abs(2.0 * fbm3(q * 3.1 + w * 2.0, 4) - 1.0);
+  fil = fil * fil * fil;
+  float region = smoothstep(0.32, 0.72, fbm3(q * 0.45 + 3.3, 3));
+  float hue = fbm3(q * 0.7 + 11.0, 3);
+  vec3 c = mix(uNebA, uNebB, smoothstep(0.35, 0.65, hue));
+  c = mix(c, uNebC, smoothstep(0.5, 0.8, w.x + 0.5) * 0.75);
+  float dens = big * (0.3 + 0.7 * fil) * mix(0.18, 1.0, region) * (0.45 + 0.55 * band);
+  // poeira escura recortando as nuvens e a faixa
+  float dust = smoothstep(0.48, 0.74, fbm3(q * 2.3 + w * 1.5 + 3.0, 5));
+  vec3 neb = c * dens * (1.0 - 0.85 * dust * (0.4 + 0.6 * big));
+  // núcleos brilhantes (gás ionizado mais quente, puxado para o branco)
+  float core = pow(big * fil, 3.0);
+  neb += mix(c, vec3(1.0), 0.35) * core * 1.4;
+  // faixa galáctica: brilho difuso de estrelas não resolvidas
+  vec3 milky = mix(vec3(0.85, 0.82, 1.0), c, 0.35) * band * (0.25 + 0.75 * fbm3(q * 4.0, 4)) * (1.0 - 0.75 * dust);
+  return (neb * 0.16 + milky * 0.035) * uNebGain;
 }
 
 // ── aurora: cortinas projetadas em camadas horizontais ──
@@ -392,7 +402,8 @@ void main() {
       }
       // halo (coroa + espalhamento no olho/lente) — atenuado pela atmosfera
       float e = length(uStarE[l]);
-      add += uStarTint[l] * e * T * (1.2 * exp(-th / (ang * 2.5)) + 0.22 * exp(-th / (ang * 9.0)) + 0.045 * exp(-th / 0.09) + 0.01 * exp(-th / 0.4));
+      float wide = mix(0.3, 1.0, uInside);
+      add += uStarTint[l] * e * T * (1.2 * exp(-th / (ang * 2.5)) + 0.22 * mix(0.45, 1.0, uInside) * exp(-th / (ang * 9.0)) + wide * (0.045 * exp(-th / 0.09) + 0.01 * exp(-th / 0.4)));
     }
     vec3 glowAdd = vec3(0.0);
     composeBodies(rd, bg, glowAdd);
@@ -428,6 +439,7 @@ export function createDome(sharedUniforms) {
     uNebC: { value: new THREE.Vector3(0.2, 0.9, 0.8) },
     uNebSeed: { value: 0 },
     uStarGain: { value: 1 },
+    uNebGain: { value: 1 },
     uAurora: { value: 0 },
     uAurLow: { value: new THREE.Vector3(0.1, 1, 0.4) },
     uAurHigh: { value: new THREE.Vector3(0.6, 0.1, 0.9) },

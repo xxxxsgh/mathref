@@ -41,7 +41,9 @@ void main() {
     // luz do céu refletida pelo chão (aproximação: 25% da direta + piso)
     bg = uGroundAlbedo / PI * E * 1.25 + uGroundAlbedo * 0.02 * L;
   }
-  gl_FragColor = vec4(min(L + T * bg, vec3(200.0)), 1.0);
+  // ganho de preenchimento: o céu ilumina as sombras com mais força (leitura
+  // de jogo: sombras coloridas pelo céu em vez de quase pretas)
+  gl_FragColor = vec4(min(L * 1.6 + T * bg, vec3(200.0)), 1.0);
 }`;
 
 export class EnvProbe {
