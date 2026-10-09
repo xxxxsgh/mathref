@@ -49,10 +49,10 @@ export const BIOMES = {
     temperature: 41, humidity: 0.9, flora: 0.7, fauna: 0.5,
     sea: 0,
     palette: {
-      grass: [0.42, 0.58, 0.015], grass2: [0.16, 0.42, 0.03], dry: [0.5, 0.4, 0.03],
+      grass: [0.25, 0.37, 0.01], grass2: [0.09, 0.26, 0.02], dry: [0.34, 0.27, 0.02],
       rock: [0.09, 0.05, 0.11], rock2: [0.22, 0.12, 0.2], sand: [0.45, 0.42, 0.08],
-      snow: [0.75, 0.85, 0.5], water: [0.06, 0.24, 0.01], deep: [0.012, 0.05, 0.0], seabed: [0.18, 0.25, 0.04],
-      sky: [0.65, 0.8, 0.25], accent: [0.6, 0.1, 0.8], emissiveWater: [0.05, 0.18, 0.0],
+      snow: [0.75, 0.85, 0.5], water: [0.03, 0.13, 0.005], deep: [0.006, 0.03, 0.0], seabed: [0.12, 0.16, 0.03],
+      sky: [0.65, 0.8, 0.25], accent: [0.6, 0.1, 0.8], emissiveWater: [0.012, 0.05, 0.0],
     },
     style: {
       landBias: 0.25, warp: 4000, hillAmp: 300, hillWave: 1900, ridgeAmp: 700, ridgeWave: 6000, mountains: 0.6,
@@ -90,7 +90,7 @@ export const BIOMES = {
     },
     style: {
       landBias: 0.6, warp: 5000, hillAmp: 220, hillWave: 2600, ridgeAmp: 900, ridgeWave: 7500, mountains: 0.55,
-      canyons: 1, canyonDepth: 340, plateaus: 0.9, terraceStep: 55, spires: 0.3, billow: 0, craters: 0.1,
+      canyons: 1, canyonDepth: 460, plateaus: 0.9, terraceStep: 55, spires: 0.3, billow: 0, craters: 0.1,
       snowLine: 99999, rockSlope: 0.26, sandAmount: 0.35, strata: 1,
     },
     features: { arch: 0.07, floatArch: 0.015, floating: 0.02, cave: 0.05 },
@@ -117,15 +117,15 @@ export const BIOMES = {
     temperature: 18, humidity: 0.6, flora: 0.8, fauna: 0.6,
     sea: 0,
     palette: {
-      grass: [0.48, 0.035, 0.34], grass2: [0.14, 0.05, 0.5], dry: [0.6, 0.2, 0.45],
-      rock: [0.05, 0.28, 0.3], rock2: [0.16, 0.46, 0.44], sand: [0.6, 0.48, 0.7],
+      grass: [0.3, 0.02, 0.22], grass2: [0.08, 0.03, 0.32], dry: [0.42, 0.13, 0.3],
+      rock: [0.015, 0.22, 0.25], rock2: [0.04, 0.45, 0.4], sand: [0.6, 0.48, 0.7],
       snow: [0.85, 0.85, 1.0], water: [0.05, 0.03, 0.2], deep: [0.01, 0.0, 0.05], seabed: [0.2, 0.1, 0.25],
       sky: [0.65, 0.42, 0.9], accent: [0.1, 1.0, 0.8],
     },
     style: {
-      landBias: 0.3, warp: 4500, hillAmp: 300, hillWave: 2200, ridgeAmp: 1100, ridgeWave: 6000, mountains: 0.6,
-      canyons: 0.3, canyonDepth: 200, plateaus: 0.35, terraceStep: 60, spires: 0.8, billow: 0.3, craters: 0,
-      snowLine: 99999, rockSlope: 0.3, sandAmount: 0.2, strata: 0.5,
+      landBias: 0.3, warp: 4500, hillAmp: 320, hillWave: 2200, ridgeAmp: 1500, ridgeWave: 6000, mountains: 0.85,
+      canyons: 0.3, canyonDepth: 200, plateaus: 0.35, terraceStep: 60, spires: 0.45, billow: 0.3, craters: 0,
+      snowLine: 99999, rockSlope: 0.34, sandAmount: 0.04, strata: 0.5,
     },
     features: { arch: 0.09, floatArch: 0.06, floating: 0.09, cave: 0.04 },
   },

@@ -64,6 +64,9 @@ export class Ocean {
     };
     const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.06, metalness: 0, transparent: true, depthWrite: true });
     mat.name = 'planet:ocean';
+    // o reflexo do céu vem do envMap da cena (PBR) — atenuado: sem a
+    // geometria do relevo refletida, um espelho perfeito vira um "céu no chão"
+    mat.envMapIntensity = 0.4;
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.uniforms);
       sh.vertexShader = sh.vertexShader
@@ -79,8 +82,12 @@ export class Ocean {
           float wFade = 1.0 - smoothstep(300.0, 6000.0, wDist);
           float wd = max(vDepth, 0.0);
           float shallowK = 1.0 - exp(-wd * 0.18);
-          diffuseColor.rgb = mix(uShallow * 1.15, uDeep, smoothstep(0.0, 1.0, 1.0 - exp(-wd * 0.04)));
-          float foamN = texture(tMacro, wP.xz * 0.06 + uTime * 0.01).w;
+          // a água quase não espalha luz de forma difusa: a cor vem da absorção
+          // (escura) + o que se vê do leito pela transparência
+          diffuseColor.rgb = mix(uShallow * 0.45, uDeep * 0.6, smoothstep(0.0, 1.0, 1.0 - exp(-wd * 0.06)));
+          vec3 fUp = normalize(vWP - uCenter);
+          vec3 fBw = pow(abs(fUp), vec3(6.0)); fBw /= (fBw.x + fBw.y + fBw.z);
+          float foamN = texture(tMacro, wP.zy * 0.06 + uTime * 0.01).w * fBw.x + texture(tMacro, wP.xz * 0.06 + uTime * 0.01).w * fBw.y + texture(tMacro, wP.xy * 0.06 + uTime * 0.01).w * fBw.z;
           float foam = (1.0 - smoothstep(0.0, 0.9 + foamN * 0.8, wd)) * wFade;
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8), foam * 0.85);
           `,
@@ -89,12 +96,16 @@ export class Ocean {
           '#include <normal_fragment_maps>',
           /* glsl */ `
           {
-            vec2 uvA = wP.xz * 0.05 + vec2(uTime * 0.013, uTime * 0.007);
-            vec2 uvB = wP.zx * 0.017 - vec2(uTime * 0.006, -uTime * 0.009);
-            vec2 nA = texture(tNrm, vec3(uvA, 2.0)).xy * 2.0 - 1.0;
-            vec2 nB = texture(tNrm, vec3(uvB, 2.0)).xy * 2.0 - 1.0;
-            vec2 nn = (nA * 0.6 + nB * 0.8) * (0.25 + 0.75 * wFade);
+            // TRIPLANAR pela normal local (a superfície é uma esfera: projetar
+            // só em xz estica as ondas em listras longe do polo)
             vec3 up = normalize(vWP - uCenter);
+            vec3 bw = pow(abs(up), vec3(6.0)); bw /= (bw.x + bw.y + bw.z);
+            vec2 tA = vec2(uTime * 0.013, uTime * 0.007), tB = -vec2(uTime * 0.006, -uTime * 0.009);
+            vec2 nA = vec2(0.0), nB = vec2(0.0);
+            if (bw.x > 0.01) { nA += (texture(tNrm, vec3(wP.zy * 0.05 + tA, 2.0)).xy * 2.0 - 1.0) * bw.x; nB += (texture(tNrm, vec3(wP.yz * 0.017 + tB, 2.0)).xy * 2.0 - 1.0) * bw.x; }
+            if (bw.y > 0.01) { nA += (texture(tNrm, vec3(wP.xz * 0.05 + tA, 2.0)).xy * 2.0 - 1.0) * bw.y; nB += (texture(tNrm, vec3(wP.zx * 0.017 + tB, 2.0)).xy * 2.0 - 1.0) * bw.y; }
+            if (bw.z > 0.01) { nA += (texture(tNrm, vec3(wP.xy * 0.05 + tA, 2.0)).xy * 2.0 - 1.0) * bw.z; nB += (texture(tNrm, vec3(wP.yx * 0.017 + tB, 2.0)).xy * 2.0 - 1.0) * bw.z; }
+            vec2 nn = (nA * 0.6 + nB * 0.8) * (0.25 + 0.75 * wFade);
             vec3 t1 = normalize(cross(up, vec3(0.0, 1.0, 0.0001)));
             vec3 t2 = cross(up, t1);
             vec3 nw = normalize(up + t1 * nn.x * 0.35 + t2 * nn.y * 0.35);
@@ -109,9 +120,11 @@ export class Ocean {
             vec3 V = normalize(-vWP);
             vec3 up = normalize(vWP - uCenter);
             float fr = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 5.0) * 0.95 + 0.03;
-            outgoingLight = mix(outgoingLight, uSkyCol * 0.8, fr * 0.85 * (1.0 - foam));
-            outgoingLight += uEmis;
-            float a = mix(0.62 * shallowK + 0.3, 0.97, fr);
+            // reflexo do céu: atenuado e tingido pela água (sem virar um espelho chapado)
+            vec3 refl = mix(uSkyCol * 0.42, uDeep, 0.35);
+            outgoingLight = mix(outgoingLight, refl, min(fr, 0.6) * 0.35 * (1.0 - foam));
+            outgoingLight += uEmis * (0.35 + 0.65 * shallowK);
+            float a = mix(0.7 * shallowK + 0.28, 0.98, fr);
             a = max(a, foam);
             diffuseColor.a = clamp(a, 0.0, 1.0);
           }

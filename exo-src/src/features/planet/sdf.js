@@ -64,13 +64,15 @@ export function siteSDF(T, s) {
 
   if (s.type === 'arch' || s.type === 'floatArch') {
     const floating = s.type === 'floatArch';
-    const span = floating ? 30 + 60 * g(1) : 34 + 66 * g(1);
+    // ~1 em 5 é GIGANTE (150–270 m de vão): a silhueta que se vê de longe
+    const giant = g(7) < 0.2;
+    const span = giant ? 150 + 120 * g(1) : floating ? 30 + 60 * g(1) : 40 + 80 * g(1);
     const a = span / 2;
     const Hs = span * (floating ? 0.35 + 0.3 * g(2) : 0.5 + 0.55 * g(2));
     const t0 = 3.5 + span * 0.075 * (0.7 + 0.7 * g(3));
     const yaw = g(4) * Math.PI * 2;
     const cy = Math.cos(yaw), sy = Math.sin(yaw);
-    const lift = floating ? 45 + 90 * g(5) : 0;
+    const lift = floating ? (giant ? 90 + 120 * g(5) : 45 + 90 * g(5)) : 0;
     const tilt = floating ? (g(6) - 0.5) * 0.9 : 0;
     const ct = Math.cos(tilt), st = Math.sin(tilt);
     // pés no chão: base abaixo do ponto mais baixo sob as pernas
@@ -102,8 +104,10 @@ export function siteSDF(T, s) {
         d = Math.hypot(Math.abs(xr) - a, yr / 1.35) - t0 * 1.45;
       }
       d *= Math.min(1, b / a);
-      d += rock(x, y, z, 1.1 + t0 * 0.06, 11);
-      d += 0.6 * Math.sin(z * 0.55 + 2.5 * gnoise(x / 14, y / 14, z / 14, ns + 3));
+      const rs = Math.max(1, span / 70);
+      d += rock(x, y, z, (1.1 + t0 * 0.06) * Math.sqrt(rs), 11 * rs);
+      // estratos horizontais erodidos (ressaltos de rocha sedimentar)
+      d += 0.6 * Math.sqrt(rs) * Math.sin(z * 0.55 / Math.sqrt(rs) + 2.5 * gnoise(x / 14, y / 14, z / 14, ns + 3));
       return d;
     };
     const m = t0 * 2.4 + 4;
@@ -118,7 +122,7 @@ export function siteSDF(T, s) {
     const base = 70 + 120 * g(2);
     const isl = [];
     for (let i = 0; i < k; i++) {
-      const r = (i === 0 ? 20 : 9) + 24 * g(10 + i);
+      const r = (i === 0 ? 26 : 10) + 34 * g(10 + i);
       const ang = g(20 + i) * Math.PI * 2;
       const dd = i === 0 ? 0 : 25 + 45 * g(30 + i);
       isl.push({ x: Math.cos(ang) * dd, y: Math.sin(ang) * dd, z: base + (g(40 + i) - 0.5) * 40, r });
@@ -185,7 +189,8 @@ export function buildFeature(p) {
   const S = siteSDF(T, s);
   const [x0, y0, z0, x1, y1, z1] = S.box;
   const ext = Math.max(x1 - x0, y1 - y0, z1 - z0);
-  const cs = ext / (p.res || 56);
+  // features grandes ganham mais células (até 1,5×) para manter o detalhe
+  const cs = ext / ((p.res || 56) * clamp(ext / 140, 1, 1.5));
   const nx = Math.ceil((x1 - x0) / cs) + 1, ny = Math.ceil((y1 - y0) / cs) + 1, nz = Math.ceil((z1 - z0) / cs) + 1;
   const F = new Float32Array(nx * ny * nz);
   const id = (i, j, k) => (k * ny + j) * nx + i;

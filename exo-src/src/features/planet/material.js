@@ -55,24 +55,29 @@ varying vec4 vData;
 varying float vAO;
 varying float vSk;
 
+// Derivadas de tela da coordenada triplanar, calculadas em fluxo UNIFORME
+// (topo do main). As amostras abaixo ficam dentro de ifs por pixel (pesos,
+// distância): sem textureGrad as derivadas implícitas ficam indefinidas nas
+// bordas dos quads 2×2 e o mip escolhido vira um xadrez serrilhado.
+vec3 gDpx, gDpy;
 vec4 triA(float layer, vec3 p, vec3 bw, float s) {
   vec4 a = vec4(0.0);
-  if (bw.x > 0.01) a += texture(tAlb, vec3(p.zy * s, layer)) * bw.x;
-  if (bw.y > 0.01) a += texture(tAlb, vec3(p.xz * s, layer)) * bw.y;
-  if (bw.z > 0.01) a += texture(tAlb, vec3(p.xy * s, layer)) * bw.z;
+  if (bw.x > 0.01) a += textureGrad(tAlb, vec3(p.zy * s, layer), gDpx.zy * s, gDpy.zy * s) * bw.x;
+  if (bw.y > 0.01) a += textureGrad(tAlb, vec3(p.xz * s, layer), gDpx.xz * s, gDpy.xz * s) * bw.y;
+  if (bw.z > 0.01) a += textureGrad(tAlb, vec3(p.xy * s, layer), gDpx.xy * s, gDpy.xy * s) * bw.z;
   return a;
 }
 // normais tangentes por projeção (acumuladas por camada)
 void triN(float layer, vec3 p, vec3 bw, float s, float w, inout vec3 nX, inout vec3 nY, inout vec3 nZ, inout vec2 rc) {
   vec4 t;
-  if (bw.x > 0.01) { t = texture(tNrm, vec3(p.zy * s, layer)); nX.xy += (t.xy * 2.0 - 1.0) * w; rc += t.zw * bw.x * w; }
-  if (bw.y > 0.01) { t = texture(tNrm, vec3(p.xz * s, layer)); nY.xy += (t.xy * 2.0 - 1.0) * w; rc += t.zw * bw.y * w; }
-  if (bw.z > 0.01) { t = texture(tNrm, vec3(p.xy * s, layer)); nZ.xy += (t.xy * 2.0 - 1.0) * w; rc += t.zw * bw.z * w; }
+  if (bw.x > 0.01) { t = textureGrad(tNrm, vec3(p.zy * s, layer), gDpx.zy * s, gDpy.zy * s); nX.xy += (t.xy * 2.0 - 1.0) * w; rc += t.zw * bw.x * w; }
+  if (bw.y > 0.01) { t = textureGrad(tNrm, vec3(p.xz * s, layer), gDpx.xz * s, gDpy.xz * s); nY.xy += (t.xy * 2.0 - 1.0) * w; rc += t.zw * bw.y * w; }
+  if (bw.z > 0.01) { t = textureGrad(tNrm, vec3(p.xy * s, layer), gDpx.xy * s, gDpy.xy * s); nZ.xy += (t.xy * 2.0 - 1.0) * w; rc += t.zw * bw.z * w; }
 }
 float hash11(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
 float strataN(float a) { float i = floor(a); float f = fract(a); return mix(hash11(i), hash11(i + 1.0), smoothstep(0.3, 0.7, f)); }
 float macroAt(vec3 p, vec3 bw, float s, int ch) {
-  vec4 m = texture(tMacro, p.zy * s) * bw.x + texture(tMacro, p.xz * s) * bw.y + texture(tMacro, p.xy * s) * bw.z;
+  vec4 m = textureGrad(tMacro, p.zy * s, gDpx.zy * s, gDpy.zy * s) * bw.x + textureGrad(tMacro, p.xz * s, gDpx.xz * s, gDpy.xz * s) * bw.y + textureGrad(tMacro, p.xy * s, gDpx.xy * s, gDpy.xy * s) * bw.z;
   return ch == 0 ? m.x : ch == 1 ? m.y : ch == 2 ? m.z : m.w;
 }
 `;
@@ -85,6 +90,7 @@ const COLOR_FRAG = /* glsl */ `
   vec3 tNg = normalize(vWNor);
   float tSlope = 1.0 - clamp(dot(tNg, tUp), 0.0, 1.0);
   vec3 tP = vWPos + uCamMod;
+  gDpx = dFdx(vWPos); gDpy = dFdy(vWPos);
   float tDist = length(vWPos);
   // pesos triplanares: da normal da malha (detalhe) e do "up" (macro)
   vec3 tBw = pow(abs(tNg), vec3(5.0)); tBw /= (tBw.x + tBw.y + tBw.z);
@@ -149,6 +155,9 @@ const COLOR_FRAG = /* glsl */ `
   vec3 tGrassC = mix(uGrass, uGrass2, smoothstep(0.25, 0.75, tReg + (tM1 - 0.5) * 1.1 + (tM3 - 0.5) * 0.45));
   tGrassC = mix(tGrassC, uDry, smoothstep(0.5, 0.15, tMoist + (tM3 - 0.5) * 0.3) * 0.8);
   tGrassC *= 0.82 + 0.36 * tM3 + (tEro - 0.6) * 0.25;
+  // franja de solo exposto/seco ao redor da rocha (sem "adesivos" de rocha na grama)
+  float tFringe = smoothstep(uRockSlope - 0.16, uRockSlope - 0.02, tSlope + (tM1 - 0.5) * 0.16 + tStr * 0.06) * (1.0 - tRockW);
+  tGrassC = mix(tGrassC, mix(uDry, uRock2, 0.35) * (0.7 + 0.4 * tM3), tFringe * 0.75);
   vec3 tSandC = uSand * (0.88 + 0.24 * tM1);
   vec3 tSnowC = uSnow * (0.8 + 0.08 * tM3) * mix(vec3(0.72, 0.82, 1.0), vec3(1.0), smoothstep(0.35, 0.85, vAO));
   vec3 tAlbC = tBl.x * tRockC * tD0 * 2.0 + tBl.y * tSnowC * tA3.rgb * 1.12 + tBl.z * tSandC * tA2.rgb * 2.0 + tBl.w * tGrassC * tD1 * 2.0;
@@ -156,7 +165,9 @@ const COLOR_FRAG = /* glsl */ `
   if (uHasSea > 0.5) {
     float tUw = smoothstep(uSea + 0.5, uSea - 3.0, tAlt);
     vec3 tBed = mix(uSeabed * (tD1 * 2.0), uWater, 0.35);
-    tAlbC = mix(tAlbC, tBed * exp(min(0.0, tAlt - uSea) * 0.015), tUw);
+    // absorção: o leito some rápido para a cor da água com a profundidade
+    float tDep = max(0.0, uSea - tAlt);
+    tAlbC = mix(tAlbC, mix(uWater * 0.5, tBed, exp(-tDep * 0.12)) * exp(-tDep * 0.03), tUw);
   }
   diffuseColor.rgb = tAlbC;
 #ifdef DEBUG_SKIRT
@@ -187,7 +198,9 @@ const NORMAL_FRAG = /* glsl */ `
     vec3 tnZ = vec3(nZ.xy + tNg.xy, tNg.z);
     vec3 tNw = normalize(tnX.zyx * tBw.x + tnY.xzy * tBw.y + tnZ.xyz * tBw.z);
     // relevo distante: bump de tela pela altura macro (256 m) e pela rocha (32 m)
-    float tHb = ((tM1 - 0.5) * 9.0 + (tC1.a - 0.5) * 5.0 * (0.4 + tBl.x)) * smoothstep(80.0, 500.0, tDist);
+    // (o termo da rocha some com a distância: perto do tamanho do pixel o
+    // bump por derivada de tela vira um xadrez 2×2)
+    float tHb = ((tM1 - 0.5) * 9.0 + (tC1.a - 0.5) * 4.0 * (0.4 + tBl.x) * (1.0 - smoothstep(400.0, 1400.0, tDist))) * smoothstep(80.0, 500.0, tDist);
     {
       vec3 dpx = dFdx(vWPos), dpy = dFdy(vWPos);
       float dhx = dFdx(tHb), dhy = dFdy(tHb);

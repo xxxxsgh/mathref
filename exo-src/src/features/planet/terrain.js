@@ -48,7 +48,7 @@ function terrace01(t, n) {
   const x = t * n;
   const k = Math.floor(x);
   const f = x - k;
-  return Math.min(1, (k + 0.2 * f + 0.8 * smoothstep(0.55, 0.9, f)) / n);
+  return Math.min(1, (k + 0.1 * f + 0.9 * smoothstep(0.7, 0.96, f)) / n);
 }
 
 export function createTerrain(cfg) {
@@ -174,9 +174,16 @@ export function createTerrain(cfg) {
       const kk = 1 / 12000;
       let v = gnoise(qx * kk, qy * kk, qz * kk, sK2) + 0.32 * gnoise(qx * kk * 2.9, qy * kk * 2.9, qz * kk * 2.9, sK3);
       v = Math.abs(v);
+      // paredes recortadas: contrafortes, nichos e ravinas laterais
+      if (v < 0.14) {
+        v += 0.022 * ow(1400, sp) * gnoise(qx / 1400, qy / 1400, qz / 1400, sK3 + 5);
+        v += 0.009 * ow(420, sp) * gnoise(qx / 420, qy / 420, qz / 420, sK3 + 6);
+        v += 0.004 * ow(140, sp) * gnoise(qx / 140, qy / 140, qz / 140, sK3 + 7);
+        v = Math.abs(v);
+      }
       const wc = 0.085;
       if (v < wc) {
-        const t = terrace01(v / wc, 4);
+        const t = terrace01(v / wc, 5);
         h -= S.canyonDepth * mCanyon * (1 - t);
         strata = Math.max(strata, mCanyon * (1 - t * 0.6));
       }
