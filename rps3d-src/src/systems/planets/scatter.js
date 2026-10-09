@@ -22,7 +22,7 @@ export function atmoUniforms(body) {
     A,
     R: uniform(A.R), top: uniform(A.top), HR: uniform(A.HR), HM: uniform(A.HM),
     betaR: uniform(new THREE.Vector3(...A.betaR)), betaM: uniform(new THREE.Vector3(...A.betaM)), betaMe: uniform(new THREE.Vector3(...A.betaMe)),
-    mieExt: uniform(A.mieExt), g: uniform(A.g),
+    mieExt: uniform(A.mieExt), g: uniform(A.g), xk: uniform(A.xk || 1),
   };
 }
 
@@ -40,8 +40,8 @@ export function sunTrans(U, p, L) {
   const r = length(p);
   const h = r.sub(U.R);
   const mu = dot(p, L).div(r);
-  const odR = U.HR.mul(chap(U.R.div(U.HR), h.div(U.HR), mu));
-  const odM = U.HM.mul(chap(U.R.div(U.HM), h.div(U.HM), mu));
+  const odR = U.HR.mul(chap(U.R.mul(U.xk).div(U.HR), h.div(U.HR), mu));
+  const odM = U.HM.mul(chap(U.R.mul(U.xk).div(U.HM), h.div(U.HM), mu));
   return exp(U.betaR.mul(odR).add(U.betaMe.mul(odM)).negate());
 }
 
@@ -76,7 +76,7 @@ export function makeScatter(U, S, steps, ground, name) {
     ds.assign(max(t1.sub(t0), 0.0).mul(select(disc.greaterThan(0.0), float(1.0), float(0.0))).div(steps));
     const odR = float(0).toVar(), odM = float(0).toVar();
     const sR = vec3(0).toVar(), sM = vec3(0).toVar();
-    const XR = U.R.div(U.HR), XM = U.R.div(U.HM);
+    const XR = U.R.mul(U.xk).div(U.HR), XM = U.R.mul(U.xk).div(U.HM);
     Loop(steps, ({ i }) => {
       const t = t0.add(ds.mul(float(i).add(0.5)));
       const p = ro.add(rd.mul(t));

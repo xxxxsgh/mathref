@@ -110,25 +110,58 @@ export function registerShots(ctx, api, st) {
     api.settle();
   });
 
-  // ── pôr do sol na costa de Verídia ──
+  // ── pôr do sol na costa de Verídia: sol baixo no quadro, serras em
+  //    contraluz, água à frente refletindo o caminho dourado ──
   ctx.shots.register('planets-veridia-surface-sunset', async (ctx) => {
     setup(ctx, 'kessa', 64);
     const b = body(ctx, 'Verídia');
     const v = api.view(b);
-    const d = search(api, b, P(ctx, 'elev', 1.8), (d, h, T) => {
-      if (h < 18 || h > 120) return -Infinity;
-      const { tan } = sunTangent(api, b, d, ctx);
-      const side = new THREE.Vector3().crossVectors(d, tan).normalize();
-      const sea = profile(T, b, d, tan, [600, 1200, 2000]);
-      const mtn = Math.max(profile(T, b, d, side, [3000, 6000, 9000]), profile(T, b, d, side.clone().negate(), [3000, 6000, 9000]));
-      return (sea < 0 ? 600 : 0) + Math.min(mtn, 2600) - Math.abs(h - 40) * 2;
-    }, { tries: 360 });
-    const { tan, sunL } = sunTangent(api, b, d, ctx);
+    // busca ampla: sol entre 1,5° e 7°, olhar 22–46° ao lado do sol (o disco
+    // fica no quadro); nota = ângulo das serras no quadro + água à frente
+    const T = v.terrain;
+    const smp = v.S.wtex.sampler;
+    const wa = v.wmapAt(ctx.time.world) * Math.PI * 2, wc = Math.cos(wa), ws = Math.sin(wa);
+    const cov = (q) => smp(q.x * wc - q.z * ws, q.y, q.x * ws + q.z * wc).cov;
+    let d = null, Y = P(ctx, 'yaw', 0), best = -Infinity;
+    const yaws = Y ? [Y] : [-40, -30, -22, 22, 30, 40];
+    for (let i = 0; i < 1400; i++) {
+      const el = 2.2 + ((i * 0.6180339) % 1) * 2.4;
+      const dd = api.dirForSun(b, el, i * 0.2571 * 57.3);
+      const h0 = T.height(dd.x, dd.y, dd.z);
+      if (h0 < 4 || h0 > 120) continue;
+      const tan = sunTangent(api, b, dd, ctx).tan;
+      // o sol precisa estar livre (nenhum relevo na frente do disco)
+      let blocked = false;
+      for (const k of [300, 800, 1600, 3000, 5000, 8000, 12000, 16000]) {
+        const p = dd.clone().addScaledVector(tan, k / b.radius).normalize();
+        if ((T.height(p.x, p.y, p.z) - h0 - 20 - k * k / (2 * b.radius)) / k > Math.tan((el - 1.0) * D2R)) { blocked = true; break; }
+      }
+      if (blocked) continue;
+      for (const y of yaws) {
+        const L = tan.clone().applyAxisAngle(dd, y * D2R);
+        let ang = 0;
+        for (const a of [-30, -18, -6, 6, 18, 30]) {
+          const Ld = L.clone().applyAxisAngle(dd, a * D2R);
+          for (const k of [2000, 3500, 5500, 8000, 11000]) {
+            const p = dd.clone().addScaledVector(Ld, k / b.radius).normalize();
+            ang = Math.max(ang, (T.height(p.x, p.y, p.z) - h0 - k * k / (2 * b.radius)) / k);
+          }
+        }
+        const water = profile(T, b, dd, L, [300, 700, 1300]);
+        const near = profile(T, b, dd, L, [50, 120, 250]) - h0;
+        // céu limpo sobre a câmera e na direção do sol (camada de nuvens ~2 km)
+        const sunSide = dd.clone().addScaledVector(tan, 9000 / b.radius).normalize();
+        const s = Math.min(ang, 0.2) * 4000 + (water < 0 ? 250 : 0) - Math.max(0, near) * 15 - Math.abs(h0 - 25)
+          - (cov(dd) * 1.5 + cov(sunSide)) * 500;
+        if (s > best) { best = s; d = dd; Y = y; }
+      }
+    }
+    const lookOf = (dd) => sunTangent(api, b, dd, ctx).tan.applyAxisAngle(dd, Y * D2R);
     const h = Math.max(0, v.terrain.height(d.x, d.y, d.z));
-    const pos = d.clone().multiplyScalar(b.radius + h + P(ctx, 'alt', 28));
-    const look = tan.clone().applyAxisAngle(d, P(ctx, 'yaw', 72) * D2R).addScaledVector(d, P(ctx, 'pitch', 0.03)).normalize();
+    const pos = d.clone().multiplyScalar(b.radius + h + P(ctx, 'alt', 16));
+    const look = lookOf(d).addScaledVector(d, P(ctx, 'pitch', 0.06)).normalize();
     localCam(ctx, st, b, pos, look, d);
-    ctx.services.rendering?.setExposure?.(P(ctx, 'exp', 0.6), { speed: 200 });
+    ctx.services.rendering?.setExposure?.(P(ctx, 'exp', 0.5), { speed: 200, auto: false });
     api.weather.force('rain', 0);
     api.settle();
   });
@@ -182,7 +215,7 @@ export function registerShots(ctx, api, st) {
     const look = tan.clone().applyAxisAngle(d, 70 * D2R).addScaledVector(d, 0.08).normalize();
     const h = v.terrain.height(d.x, d.y, d.z);
     localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + 2.2), look, d);
-    api.weather.force('blizzard', P(ctx, 'storm', 0.45));
+    api.weather.force('blizzard', P(ctx, 'storm', 0.72));
     api.settle();
   });
 
@@ -265,7 +298,13 @@ export function registerShots(ctx, api, st) {
       const dir = tan.clone().applyAxisAngle(d, a * D2R);
       let l = 0;
       for (const k of [200, 500, 900, 1500]) { const p = d.clone().addScaledVector(dir, k / b.radius).normalize(); l += T.sample(p.x, p.y, p.z, {}).s; }
-      l += Math.max(0, profile(T, b, d, dir, [2500, 4000, 6000]) - 150) / 110;
+      // cone vulcânico no horizonte: maior ângulo de elevação do relevo distante
+      let ang = 0;
+      for (const k of [2500, 4000, 6000, 8500, 12000]) {
+        const p = d.clone().addScaledVector(dir, k / b.radius).normalize();
+        ang = Math.max(ang, (T.height(p.x, p.y, p.z) - T.height(d.x, d.y, d.z) - k * k / (2 * b.radius)) / k);
+      }
+      l += Math.min(ang, 0.15) * 60;
       if (dir.dot(tan) > 0.3) l -= 6; // nunca contra o sol: a lava brilha no contraluz do crepúsculo
       if (l > bl) { bl = l; look = dir; }
     }
@@ -299,6 +338,47 @@ export function registerShots(ctx, api, st) {
     const look = gT.clone().addScaledVector(d, 0.3).normalize();
     const h = v.terrain.height(d.x, d.y, d.z);
     localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + 30), look, d);
+    api.settle();
+  });
+
+  // ── noite em Verídia: céu estrelado, Tharsos e seus anéis sobre a serra ──
+  ctx.shots.register('planets-veridia-night', async (ctx) => {
+    setup(ctx, 'kessa', P(ctx, 'fov', 38));
+    const b = body(ctx, 'Verídia');
+    const g = body(ctx, 'Tharsos');
+    const v = api.view(b), T = v.terrain;
+    const t = ctx.time.world;
+    const toG = b.dirToLocal(g.pos.clone().sub(b.pos).normalize(), t, new THREE.Vector3());
+    const sunL = b.dirToLocal(ctx.universe.system.star.pos.clone().sub(b.pos).normalize(), t, new THREE.Vector3());
+    let best = null, bs = -Infinity;
+    const N = 3000;
+    for (let i = 0; i < N; i++) {
+      // pontos de Fibonacci na esfera
+      const yy = 1 - (2 * (i + 0.5)) / N, rr = Math.sqrt(1 - yy * yy), ph = i * 2.39996;
+      const d = new THREE.Vector3(Math.cos(ph) * rr, yy, Math.sin(ph) * rr);
+      const sEl = Math.asin(d.dot(sunL)) / D2R, gEl = Math.asin(d.dot(toG)) / D2R;
+      if (sEl > -14 || gEl < 6 || gEl > 30) continue;
+      const h0 = T.height(d.x, d.y, d.z);
+      if (h0 < 5) continue;
+      const gT = toG.clone().addScaledVector(d, -toG.dot(d)).normalize();
+      // serra escura no horizonte abaixo do planeta
+      let ang = -1;
+      for (const a of [-12, -4, 4, 12]) for (const k of [2500, 5000, 8000, 12000]) {
+        const p = d.clone().addScaledVector(gT.clone().applyAxisAngle(d, a * D2R), k / b.radius).normalize();
+        ang = Math.max(ang, (T.height(p.x, p.y, p.z) - h0 - k * k / (2 * b.radius)) / k);
+      }
+      const s = -Math.abs(gEl - 14) * 3 + Math.min(ang, Math.tan((gEl - 5) * D2R)) * 600 - Math.max(0, ang - Math.tan((gEl - 5) * D2R)) * 4000;
+      if (s > bs) { bs = s; best = d; }
+    }
+    const d = best || api.dirForSun(b, -20, 0);
+    const gT = toG.clone().addScaledVector(d, -toG.dot(d)).normalize();
+    const gEl = Math.asin(d.dot(toG));
+    const look = gT.clone().multiplyScalar(Math.cos(gEl * 0.62)).addScaledVector(d, Math.sin(gEl * 0.62)).normalize()
+      .applyAxisAngle(d, P(ctx, 'yaw', 9) * D2R);
+    const h = Math.max(0, T.height(d.x, d.y, d.z));
+    localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + P(ctx, 'alt', 12)), look, d);
+    ctx.services.rendering?.setExposure?.(P(ctx, 'exp', 1.6), { speed: 200, auto: false });
+    api.weather.force('rain', 0);
     api.settle();
   });
 

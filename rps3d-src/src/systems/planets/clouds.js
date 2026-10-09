@@ -107,7 +107,9 @@ export function makeCloudMaterials(body, U, S, opts) {
     const acc = vec3(0).toVar();
     const tFirst = float(-1).toVar();
     const mu = dot(rd, S.sunL).toVar();
-    const phase = mix(hg(mu, 0.42), hg(mu, -0.15), 0.35).mul(4 * PI).toVar();
+    // fase: lóbulo para a frente + retroespalhamento + pico estreito (forro
+    // prateado nas bordas de nuvens diante do sol)
+    const phase = mix(hg(mu, 0.42), hg(mu, -0.15), 0.35).add(hg(mu, 0.85).mul(0.12)).mul(4 * PI).toVar();
     // luz do sol nas nuvens: transmitância avaliada perto do chão (≈350 m) para
     // que os pores do sol tinjam as nuvens como numa atmosfera "grande"
     const pm0 = ro.add(rd.mul(tStart.add(seg.mul(0.3))));
@@ -135,11 +137,13 @@ export function makeCloudMaterials(body, U, S, opts) {
             const l2 = density(pb, wb, cloudCoverage(U, S, null, wb));
             const od = l1.mul(180.0).add(l2.mul(520.0)).mul(sigma);
             // espalhamento múltiplo aproximado: soma de lóbulos de Beer cada vez mais fracos
-            const Tl = exp(od.negate()).add(exp(od.mul(-0.25)).mul(0.32)).add(exp(od.mul(-0.06)).mul(0.1));
+            const Tl = exp(od.negate()).add(exp(od.mul(-0.25)).mul(0.4)).add(exp(od.mul(-0.06)).mul(0.16));
             const powder = float(1).sub(exp(d.mul(sigma).mul(-480.0))).mul(0.65).add(0.35);
             const hn = length(p).sub(C.base).div(C.top.sub(C.base));
             // bases úmidas (chuva) escurecem; topos recebem mais céu
-            const amb = ambC.mul(mix(C.dark, vec3(1.0), clamp(hn.mul(1.2).add(0.15).sub(w.z.mul(0.35)), 0.0, 1.0)));
+            // céu só ilumina o lado diurno (no lado noturno as nuvens apagam)
+            const dayF = smoothstep(-0.1, 0.45, dot(p, S.sunL).div(length(p)));
+            const amb = ambC.mul(mix(C.dark, vec3(1.0), clamp(hn.mul(1.2).add(0.15).sub(w.z.mul(0.35)), 0.0, 1.0))).mul(dayF.mul(0.97).add(0.03));
             const lum = sunC.mul(Tl).mul(phase).mul(powder).add(amb);
             const Ts = exp(d.mul(sigma).mul(ds).negate());
             acc.addAssign(lum.mul(trans).mul(float(1).sub(Ts)));

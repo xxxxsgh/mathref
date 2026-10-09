@@ -101,7 +101,7 @@ function afterViews(ctx, info, dt) {
   const space = ctx.services.space;
   if (v?.A) {
     const lum = 0.2126 * v.zen[0] + 0.7152 * v.zen[1] + 0.0722 * v.zen[2];
-    const fade = Math.max(0, 1 - lum * 45) ** 2;
+    const fade = Math.max(0, 1 - lum * 140) ** 2;
     space?.setSkyFade?.(1 - inside * (1 - fade));
   } else space?.setSkyFade?.(1);
   // luz do sol avermelhada pela atmosfera (pôr do sol) + céu do IBL

@@ -146,12 +146,15 @@ export class PlanetView {
     const sd = this.sunLocal.clone().addScaledVector(up, -this.sunLocal.dot(up));
     if (sd.lengthSq() < 1e-6) sd.set(up.y, -up.x, 0);
     sd.normalize();
+    // média de 4 azimutes (sol, oposto e laterais): no crepúsculo o brilho em
+    // volta do sol é estreito e não deve virar a luz ambiente do mundo inteiro
     const hz = [0, 0, 0];
-    for (const s of [1, -1]) {
-      const d = [sd.x * s + up.x * 0.06, sd.y * s + up.y * 0.06, sd.z * s + up.z * 0.06];
+    const sp = new THREE.Vector3().crossVectors(up, sd).normalize();
+    for (const [a, c] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const d = [sd.x * a + sp.x * c + up.x * 0.06, sd.y * a + sp.y * c + up.y * 0.06, sd.z * a + sp.z * c + up.z * 0.06];
       const l = Math.hypot(...d);
       const o = scatterCPU(A, ro, [d[0] / l, d[1] / l, d[2] / l], L, Infinity, 8, this.skyCPU);
-      for (let k = 0; k < 3; k++) hz[k] += o.I[k] * 0.5 * [sk.x, sk.y, sk.z][k];
+      for (let k = 0; k < 3; k++) hz[k] += o.I[k] * 0.25 * [sk.x, sk.y, sk.z][k];
     }
     this.hor = hz;
     S.skyZ.value.set(...this.zen);

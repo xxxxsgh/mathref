@@ -92,7 +92,11 @@ function surface(type, P, U, S, I) {
     const canopy = N3(det.mul(fq(6))).b.mul(fade(dist, 6));
     const veg = mix(meadow.mul(vFine.mul(0.5).add(vMicro.mul(0.7)).add(1)), forestCol.mul(canopy.mul(0.9).add(0.55)), forestMask);
     // rocha estratificada
-    const strata = N3(vec3(h.mul(1 / 90), up.x.mul(3.0), up.z.mul(3.0)).add(vMicro.mul(0.4))).r;
+    // estratos: camadas finas (somem antes de virar listras de contorno) sobre
+    // bancadas largas torcidas pelo ruído macro
+    const strataF = N3(vec3(h.mul(1 / 90), up.x.mul(3.0), up.z.mul(3.0)).add(vMicro.mul(0.4)).add(macro.g.mul(0.6))).r.sub(0.5).mul(fade(dist, 22));
+    const strataL = N3(vec3(h.mul(1 / 520).add(macro.b.mul(0.8)), up.x.mul(1.3), up.z.mul(1.3))).g;
+    const strata = strataL.add(strataF.mul(0.8));
     const rockCol = mix(C3(P.rock), C3(P.rock2), strata.mul(0.7).add(vMicro.mul(0.9)).add(0.1)).mul(vFine.mul(0.6).add(meso.g.sub(0.5).mul(0.5)).add(1));
     const rockMask = smoothstep(0.24, 0.42, slope.add(vMicro.mul(0.15)).add(q.mul(0.12)));
     // alta montanha (tundra) e neve
@@ -138,29 +142,35 @@ function surface(type, P, U, S, I) {
     const rockCol = strataCol.mul(float(1).sub(varnish)).mul(vFine.mul(0.7).add(vMicro.mul(0.6)).add(1));
     // salinas nas bacias
     const salt = smoothstep(-80, -200, h).mul(smoothstep(0.08, 0.02, slope));
-    let g = mix(rockCol, sandCol.mul(vFine.mul(0.12).add(vMicro.mul(0.35)).add(rip2.mul(0.04)).add(1)), sandMask);
+    let g = mix(rockCol, sandCol.mul(vFine.mul(0.06).add(vMicro.mul(0.14)).add(rip2.mul(0.05)).add(1)), sandMask);
     g = mix(g, C3(P.snow).mul(vMicro.mul(0.4).add(0.95)), salt.mul(0.8));
     albedo = g;
     rough = mix(float(0.8), float(0.95), sandMask);
     // rocha: degraus finos dos estratos (erosão diferencial) em vez de caroços
     const ledge = fract(band.mul(3.0)).mul(fade(dist, 4.0));
-    bump = mix(vFine.mul(0.5).add(vMicro.mul(1.6)).add(ledge.mul(0.8)), ripple.mul(0.12).add(vMicro.mul(0.5)), sandMask);
+    bump = mix(vFine.mul(0.5).add(vMicro.mul(1.6)).add(ledge.mul(0.8)), ripple.mul(0.14).add(vMicro.mul(0.2)), sandMask);
     bumpScale = float(1);
   } else if (type === 'ice') {
     const snowCol = mix(C3(P.lowA), C3(P.lowB), smoothstep(0.35, 0.7, macro.r.add(vMeso.mul(0.5)))).mul(vFine.mul(0.08).add(1));
-    const iceMask = smoothstep(0.55, 0.75, s.mul(0.5).add(macro2.b.mul(0.6)).add(vMeso.mul(0.5))).mul(smoothstep(0.02, 0.12, slope).mul(0.6).add(0.4));
-    const iceCol = mix(C3(P.forest), C3(P.alien), smoothstep(0.3, 0.8, micro.g)).mul(vFine.mul(0.2).add(1));
+    // gelo azul exposto: só onde o vento varreu a neve (manchas grandes e raras)
+    const iceMask = smoothstep(0.78, 0.9, s.mul(0.45).add(macro2.b.mul(0.6)).add(vMeso.mul(0.4))).mul(smoothstep(0.02, 0.12, slope).mul(0.5).add(0.5));
+    const iceCol = mix(C3(P.forest), C3(P.alien), smoothstep(0.3, 0.8, macro.g)).mul(vMicro.mul(0.3).add(1));
     const crev = smoothstep(0.45, 0.8, q).mul(s);
-    const rockMask = smoothstep(0.45, 0.65, slope.add(vMicro.mul(0.08)));
-    const rockCol = mix(C3(P.rock), C3(P.rock2), micro.r).mul(vFine.mul(0.6).add(1));
+    // rocha exposta: limite nítido e irregular (a neve gruda nas partes menos
+    // íngremes e nas fendas), com estratos e ressaltos claros/escuros
+    const rockMask = smoothstep(0.47, 0.53, slope.add(vMicro.mul(0.22)).add(vMeso.mul(0.18)).add(vFine.mul(0.06)));
+    const iceStrata = N3(vec3(h.mul(1 / 140).add(macro.g.mul(0.7)), up.x.mul(2.0), up.z.mul(2.0))).g;
+    const rockCol = mix(C3(P.rock), C3(P.rock2), iceStrata.mul(0.8).add(micro.r.mul(0.4)).sub(0.1)).mul(vFine.mul(0.5).add(vMicro.mul(0.4)).add(1));
+    // neve presa nas saliências da rocha (manchas finas)
+    const rime = smoothstep(0.62, 0.7, fine.b.add(micro.g.mul(0.3))).mul(fFine).mul(0.7);
     let g = mix(snowCol, iceCol, iceMask);
     g = mix(g, C3(P.wet).mul(0.6), crev);
-    g = mix(g, rockCol, rockMask);
+    g = mix(g, mix(rockCol, C3(P.lowA), rime), rockMask);
     albedo = g;
     rough = mix(mix(float(0.62), float(0.18), iceMask), float(0.8), rockMask);
     // sastrugi: cristas de neve esculpidas pelo vento (ruído esticado)
     const sast = N3(det.mul(vec3(fq(1.5), fq(7), fq(1.5)))).r.sub(0.5).mul(fade(dist, 3));
-    bump = vFine.mul(0.05).add(vMicro.mul(0.3)).add(sast.mul(0.1)).add(rockMask.mul(vMicro.mul(3)));
+    bump = vFine.mul(0.008).add(vMicro.mul(0.12)).add(sast.mul(0.035)).add(rockMask.mul(vMicro.mul(3).add(vFine.mul(0.8)).add(iceStrata.mul(1.5))));
     // cristais: brilho especular pontual
     metal = smoothstep(0.86, 0.95, fine.b).mul(fFine).mul(0.4);
   } else if (type === 'volcanic') {
@@ -206,7 +216,7 @@ function surface(type, P, U, S, I) {
     rough = float(0.92);
     bump = vFine.mul(0.6).add(vMicro.mul(2.6));
   }
-  albedo = albedo.mul(grain.mul(0.08).add(1));
+  albedo = albedo.mul(grain.mul(type === 'ice' ? 0.03 : 0.08).add(1));
   bump = bump.add(grain.mul(0.04));
   return { albedo, rough, emissive, bump, bumpScale, metal };
 }
@@ -348,9 +358,13 @@ export function makeWaterMaterial(body, P, U, S, opts) {
   const NdV = max(dot(n, V), 0.0);
   const fres = float(0.02).add(float(0.98).mul(pow(float(1).sub(NdV), 5.0)));
   const Rv = reflect(V.negate(), n);
-  const sky = mix(S.skyH, S.skyZ, pow(max(dot(Rv, up), 0.0), 0.45));
   const sunG = hasAtmo ? varying(sunTrans(U, pL, S.sunL)) : vec3(1);
   const RdL = max(dot(Rv, S.sunL), 0.0);
+  // reflexo do céu: gradiente zênite/horizonte + o brilho em volta do sol
+  // (dispersão para a frente), que no crepúsculo pinta o caminho dourado na água
+  const horiz = float(1).sub(max(dot(Rv, up), 0.0));
+  const sky = mix(S.skyH, S.skyZ, pow(max(dot(Rv, up), 0.0), 0.45))
+    .add(S.sunCol.mul(sunG).mul(pow(RdL, 6.0).mul(0.16).add(pow(RdL, 48.0).mul(0.5))).mul(horiz.mul(0.7).add(0.3)));
   const spec = pow(RdL, 900.0).mul(40).add(pow(RdL, 90.0).mul(1.2)).add(pow(RdL, 12.0).mul(0.05));
   const day = smoothstep(-0.1, 0.15, dot(up, S.sunL));
   const sunDiff = S.sunCol.mul(sunG).mul(max(dot(up, S.sunL), 0.0)).div(PI);
@@ -416,8 +430,12 @@ export function makeSkyMaterial(body, U, S, opts) {
     const w = weatherAt(S, normalize(pc));
     const q = pc.mul(1 / 9000).add(S.wind.mul(1.3));
     const n1 = N3(q).r;
-    const n2 = N3(vec3(q.x.mul(3.0), q.y.mul(0.8), q.z.mul(3.0)).add(n1.mul(0.8))).r; // fibras
-    const dens = w.w.mul(smoothstep(0.48, 0.95, n1.mul(0.55).add(n2.mul(0.5)))).mul(0.3).mul(select(ok, float(1), float(0)));
+    // fibras esticadas na direção zonal (ventos de altitude): comprime o
+    // domínio ao longo de leste-oeste e estica no resto
+    const ez = normalize(cross(S.axis, pc));
+    const qf = q.mul(3.2).sub(ez.mul(dot(q, ez).mul(3.2 * 0.85))).add(n1.mul(0.5));
+    const n2 = N3(qf).r;
+    const dens = w.w.mul(smoothstep(0.5, 0.95, n1.mul(0.45).add(n2.mul(0.6)))).mul(0.26).mul(select(ok, float(1), float(0)));
     const mu = dot(rd, S.sunL);
     const sunC = S.sunCol.mul(sunTrans(U, normalize(pc).mul(U.R.add(1500.0)), S.sunL));
     const ph = float(0.35).add(pow(max(mu, 0.0), 8.0).mul(1.6));

@@ -176,8 +176,12 @@ export class Terrain {
     // mesetas em terraços
     const t = this.fbm(n, Xw * 0.06, Yw * 0.06, Zw * 0.06, 5, 2.2, 0.5);
     const plateau = sstep(0.04, 0.085, t);
-    const st = 0.055, kk = t / st, fl = Math.floor(kk), fr = kk - fl;
-    const terr = (fl + sstep(0.62, 0.86, fr)) * st;
+    // degraus irregulares: altura do degrau varia por região e as bordas das
+    // bancadas são torcidas pelo ruído (nada de zigurate de curvas de nível);
+    // cada degrau = paredão de rocha dura no topo + talude de detritos abaixo
+    const st = 0.07 * (0.75 + 0.5 * (this.fbm(n2, X * 0.05 + 17, Y * 0.05, Z * 0.05, 2) + 0.5));
+    const kk = t / st + this.fbm(n2, X * 0.35 + 3, Y * 0.35, Z * 0.35, 3) * 0.45, fl = Math.floor(kk), fr = kk - fl;
+    const terr = (fl + sstep(0.5, 0.74, fr) * 0.3 + sstep(0.74, 0.9, fr) * 0.7) * st;
     h += plateau * (120 + Math.max(0, terr) * 1500);
     // cânions cortando as mesetas
     const rv = Math.abs(this.fbm(n2, Xw * 0.035 + 7, Yw * 0.035, Zw * 0.035, 4));
@@ -226,7 +230,13 @@ export class Terrain {
     let h = c * 420;
     const mm = sstep(0.02, 0.32, c + this.fbm(n2, X * 0.06, Y * 0.06, Z * 0.06, 3) * 0.22);
     let ridge = 0;
-    if (mm > 1e-7) { ridge = this.ridged(n, Xw * 0.095, Yw * 0.095, Zw * 0.095, 7); h += Math.pow(ridge, 1.9) * amp * 1.05 * mm; }
+    if (mm > 1e-7) {
+      ridge = this.ridged(n, Xw * 0.095, Yw * 0.095, Zw * 0.095, 7);
+      h += Math.pow(ridge, 1.9) * amp * 1.05 * mm;
+      // penhascos e arestas (escala de 100–800 m) nas encostas altas
+      const crag = this.ridged(n2, Xw * 0.85, Yw * 0.85, Zw * 0.85, 4);
+      h += crag * crag * 150 * mm * sstep(0.25, 0.6, ridge);
+    }
     // mantos de gelo: planícies achatadas com ondulação suave
     const g = 1 - sstep(60, 520, h);
     const sheet = 90 + this.fbm(n, X * 0.25, Y * 0.25, Z * 0.25, 3) * 30;
