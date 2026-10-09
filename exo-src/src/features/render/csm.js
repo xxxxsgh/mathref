@@ -123,6 +123,10 @@ export class CascadedShadows {
     this._c = new THREE.Vector3();
     this.hiddenSun = null;
     this.radii = [];
+    this.frame = 0;
+    this.prevO = new ctx.WorldPos();
+    this.hasPrev = false;
+    this._t = new THREE.Matrix4();
     this.configure();
   }
 
@@ -144,6 +148,9 @@ export class CascadedShadows {
       L.shadow.bias = -0.0002;
       L.shadow.radius = i === 0 ? 2.5 : 1.5;
       if (i > 0) L.color.setRGB(0, 0, 0);
+      // cascatas distantes se atualizam em frames alternados (ver update)
+      L.shadow.autoUpdate = false;
+      L.shadow.needsUpdate = true;
       this.ctx.scene.add(L, L.target);
       this.lights.push(L);
     }
@@ -189,10 +196,17 @@ export class CascadedShadows {
     const sunUp = this.lights[0].intensity > 1e-3;
     // acima de alguns km a sombra de contato não aparece — desliga
     const alt = ctx.player?.altitude ?? 0;
+    // castShadow fica constante (trocar recompila todos os materiais no meio
+    // do voo); sem sol ou alto demais só paramos de redesenhar os mapas —
+    // as esferas das cascatas ficam longe do chão e não são consultadas
     const on = sunUp && alt < 4000 && ctx.renderer.shadowMap.enabled;
-    for (const L of this.lights) L.castShadow = on;
+    for (const L of this.lights) L.castShadow = ctx.renderer.shadowMap.enabled;
     this.enabled = on;
-    if (!on) return;
+    if (!on) {
+      for (const L of this.lights) L.shadow.needsUpdate = false;
+      this.hasPrev = false;
+      return;
+    }
 
     const cam = ctx.camera;
     const splits = SPLITS[this.count];
@@ -206,8 +220,31 @@ export class CascadedShadows {
     right.normalize();
     const up = this._u.copy(Ld).cross(right).normalize();
     const O = ctx.space.origin; // posição double da câmera (origem de render)
+    // deslocamento da origem desde o frame anterior (double)
+    const dx = this.hasPrev ? O.x - this.prevO.x : 0;
+    const dy = this.hasPrev ? O.y - this.prevO.y : 0;
+    const dz = this.hasPrev ? O.z - this.prevO.z : 0;
+    const moved = Math.hypot(dx, dy, dz);
+    this.prevO.copy(O);
+    const firstFrame = !this.hasPrev;
+    this.hasPrev = true;
+    this.frame++;
+    // custo: a cascata 0 todo frame; as demais alternam (metade/um quarto
+    // dos frames). Câmera rápida ou salto → todas.
+    const all = firstFrame || moved > 3;
     for (let i = 0; i < this.count; i++) {
       const L = this.lights[i];
+      const period = i === 0 ? 1 : i === 3 ? 4 : 2;
+      const phase = i === 2 ? 1 : 0;
+      const doIt = all || period === 1 || this.frame % period === phase;
+      if (!doIt) {
+        // mapa antigo: a matriz de sombra acompanha a origem de render
+        // (p_antigo = p_novo + Δorigem)
+        L.shadow.needsUpdate = false;
+        if (moved > 0) L.shadow.matrix.multiply(this._t.makeTranslation(dx, dy, dz));
+        continue;
+      }
+      L.shadow.needsUpdate = true;
       const n = splits[i], f = splits[i + 1];
       // esfera mínima da fatia [n, f] do frustum (raio constante)
       const k2 = 1 + tanX * tanX + tanY * tanY;

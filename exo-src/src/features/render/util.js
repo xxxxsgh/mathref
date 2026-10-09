@@ -43,9 +43,13 @@ export class Blitter {
   }
   draw(material, target) {
     const r = this.renderer;
+    // sem limpar: passadas com mistura (AO, cópias) somam sobre o destino
+    const prev = r.autoClear;
+    r.autoClear = false;
     r.setRenderTarget(target);
     this.quad.material = material;
     this.quad.render(r);
+    r.autoClear = prev;
   }
   dispose() {
     this.quad.dispose();
