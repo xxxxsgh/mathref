@@ -49,20 +49,21 @@ function signAtlas() {
     g.fillText(t, x, row * RH + RH / 2 + 4);
   };
   // 0: identificação da baia (estêncil claro)
-  text('BAIA DE CARGA  02', 0, { px: 92 });
+  text('BAIA DE CARGA  02', 0, { px: 96, col: '#e0a422' });
   // 1: aviso de carga suspensa (placa amarela com faixas)
   g.fillStyle = '#d9a21c'; g.fillRect(0, RH * 1 + 8, 1024, RH - 16);
   stripes(0, RH * 1 + 8, 150, RH - 16); stripes(874, RH * 1 + 8, 150, RH - 16);
   text('CARGA SUSPENSA', 1, { col: '#141414', px: 70 });
   // 2: convés (grande, para piso e anteparas)
-  text('CONVÉS  B · 02', 2, { px: 104 });
+  text('CONVÉS  B · 02', 2, { px: 104, col: '#e0a422' });
   // 3: direções
-  text('◄ PONTE        MÁQUINAS ►', 3, { px: 72, col: '#cfe6ee' });
+  g.fillStyle = '#16191c'; g.fillRect(0, RH * 3 + 10, 1024, RH - 20);
+  text('◄ PONTE        MÁQUINAS ►', 3, { px: 72, col: '#e8eef0' });
   // 4: perigo do reator
   g.fillStyle = '#c8301e'; g.fillRect(0, RH * 4 + 8, 1024, RH - 16);
   text('PERIGO · REATOR · RADIAÇÃO', 4, { col: '#f4ede0', px: 66 });
   // 5: capacidade
-  text('MÁX. 12 t  ·  AMARRE A CARGA', 5, { px: 64, col: '#d8d2c2', w: 700 });
+  text('MÁX. 12 t  ·  AMARRE A CARGA', 5, { px: 64, col: '#1a1a1a', w: 800 });
   // 6: faixa de perigo pura
   stripes(0, RH * 6 + 8, 1024, RH - 16, '#d4a019', '#151515', 46);
   // 7: saída de emergência
@@ -211,7 +212,9 @@ export function buildInterior(ctx, classId) {
     if (pool.length) sm.lightsNode = mat.lightsNode;
     sm.envNode = U.envCol;
     // sem luzes reais (mobile): leve emissivo para não sumir no escuro
-    if (!pool.length) sm.emissiveNode = tx.rgb.mul(0.25);
+    // o casco do interior recebe luz falsa no emissivo; a tinta acompanha
+    // (senão as placas ficam mais escuras que a parede em volta)
+    sm.emissiveNode = tx.rgb.mul(pool.length ? 0.5 : 0.45);
     const sgm = new THREE.Mesh(sgGeo, sm); sgm.renderOrder = 3; sgm.receiveShadow = true; group.add(sgm);
   }
   const syncLights = () => {

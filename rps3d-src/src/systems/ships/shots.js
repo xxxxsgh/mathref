@@ -227,7 +227,9 @@ export function registerShots(ctx, api, st) {
         const dist = s.length / Math.tan(span);
         const az = ((i - 2) * 11.5 + (r % 2 ? 2 : -2)) * D2R;
         const dir = cv(Math.sin(az) * Math.cos(el * D2R), Math.sin(el * D2R), -Math.cos(az) * Math.cos(el * D2R)).normalize();
-        s.group.quaternion.copy(look(nose, upS.clone().applyAxisAngle(nose, (i - 2) * 0.04)));
+        // fileiras altas inclinam o dorso para a câmera (senão só se vê a barriga)
+        const upR = upS.clone().lerp(dir.clone().negate(), THREE.MathUtils.clamp(el / 22, 0, 0.7)).normalize();
+        s.group.quaternion.copy(look(nose, upR.applyAxisAngle(nose, (i - 2) * 0.04)));
         ctx.world.add(s.group, C.clone().addScaledVector(dir, dist));
       });
     });
