@@ -158,7 +158,7 @@ export function registerShots(ctx, api, st) {
     }
     const lookOf = (dd) => sunTangent(api, b, dd, ctx).tan.applyAxisAngle(dd, Y * D2R);
     const h = Math.max(0, v.terrain.height(d.x, d.y, d.z));
-    const pos = d.clone().multiplyScalar(b.radius + h + P(ctx, 'alt', 16));
+    const pos = d.clone().multiplyScalar(b.radius + h + P(ctx, 'alt', 8));
     const look = lookOf(d).addScaledVector(d, P(ctx, 'pitch', 0.06)).normalize();
     localCam(ctx, st, b, pos, look, d);
     ctx.services.rendering?.setExposure?.(P(ctx, 'exp', 0.62), { speed: 200, auto: false });
@@ -362,7 +362,7 @@ export function registerShots(ctx, api, st) {
         const p = d.clone().addScaledVector(gT, k / b.radius).normalize();
         ang = Math.max(ang, (T.height(p.x, p.y, p.z) - h0 - k * k / (2 * b.radius)) / k);
       }
-      const s = -Math.abs(gEl - 16) * 2 - Math.abs(ang - 0.06) * 300 + side * 15 - Math.abs(sEl - 7);
+      const s = -Math.abs(gEl - 16) * 2 - Math.abs(ang - 0.06) * 300 + side * 60 - Math.abs(sEl - 7);
       if (s > bs) { bs = s; best = d; }
     }
     const d = best || api.dirForSun(b, 8, 0);

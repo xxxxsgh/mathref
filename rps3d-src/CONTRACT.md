@@ -150,6 +150,12 @@ Emita/escute com estes nomes e payloads. Novos eventos: documente aqui.
 | `flash` | `{color, intensity}` |
 | `weather` | `{kind, intensity}` |
 | `notify` | `{text, kind?:'info'|'warn'|'reward'}` |
+| `game:new` | `{}` — "Novo jogo" no título: sistemas zeram o estado de campanha (inventário, créditos...) |
+| `story:act` / `story:flag` / `story:defect` | `{act}` / `{flag, value}` / `{choice}` (deserção na abertura) |
+| `dialog:choice` | `{dialog, choice}` — escolha feita num diálogo da história |
+| `npc:talk` | `{npc, station?}` — `stations`/`foot` emitem ao falar com um NPC (ex.: `iara`, `okonkwo`, `oren`); a missão de conversa avança |
+| `prefs:change` | `{quality?, sensitivity?, invertY?, volume?, subtitles?}` — configurações mudadas no título |
+| `battle:start` / `battle:end` | `{id, kind, center}` / `{id, kind, result:'vitoria'|'derrota'|'fuga'|..., winner}` (combat) |
 
 ## Screenshots e testes
 
@@ -167,4 +173,5 @@ Emita/escute com estes nomes e payloads. Novos eventos: documente aqui.
 
 ## Mudanças no núcleo
 (registre aqui: data, quem, o quê)
+- 2026-10-12, story: catálogo de eventos ganhou `game:new`, `story:*`, `dialog:choice`, `npc:talk`, `prefs:change`, `battle:*`. Eventos `radio`/`notify` emitidos pela história levam `story: true` (a legenda já está na tela durante cenas; a HUD pode ignorar os que têm `subtitle: true`).
 - 2026-10-07, rendering: `tools/shot.mjs` — `page.screenshot` usa `--timeout` (antes 30 s fixos; cenas pesadas no SwiftShader passavam disso).

@@ -303,7 +303,8 @@ export class Terrain {
     if (mm > 1e-7) { ridge = this.ridged(n, X * 0.08, Y * 0.08, Z * 0.08, 6); h += ridge * ridge * amp * 0.55 * mm; }
     // crateras em 4 escalas
     let ej = 0;
-    const scales = [[0.028, 650, 0.5], [0.11, 190, 0.45], [0.45, 45, 0.4], [1.9, 8, 0.38]];
+    // profundidade ~ 1/5–1/8 do diâmetro (crateras simples), da escala de 15 km até 50 m
+    const scales = [[0.028, 900, 0.5], [0.11, 420, 0.45], [0.45, 120, 0.4], [1.9, 30, 0.38], [7.0, 7, 0.36]];
     for (let i = 0; i < scales.length; i++) {
       const [f, depth, rad] = scales[i];
       this.cell(X * f, Y * f, Z * f, 300 + i * 17, _c);
@@ -318,7 +319,7 @@ export class Terrain {
         }
         h += Math.exp(-((r - 1) ** 2) / 0.035) * d * 0.28;
         const e = Math.exp(-((r - 1.05) ** 2) / 0.12) * (1 - _c.id);
-        ej = Math.max(ej, e * (i < 2 ? 1 : 0.6));
+        ej = Math.max(ej, e * (i < 2 ? 1 : i < 4 ? 0.6 : 0.3));
       }
     }
     h += this.fbm(n, X * 3, Y * 3, Z * 3, 3) * 4 + n2.noise3(X * 28, Y * 28, Z * 28) * 0.8;

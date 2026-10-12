@@ -93,7 +93,12 @@ function surface(type, P, U, S, I) {
     const forestMask = smoothstep(0.5, 0.62, m.add(meso.g.sub(0.5).mul(0.5)).add(macro.b.mul(0.25)).sub(slope.mul(1.2)).sub(smoothstep(900, 1600, h).mul(0.6)));
     // copas: manchas escuras/claras de árvores (Worley em ~6 m)
     const canopy = N3(det.mul(fq(6))).b.mul(fade(dist, 6));
-    const veg = mix(meadow.mul(vFine.mul(0.5).add(vMicro.mul(0.7)).add(1)), forestCol.mul(canopy.mul(0.9).add(0.55)), forestMask);
+    // tufos de capim e manchas de flores alienígenas (somem antes de serrilhar)
+    const tuftN = N3(det.mul(fq(0.8)));
+    const tuft = tuftN.b.sub(0.5).mul(fade(dist, 0.8));
+    const bloom = smoothstep(0.78, 0.9, N3(det.mul(fq(3.5)).add(0.37)).g.add(macro2.r.sub(0.5).mul(0.4))).mul(fade(dist, 3.5)).mul(float(1).sub(slope.mul(3.0)).clamp(0, 1));
+    const meadowD = mix(meadow.mul(vFine.mul(0.5).add(vMicro.mul(0.7)).add(tuft.mul(0.55)).add(1)), C3(P.alien).mul(1.8).add(C3(P.lowB).mul(0.4)), bloom.mul(type === 'toxic' ? 0.2 : 0.35));
+    const veg = mix(meadowD, forestCol.mul(canopy.mul(0.9).add(0.55)), forestMask);
     // rocha estratificada
     // estratos: camadas finas (somem antes de virar listras de contorno) sobre
     // bancadas largas torcidas pelo ruído macro
@@ -118,7 +123,7 @@ function surface(type, P, U, S, I) {
     g = mix(bed.mul(vMicro.add(1)), g, smoothstep(-3, 0.5, h));
     albedo = mix(g, C3(P.snow).mul(vFine.mul(0.15).add(1)), snow);
     rough = mix(mix(float(0.88), float(0.72), rockMask), float(0.45), max(wet.mul(0.6), snow.mul(0.7)));
-    bump = vFine.mul(0.25).add(vMicro.mul(2.4)).add(canopy.mul(forestMask).mul(0.6));
+    bump = vFine.mul(0.25).add(vMicro.mul(2.4)).add(canopy.mul(forestMask).mul(0.6)).add(tuft.mul(0.12).mul(float(1).sub(rockMask)));
     bumpScale = mix(float(0.6), float(1.4), rockMask);
     if (type === 'toxic') {
       // fungos bioluminescentes (só se percebem à noite)
@@ -215,15 +220,22 @@ function surface(type, P, U, S, I) {
     bump = vFine.mul(0.8).add(vMicro.mul(3.5)).sub(crack.mul(lavaHot).mul(0.6));
   } else { // dead
     const mare = smoothstep(-150, -500, h.add(vMeso.mul(200))).mul(0.7);
-    const reg = mix(C3(P.lowA), C3(P.lowB), smoothstep(0.3, 0.7, macro.r.add(vMeso.mul(0.6)))).mul(vFine.mul(0.3).add(vMicro.mul(0.4)).add(1));
+    // regolito: terras altas claras × planícies escuras em escala de km,
+    // manchas de poeira fina e pedregulhos escuros perto das crateras
+    const highland = smoothstep(0.35, 0.65, macro2.g.add(vMeso.mul(0.3)));
+    const reg = mix(mix(C3(P.lowA), C3(P.lowB), smoothstep(0.3, 0.7, macro.r.add(vMeso.mul(0.6)))), C3(P.high).mul(0.85), highland.mul(0.5))
+      .mul(vFine.mul(0.35).add(vMicro.mul(0.5)).add(1));
+    const boulders = smoothstep(0.8, 0.92, N3(det.mul(fq(1.6))).b).mul(fade(dist, 1.6)).mul(s.mul(0.8).add(q.mul(0.6)).add(0.15));
     const ej = s.mul(smoothstep(0.4, 0.7, micro.r.add(meso.g.mul(0.5))));
     const rockMask = smoothstep(0.3, 0.5, slope.add(vMicro.mul(0.2)));
     let g = mix(reg, C3(P.deep).mul(vMicro.mul(0.5).add(1.2)), mare);
-    g = mix(g, C3(P.snow), ej.mul(0.6));
+    g = mix(g, C3(P.snow), ej.mul(0.75));
     g = mix(g, mix(C3(P.rock), C3(P.rock2), micro.g), rockMask);
+    g = mix(g, C3(P.rock).mul(0.6), boulders);
     albedo = g;
     rough = float(0.92);
-    bump = vFine.mul(0.6).add(vMicro.mul(2.6));
+    bump = vFine.mul(0.5).add(vMicro.mul(1.2)).add(boulders.mul(1.2));
+    bumpScale = float(0.7);
   }
   albedo = albedo.mul(grain.mul(type === 'ice' ? 0.03 : 0.08).add(1));
   bump = bump.add(grain.mul(type === 'ice' ? 0.012 : 0.04));
