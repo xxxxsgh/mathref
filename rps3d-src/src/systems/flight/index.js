@@ -737,9 +737,9 @@ function frame(dt, ctx) {
   });
   const E = m.env;
   S.trails.frame(dt, {
-    pos: S.wp, quat: S.wq, velW: S.wv, density: E.density, gforce: m.gforce, speed: m.speed, exterior: !cockpitView && m.mode !== 'quantum',
+    pos: S.wp, quat: S.wq, velW: S.wv, density: E.density, gforce: m.gforce, speed: m.speed, exterior: !cockpitView && m.mode !== 'quantum' && ctx.params.get('trails') !== '0',
     contrail: E.inAtmo && E.density > 0.008 && E.density < 0.25 && m.speed > 260 && m.reentry < 0.1 ? 0.3 : 0,
-    sunColor: ctx.services.rendering?.sun?.color || null,
+    sunColor: ctx.services.rendering?.sun?.color || null, frame: m.frame, t,
   });
   if (m.reentry > 0.02) ctx.bus.emit('reentry', { intensity: m.reentry });
   // trepidação da reentrada / turbulência no ar denso em alta velocidade

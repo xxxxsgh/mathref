@@ -1,10 +1,12 @@
 // Presets de screenshot do sistema flight (câmera REAL do jogo, nave real).
 //
 //   flight-chase     câmera externa: o caça do Rafael em pós-combustão sobre
-//                    Verídia, a 30 km, planeta curvo embaixo, sol rasante
+//                    Verídia, a ~2,8 km, saindo de uma nuvem sobre ilhas
 //   flight-reentry   mergulho na atmosfera de Ashar a ~1,5 km/s: bainha de
 //                    plasma, bordas do casco em brasa, rastro de faíscas
 //   flight-landed    pousado em Nivália com o trem baixado, luz dourada
+//   flight-canyon    voo rasante em Ashar a ~60 m do chão, inclinado puxando G
+//                    (vórtices de ponta de asa), sol baixo, mesetas ao fundo
 //
 // Parâmetros de URL (ajuste fino sem editar código): elev, az, alt, roll,
 // pitch, oy (órbita guinada), op (órbita arfagem), spd, body.
@@ -63,19 +65,19 @@ export function registerShots(ctx, api, S) {
     const fwd = sunT.clone().multiplyScalar(Math.cos(hdg)).addScaledVector(side, Math.sin(hdg)).normalize();
     const pitch = P(ctx, 'pitch', -7) * D2R;
     const f2 = fwd.clone().multiplyScalar(Math.cos(pitch)).addScaledVector(up, Math.sin(pitch)).normalize();
-    const alt = P(ctx, 'alt', 6200);
+    const alt = P(ctx, 'alt', 2800);
     const pos = up.clone().multiplyScalar(b.radius + alt);
     let q = look(f2, up);
-    q.multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), -P(ctx, 'roll', 22) * D2R));
+    q.multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), -P(ctx, 'roll', 18) * D2R));
     const spd = P(ctx, 'spd', 480);
     api.spawnPlayerShip(pos, q, 'fighter', { body: b, vel: f2.clone().multiplyScalar(spd), throttle: 1, faction: 'hegemonia', third: true });
     const m = S.model;
     m.boosting = true; m.boostFuel = 0.7;
     m.thrustLocal.set(0, 0, -1);
     m.angVel.set(0.05, 0.12, 0.35);
-    S.controls.head.yaw = P(ctx, 'oy', 18) * D2R; S.controls.head.pitch = P(ctx, 'op', -4) * D2R;
+    S.controls.head.yaw = P(ctx, 'oy', 18) * D2R; S.controls.head.pitch = P(ctx, 'op', -12) * D2R;
     S.cam.orbit.yaw = S.controls.head.yaw; S.cam.orbit.pitch = S.controls.head.pitch;
-    holdLinear(S, () => { m.boosting = true; m.thrustLocal.set(0, 0, -1); S.controls.head.yaw = P(ctx, 'oy', 18) * D2R; S.controls.head.pitch = P(ctx, 'op', -4) * D2R; });
+    holdLinear(S, () => { m.boosting = true; m.thrustLocal.set(0, 0, -1); S.controls.head.yaw = P(ctx, 'oy', 18) * D2R; S.controls.head.pitch = P(ctx, 'op', -12) * D2R; });
     S.ctx.services.rendering?.sun?.setShadowRange?.(120);
     ctx.camera.fov = 62; ctx.camera.updateProjectionMatrix();
     S.cam.fov = 62; S.cam.chaseFov = 56;
@@ -181,5 +183,59 @@ export function registerShots(ctx, api, S) {
     try { pl?.weather?.force?.(ctx.params.get('wx') || 'clear', P(ctx, 'wi', 0)); } catch { /* sem clima */ }
     S.frameNow?.();
     pl?.settle?.();
+  });
+
+  // ── rasante em Ashar: puxando G entre mesetas, sol baixo ─────────────────
+  ctx.shots.register('flight-canyon', async (ctx) => {
+    prepare(ctx, 'kessa');
+    const b = bodyByName(ctx, ctx.params.get('body') || 'Ashar');
+    const pl = ctx.services.planets;
+    const t = ctx.time.world;
+    const v = pl?.view?.(b);
+    const elev = P(ctx, 'elev', 16);
+    const H = (d) => (v?.terrain ? v.terrain.height(d.x, d.y, d.z) : 0);
+    const sunL = sunLocal(ctx, b, t);
+    // procura um vale: chão baixo onde a nave está, relevo alto dos dois lados
+    let best = null, bs = -Infinity;
+    for (let az = 0; az < 360; az += P(ctx, 'step', 15)) {
+      const up = pl?.dirForSun ? pl.dirForSun(b, elev, az, t) : sunL.clone();
+      const sunT = sunL.clone().addScaledVector(up, -sunL.dot(up)).normalize();
+      const hdg = P(ctx, 'hdg', 100) * D2R;
+      const side = new THREE.Vector3().crossVectors(up, sunT).normalize();
+      const fwd = sunT.clone().multiplyScalar(Math.cos(hdg)).addScaledVector(side, Math.sin(hdg)).normalize();
+      const lat = new THREE.Vector3().crossVectors(fwd, up).normalize();
+      const h0 = H(up);
+      let rel = 0, flat = 0;
+      for (const k of [800, 1600, 2600]) for (const sg of [-1, 1]) {
+        const d = up.clone().addScaledVector(fwd, k / b.radius).addScaledVector(lat, sg * k * 0.5 / b.radius).normalize();
+        rel += Math.max(0, H(d) - h0);
+      }
+      for (const k of [-200, 200, 500]) { const d = up.clone().addScaledVector(fwd, k / b.radius).normalize(); flat = Math.max(flat, Math.abs(H(d) - h0)); }
+      const score = rel - flat * 4;
+      if (score > bs) { bs = score; best = { up, fwd, h0 }; }
+    }
+    const { up, fwd } = best;
+    const alt = P(ctx, 'alt', 60);
+    const pos = up.clone().multiplyScalar(b.radius + Math.max(best.h0, v?.terrain?.hasSea ? 0 : -1e9) + alt);
+    const pitch = P(ctx, 'pitch', 4) * D2R;
+    const f2 = fwd.clone().multiplyScalar(Math.cos(pitch)).addScaledVector(up, Math.sin(pitch)).normalize();
+    const q = look(f2, up).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), -P(ctx, 'roll', 58) * D2R));
+    const spd = P(ctx, 'spd', 420);
+    api.spawnPlayerShip(pos, q, 'fighter', { body: b, vel: fwd.clone().multiplyScalar(spd), throttle: 1, faction: 'hegemonia', third: true });
+    const m = S.model;
+    const cam = () => { S.controls.head.yaw = P(ctx, 'oy', 22) * D2R; S.controls.head.pitch = P(ctx, 'op', 2) * D2R; };
+    cam(); S.cam.orbit.yaw = S.controls.head.yaw; S.cam.orbit.pitch = S.controls.head.pitch;
+    m.boosting = true; m.thrustLocal.set(0, 0, -1);
+    // curva apertada: ~6 g → vórtices nas pontas das asas
+    holdLinear(S, () => { m.boosting = true; m.thrustLocal.set(0, 0, -1); m.gforce = P(ctx, 'g', 6.5); cam(); });
+    m.gforce = P(ctx, 'g', 6.5);
+    if (S.trails) S.trails.strength = 1;
+    S.ctx.services.rendering?.sun?.setShadowRange?.(140);
+    ctx.camera.fov = P(ctx, 'fov', 60); ctx.camera.updateProjectionMatrix(); S.cam.fov = ctx.camera.fov; S.cam.chaseFov = ctx.camera.fov;
+    S.cam.distK = P(ctx, 'dk', 0.8);
+    try { pl?.weather?.force?.(ctx.params.get('wx') || 'clear', P(ctx, 'wi', 0)); } catch { /* sem clima */ }
+    S.frameNow?.();
+    pl?.settle?.();
+    ctx.log('flight-canyon relevo', bs.toFixed(0), 'chão', best.h0.toFixed(0));
   });
 }

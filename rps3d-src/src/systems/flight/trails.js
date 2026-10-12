@@ -7,6 +7,7 @@ import { Fn, attribute, vec3, float, smoothstep, pow, abs, mix, uniform, uv } fr
 
 const N = 72;
 const _white = new THREE.Color(1, 1, 1);
+const _pw = new THREE.Vector3(), _sw = new THREE.Vector3(), _pl = new THREE.Vector3(), _ul = new THREE.Vector3();
 
 class Ribbon {
   constructor(mat) {
@@ -36,8 +37,12 @@ class Ribbon {
     this.count = Math.min(N, this.count + 1);
   }
   last() { return this.pts[this.head]; }
-  update(dt, origin, life, width) {
+  update(dt, origin, life, width, frame = null, t = 0) {
     let alive = 0;
+    // pontos guardados no referencial da nave (planeta que gira/orbita):
+    // convertidos para mundo aqui, senão o rastro "escorre" com a órbita
+    const W = (i) => (frame ? frame.posToWorld(this.pts[i], t, _pw) : _pw.copy(this.pts[i]));
+    const D = (i) => (frame ? frame.dirToWorld(this.side[i], t, _sw) : _sw.copy(this.side[i]));
     for (let k = 0; k < N; k++) {
       const i = (this.head - k + N) % N;
       const a = this.age[i];
@@ -45,13 +50,13 @@ class Ribbon {
       if (k >= this.count || a > life) {
         // colapsa no último ponto válido (triângulos degenerados)
         const j = (this.head - Math.max(0, alive - 1) + N) % N;
-        const p = this.pts[j];
+        const p = W(j);
         this.pos[o] = this.pos[o + 3] = p.x - origin.x; this.pos[o + 1] = this.pos[o + 4] = p.y - origin.y; this.pos[o + 2] = this.pos[o + 5] = p.z - origin.z;
         this.aux[ox] = this.aux[ox + 2] = 1; this.aux[ox + 1] = this.aux[ox + 3] = 0;
         continue;
       }
       alive++;
-      const p = this.pts[i], sd = this.side[i];
+      const p = W(i), sd = D(i);
       const w = width * (0.35 + Math.min(1, a / life) * 2.2);
       this.pos[o] = p.x - origin.x + sd.x * w; this.pos[o + 1] = p.y - origin.y + sd.y * w; this.pos[o + 2] = p.z - origin.z + sd.z * w;
       this.pos[o + 3] = p.x - origin.x - sd.x * w; this.pos[o + 4] = p.y - origin.y - sd.y * w; this.pos[o + 5] = p.z - origin.z - sd.z * w;
@@ -104,15 +109,20 @@ export class WingTrails {
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(s.quat);
     const life = 1.6;
     const width = 0.22 + s.speed * 0.0008;
+    const fr = s.frame || null, t = s.t || 0;
+    // trocou de referencial (entrou/saiu da SOI): o rastro antigo não vale mais
+    if (fr !== this.frameRef) { this.frameRef = fr; for (const r of this.ribbons) { r.count = 0; r.age.fill(1e9); } }
+    const upL = fr ? fr.dirToLocal(up, t, _ul) : _ul.copy(up);
     for (let k = 0; k < 2; k++) {
       const r = this.ribbons[k];
-      const p = this.tips[k].clone().applyQuaternion(s.quat).add(s.pos);
+      const pw = this.tips[k].clone().applyQuaternion(s.quat).add(s.pos);
+      const p = fr ? fr.posToLocal(pw, t, _pl) : _pl.copy(pw);
       if (this.strength > 0.01 || r.count) {
         const lastP = r.last();
-        if (r.count === 0 || lastP.distanceTo(p) > Math.max(1.5, s.speed * 0.012)) r.push(p, up, this.strength);
+        if (r.count === 0 || lastP.distanceTo(p) > Math.max(1.5, s.speed * 0.012)) r.push(p, upL, this.strength);
         else { lastP.copy(p); r.str[r.head] = this.strength; }
       }
-      r.update(dt, origin, life, width);
+      r.update(dt, origin, life, width, fr, t);
       if (this.strength < 0.01 && r.mesh.visible === false) r.count = 0;
     }
     if (s.sunColor) this.U.light.value.copy(s.sunColor).lerp(_white, 0.55).multiplyScalar(0.85).addScalar(0.06);

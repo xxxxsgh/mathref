@@ -49,13 +49,17 @@ function makeSheathMaterial(U) {
     const tailFade = pow(float(1.0).sub(smoothstep(-0.2, 1.0, zf)), 1.6);
     // de fora: borda luminosa da onda de choque + estrias finas; o miolo fica
     // quase transparente (a nave aparece dentro); de dentro: só a proa à frente
-    const cap = pow(bow, 3.0).mul(ndv.mul(0.6).add(0.4)).mul(0.42).mul(streak.mul(0.5).add(0.75));
-    const outside = rim.mul(pow(bow.add(0.04), 1.6).mul(2.2)).add(cap).add(streak.mul(pow(rim, 0.8).mul(1.2).add(0.03)).mul(pow(tailFade, 1.3)).mul(smoothstep(-0.6, 0.2, zf)).mul(1.2));
+    // (o miolo da proa é um véu fino e turbulento, não um disco chapado: o
+    // que lê como "fogo" é a borda rasgada da onda de choque e as estrias)
+    const turb = mx_fractal_noise_float(vec3(g.x.mul(4.0), g.y.mul(4.0), zf.mul(3.0).sub(time.mul(9.0))), 3, 2.0, 0.55).mul(0.5).add(0.5);
+    const cap = pow(bow, 4.0).mul(ndv.mul(0.5).add(0.2)).mul(0.13).mul(pow(turb, 2.0).mul(1.6).add(0.2));
+    const torn = smoothstep(0.25, 0.75, turb).mul(0.75).add(0.25);
+    const outside = rim.mul(pow(bow.add(0.04), 1.6).mul(2.3)).mul(torn).add(cap).add(streak.mul(pow(rim, 0.8).mul(1.2).add(0.03)).mul(pow(tailFade, 1.3)).mul(smoothstep(-0.6, 0.2, zf)).mul(1.2));
     const inside = pow(bow, 3.0).mul(ndv.mul(0.6).add(0.4)).mul(0.6).add(streak.mul(0.08).mul(bow));
     const shape = select(frontFacing, outside, inside);
     const flick = sin(time.mul(41.0).add(ang.mul(5.0))).mul(0.06).add(0.94);
     const I = U.intensity;
-    const heatT = clamp(bow.mul(0.8).add(streak.mul(0.15)).add(I.sub(0.6).mul(0.4)), 0.0, 1.0);
+    const heatT = clamp(bow.mul(0.7).add(streak.mul(0.12)).add(I.sub(0.7).mul(0.35)), 0.0, 0.92);
     const col = plasmaColor(heatT);
     // ionização forte: franja violeta na borda
     const ion = vec3(0.55, 0.42, 1.0).mul(rim.mul(bow).mul(smoothstep(0.6, 1.0, I)).mul(0.6));
@@ -100,7 +104,7 @@ export class FlightFx {
     this.entry = ctx.world.add(this.sheath, this.sheathPos);
     this.skinMat = makeSkinMaterial(this.U);
     this.skins = [];
-    this.emitT = 0; this.dustT = 0;
+    this.emitT = 0; this.emitDt = 1 / 30; this.dustT = 0;
     this.haze = null;
   }
 
@@ -147,23 +151,32 @@ export class FlightFx {
       const rp = ctx.services.rendering?.particles;
       this.emitT -= dt;
       if (rp && this.emitT <= 0 && s.exterior) {
-        this.emitT = 1 / 30;
-        const n = Math.round(1 + I * 4);
+        this.emitDt = 1 / 30;
+        this.emitT = this.emitDt;
+        const n = Math.round(2 + I * 5);
         const tailPos = _v2.copy(s.pos).addScaledVector(flow, -R * 0.5);
         const vx = s.velW.x, vy = s.velW.y, vz = s.velW.z;
+        // as partículas herdam ~70% da velocidade: entre duas emissões a nave
+        // abre um vão de (1−j)·v·Δt — espalha cada leva ao longo dele para o
+        // rastro sair contínuo (sem "contas" de luz)
+        const gap = sp * 0.3 * this.emitDt;
+        const fx = flow.x, fy = flow.y, fz = flow.z;
         try {
           rp.emit('spark', tailPos, n, (k, o) => {
             const j = 0.55 + Math.random() * 0.3;
-            o.x = (Math.random() - 0.5) * R * 0.8; o.y = (Math.random() - 0.5) * R * 0.4; o.z = (Math.random() - 0.5) * R * 0.8;
+            const u = -Math.random() * gap;
+            o.x = (Math.random() - 0.5) * R * 0.8 + fx * u; o.y = (Math.random() - 0.5) * R * 0.4 + fy * u; o.z = (Math.random() - 0.5) * R * 0.8 + fz * u;
             o.vx = vx * j + (Math.random() - 0.5) * 30; o.vy = vy * j + (Math.random() - 0.5) * 30; o.vz = vz * j + (Math.random() - 0.5) * 30;
             o.life = 0.2 + Math.random() * 0.35; o.s0 = 0.3 + I * 0.5; o.s1 = 0.1; o.drag = 2.2; o.g = 0; o.a = 0.9; o.b = 3 + I * 4; o.spin = 0.012;
           });
-          rp.emit('glow', tailPos, Math.round(1 + I * 2), (k, o) => {
+          const ng = Math.round(3 + I * 5);
+          rp.emit('glow', tailPos, ng, (k, o) => {
             const j = 0.75 + Math.random() * 0.15;
-            o.x = (Math.random() - 0.5) * R * 0.5; o.y = (Math.random() - 0.5) * R * 0.3; o.z = (Math.random() - 0.5) * R * 0.5;
+            const u = -((k + Math.random()) / ng) * gap * 0.85;
+            o.x = (Math.random() - 0.5) * R * 0.5 + fx * u; o.y = (Math.random() - 0.5) * R * 0.3 + fy * u; o.z = (Math.random() - 0.5) * R * 0.5 + fz * u;
             o.vx = vx * j; o.vy = vy * j; o.vz = vz * j;
             o.life = 0.25 + Math.random() * 0.2; o.s0 = R * (0.3 + I * 0.3); o.s1 = R * (0.7 + I * 0.5); o.drag = 1.5; o.g = 0;
-            o.a = 1.4 * I; o.b = 0.42 * I; o.c = 0.09 * I; o.w = 1.2;
+            o.a = 0.75 * I; o.b = 0.24 * I; o.c = 0.05 * I; o.w = 1.2;
           }, { ttl: 2 });
         } catch { /* partículas indisponíveis */ }
       }
