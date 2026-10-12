@@ -24,10 +24,10 @@ export const BOLT_COLORS = {
 export const WEAPONS = {
   laser: { id: 'laser', label: 'CANHÃO DE LASER', kind: 'energy', speed: 1750, range: 2400, damage: 9, rof: 7.5, heat: 0.028, spread: 0.0016, length: 42, width: 1.2, intensity: 11, shieldMul: 1.25, hullMul: 0.85 },
   massa: { id: 'massa', label: 'CANHÃO DE MASSA', kind: 'kinetic', speed: 2600, range: 3200, damage: 15, rof: 4.2, heat: 0.04, spread: 0.0012, length: 40, width: 0.6, intensity: 9, shieldMul: 0.7, hullMul: 1.35 },
-  ion: { id: 'ion', label: 'CANHÃO DE ÍONS', kind: 'ion', speed: 1500, range: 2000, damage: 5, rof: 3, heat: 0.05, spread: 0.002, length: 18, width: 1.4, intensity: 30, shieldMul: 3.2, hullMul: 0.25, disable: 1 },
-  pd: { id: 'pd', label: 'DEFESA DE PONTO', kind: 'flak', speed: 1500, range: 2600, damage: 4, rof: 9, heat: 0, spread: 0.012, length: 16, width: 0.7, intensity: 16, shieldMul: 1, hullMul: 1, flak: 26 },
-  heavy: { id: 'heavy', label: 'CANHÃO PESADO', kind: 'heavy', speed: 1050, range: 6000, damage: 80, rof: 0.55, heat: 0, spread: 0.003, length: 70, width: 4.2, intensity: 34, shieldMul: 1, hullMul: 1.1 },
-  pulso: { id: 'pulso', label: 'PULSO ANTIGO', kind: 'energy', speed: 2300, range: 2800, damage: 9, rof: 6, heat: 0.02, spread: 0.0008, length: 30, width: 0.7, intensity: 34, shieldMul: 1.4, hullMul: 1 },
+  ion: { id: 'ion', label: 'CANHÃO DE ÍONS', kind: 'ion', speed: 1500, range: 2000, damage: 5, rof: 3, heat: 0.05, spread: 0.002, length: 18, width: 1.4, intensity: 14, shieldMul: 3.2, hullMul: 0.25, disable: 1 },
+  pd: { id: 'pd', label: 'DEFESA DE PONTO', kind: 'flak', speed: 1500, range: 2600, damage: 4, rof: 9, heat: 0, spread: 0.012, length: 16, width: 0.7, intensity: 10, shieldMul: 1, hullMul: 1, flak: 26 },
+  heavy: { id: 'heavy', label: 'CANHÃO PESADO', kind: 'heavy', speed: 1050, range: 6000, damage: 80, rof: 0.55, heat: 0, spread: 0.003, length: 70, width: 4.2, intensity: 18, shieldMul: 1, hullMul: 1.1 },
+  pulso: { id: 'pulso', label: 'PULSO ANTIGO', kind: 'energy', speed: 2300, range: 2800, damage: 9, rof: 6, heat: 0.02, spread: 0.0008, length: 30, width: 0.9, intensity: 16, shieldMul: 1.4, hullMul: 1 },
 };
 
 /** Mísseis. seeker: 'ir' (despistado por flares) | 'radar' (por chaff). */

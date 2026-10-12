@@ -1,22 +1,24 @@
-// Presets de screenshot do combate (simulação real, IA real, câmera de cena).
+// Presets de screenshot do combate (simulação real, câmera de cena).
 //
 //   combat-dogfight         mergulho sobre Aurora (Halden): câmera atrás de um
-//                           caça da Hegemonia que persegue um caça da Frente,
-//                           rajadas douradas, escudo do alvo piscando, a
+//                           caça da Hegemonia despejando rajadas douradas num
+//                           caça da Frente (escudo piscando, faíscas), a
 //                           batalha da abertura ao fundo
-//   combat-capital-battle   destróier e porta-caças da Hegemonia com o planeta
-//                           embaixo: torres atirando, flak, caças da milícia
-//                           fazendo passadas, canhões pesados contra a fragata,
-//                           brechas fumegando, uma torre explodindo
+//   combat-capital-battle   destróier e porta-caças da Hegemonia sobre Aurora:
+//                           torres rastreando e atirando, flak, milícia
+//                           mergulhando no convés, interceptadores atrás dela,
+//                           escudo localizado, brechas fumegando, uma torre
+//                           arrancada
 //   combat-missile          Kessa sobre Verídia: míssil IR com rastro de fumaça
-//                           atrás de um corsário que solta flares
-//   combat-explosion        um caça em chamas explode sobre o convés do
-//                           porta-caças: bola de fogo, destroços em brasa
+//                           a dezenas de metros de um corsário que solta flares
+//   combat-explosion        caça da Frente explode sobre o convés do
+//                           porta-caças: bola de fogo + destroços em brasa
 //
-// Todos montam o enquadramento a partir do sol e do planeta (fase "gibosa":
-// terminador visível, luz lateral nas naves). Parâmetros de URL: warm, alt
-// (altitude em raios), phase (graus do ponto subsolar), hdg (rumo em graus
-// relativo ao sol), pitch, cx/cy/cz (câmera), fov, seed.
+// Para a captura ficar nítida com o motion blur de câmera e o TAA do
+// `rendering`, as cenas usam câmera PARADA e naves em velocidade de cena
+// (o quadro é estático; os rastros e raios já foram formados no aquecimento).
+// Parâmetros de URL: warm, alt (altitude em raios), phase (graus do ponto
+// subsolar), hdg (rumo relativo ao sol), pitch, e, cx/cy/cz, fov, seed, spd.
 import * as THREE from 'three/webgpu';
 import { lookQuat } from './math.js';
 
@@ -146,25 +148,6 @@ function finish(ctx, S) {
 }
 
 export function registerShots(ctx, api, S) {
-  // ── depuração: raios cruzando a vista a várias distâncias (câmera parada) ──
-  ctx.shots.register('combat-test-bolts', async (ctx) => {
-    prepare(ctx, S, 'kessa', 60);
-    const sim = S.sim;
-    const base = V(3e7, 4e6, 0);
-    const F = V(0, 0, -1), U = V(0, 1, 0);
-    const guns = [];
-    for (let i = 0; i < 4; i++) {
-      const d = [40, 90, 200, 600][i];
-      const s = sim.spawn('hegemonia', 'fighter', base.clone().add(V(-d * 0.9, -d * 0.25 + i * 3, -d)), { quat: lookQuat(V(1, 0, 0), U), vel: V(), ai: false, force: true });
-      guns.push(s);
-    }
-    const shoot = () => { for (const g of guns) { g.vel.set(0, 0, 0); for (const w of g.weapons) { if (w.cd > 0) continue; w.cd = 1 / w.def.rof; sim.projectiles.fire(g, w.def, g.toWorld(w.hp, V()), V(1, 0, 0), { muzzleLocal: w.hp }); } } };
-    warm(S, 0.5, shoot);
-    S.shotHook = shoot;
-    S.rig = () => setCam(ctx, base, base.clone().add(F), U);
-    finish(ctx, S);
-  });
-
   // ── dogfight: mergulho sobre Aurora ───────────────────────────────────────
   ctx.shots.register('combat-dogfight', async (ctx) => {
     prepare(ctx, S, 'halden', P(ctx, 'fov', 44));
@@ -299,15 +282,18 @@ export function registerShots(ctx, api, S) {
       if (sp) sp.ctl.throttle = 0.85;
     }
     // míssil vindo de trás à esquerda (perseguição proporcional → rastro curvo)
-    const mPos = P0.clone().addScaledVector(B.F, -P(ctx, 'mback', 900)).addScaledVector(B.R, -P(ctx, 'mleft', 650)).addScaledVector(B.U, -40);
-    const m = sim.missiles.launch(shooter, prey, 'ir', { pos: mPos, dir: B.F.clone().addScaledVector(B.R, 0.4).normalize() });
+    // vem de lado (perpendicular ao rumo do corsário) e curva para a interceptação:
+    // o rastro aparece inteiro, cruzando o quadro
+    const perp = new THREE.Vector3().crossVectors(preyF, B.U).normalize();
+    const mPos = P0.clone().addScaledVector(preyF, -P(ctx, 'mback', 350)).addScaledVector(perp, -P(ctx, 'mside', 1000)).addScaledVector(B.U, -60);
+    const m = sim.missiles.launch(shooter, prey, 'ir', { pos: mPos, dir: perp.clone().addScaledVector(preyF, 0.2).normalize() });
     m.def = { ...m.def, life: 60 };
     m.vel.copy(m.dir).multiplyScalar(420);
     let flared = false;
-    const gap = P(ctx, 'gap', 170);
+    const gap = P(ctx, 'gap', 75);
     for (let k = 0; k < 600 && m.alive; k++) {
       const d = m.pos.distanceTo(prey.pos);
-      if (!flared && d < 750) {
+      if (!flared && d < P(ctx, 'flare', 300)) {
         flared = true; sim.missiles.deploy(prey, 'flare', 6);
         for (const dc of sim.missiles.decoys) m.checked.add(dc); // na captura o míssil não morde o flare
       }
@@ -326,12 +312,13 @@ export function registerShots(ctx, api, S) {
     for (const dc of sim.missiles.decoys) dc.vel.setLength(Math.min(dc.vel.length(), crawl * 0.5));
     const ref = m.alive ? m : prey;
     if (sim.debug) ctx.errors.push(`DBG míssil vivo=${m.alive} d=${m.pos.distanceTo(prey.pos).toFixed(0)} t=${sim.now.toFixed(2)} vel=${m.vel.length().toFixed(0)} smoke=${!!m.smoke} pts=${m.smoke?.count}`);
-    // à frente do corsário olhando para trás: ele em primeiro plano soltando
-    // flares, o míssil chegando com o rastro de fumaça curvo, Verídia ao fundo
+    // de lado, perto: o míssil a dezenas de metros do corsário, o rastro de
+    // fumaça cruzando o quadro inteiro, flares acesos em volta do alvo
     const along = prey.pos.clone().sub(ref.pos).normalize();
     const side = new THREE.Vector3().crossVectors(along, fr.U).normalize();
-    const camPos = prey.pos.clone().addScaledVector(side, P(ctx, 'side', 10)).addScaledVector(fr.U, P(ctx, 'up', 4)).addScaledVector(along, P(ctx, 'ahead', 17));
-    const lookAt = prey.pos.clone().lerp(ref.pos, P(ctx, 'look', 0.3));
+    const mid = ref.pos.clone().lerp(prey.pos, P(ctx, 'mid', 0.5));
+    const camPos = mid.clone().addScaledVector(side, P(ctx, 'side', 66)).addScaledVector(fr.U, P(ctx, 'up', 52)).addScaledVector(along, -P(ctx, 'back', 18));
+    const lookAt = mid.clone().addScaledVector(along, -P(ctx, 'lback', 12));
     S.rig = staticRig(ctx, camPos, lookAt, B.U);
     finish(ctx, S);
   });
@@ -367,15 +354,20 @@ export function registerShots(ctx, api, S) {
     sim.die(victim, chaser, { burn: true });
     victim.dieT = 99;
     warm(S, P(ctx, 'burn', 1.0));
-    // câmera fixa no ponto previsto da explosão (a vítima continua andando até lá)
-    const boom = P(ctx, 'boom', 0.0);
-    const at = victim.pos.clone().addScaledVector(victim.vel, boom + 1 / 60);
-    // a bola de fogo deriva com metade da velocidade da nave (captura ~0,8 s depois)
-    at.addScaledVector(victim.vel, 0.5 * P(ctx, 'tcap', 0.8));
-    const camPos = at.clone().addScaledVector(R, P(ctx, 'cr', 56)).addScaledVector(U, P(ctx, 'cu', 16)).addScaledVector(F, P(ctx, 'cf', 34));
-    const lookAt = at.clone().addScaledVector(R, -P(ctx, 'lr', 12)).addScaledVector(U, -P(ctx, 'lu', 20)).addScaledVector(F, -P(ctx, 'lf', 24));
+    // explode durante o aquecimento: os destroços em brasa (do combate) já
+    // saíram voando com rastro de fogo; a bola de fogo do `rendering` nasce no
+    // fim do setup (fresca na captura, qualquer que seja o nº de quadros)
+    const vel0 = victim.vel.clone();
+    victim.dieT = 0;
+    warm(S, STEP * 2);
+    const at = victim.pos.clone();
+    sim.wrecks.burst(at, vel0, victim.radius * 1.1, P(ctx, 'chunks', 5), new THREE.Color(0.5, 0.36, 0.27));
+    warm(S, P(ctx, 'fly', 0.55));
+    const c = at.clone().addScaledVector(vel0, 0.5 * (P(ctx, 'fly', 0.55) + 0.25));
+    sim.explode(c, victim.radius * 2.6, 'ship', { force: true, vel: vel0.clone().multiplyScalar(0.5) });
+    const camPos = c.clone().addScaledVector(R, P(ctx, 'cr', 80)).addScaledVector(U, P(ctx, 'cu', 22)).addScaledVector(F, P(ctx, 'cf', 50));
+    const lookAt = c.clone().addScaledVector(R, -P(ctx, 'lr', 14)).addScaledVector(U, -P(ctx, 'lu', 18)).addScaledVector(F, -P(ctx, 'lf', 22));
     S.rig = () => setCam(ctx, camPos, lookAt, U);
-    S.timers.push({ t: boom, fn: () => { victim.dieT = 0; } });
     finish(ctx, S);
   });
 }

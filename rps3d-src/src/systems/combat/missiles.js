@@ -143,9 +143,9 @@ class Decoy {
     if (this.kind === 'flare') {
       _a.copy(this.pos).sub(origin);
       const fl = 0.75 + 0.25 * Math.sin(now * 47 + this.seed * 20) * Math.sin(now * 31);
-      const I = 7 * k * fl;
-      bolts.glow(_a, 2.4 + 1.2 * k, 1.0 * I, 0.72 * I, 0.42 * I, 1);
-      bolts.glow(_a, 0.55, 10 * k, 9 * k, 8 * k, 1);
+      const I = 3.2 * k * fl;
+      bolts.glow(_a, 1.0 + 0.6 * k, 1.0 * I, 0.68 * I, 0.38 * I, 1);
+      bolts.glow(_a, 0.4, 9 * k, 8 * k, 7 * k, 1);
     } else {
       const R = 6 + this.t * 9;
       for (const g of this.glints) {

@@ -96,7 +96,7 @@ export class PlayerWeapons {
     const wIdx = this.gun % this.loadout.length;
     const def = WEAPONS[this.loadout[wIdx]] || WEAPONS.laser;
     const nGuns = guns.length;
-    this.cd = 1 / (def.rof * Math.max(1, nGuns * 0.5));
+    this.cd = 1 / (def.rof * Math.max(1, nGuns)); // canhões alternados: mesma cadência total da IA
     const hp = guns[this.gun % nGuns];
     this.gun++;
     const energy = m?.energy?.weapons ?? 0.5;
