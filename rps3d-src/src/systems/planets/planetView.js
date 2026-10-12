@@ -101,7 +101,7 @@ export class PlanetView {
     S.cam.value.copy(this.camLocal);
     S.sunL.value.copy(this.sunLocal);
     S.time.value = t;
-    const sc = info.dominant === b && info.adapt ? info.adapt : this.sys.star.color, I = info.sunI;
+    const sc = (info.dominant === b ? info.adapt : info.adaptSpace) || this.sys.star.color, I = info.sunI;
     S.sunCol.value.set(sc[0] * I, sc[1] * I, sc[2] * I);
     const sk = I / 4.2 * SKY_SCALE;
     S.skyI.value.set(sc[0] * sk, sc[1] * sk, sc[2] * sk);

@@ -64,10 +64,10 @@ function frameInfo(ctx) {
   // adaptação cromática (von Kries parcial): na superfície o olho se adapta à
   // cor da estrela — neve continua branca sob um sol alaranjado, mas o tom
   // da estrela ainda se percebe. Só sob a atmosfera do corpo dominante.
-  const sc = sys.star.color, a = 0.7 * (st.insideLast || 0);
-  const adapt = sc.map((c) => c / (1 + a * (c - 1)));
-  const m = Math.max(...adapt);
-  return { cam, dominant: sys.dominantBody(cam), sunI: sunIntensity(sys), comp, lit, K, adapt: adapt.map((c) => c / m) };
+  // no espaço uma adaptação menor (nuvens vistas de órbita continuam brancas)
+  const sc = sys.star.color;
+  const adaptK = (a) => { const v = sc.map((c) => c / (1 + a * (c - 1))); const m = Math.max(...v); return v.map((c) => c / m); };
+  return { cam, dominant: sys.dominantBody(cam), sunI: sunIntensity(sys), comp, lit, K, adapt: adaptK(0.4 + 0.3 * (st.insideLast || 0)), adaptSpace: adaptK(0.4) };
 }
 
 function update(ctx, dt) {

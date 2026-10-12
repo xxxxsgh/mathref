@@ -161,7 +161,7 @@ export function registerShots(ctx, api, st) {
     const pos = d.clone().multiplyScalar(b.radius + h + P(ctx, 'alt', 16));
     const look = lookOf(d).addScaledVector(d, P(ctx, 'pitch', 0.06)).normalize();
     localCam(ctx, st, b, pos, look, d);
-    ctx.services.rendering?.setExposure?.(P(ctx, 'exp', 0.5), { speed: 200, auto: false });
+    ctx.services.rendering?.setExposure?.(P(ctx, 'exp', 0.62), { speed: 200, auto: false });
     api.weather.force('rain', 0);
     api.settle();
   });
@@ -336,27 +336,42 @@ export function registerShots(ctx, api, st) {
 
   // ── Ossário: crateras com Tharsos e anéis no céu ──
   ctx.shots.register('planets-ossario-craters', async (ctx) => {
-    setup(ctx, 'kessa', 68);
+    setup(ctx, 'kessa', P(ctx, 'fov', 46));
     const b = body(ctx, 'Ossário');
     const g = body(ctx, 'Tharsos');
-    const v = api.view(b);
+    const v = api.view(b), T = v.terrain;
     const t = ctx.time.world;
     const toG = b.dirToLocal(g.pos.clone().sub(b.pos).normalize(), t, new THREE.Vector3());
-    // ponto de onde Tharsos fica a ~25° acima do horizonte e o sol baixo
+    const sunL = b.dirToLocal(ctx.universe.system.star.pos.clone().sub(b.pos).normalize(), t, new THREE.Vector3());
+    // Tharsos a ~16° sobre o horizonte, sol rasante (sombras longas nas
+    // bordas das crateras) vindo de lado, e uma borda de cratera recortada
+    // logo abaixo do planeta
     let best = null, bs = -Infinity;
-    for (let i = 0; i < 400; i++) {
-      const az = i * 0.9, el = 14 + (i % 9) * 2;
-      const d = api.dirForSun(b, el, az);
-      const gEl = Math.asin(d.dot(toG)) / D2R;
-      const h = v.terrain.height(d.x, d.y, d.z);
-      const s = -Math.abs(gEl - 28) * 3 - Math.abs(h) * 0.01;
+    const N = 2400;
+    for (let i = 0; i < N; i++) {
+      const yy = 1 - (2 * (i + 0.5)) / N, rr = Math.sqrt(1 - yy * yy), ph = i * 2.39996;
+      const d = new THREE.Vector3(Math.cos(ph) * rr, yy, Math.sin(ph) * rr);
+      const gEl = Math.asin(d.dot(toG)) / D2R, sEl = Math.asin(d.dot(sunL)) / D2R;
+      if (gEl < 8 || gEl > 26 || sEl < 3 || sEl > 14) continue;
+      const h0 = T.height(d.x, d.y, d.z);
+      const gT = toG.clone().addScaledVector(d, -toG.dot(d)).normalize();
+      const sT = sunL.clone().addScaledVector(d, -sunL.dot(d)).normalize();
+      const side = 1 - Math.abs(gT.dot(sT)); // sol de lado em relação ao olhar
+      let ang = -1;
+      for (const k of [600, 1200, 2000, 3200]) {
+        const p = d.clone().addScaledVector(gT, k / b.radius).normalize();
+        ang = Math.max(ang, (T.height(p.x, p.y, p.z) - h0 - k * k / (2 * b.radius)) / k);
+      }
+      const s = -Math.abs(gEl - 16) * 2 - Math.abs(ang - 0.06) * 300 + side * 15 - Math.abs(sEl - 7);
       if (s > bs) { bs = s; best = d; }
     }
-    const d = best;
+    const d = best || api.dirForSun(b, 8, 0);
     const gT = toG.clone().addScaledVector(d, -toG.dot(d)).normalize();
-    const look = gT.clone().addScaledVector(d, 0.3).normalize();
-    const h = v.terrain.height(d.x, d.y, d.z);
-    localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + 30), look, d);
+    const gEl = Math.asin(d.dot(toG));
+    const look = gT.clone().multiplyScalar(Math.cos(gEl * 0.55)).addScaledVector(d, Math.sin(gEl * 0.55)).normalize()
+      .applyAxisAngle(d, P(ctx, 'yaw', 8) * D2R);
+    const h = T.height(d.x, d.y, d.z);
+    localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + P(ctx, 'alt', 6)), look, d);
     api.settle();
   });
 
@@ -424,14 +439,21 @@ export function registerShots(ctx, api, st) {
     const d = search(api, b, 12, (d, h, T) => {
       if (h > -8 || h < -60) return -Infinity;
       const { tan } = sunTangent(api, b, d, ctx);
+      // água aberta em volta da câmera (nada de baixio de areia no primeiro plano)
+      let shoal = 0;
+      for (let a = 0; a < 8; a++) for (const k of [30, 90, 200]) {
+        const p = d.clone().addScaledVector(tan.clone().applyAxisAngle(d, a * Math.PI / 4), k / b.radius).normalize();
+        if (T.height(p.x, p.y, p.z) > -6) shoal++;
+      }
       const isl = Math.max(profile(T, b, d, tan.clone().applyAxisAngle(d, 140 * D2R), [800, 1600, 2600]), profile(T, b, d, tan.clone().applyAxisAngle(d, -140 * D2R), [800, 1600, 2600]));
-      return Math.min(isl, 400);
-    }, { tries: 300 });
+      return Math.min(isl, 400) - shoal * 300;
+    }, { tries: 700 });
     const { tan } = sunTangent(api, b, d, ctx);
     const T = v.terrain;
     const a1 = tan.clone().applyAxisAngle(d, 140 * D2R), a2 = tan.clone().applyAxisAngle(d, -140 * D2R);
     const look = (profile(T, b, d, a1, [800, 1600, 2600]) > profile(T, b, d, a2, [800, 1600, 2600]) ? a1 : a2).addScaledVector(d, -0.03).normalize();
     localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + 22), look, d);
+    api.weather.force('rain', P(ctx, 'storm', 0));
     api.settle();
   });
 

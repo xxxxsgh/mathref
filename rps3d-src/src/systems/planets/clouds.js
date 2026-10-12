@@ -55,7 +55,11 @@ export function makeCloudMaterials(body, U, S, opts) {
 
   const remap = (v, lo, hi) => clamp(v.sub(lo).div(hi.sub(lo)), 0.0, 1.0);
   /** Densidade num ponto local p com amostra do mapa de clima w (vec4) e cobertura cov. */
-  const density = (p, w, cov) => {
+  const density = (p, w, cov0) => {
+    // quebra a cobertura do mapa de clima em células e ruas de nuvens (2–8 km):
+    // vista de órbita deixa de ser um bloco liso
+    const brk = N3(p.mul(1 / 11000).add(S.wind.mul(1.7))).g;
+    const cov = clamp(cov0.mul(brk.mul(0.9).add(0.58)), 0.0, 1.0);
     const r = length(p);
     const hn = r.sub(C.base).div(C.top.sub(C.base));
     // tipo 0 → estrato (topo baixo e achatado); 1 → cúmulo que ocupa a camada toda
@@ -118,8 +122,12 @@ export function makeCloudMaterials(body, U, S, opts) {
     // luz do sol nas nuvens: transmitância avaliada perto do chão (≈350 m) para
     // que os pores do sol tinjam as nuvens como numa atmosfera "grande"
     const pm0 = ro.add(rd.mul(tStart.add(seg.mul(0.3))));
-    const pm = normalize(pm0).mul(min(length(pm0), U.R.add(900.0)));
-    const sunC = S.sunCol.mul(body.atmosphere ? sunTrans(U, pm, S.sunL) : vec3(1)).mul(C.tint).mul(0.8).toVar();
+    const pm = normalize(pm0).mul(min(length(pm0), U.R.add(mix(float(900.0), float(2600.0), S.cloudFar))));
+    const sunC0 = S.sunCol.mul(body.atmosphere ? sunTrans(U, pm, S.sunL) : vec3(1)).mul(C.tint).mul(0.8);
+    // nuvem de dia é branca: tira metade do tom da estrela (o avermelhado do
+    // pôr do sol, que vem da transmitância, continua inteiro)
+    const starTint = S.sunCol.div(max(dot(S.sunCol, vec3(0.2126, 0.7152, 0.0722)), 1e-4));
+    const sunC = sunC0.div(mix(vec3(1.0), starTint, 0.5)).toVar();
     const ambC = S.amb.mul(1.7).add(S.skyZ.mul(0.2)).mul(C.tint).toVar();
     const sigma = C.density;
     const k = float(curve);

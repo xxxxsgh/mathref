@@ -136,11 +136,11 @@ function surface(type, P, U, S, I) {
     const sandMask = clamp(s.mul(1.2).add(float(1).sub(smoothstep(0.1, 0.3, slope.add(vMicro.mul(0.1))))).mul(0.85), 0, 1)
       .mul(float(1).sub(smoothstep(0.28, 0.5, slope.add(vMicro.mul(0.15)))));
     // estratos coloridos nas paredes das mesetas e cânions
-    const band = h.mul(1 / 31).add(vMicro.mul(0.22)).add(vMeso.mul(0.5)).add(macro.g.mul(3));
+    const band = h.mul(1 / 31).add(vMicro.mul(0.15)).add(vMeso.mul(0.18)).add(macro.g.mul(3));
     const b1 = sin(band.mul(2.1)).mul(0.5).add(0.5), b2 = sin(band.mul(5.3).add(1.3)).mul(0.5).add(0.5);
     const b3 = sin(band.mul(13.7).add(2.1)).mul(0.5).add(0.5);
     let strataCol = mix(mix(C3(P.rock), C3(P.rock2), b1), C3(P.high), b2.mul(b2).mul(b2).mul(0.4));
-    strataCol = strataCol.mul(b3.mul(0.25).add(0.85)).mul(mix(float(0.75), float(1.1), micro.b));
+    strataCol = strataCol.mul(b3.mul(0.12).add(0.92)).mul(mix(float(0.75), float(1.1), micro.b));
     // verniz do deserto: escorridos escuros verticais nos paredões (ruído
     // constante ao longo da vertical → listras que descem a face)
     const tanP = det.sub(up.mul(dot(det, up)));
@@ -399,14 +399,18 @@ export function makeWaterMaterial(body, P, U, S, opts) {
   // espuma: arrebentação na costa + cristas
   const foamN = N3(aDet.mul(fq(5)).add(vec3(T.mul(0.03), 0, 0))).b;
   const shore = smoothstep(1.2, 0.15, depth).mul(smoothstep(0.0, 0.1, depth)).mul(smoothstep(0.5, 0.8, foamN.add(sin(depth.mul(4.0).sub(T.mul(1.6))).mul(0.25)))).mul(0.7);
-  const crest = smoothstep(0.55, 0.95, w0).mul(S.fogD.mul(400).add(0.2)).mul(fade(dist, 20));
+  // cristas brancas: só nas vagas mais altas, quebradas em fiapos pelo ruído
+  // celular; mar calmo quase sem espuma, tempestade (fogD) espuma muito
+  const rough = clamp(S.fogD.mul(500), 0, 1);
+  const crest = smoothstep(mix(float(0.95), float(0.45), rough), mix(float(1.35), float(0.85), rough), w0)
+    .mul(smoothstep(0.42, 0.75, foamN)).mul(rough.mul(0.7).add(0.3)).mul(fade(dist, 20));
   const foam = clamp(shore.add(crest), 0, 1);
   const foamCol = vec3(0.9, 0.93, 0.95).mul(sunDiff.add(S.amb));
   let col = mix(lit, sky.mul(0.9), fres).add(S.sunCol.mul(sunG).mul(spec).mul(day).mul(float(1).sub(foam)));
   col = mix(col, foamCol, foam.mul(0.85));
   if (toxic) col = col.add(C3(P.glow).mul(0.02).mul(float(1).sub(day)));
-  let alpha = clamp(smoothstep(0.0, 6.0, depth).mul(0.85).add(fres.mul(0.5)).add(foam), 0, 1);
-  alpha = max(alpha, smoothstep(0.5, 3.0, depth).mul(0.6));
+  // água rasa já tinge a areia de turquesa logo no primeiro metro
+  let alpha = clamp(smoothstep(0.0, 2.5, depth).mul(0.72).add(smoothstep(2.5, 12.0, depth).mul(0.23)).add(fres.mul(0.5)).add(foam), 0, 1);
   let o = col;
   if (hasAtmo) { const ap = varying(aerial(U, S, scat, pL)); o = o.mul(ap.w).add(ap.xyz); }
   o = mix(o, S.hfCol, heightFog(U, S, float(0.0), dist));

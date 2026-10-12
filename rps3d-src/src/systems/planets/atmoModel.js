@@ -50,7 +50,7 @@ export function atmoParams(body) {
     mieTint = hint.map((c, i) => (c / mx) * tint[i] ** 0.5);
   }
   const dusty = body.type === 'desert' || body.type === 'volcanic' || body.type === 'toxic';
-  const tauM = (gas ? 0.003 : dusty ? 0.007 : 0.016) * at.mie * (body.type === 'desert' ? 4.2 : body.type === 'volcanic' ? 3.6 : body.type === 'toxic' ? 2.6 : 1) * dens;
+  const tauM = (gas ? 0.003 : dusty ? 0.007 : 0.011) * at.mie * (body.type === 'desert' ? 4.2 : body.type === 'volcanic' ? 3.6 : body.type === 'toxic' ? 2.6 : 1) * dens;
   const betaM = mieTint.map((c) => (c * tauM) / HM);
   // extinção da poeira neutra (o que não espalha na cor da dica é absorvido)
   const betaMe = [0, 1, 2].map(() => (tauM / HM) * 1.11);
@@ -66,7 +66,9 @@ export function atmoParams(body) {
     // ~750) a massa de ar no horizonte vira ~20× a vertical: sol laranja e
     // vermelho, céu em brasa, sem mudar a espessura vertical (céu do meio-dia).
     xk: gas ? 1 : 20,
-    R, top, HR, HM, betaR, betaRe, betaM, betaMe, mieExt: 1.11, g: body.type === 'desert' || body.type === 'volcanic' ? 0.7 : 0.78,
+    R, top, HR, HM, betaR, betaRe, betaM, betaMe, mieExt: 1.11, // aerossol fino (g alto): auréola concentrada e dourada em volta do sol, céu
+    // limpo a 20° dele; poeira (deserto/vulcão) espalha mais largo
+    g: body.type === 'desert' || body.type === 'volcanic' ? 0.7 : gas ? 0.78 : 0.86,
     density: dens,
   };
 }
