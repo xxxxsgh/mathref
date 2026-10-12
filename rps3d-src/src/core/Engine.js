@@ -68,6 +68,7 @@ export async function createEngine({ canvas, ui, onProgress = () => {} }) {
     body: null,                    // estado a pé (preenchido por `foot`)
     bodyId: null,                  // corpo celeste dominante (SOI) atual
     altitude: Infinity,            // altitude sobre o corpo dominante (m)
+    frameVel: new THREE.Vector3(), // velocidade (mundo, m/s) do referencial onde a câmera está parada (superfície que gira, nave); a reprojeção do TAA/motion blur pode descontá-la
   };
 
   const galaxy = new Galaxy(Number(params.get('seed')) || 2387);

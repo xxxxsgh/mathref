@@ -83,7 +83,7 @@ await ctx.render(ctx, dt)   → padrão renderer.render(scene, camera); `renderi
 | `backend` | `'webgpu'` \| `'webgl'` |
 | `scene`, `camera` | cena única; câmera `PerspectiveCamera` (FOV 72, near 0,05, far 2e9) **sempre em (0,0,0)** — origem flutuante. A câmera está na cena: filhos dela (cockpit, armas) renderizam |
 | `world` | origem flutuante: `world.add(obj, posMundo, {getPos})` → `{remove()}`; `world.toLocal(v)`, `world.toWorld(v)`, `world.origin` |
-| `player` | `{ mode, camWorld, pos, vel, ship, body, bodyId, altitude }` — quem controla a câmera escreve `camWorld` (mundo) e `camera.quaternion` |
+| `player` | `{ mode, camWorld, pos, vel, ship, body, bodyId, altitude, frameVel }` — quem controla a câmera escreve `camWorld` (mundo) e `camera.quaternion` |
 | `game` | `{ mode, paused, setMode(to, data), setPaused(b) }` — modos: `title`, `cinematic`, `ship`, `foot`, `map` |
 | `universe` | `{ galaxy, system, systemId, setSystem(id), FACTIONS, BIOMES }` — ver `src/core/Universe.js` |
 | `collision` | `addBox`, `addSphere`, `addGround(fn)`, `ground(p)`, `resolveSphere(p, r, up)`, `raycast(o, d, max)` — em coordenadas de mundo; formas presas a um *frame* `{pos, quat}` mutável |
@@ -177,6 +177,7 @@ Emita/escute com estes nomes e payloads. Novos eventos: documente aqui.
 
 ## Mudanças no núcleo
 (registre aqui: data, quem, o quê)
+- 2026-10-12, foot: `ctx.player.frameVel` (Vector3, m/s em mundo) — velocidade do referencial onde a câmera está parada (a pé na superfície de um planeta que gira ≈ 120 m/s; dentro de nave em movimento). Quem controla a câmera escreve; o `rendering` pode subtrair `frameVel·dt` do deslocamento de origem na reprojeção (TAA/motion blur), senão o chão parado borra. Enquanto o `rendering` não declarar `services.rendering.frameVelAware = true`, o `foot` chama `rendering.cut()` a cada frame em superfície que gira (sem borrão, sem histórico de TAA). Eventos novos do `foot`: `foot:fire`, `foot:step` `{intensity, material, sprint}`, `foot:reload`, `foot:equip`, `foot:grenade`, `foot:scan`, `foot:mine` `{resource, amount}`, `foot:kill` `{faction, kind, byPlayer}`, `foot:mantle`, `foot:enemyFire` `{faction, pos}`, `board:complete` `{ship, faction}`.
 - 2026-10-12, combat: catálogo de eventos ganhou `board`, `ship:disabled`, `ship:jumpout`, `turret:destroyed`, `capital:launch`, `shield:down`, `combat:defect`, `combat:target`.
 - 2026-10-12, story: catálogo de eventos ganhou `game:new`, `story:*`, `dialog:choice`, `npc:talk`, `prefs:change`, `battle:*`. Eventos `radio`/`notify` emitidos pela história levam `story: true` (a legenda já está na tela durante cenas; a HUD pode ignorar os que têm `subtitle: true`).
 - 2026-10-07, rendering: `tools/shot.mjs` — `page.screenshot` usa `--timeout` (antes 30 s fixos; cenas pesadas no SwiftShader passavam disso).
