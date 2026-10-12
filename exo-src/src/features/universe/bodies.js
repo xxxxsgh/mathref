@@ -98,6 +98,8 @@ uniform vec3 uSunDir[2];
 uniform vec3 uSunCol[2];    // já multiplicada pela iluminância
 uniform float uTime;
 uniform float uDetail;      // 0..1 (oitavas extras quando grande na tela)
+uniform vec3 uFillDir;      // direção ao planeta atual (luz refletida por ele)
+uniform vec3 uFillCol;
 varying vec3 vObjN;
 varying vec3 vWorldPos;
 varying vec3 vWorldN;
@@ -139,9 +141,18 @@ void main() {
     float b1 = 0.5 + 0.5 * sin(band * 3.1416);
     float b2 = 0.5 + 0.5 * sin(band * 7.2 + 1.7);
     float b3 = 0.5 + 0.5 * sin(band * 16.0 + 0.4 + w2 * 2.0);
-    albedo = mix(uC0, uC1, smoothstep(0.15, 0.85, b1));
-    albedo = mix(albedo, uC3, smoothstep(0.55, 0.95, b2) * 0.6);
-    albedo = mix(albedo, uC2, smoothstep(0.6, 1.0, b3) * 0.4);
+    albedo = mix(uC0, uC1, smoothstep(0.1, 0.9, b1));
+    albedo = mix(albedo, uC3, smoothstep(0.5, 0.95, b2) * 0.75);
+    albedo = mix(albedo, uC2, smoothstep(0.55, 1.0, b3) * 0.6);
+    // faixas finas escuras e claras
+    float lane = smoothstep(0.92, 1.0, 0.5 + 0.5 * sin(band * 29.0 + w2 * 4.0));
+    albedo = mix(albedo, uC2 * 0.6, lane * 0.55);
+    float bright = smoothstep(0.9, 1.0, 0.5 + 0.5 * sin(band * 11.0 - 0.7 + t1 * 3.0));
+    albedo = mix(albedo, uC3 * 1.15, bright * 0.5);
+    // redemoinhos nas bordas das faixas (cisalhamento)
+    float shear = abs(cos(band * 3.1416));
+    float eddy = snoise(vec3(q.x * 9.0, lat * 70.0, q.z * 9.0) + w2 * 3.0);
+    albedo *= 1.0 + 0.16 * eddy * shear;
     float stk = snoise(vec3(q.x * 12.0 + w2 * 2.0, lat * 150.0, q.z * 12.0));
     albedo *= 0.9 + 0.14 * stk;
     float turb = t1;
@@ -266,6 +277,8 @@ void main() {
     if (uType == 1) surf *= 0.55 + 0.45 * pow(NV, 0.35);
     col += surf * E / 3.14159;
   }
+  // luz refletida pelo planeta atual no lado noturno (planetshine)
+  col += albedo * uFillCol * max(0.0, dot(N, uFillDir)) / 3.14159;
   // brilho noturno (lava) e ambiente estelar mínimo
   col += emiss * vec3(1.0, 0.32, 0.06) * 0.6;
   col += albedo * 0.0025;
@@ -449,6 +462,8 @@ export class BodyRenderer {
         uSunCol: { value: sunCol },
         uTime: { value: 0 },
         uDetail: { value: 0.5 },
+        uFillDir: { value: new THREE.Vector3(0, 1, 0) },
+        uFillCol: { value: new THREE.Vector3() },
         ...ringU,
       },
     });
@@ -535,6 +550,8 @@ export class BodyRenderer {
     const H = ctx.pipeline.height || 720;
     const pxPerRad = H / ((ctx.camera.fov * Math.PI) / 180);
     const t = ctx.time.world;
+    const cp = sys.planets[sys.currentPlanetIndex];
+    const cur = cp ? { x: cp.position.x, y: cp.position.y, z: cp.position.z, r: cp.radius } : null;
     for (const it of this.items) {
       const m = it.mesh;
       const d = m.position.length();
@@ -547,6 +564,18 @@ export class BodyRenderer {
       }
       m.visible = px > 0.4;
       it.mat.uniforms.uDetail.value = Math.min(1, Math.max(0, (px - 40) / 300));
+      // planetshine: o planeta atual (no centro do mundo) ilumina o lado noturno das luas próximas
+      if (cur) {
+        const fd = it.mat.uniforms.uFillDir.value;
+        fd.set(cur.x - it.body.position.x, cur.y - it.body.position.y, cur.z - it.body.position.z);
+        const dist = fd.length();
+        fd.divideScalar(dist || 1);
+        const sr = cur.r / Math.max(dist, cur.r);
+        // fração iluminada do planeta vista do corpo × ângulo sólido
+        const phase = 0.5 + 0.5 * -fd.dot(this.sunDir[0]);
+        const k = 0.35 * phase * sr * sr * 4;
+        it.mat.uniforms.uFillCol.value.copy(this.sunCol[0]).multiplyScalar(k);
+      }
       it.mat.uniforms.uTime.value = t;
       if (it.ring) {
         it.ring.material.uniforms.uCenter.value.copy(m.position);

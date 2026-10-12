@@ -33,7 +33,7 @@ const CLASS_COLOR = {
   O: [0.55, 0.68, 1.0], B: [0.68, 0.8, 1.0], A: [0.88, 0.92, 1.0], F: [1.0, 0.97, 0.88],
   G: [1.0, 0.9, 0.62], K: [1.0, 0.68, 0.38], M: [1.0, 0.45, 0.3],
 };
-const CLASS_SIZE = { O: 2.0, B: 1.7, A: 1.35, F: 1.15, G: 1.0, K: 0.9, M: 0.75 };
+const CLASS_SIZE = { O: 2.0, B: 1.7, A: 1.35, F: 1.15, G: 1.0, K: 0.82, M: 0.62 };
 const BIOME_PT = {
   lush: 'exuberante', ocean: 'oceânico', frozen: 'congelado', toxic: 'tóxico', scorched: 'escaldante',
   exotic: 'exótico', radioactive: 'radioativo', barren: 'estéril', gas: 'gigante gasoso',
@@ -53,7 +53,7 @@ void main() {
   float px = aSize * uScale / d;
   gl_PointSize = clamp(px * 0.35, 1.0, 3.0);
   // estrelas resolvidas por cima do volume: brilho cai com a distância, some muito perto
-  vI = uGain * clamp(px * 0.12, 0.12, 1.0) * smoothstep(60.0, 300.0, d);
+  vI = uGain * clamp(px * 0.12, 0.12, 1.0) * smoothstep(300.0, 2500.0, d);
   vColor = aColor;
   gl_Position = projectionMatrix * mv;
 }`;
@@ -140,7 +140,7 @@ void main() {
   float px = uPx * aSize * clamp(900.0 / d, 0.5, 2.2);
   gl_PointSize = clamp(px, 2.0, 40.0);
   float df = length(position - uFocus);
-  vFade = smoothstep(16000.0, 4000.0, d) * (uRadius > 0.0 ? pow(smoothstep(uRadius, uRadius * 0.15, df), 1.5) : 1.0) * (0.35 + 0.65 * aSize / 2.0);
+  vFade = smoothstep(16000.0, 4000.0, d) * (uRadius > 0.0 ? pow(smoothstep(uRadius, uRadius * 0.15, df), 1.5) : 1.0) * (0.15 + 0.85 * pow(aSize / 2.0, 1.6));
   vColor = aColor;
   vFlag = aFlag;
   gl_Position = projectionMatrix * mv;
@@ -241,6 +241,7 @@ void main() { vNdc = position.xy; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 const VOL_FRAG = (galGlsl) => /* glsl */ `
 precision highp float;
 uniform vec3 uCamPos;
+uniform float uVolGain;
 uniform mat4 uCamWorld;
 uniform mat4 uProjInv;
 varying vec2 vNdc;
@@ -277,13 +278,15 @@ void main() {
       vec3 pp = ro + rd * (t + dt * jit);
       vec3 em; float dust;
       galSample(pp, em, dust);
-      acc += T * em * dt * 0.0011;
+      // perto da câmera as estrelas são pontos resolvidos (camada de pontos), não névoa
+      float far = smoothstep(150.0, 2600.0, t + dt * jit);
+      acc += T * em * dt * 0.0011 * far;
       T *= exp(-dust * dt * 0.0016);
       t += dt;
       if (t > t1 || T < 0.02) break;
     }
   }
-  acc *= 0.7;
+  acc *= 0.7 * uVolGain;
   acc = acc / (1.0 + 0.45 * acc);
   gl_FragColor = vec4(acc, 1.0);
 }`;
@@ -612,6 +615,7 @@ export default {
     const gal = this.uni.galaxy;
     const uniforms = {
       uCamPos: { value: new THREE.Vector3() },
+      uVolGain: { value: 1 },
       uCamWorld: { value: new THREE.Matrix4() },
       uProjInv: { value: new THREE.Matrix4() },
       uJit: { value: 0 },
@@ -728,7 +732,7 @@ export default {
         .gmap .pl{font-size:12px;opacity:.85;line-height:1.6;margin-top:8px}
         .gmap .btn{margin-top:14px;width:100%;padding:10px 0;font:600 13px system-ui;letter-spacing:.3em;text-transform:uppercase;color:#0b1020;background:linear-gradient(90deg,#ffd27a,#ffb347);border:0;border-radius:2px;cursor:pointer;pointer-events:auto}
         .gmap .btn[disabled]{background:#3a4258;color:#8b93a8;cursor:default}
-        .gmap .top{position:absolute;left:28px;top:24px;font-size:11px;letter-spacing:.3em;text-transform:uppercase;opacity:.8}
+        .gmap .top{position:absolute;left:28px;top:24px;font-size:11px;letter-spacing:.3em;text-transform:uppercase;opacity:.9;text-shadow:0 0 10px #000,0 0 3px #000}
         .gmap .top b{display:block;font-size:20px;letter-spacing:.16em;opacity:1;margin-top:4px}
         .gmap .hint{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);font-size:11px;letter-spacing:.2em;opacity:.55;text-transform:uppercase;white-space:nowrap}
         .gmap .lbl{position:absolute;font-size:10px;letter-spacing:.18em;text-transform:uppercase;white-space:nowrap;transform:translate(10px,-50%);text-shadow:0 0 6px #000;opacity:.8}
@@ -830,7 +834,9 @@ export default {
     const p = ctx.player;
     const r = ctx.services.render;
     if (on) {
-      this.prev = { move: p.moveEnabled, look: p.lookEnabled, auto: r?.autoExposure, exp: r?.exposure };
+      this.prev = { move: p.moveEnabled, look: p.lookEnabled, auto: r?.autoExposure, exp: r?.exposure, layers: ctx.camera.layers.mask };
+      // o mapa cobre a tela toda: a câmera do mundo não desenha nada enquanto aberto
+      ctx.camera.layers.disableAll();
       if (!ctx.shot) {
         p.moveEnabled = false;
         p.lookEnabled = false;
@@ -844,6 +850,7 @@ export default {
       this.onSystem();
       this.cam = { ...this.camT };
     } else if (this.prev) {
+      ctx.camera.layers.mask = this.prev.layers;
       p.moveEnabled = this.prev.move;
       p.lookEnabled = this.prev.look;
       if (!ctx.shot) ctx.input.wantsLock = true;
@@ -1006,10 +1013,14 @@ export default {
       this.volKey = '';
     }
     const vu = this.volMat.uniforms;
+    // de perto (vizinhança) o fundo galáctico fica contido: as estrelas locais mandam
+    const near = THREE.MathUtils.smoothstep(c.dist, 1200, 9000);
+    vu.uVolGain.value = 0.22 + 0.78 * near;
+    this.cloudMat.uniforms.uGain.value = 0.5 * (0.25 + 0.75 * near);
     vu.uCamPos.value.copy(cam.position).add(this.focus);
     vu.uCamWorld.value.copy(cam.matrixWorld);
     vu.uProjInv.value.copy(cam.projectionMatrixInverse);
-    const key = `${vu.uCamPos.value.toArray().map((v) => v.toFixed(1))}|${cam.quaternion.toArray().map((v) => v.toFixed(4))}|${vw}`;
+    const key = `${vu.uCamPos.value.toArray().map((v) => v.toFixed(1))}|${cam.quaternion.toArray().map((v) => v.toFixed(4))}|${vw}|${vu.uVolGain.value.toFixed(3)}`;
     r.autoClear = false;
     if (key !== this.volKey) {
       this.volKey = key;

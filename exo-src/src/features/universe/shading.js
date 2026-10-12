@@ -104,9 +104,16 @@ void main() {
   }
   #endif
   float rough = uRough;
+  float mineral = 0.0;
+  #ifdef USE_ROCK
+  // veios minerais: mais lisos e brilhantes (reflexo cristalino)
+  mineral = smoothstep(0.55, 0.85, snoise(vLocal * 4.3 + 21.0)) * smoothstep(-0.2, 0.4, snoise(vLocal * 1.3 - 5.0));
+  rough = mix(rough, 0.32, mineral);
+  albedo = mix(albedo, albedo * vec3(0.8, 1.05, 1.2) + 0.03, mineral * 0.6);
+  #endif
   float a = rough * rough;
   float shin = 2.0 / max(1e-3, a * a) - 2.0;
-  vec3 F0 = mix(vec3(0.04), albedo, uMetal);
+  vec3 F0 = mix(vec3(0.04 + 0.06 * mineral), albedo, uMetal);
   vec3 diffC = albedo * (1.0 - uMetal);
   vec3 col = vec3(0.0);
   for (int i = 0; i < 2; i++) {

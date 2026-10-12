@@ -38,7 +38,7 @@ import { WorldPos } from '../../core/Space.js';
 import { quatFromForwardUp } from '../../core/Geo.js';
 import { createGalaxy, lyBetween } from './galaxy.js';
 import { generateSystem, recenter, travelTime, PULSE_SPEED, STAR_DIST } from './system.js';
-import { BodyRenderer, mulberry } from './bodies.js';
+import { BodyRenderer } from './bodies.js';
 import { AsteroidField } from './asteroids.js';
 import { buildStation } from './station.js';
 import { GalaxySky, GALAXY_GLSL } from './galaxysky.js';
@@ -489,4 +489,3 @@ export default {
   },
 };
 
-void mulberry;

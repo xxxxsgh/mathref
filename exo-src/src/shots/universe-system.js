@@ -14,7 +14,7 @@ export default [
     camera: { lat: 5, lon: 40, alt: 400000, heading: 0, pitch: 0, fov: 62 },
     timeOfDay: 0.42,
     weather: 'clear',
-    params: { uniCam: { body: 'p2', dist: 4.3, az: 55, el: 14, look: 'p2', yaw: 16, pitch: -3 } },
+    params: { uniCam: { body: 'p2', dist: 3.6, az: 75, el: -12, look: 'p2', yaw: -16, pitch: 4 } },
   },
   {
     name: 'universe-station',

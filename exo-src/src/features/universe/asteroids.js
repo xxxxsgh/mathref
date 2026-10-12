@@ -424,8 +424,10 @@ export class AsteroidField {
 
   frame(ctx, visible) {
     const cam = ctx.player.cameraWorld;
-    this.root.visible = visible;
-    if (visible) this.rebuild(cam);
+    // em pulso (milhares de km/s) as rochas próximas não fazem sentido: some e não reconstrói
+    const fast = (ctx.player.velocity?.length?.() ?? 0) > 4000;
+    this.root.visible = visible && !fast;
+    if (visible && !fast) this.rebuild(cam);
     const H = ctx.pipeline.height || 720;
     const px = H / ((ctx.camera.fov * Math.PI) / 180);
     for (const d of this.dust) {

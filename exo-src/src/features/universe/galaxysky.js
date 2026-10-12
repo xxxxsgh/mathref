@@ -53,7 +53,7 @@ float galArm(float rr, float th) {
 void galSample(vec3 p, out vec3 em, out float dust) {
   float rr = length(p.xz);
   float th = atan(p.z, p.x);
-  float ch = cosh(min(30.0, p.y / G_HZ));
+  float ch = cosh(min(30.0, p.y / (G_HZ * 1.5)));
   // perfil de LUZ: disco mais plano que o de contagem e com o centro
   // esvaziado (os braços entram até o bojo, como numa espiral real)
   float disk = exp(-rr / 11000.0) * (1.0 - 0.75 * exp(-rr * rr / (5500.0 * 5500.0))) / (ch * ch);
@@ -101,11 +101,18 @@ void main() {
     if (abs(p.y) > 6000.0 && p.y * d.y > 0.0) break;
     vec3 em; float dust;
     galSample(p, em, dust);
-    acc += T * em * dt * 0.00052;
-    T *= exp(-dust * dt * 0.0011);
+    // estrelas a menos de ~1 500 al são resolvidas (o domo do céu as desenha):
+    // a faixa é a luz NÃO resolvida, distante
+    float far = smoothstep(700.0, 3200.0, t);
+    acc += T * em * dt * 0.0009 * far;
+    T *= exp(-dust * dt * 0.0013);
     t += dt;
     if (T < 0.01 || t > 70000.0) break;
   }
+  // nuvens estelares e fendas escuras em escala angular (textura da faixa)
+  float n1 = fbm(d * 7.0 + uGSeed, 5);
+  float n2 = fbm(d * 23.0 - uGSeed, 4);
+  acc *= (0.45 + 1.1 * smoothstep(-0.45, 0.55, n1)) * (0.75 + 0.5 * smoothstep(-0.3, 0.7, n2));
   gl_FragColor = vec4(acc, 1.0);
 }`;
 

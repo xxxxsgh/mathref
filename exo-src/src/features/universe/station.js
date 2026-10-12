@@ -149,6 +149,20 @@ export function buildStation(seed = 1) {
   }
   add(hull, new THREE.CylinderGeometry(2, 2, 220, 6), [0, 0, -380], [Math.PI / 2, 0, 0]);
   add(hull, new THREE.SphereGeometry(30, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), [0, 60, -300], [0, 0, 0]);
+  // segundo anel (menor, à frente) e braços de atracação
+  add(hull, new THREE.TorusGeometry(250, 20, 14, 120), [0, 0, 150]);
+  add(lights, new THREE.CylinderGeometry(270.5, 270.5, 8, 120, 1, true), [0, 0, 150], [Math.PI / 2, 0, 0]);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    add(hull, new THREE.CylinderGeometry(7, 7, 180, 8), [Math.cos(a) * 160, Math.sin(a) * 160, 150], [0, 0, a - Math.PI / 2]);
+    add(hull, new THREE.BoxGeometry(46, 46, 130), [Math.cos(a) * 110, Math.sin(a) * 110, -120], [0, 0, a]);
+    add(hull, new THREE.CylinderGeometry(16, 22, 90, 12), [Math.cos(a) * 110, Math.sin(a) * 110, -230], [Math.PI / 2, 0, 0]);
+  }
+  // módulos ao longo do eixo
+  for (let k = 0; k < 5; k++) {
+    const z = -160 + k * 70;
+    add(hull, new THREE.CylinderGeometry(84 + (k % 2) * 10, 84 + (k % 2) * 10, 26, 32), [0, 0, z], [Math.PI / 2, 0, 0]);
+  }
   // luzes de navegação
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
