@@ -9,7 +9,7 @@ import {
   vec3, vec4, float, normalize, dot, max, min, mix, smoothstep, clamp, abs, pow, exp, length, positionLocal, sin, cos,
   cross, sqrt, select, uniform, fract,
 } from 'three/tsl';
-import { N3 } from './materials.js';
+import { N3, sunConeDiv } from './materials.js';
 import { PI } from './scatter.js';
 
 const C3 = (c) => vec3(c.r, c.g, c.b);
@@ -55,11 +55,12 @@ export function makeGasGiant(body, P, U, S) {
   const streak2 = N3(vec3(dr.x.mul(9.0), lat.mul(90.0), dr.z.mul(9.0)).add(w2.mul(0.6))).g.sub(0.5);
   // faixas: perfil zonal (1D ao longo da latitude) com larguras irregulares,
   // deformado pela turbulência — mais forte nas bordas (cisalhamento)
-  const latW = lat.add(w1.mul(0.035)).add(w2.mul(0.018)).add(streak.mul(0.012)).add(w3.mul(0.004));
-  const z1 = N3(vec3(latW.mul(1.9), seedOff, 0.31)).r;
+  const latW = lat.add(w1.mul(0.024)).add(w2.mul(0.013)).add(streak.mul(0.012)).add(w3.mul(0.004));
+  const z1 = N3(vec3(latW.mul(2.4), seedOff, 0.31)).r;
   const z2 = N3(vec3(latW.mul(6.3), seedOff.add(0.37), 0.77)).g;
-  const z3 = N3(vec3(latW.mul(17.0), seedOff.add(0.61), 0.13)).r;
-  const zone = z1.mul(0.62).add(z2.mul(0.28)).add(z3.mul(0.1));
+  const z3 = N3(vec3(latW.mul(19.0), seedOff.add(0.61), 0.13)).r;
+  const z4 = N3(vec3(latW.mul(52.0), seedOff.add(0.17), 0.57)).g;
+  const zone = z1.mul(0.58).add(z2.mul(0.27)).add(z3.mul(0.1)).add(z4.mul(0.05));
   const belt = smoothstep(0.42, 0.62, zone);           // 1 = zona clara, 0 = cinturão escuro
   const shear = float(1).sub(abs(belt.mul(2.0).sub(1.0)));  // bordas entre faixas
   let col = mix(C3(P.shallow), C3(P.deep), smoothstep(0.25, 0.5, zone));
@@ -70,7 +71,9 @@ export function makeGasGiant(body, P, U, S) {
   const fest = smoothstep(0.12, 0.0, abs(lat.sub(0.06))).mul(smoothstep(0.55, 0.75, N3(dr.mul(6.0).add(0.2)).b));
   col = mix(col, C3(P.seabed), fest.mul(0.55));
   // turbulência visível nas bordas: redemoinhos claros/escuros
-  col = col.mul(float(1).add(shear.mul(w2.mul(1.4).add(streak2.mul(0.9)))));
+  col = col.mul(float(1).add(shear.mul(w2.mul(0.9).add(streak2.mul(0.7)))));
+  // bandas finas (estrias claras/escuras dentro de cada faixa)
+  col = col.mul(z4.sub(0.5).mul(0.22).add(1.0));
   // regiões polares mais escuras e azuladas
   col = mix(col, C3(P.high).mul(0.7), smoothstep(0.72, 0.95, abs(lat)).mul(0.55));
   // tempestade oval gigante (hemisfério sul)
@@ -102,7 +105,7 @@ export function makeGasGiant(body, P, U, S) {
   const lit = col.mul(S.sunCol).mul(diff.div(PI)).mul(float(1).sub(ringSh)).mul(limb);
   // tom quente no terminador (luz atravessando mais atmosfera)
   const term = smoothstep(0.25, 0.0, NdL).mul(smoothstep(-0.15, 0.05, NdL));
-  mat.colorNode = lit.add(col.mul(S.sunCol).mul(term.mul(0.03)).mul(vec3(1.0, 0.5, 0.25))).add(col.mul(S.amb).mul(0.05))
+  mat.colorNode = lit.add(col.mul(S.sunCol).mul(term.mul(0.03)).mul(vec3(1.0, 0.5, 0.25))).add(col.mul(S.amb).mul(0.05).mul(smoothstep(-0.15, 0.3, NdL)))
     // lado noturno: luz refletida pelos anéis e pelas luas (nunca preto absoluto)
     .add(col.mul(S.sunCol).mul(float(1).sub(smoothstep(-0.2, 0.1, NdL))).mul(body.rings ? 0.006 : 0.002));
   const sphere = new THREE.Mesh(new THREE.SphereGeometry(R, 192, 96), mat);
@@ -141,7 +144,8 @@ export function makeGasGiant(body, P, U, S) {
     const refl = pow(abs(lightSide), 0.5).mul(0.75).add(0.3); // anel espesso: espalhamento múltiplo
     const trans = float(1).sub(dens).mul(0.35).add(fwd).mul(abs(lightSide).add(0.15));
     const light = mix(trans, refl, same);
-    rm.colorNode = rc.mul(S.sunCol).mul(light).mul(shadow).div(PI).add(rc.mul(S.amb).mul(0.02));
+    const ringCol = rc.mul(S.sunCol).mul(light).mul(shadow).div(PI).add(rc.mul(S.amb).mul(0.02));
+    rm.colorNode = body.atmosphere ? ringCol.div(sunConeDiv(U, S, V2.negate())) : ringCol;
     rm.opacityNode = clamp(dens.mul(0.82), 0, 1);
     const ring = new THREE.Mesh(geo, rm);
     ring.frustumCulled = false;

@@ -19,7 +19,7 @@ import {
   clamp, mix, pow, uniform, screenCoordinate, fract, sin, viewportDepthTexture, logarithmicDepthToViewZ, cameraNear, cameraFar,
   screenUV, positionView,
 } from 'three/tsl';
-import { N3, cloudCoverage, weatherAt } from './materials.js';
+import { N3, cloudCoverage, weatherAt, sunConeDiv } from './materials.js';
 import { sunTrans, PI } from './scatter.js';
 
 const hg = (mu, g) => {
@@ -63,10 +63,15 @@ export function makeCloudMaterials(body, U, S, opts) {
     const grad = smoothstep(0.0, 0.08, hn).mul(smoothstep(topLim, topLim.mul(0.45), hn));
     const n = N3(p.mul(1 / 2600).add(S.wind.mul(3.1)));
     // de longe (órbita) as formas finas viram "pipoca": suaviza com a distância
-    const shape = mix(n.r.mul(0.6).add(n.b.mul(0.55)), n.r.mul(0.5).add(0.3), S.cloudFar.mul(0.5));
+    // perto da câmera: oitava extra de "couve-flor" (bolhas de ~250 m) e erosão fina
+    const nearF = smoothstep(9000.0, 2500.0, length(p.sub(S.cam))).mul(float(1).sub(S.cloudFar));
+    const billow = N3(p.mul(1 / 1000).add(S.wind.mul(4.3))).b.sub(0.5).mul(nearF).mul(0.3);
+    const shape = mix(n.r.mul(0.6).add(n.b.mul(0.55)).add(billow), n.r.mul(0.5).add(0.3), S.cloudFar.mul(0.5));
     const base = remap(shape.mul(grad), float(1).sub(cov), float(1)).mul(cov);
     // erosão: fiapos no topo, bordas enroladas na base
-    const det = N3(p.mul(1 / 540).add(S.wind.mul(6.0)).add(vec3(0, S.time.mul(0.0008), 0))).a;
+    const det0 = N3(p.mul(1 / 540).add(S.wind.mul(6.0)).add(vec3(0, S.time.mul(0.0008), 0))).a;
+    const det1 = N3(p.mul(1 / 160).add(S.wind.mul(9.0)).add(vec3(S.time.mul(0.0015), 0, 0))).a;
+    const det = mix(det0, det0.mul(0.65).add(det1.mul(0.35)), nearF);
     const mod = mix(det, float(1).sub(det), clamp(hn.mul(3.0), 0.0, 1.0)).mul(float(0.36).sub(S.cloudFar.mul(0.2)));
     return remap(base, mod, float(1)).mul(mix(float(1.2), float(2.2), cov));
   };
@@ -158,7 +163,7 @@ export function makeCloudMaterials(body, U, S, opts) {
     const far = max(tFirst, 0.0);
     const haze = float(1).sub(exp(far.mul(-1 / 38000)));
     const col = mix(acc, S.skyH.mul(alpha), haze.mul(0.8));
-    return vec4(col.add(S.skyZ.mul(S.flash).mul(alpha).mul(2.0)), alpha);
+    return vec4(col.add(S.skyZ.mul(S.flash).mul(alpha).mul(2.0)).div(sunConeDiv(U, S, rd)), alpha);
   });
 
   const nodeOuter = marchFn(false, 1.0)();

@@ -17,13 +17,15 @@ import {
 import { Noise } from '../../core/Rng.js';
 
 export const KINDS = {
-  lush: { kind: 'rain', fog: 1 / 900, color: [0.55, 0.6, 0.66], fall: 11, wind: 6, len: 0.9, width: 0.012, alpha: 0.32, p: [0.75, 0.8, 0.88], clouds: 0.45 },
-  ocean: { kind: 'rain', fog: 1 / 800, color: [0.55, 0.62, 0.7], fall: 12, wind: 10, len: 1.0, width: 0.012, alpha: 0.32, p: [0.75, 0.82, 0.9], clouds: 0.45 },
-  desert: { kind: 'sandstorm', fog: 1 / 300, color: [0.86, 0.55, 0.3], fall: 0.6, wind: 26, len: 0.35, width: 0.02, alpha: 0.45, p: [1.0, 0.72, 0.45], clouds: 0.1 },
-  ice: { kind: 'blizzard', fog: 1 / 200, color: [0.74, 0.86, 1.05], fall: 2.2, wind: 18, len: 0.12, width: 0.022, alpha: 0.85, p: [1, 1, 1], clouds: 0.5 },
-  volcanic: { kind: 'ash', fog: 1 / 420, color: [0.32, 0.29, 0.28], fall: 1.1, wind: 4, len: 0.05, width: 0.025, alpha: 0.6, p: [0.22, 0.2, 0.19], clouds: 0.3 },
-  toxic: { kind: 'acid', fog: 1 / 260, color: [0.55, 0.68, 0.25], fall: 6, wind: 5, len: 0.5, width: 0.014, alpha: 0.3, p: [0.75, 0.95, 0.35], clouds: 0.35 },
-  dead: { kind: 'electric', fog: 1 / 3000, color: [0.3, 0.32, 0.38], fall: 0, wind: 9, len: 0.2, width: 0.02, alpha: 0.25, p: [0.6, 0.7, 0.8], clouds: 0 },
+  // ov = quanto o céu fecha (luz direta do sol cai, luz difusa domina);
+  // drift = véu de partículas rente ao chão (neblina de altura extra, m de escala)
+  lush: { kind: 'rain', ov: 0.85, drift: 0, fog: 1 / 900, color: [0.55, 0.6, 0.66], fall: 11, wind: 6, len: 0.9, width: 0.012, alpha: 0.32, p: [0.75, 0.8, 0.88], clouds: 0.45 },
+  ocean: { kind: 'rain', ov: 0.85, drift: 0, fog: 1 / 800, color: [0.55, 0.62, 0.7], fall: 12, wind: 10, len: 1.0, width: 0.012, alpha: 0.32, p: [0.75, 0.82, 0.9], clouds: 0.45 },
+  desert: { kind: 'sandstorm', ov: 0.7, drift: 70, fog: 1 / 300, color: [0.86, 0.55, 0.3], fall: 0.6, wind: 26, len: 0.35, width: 0.02, alpha: 0.45, p: [1.0, 0.72, 0.45], clouds: 0.1 },
+  ice: { kind: 'blizzard', ov: 0.8, drift: 45, fog: 1 / 200, color: [0.74, 0.86, 1.05], fall: 2.2, wind: 18, len: 0.12, width: 0.022, alpha: 0.85, p: [1, 1, 1], clouds: 0.5 },
+  volcanic: { kind: 'ash', ov: 0.6, drift: 0, fog: 1 / 420, color: [0.32, 0.29, 0.28], fall: 1.1, wind: 4, len: 0.05, width: 0.025, alpha: 0.6, p: [0.22, 0.2, 0.19], clouds: 0.3 },
+  toxic: { kind: 'acid', ov: 0.55, drift: 90, fog: 1 / 260, color: [0.55, 0.68, 0.25], fall: 6, wind: 5, len: 0.5, width: 0.014, alpha: 0.3, p: [0.75, 0.95, 0.35], clouds: 0.35 },
+  dead: { kind: 'electric', ov: 0.3, drift: 0, fog: 1 / 3000, color: [0.3, 0.32, 0.38], fall: 0, wind: 9, len: 0.2, width: 0.02, alpha: 0.25, p: [0.6, 0.7, 0.8], clouds: 0 },
   gas: null,
 };
 
@@ -37,6 +39,7 @@ export class Weather {
     this.state = { kind: 'clear', intensity: 0, body: null, visibility: Infinity, wind: new THREE.Vector3() };
     this.lastEmit = { kind: '', intensity: -1, t: -9 };
     this.offset = new THREE.Vector3();
+    this.overcast = 0;   // 0..1 — céu fechado pela tempestade (lido por index.js para a luz do sol/IBL)
     this.prevCam = null;
     this.flashT = 0; this.nextFlash = 3;
     this.windW = new THREE.Vector3();
@@ -128,7 +131,7 @@ export class Weather {
     m.opacityNode = U.alpha.mul(fadeN).mul(pow(edge, 0.8)).mul(alive);
     this.mesh = new THREE.Mesh(g, m);
     this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = 5;
+    this.mesh.renderOrder = 6; // depois da casca do cone do sol (5,5)
     this.mesh.visible = false;
     this.mesh.name = 'pl.weather';
     this.ctx.scene.add(this.mesh);
@@ -141,6 +144,9 @@ export class Weather {
     if (!W || !view || !view.A) {
       this.mesh.visible = false;
       if (S) { S.fogD.value = 0; S.flash.value = 0; }
+      this.overcast = 0;
+      if (view?.hfBase) { S.hfA.value = view.hfBase[0]; S.hfH.value = view.hfBase[1]; S.hfRef.value = 0; }
+      if (S) S.driftAmt.value = 0;
       this.setState('clear', 0, body);
       this.prevCam = cam.clone();
       return;
@@ -163,11 +169,31 @@ export class Weather {
     const sunUp = Math.max(0, view.sunLocal.dot(dir));
     const sT = view.sunT, sc = S.sunCol.value, amb = S.amb.value;
     const fogCol = new THREE.Vector3(
-      (amb.x * 0.55 + sc.x * sT[0] * sunUp * 0.07) * W.color[0] * 1.6,
-      (amb.y * 0.55 + sc.y * sT[1] * sunUp * 0.07) * W.color[1] * 1.6,
-      (amb.z * 0.55 + sc.z * sT[2] * sunUp * 0.07) * W.color[2] * 1.6);
+      (amb.x * 0.55 + sc.x * sT[0] * (sunUp * 0.1 + 0.02)) * W.color[0] * 1.6,
+      (amb.y * 0.55 + sc.y * sT[1] * (sunUp * 0.1 + 0.02)) * W.color[1] * 1.6,
+      (amb.z * 0.55 + sc.z * sT[2] * (sunUp * 0.1 + 0.02)) * W.color[2] * 1.6);
     S.fogCol.value.copy(fogCol);
     S.fogD.value = W.fog * Math.pow(I, 3.5) * 1.2;
+    this.overcast = THREE.MathUtils.clamp(I * 1.35, 0, 1) * (W.ov ?? 0.8);
+    this.tint = W.color;
+    // véu varrido: deslocamento acumulado do vento no referencial local (as
+    // faixas de neve/areia correm pelo chão na direção do vento)
+    const windL = body.dirToLocal(this.windW, t, new THREE.Vector3());
+    S.drift.value.addScaledVector(windL, dt * 1.6);
+    for (const k of ['x', 'y', 'z']) S.drift.value[k] %= 4096;
+    S.driftAmt.value = W.drift ? Math.min(1, I * 1.3) : 0;
+    // neve/areia/névoa varrida rente ao chão: neblina de altura densa e rasa
+    if (view.hfBase) {
+      const dr = W.drift ? I * I : 0;
+      S.hfA.value = view.hfBase[0] + dr * (1 / 260);
+      S.hfH.value = THREE.MathUtils.lerp(view.hfBase[1], W.drift || view.hfBase[1], Math.min(1, dr * 1.5));
+      const gh = view.heightAt(dir);
+      if (dr > 0) {
+        const k = Math.min(1, dr * 2);
+        S.hfCol.value.lerp(new THREE.Vector3(fogCol.x * 1.1, fogCol.y * 1.1, fogCol.z * 1.1), k);
+      }
+      S.hfRef.value = dr > 0 ? Math.max(0, gh - 15) * Math.min(1, dr * 4) : 0;
+    }
     S.cloudCov.value = Math.min(1, I * W.clouds + (view.cloudBoost || 0)) * (view.cloud ? 1 : 0);
 
     // partículas

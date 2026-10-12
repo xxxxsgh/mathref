@@ -7,7 +7,7 @@ import * as THREE from 'three/webgpu';
 import { terrainDesc, getTerrain } from './terrain.js';
 import { atmoParams, scatterCPU, sunTransmittance } from './atmoModel.js';
 import { atmoUniforms } from './scatter.js';
-import { stateUniforms, makeTerrainMaterials, makeWaterMaterial, makeSkyMaterial } from './materials.js';
+import { stateUniforms, makeTerrainMaterials, makeWaterMaterial, makeSkyMaterial, makeSkyTransMaterial } from './materials.js';
 import { makeCloudMaterials } from './clouds.js';
 import { makeGasGiant } from './gasGiant.js';
 import { paletteFor } from './palettes.js';
@@ -34,6 +34,7 @@ export class PlanetView {
     // neblina de altura por bioma: densidade no nível do mar (1/m) e escala (m)
     const HF = { lush: [1 / 26000, 160], ocean: [1 / 30000, 140], toxic: [1 / 3500, 260], volcanic: [1 / 9000, 380], ice: [1 / 22000, 200], desert: [1 / 30000, 300] }[body.type];
     if (HF && body.atmosphere && body.kind !== 'gas_giant') { this.S.hfA.value = HF[0]; this.S.hfH.value = HF[1]; }
+    this.hfBase = [this.S.hfA.value, this.S.hfH.value];
     this.group = new THREE.Group();
     this.group.name = 'pl.' + body.name;
     this.group.matrixWorldAutoUpdate = true;
@@ -66,6 +67,14 @@ export class PlanetView {
       this.sky = new THREE.Mesh(new THREE.SphereGeometry(this.A.top, 128, 64), this.skyMat);
       this.sky.renderOrder = -4; this.sky.frustumCulled = false; this.sky.name = 'pl.sky';
       this.group.add(this.sky);
+      this.skyT = new THREE.Mesh(this.sky.geometry, makeSkyTransMaterial(body, this.U, this.S));
+      this.skyT.renderOrder = -5; this.skyT.frustumCulled = false; this.skyT.name = 'pl.skyT';
+      this.group.add(this.skyT);
+      // a coroa da estrela (deepspace) é desenhada com renderOrder 5: esta
+      // casca vem logo depois e tinge só o cone em volta do sol
+      this.skyTS = new THREE.Mesh(this.sky.geometry, makeSkyTransMaterial(body, this.U, this.S, 1));
+      this.skyTS.renderOrder = 5.5; this.skyTS.frustumCulled = false; this.skyTS.name = 'pl.skyTSun';
+      this.group.add(this.skyTS);
       if (hasClouds) {
         this.cloud = makeCloudMaterials(body, this.U, this.S, this.opts);
         this.S.cloudMid.value = (this.cloud.layer.base + this.cloud.layer.top) / 2 - body.radius;
@@ -92,7 +101,7 @@ export class PlanetView {
     S.cam.value.copy(this.camLocal);
     S.sunL.value.copy(this.sunLocal);
     S.time.value = t;
-    const sc = this.sys.star.color, I = info.sunI;
+    const sc = info.dominant === b && info.adapt ? info.adapt : this.sys.star.color, I = info.sunI;
     S.sunCol.value.set(sc[0] * I, sc[1] * I, sc[2] * I);
     const sk = I / 4.2 * SKY_SCALE;
     S.skyI.value.set(sc[0] * sk, sc[1] * sk, sc[2] * sk);
@@ -148,14 +157,19 @@ export class PlanetView {
     sd.normalize();
     // média de 4 azimutes (sol, oposto e laterais): no crepúsculo o brilho em
     // volta do sol é estreito e não deve virar a luz ambiente do mundo inteiro
-    const hz = [0, 0, 0];
+    const hz = [0, 0, 0], hs = [0, 0, 0], ho = [0, 0, 0];
     const sp = new THREE.Vector3().crossVectors(up, sd).normalize();
     for (const [a, c] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const d = [sd.x * a + sp.x * c + up.x * 0.06, sd.y * a + sp.y * c + up.y * 0.06, sd.z * a + sp.z * c + up.z * 0.06];
       const l = Math.hypot(...d);
       const o = scatterCPU(A, ro, [d[0] / l, d[1] / l, d[2] / l], L, Infinity, 8, this.skyCPU);
-      for (let k = 0; k < 3; k++) hz[k] += o.I[k] * 0.25 * [sk.x, sk.y, sk.z][k];
+      for (let k = 0; k < 3; k++) {
+        const c = o.I[k] * [sk.x, sk.y, sk.z][k];
+        hz[k] += c * 0.25;
+        if (a === 1) hs[k] = c; else ho[k] += c / 3;
+      }
     }
+    S.skyHs.value.set(...hs); S.skyHo.value.set(...ho);
     this.hor = hz;
     S.skyZ.value.set(...this.zen);
     S.skyH.value.set(...hz);

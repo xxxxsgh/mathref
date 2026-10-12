@@ -14,7 +14,7 @@ import {
   select, reflect, cross, sqrt, step, uniform, atan, asin, texture,
 } from 'three/tsl';
 import { planetNoiseTexture } from './noiseTex.js';
-import { makeScatter, aerial, sunTrans, PI } from './scatter.js';
+import { makeScatter, aerial, sunTrans, viewTrans, PI } from './scatter.js';
 import { DET_PERIOD } from './chunkgen.js';
 
 export const N3 = (p) => texture3D(planetNoiseTexture(), p, float(0));
@@ -43,7 +43,10 @@ const fade = (dist, lambda) => float(1).sub(smoothstep(lambda * 40, lambda * 220
  * hp = altura do ponto (m sobre o nível do mar), dist em metros.
  */
 export function heightFog(U, S, hp, dist) {
-  const hc = length(S.cam).sub(U.R);
+  // hfRef: base da camada (m). 0 = nível do mar; em nevasca/tempestade vira o
+  // chão sob a câmera (o véu varrido acompanha o relevo local)
+  const hc = length(S.cam).sub(U.R).sub(S.hfRef).max(0.0);
+  hp = float(hp).sub(S.hfRef).max(0.0);
   const H = S.hfH;
   const ec = exp(hc.div(H).negate().min(0.0).max(-40.0)), ep = exp(hp.div(H).negate().min(0.0).max(-40.0));
   const dh = hp.sub(hc).div(H);
@@ -142,13 +145,13 @@ function surface(type, P, U, S, I) {
     const rockCol = strataCol.mul(float(1).sub(varnish)).mul(vFine.mul(0.7).add(vMicro.mul(0.6)).add(1));
     // salinas nas bacias
     const salt = smoothstep(-80, -200, h).mul(smoothstep(0.08, 0.02, slope));
-    let g = mix(rockCol, sandCol.mul(vFine.mul(0.06).add(vMicro.mul(0.14)).add(rip2.mul(0.05)).add(1)), sandMask);
+    let g = mix(rockCol, sandCol.mul(vFine.mul(0.05).add(vMicro.mul(0.06)).add(rip2.mul(0.06)).add(1)), sandMask);
     g = mix(g, C3(P.snow).mul(vMicro.mul(0.4).add(0.95)), salt.mul(0.8));
     albedo = g;
     rough = mix(float(0.8), float(0.95), sandMask);
     // rocha: degraus finos dos estratos (erosão diferencial) em vez de caroços
     const ledge = fract(band.mul(3.0)).mul(fade(dist, 4.0));
-    bump = mix(vFine.mul(0.5).add(vMicro.mul(1.6)).add(ledge.mul(0.8)), ripple.mul(0.14).add(vMicro.mul(0.2)), sandMask);
+    bump = mix(vFine.mul(0.5).add(vMicro.mul(1.6)).add(ledge.mul(0.8)), ripple.mul(0.14).add(vMicro.mul(0.05)), sandMask);
     bumpScale = float(1);
   } else if (type === 'ice') {
     const snowCol = mix(C3(P.lowA), C3(P.lowB), smoothstep(0.35, 0.7, macro.r.add(vMeso.mul(0.5)))).mul(vFine.mul(0.08).add(1));
@@ -171,6 +174,8 @@ function surface(type, P, U, S, I) {
     // sastrugi: cristas de neve esculpidas pelo vento (ruído esticado)
     const sast = N3(det.mul(vec3(fq(1.5), fq(7), fq(1.5)))).r.sub(0.5).mul(fade(dist, 3));
     bump = vFine.mul(0.008).add(vMicro.mul(0.12)).add(sast.mul(0.035)).add(rockMask.mul(vMicro.mul(3).add(vFine.mul(0.8)).add(iceStrata.mul(1.5))));
+    // neve fofa: relevo de pixel suave (sem manchas escuras no sol rasante)
+    bumpScale = mix(float(0.7), float(1.2), rockMask);
     // cristais: brilho especular pontual
     metal = smoothstep(0.86, 0.95, fine.b).mul(fFine).mul(0.4);
   } else if (type === 'volcanic') {
@@ -217,7 +222,7 @@ function surface(type, P, U, S, I) {
     bump = vFine.mul(0.6).add(vMicro.mul(2.6));
   }
   albedo = albedo.mul(grain.mul(type === 'ice' ? 0.03 : 0.08).add(1));
-  bump = bump.add(grain.mul(0.04));
+  bump = bump.add(grain.mul(type === 'ice' ? 0.012 : 0.04));
   return { albedo, rough, emissive, bump, bumpScale, metal };
 }
 
@@ -235,8 +240,10 @@ export function stateUniforms() {
     cloudMid: uniform(3000),
     amb: uniform(new THREE.Vector3(0.03, 0.04, 0.06)),
     lodK: uniform(1000), cloudFar: uniform(0),
-    hfA: uniform(0), hfH: uniform(200), hfCol: uniform(new THREE.Vector3(0.5, 0.55, 0.6)),
+    hfA: uniform(0), hfH: uniform(200), hfRef: uniform(0),
+    drift: uniform(new THREE.Vector3()), driftAmt: uniform(0), hfCol: uniform(new THREE.Vector3(0.5, 0.55, 0.6)),
     skyZ: uniform(new THREE.Vector3(0.1, 0.2, 0.5)), skyH: uniform(new THREE.Vector3(0.4, 0.5, 0.6)),
+    skyHs: uniform(new THREE.Vector3(0.4, 0.5, 0.6)), skyHo: uniform(new THREE.Vector3(0.4, 0.5, 0.6)), // horizonte do lado do sol / resto
     axis: uniform(new THREE.Vector3(0, 1, 0)),
     city: uniform(0),
     flash: uniform(0),
@@ -303,7 +310,10 @@ export function makeTerrainMaterials(body, P, U, S, opts) {
     const mat = mat0;
     mat.fog = false;
     if (near) {
-      mat.colorNode = surf.albedo;
+      // a luz da cena não sabe que o planeta faz sombra em si mesmo: o relevo
+      // além do terminador (encostas viradas para o sol) não pode acender
+      const terminator = smoothstep(-0.07, 0.03, dot(up, S.sunL));
+      mat.colorNode = surf.albedo.mul(terminator.mul(0.97).add(0.03));
       mat.roughnessNode = surf.rough;
       mat.metalnessNode = surf.metal;
       mat.normalNode = bumpView(surf.bump, surf.bumpScale);
@@ -311,7 +321,12 @@ export function makeTerrainMaterials(body, P, U, S, opts) {
       mat.emissiveNode = surf.emissive.add(selfDirect.mul(S.comp)).add(night);
       let o = output.rgb.mul(float(1).sub(cShadow.mul(0.62)));
       if (ap) o = o.mul(ap.w).add(ap.xyz);
-      o = mix(o, S.hfCol, heightFog(U, S, max(h, 0.0), dist));
+      // tempestade: faixas de neve/areia varridas correndo pelo chão (ruído
+      // esticado na direção do vento, deslocado com ele)
+      const dN = N3(det.sub(S.drift).mul(fq(14)).add(vec3(0, S.time.mul(0.05), 0))).r;
+      const dN2 = N3(det.sub(S.drift.mul(1.7)).mul(fq(4))).g;
+      const driftMod = mix(float(1), dN.mul(1.1).add(dN2.mul(0.6)).add(0.15), S.driftAmt.mul(fade(dist, 14).mul(0.7).add(0.3)));
+      o = mix(o, S.hfCol, clamp(heightFog(U, S, max(h, 0.0), dist).mul(driftMod), 0.0, 1.0));
       const fogF = float(1).sub(exp(dist.mul(S.fogD).negate()));
       o = mix(o, S.fogCol, fogF);
       mat.outputNode = vec4(o, output.a);
@@ -363,7 +378,11 @@ export function makeWaterMaterial(body, P, U, S, opts) {
   // reflexo do céu: gradiente zênite/horizonte + o brilho em volta do sol
   // (dispersão para a frente), que no crepúsculo pinta o caminho dourado na água
   const horiz = float(1).sub(max(dot(Rv, up), 0.0));
-  const sky = mix(S.skyH, S.skyZ, pow(max(dot(Rv, up), 0.0), 0.45))
+  // horizonte refletido depende do azimute: brasa do lado do sol, azul-escuro no resto
+  const rT = normalize(Rv.sub(up.mul(dot(Rv, up))).add(vec3(1e-5)));
+  const sT = normalize(S.sunL.sub(up.mul(dot(S.sunL, up))).add(vec3(1e-5)));
+  const hzR = mix(S.skyHo, S.skyHs, pow(max(dot(rT, sT), 0.0), 3.0));
+  const sky = mix(hzR, S.skyZ, pow(max(dot(Rv, up), 0.0), 0.45))
     .add(S.sunCol.mul(sunG).mul(pow(RdL, 6.0).mul(0.16).add(pow(RdL, 48.0).mul(0.5))).mul(horiz.mul(0.7).add(0.3)));
   const spec = pow(RdL, 900.0).mul(40).add(pow(RdL, 90.0).mul(1.2)).add(pow(RdL, 12.0).mul(0.05));
   const day = smoothstep(-0.1, 0.15, dot(up, S.sunL));
@@ -394,6 +413,41 @@ export function makeWaterMaterial(body, P, U, S, opts) {
   return mat;
 }
 
+// ─── extinção do fundo (casca multiplicativa) ────────────────────────────
+/**
+ * Divisor de compensação para o que é desenhado ANTES da casca do cone do sol
+ * mas não deve ser atenuado por ela (luz espalhada do céu, nuvens).
+ */
+export function sunConeDiv(U, S, rd) {
+  const cone = smoothstep(0.82, 0.9, dot(rd, S.sunL));
+  return max(mix(vec3(1.0), viewTrans(U, S.cam, rd), cone), vec3(1e-3));
+}
+
+/**
+ * Multiplica o que já foi desenhado atrás da atmosfera (céu estrelado, disco
+ * do sol, outros planetas) pela transmitância RGB do raio de visão — o sol
+ * fica laranja e vermelho no horizonte. Desenhada antes da casca de céu.
+ */
+export function makeSkyTransMaterial(body, U, S, sunCone = 0) {
+  const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.BackSide });
+  mat.fog = false;
+  mat.blending = THREE.CustomBlending;
+  mat.blendEquation = THREE.AddEquation;
+  mat.blendSrc = THREE.ZeroFactor;
+  mat.blendDst = THREE.SrcColorFactor;
+  mat.blendSrcAlpha = THREE.ZeroFactor;
+  mat.blendDstAlpha = THREE.OneFactor;
+  const rd = normalize(positionLocal.sub(S.cam));
+  // cone em volta do sol: a coroa da estrela (desenhada depois desta casca)
+  // precisa do mesmo avermelhamento — uma segunda casca (sunCone = 1), depois
+  // da coroa, cuida só dessa região; esta (sunCone = 0) a deixa de fora
+  const cone = smoothstep(0.82, 0.9, dot(rd, S.sunL));
+  const k = sunCone ? cone : float(1).sub(cone);
+  mat.colorNode = mix(vec3(1.0), viewTrans(U, S.cam, rd), k);
+  mat.opacityNode = float(1);
+  return mat;
+}
+
 // ─── céu (casca de atmosfera, faces internas) ────────────────────────────
 export function makeSkyMaterial(body, U, S, opts) {
   const scat = makeScatter(U, S, opts.atmoSteps, true, 'pl_sky');
@@ -410,7 +464,10 @@ export function makeSkyMaterial(body, U, S, opts) {
   // brilho do disco/halo do sol visto através do ar (Mie forte) já sai do integrador;
   // relâmpago ilumina as nuvens/céu por um instante
   let col = r.xyz.add(S.skyZ.mul(S.flash).mul(0.6));
-  let op = clamp(r.w, 0, 1);
+  // a extinção colorida do fundo (sol avermelhado, estrelas, outros planetas)
+  // fica na casca multiplicativa (makeSkyTransMaterial); aqui só o que os
+  // cirros cobrem
+  let op = float(1);
   if (opts.clouds && S.wtex) {
     // cirros: véu fino e fibroso numa casca alta (≈ +6,5 km), do mapa de clima
     const ro = S.cam;
@@ -443,7 +500,7 @@ export function makeSkyMaterial(body, U, S, opts) {
     col = mix(col, cc, dens);
     op = op.mul(float(1).sub(dens));
   }
-  mat.colorNode = col;
+  mat.colorNode = body.atmosphere ? col.div(sunConeDiv(U, S, rd)) : col;
   mat.opacityNode = op;
   return mat;
 }

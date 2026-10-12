@@ -61,7 +61,13 @@ function frameInfo(ctx) {
   const comp = lit ? 1 - (sun.visibility ?? 1) : 1;
   const h = ctx.canvas?.clientHeight || innerHeight || 720;
   const K = h / (2 * Math.tan(THREE.MathUtils.degToRad(ctx.camera.fov) / 2));
-  return { cam, dominant: sys.dominantBody(cam), sunI: sunIntensity(sys), comp, lit, K };
+  // adaptação cromática (von Kries parcial): na superfície o olho se adapta à
+  // cor da estrela — neve continua branca sob um sol alaranjado, mas o tom
+  // da estrela ainda se percebe. Só sob a atmosfera do corpo dominante.
+  const sc = sys.star.color, a = 0.7 * (st.insideLast || 0);
+  const adapt = sc.map((c) => c / (1 + a * (c - 1)));
+  const m = Math.max(...adapt);
+  return { cam, dominant: sys.dominantBody(cam), sunI: sunIntensity(sys), comp, lit, K, adapt: adapt.map((c) => c / m) };
 }
 
 function update(ctx, dt) {
@@ -90,6 +96,7 @@ function afterViews(ctx, info, dt) {
     if (v.A) inside = THREE.MathUtils.clamp((v.A.top - v.camLocal.length()) / (v.A.top - v.A.R) * 4, 0, 1);
   }
   p.altitude = alt;
+  st.insideLast = inside;
   // eventos atmo:enter / atmo:exit
   const inAtmo = v?.A && v.camLocal.length() < v.A.top ? dom.id : null;
   if (inAtmo !== st.inAtmo) {
@@ -109,9 +116,16 @@ function afterViews(ctx, info, dt) {
   if (rnd?.sun?.setOverride) {
     if (v?.A && inside > 0) {
       const T = v.sunT, k = inside;
-      _c.setRGB(...ctx.universe.system.star.color);
+      _c.setRGB(...info.adapt);
       _c.r *= 1 - k + k * T[0]; _c.g *= 1 - k + k * T[1]; _c.b *= 1 - k + k * T[2];
-      rnd.sun.setOverride({ color: _c.clone() });
+      // céu fechado pela tempestade: o sol direto quase some e a luz fica
+      // difusa (sem tom de pôr do sol)
+      const ov = (st.weather?.overcast || 0) * k;
+      if (ov > 0.001) {
+        const l = (_c.r + _c.g + _c.b) / 3;
+        _c.r += (l - _c.r) * ov * 0.7; _c.g += (l - _c.g) * ov * 0.7; _c.b += (l - _c.b) * ov * 0.7;
+      }
+      rnd.sun.setOverride(ov > 0.001 ? { color: _c.clone(), intensity: info.sunI * (1 - ov * 0.55) } : { color: _c.clone() });
       st.overrideOn = true;
     } else if (st.overrideOn) { rnd.sun.setOverride(null); st.overrideOn = false; }
   }
@@ -120,13 +134,25 @@ function afterViews(ctx, info, dt) {
     st.envTimer += dt;
     if (v?.A && inside > 0) {
       const z = v.zen, d = Math.abs(z[0] - st.envLast[0]) + Math.abs(z[1] - st.envLast[1]) + Math.abs(z[2] - st.envLast[2]);
-      if (st.envTimer > 2 || d > 0.02 * (z[0] + z[1] + z[2] + 0.01) * 3) {
-        st.envTimer = 0; st.envLast = z.slice();
+      if (st.envTimer > 2 || Math.abs((st.weather?.overcast || 0) - (st.envOv || 0)) > 0.04 || d > 0.02 * (z[0] + z[1] + z[2] + 0.01) * 3) {
+        st.envTimer = 0; st.envLast = z.slice(); st.envOv = st.weather?.overcast || 0;
         const up = dom.dirToWorld(_w.copy(v.camLocal).normalize(), ctx.time.world, new THREE.Vector3());
         const g = v.P.lowA || v.P.sand;
         const sunUp = Math.max(0, v.sunLocal.dot(_a.copy(v.camLocal).normalize()));
+        // tempestade: céu de cobertura uniforme (cinza na cor do clima) que
+        // passa a ser a principal fonte de luz
+        const ov = st.weather?.overcast || 0;
+        const zc = _c2.setRGB(z[0], z[1], z[2]), hc = _c3.setRGB(v.hor[0], v.hor[1], v.hor[2]);
+        if (ov > 0.001) {
+          const wc = st.weather.tint || [0.8, 0.85, 0.9];
+          const L = (0.2126 * (z[0] + v.hor[0]) + 0.7152 * (z[1] + v.hor[1]) + 0.0722 * (z[2] + v.hor[2])) * 0.5;
+          const gl = L * 1.6 + 0.012 * info.sunI * sunUp;
+          zc.lerp(new THREE.Color(gl * wc[0], gl * wc[1], gl * wc[2]), ov); hc.lerp(new THREE.Color(gl * wc[0] * 1.05, gl * wc[1] * 1.05, gl * wc[2] * 1.05), ov);
+        }
+        // o céu como luz de preenchimento: sombras azuladas, nunca pretas
+        zc.multiplyScalar(1.6); hc.multiplyScalar(1.6);
         env.setSky({
-          zenith: _c2.setRGB(z[0], z[1], z[2]).clone(), horizon: _c3.setRGB(v.hor[0], v.hor[1], v.hor[2]).clone(),
+          zenith: zc.clone(), horizon: hc.clone(),
           ground: new THREE.Color(g.r * sunUp * 0.4 + v.hor[0] * 0.2, g.g * sunUp * 0.4 + v.hor[1] * 0.2, g.b * sunUp * 0.4 + v.hor[2] * 0.2),
           up, mix: inside,
         });

@@ -6,6 +6,9 @@
 // IBL, neblina, reflexo da água e para decidir quando o céu "apaga" as
 // estrelas). A versão GPU (scatter.js) usa exatamente as mesmas fórmulas.
 
+const OZ_K = [0.0196, 0.0568, 0.0026]; // β_ozônio / β_Rayleigh(azul) na Terra
+export let OZONE = 5.0;
+export function setOzone(v) { OZONE = v; }
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 export const MIE_TINT = {
@@ -51,6 +54,11 @@ export function atmoParams(body) {
   const betaM = mieTint.map((c) => (c * tauM) / HM);
   // extinção da poeira neutra (o que não espalha na cor da dica é absorvido)
   const betaMe = [0, 1, 2].map(() => (tauM / HM) * 1.11);
+  // ozônio (absorção de Chappuis: tira verde/vermelho, quase nada do azul) —
+  // perfil simplificado igual ao de Rayleigh; só pesa nos caminhos longos:
+  // é o que deixa o zênite do crepúsculo azul-profundo em vez de verde-água
+  const oz = blue && !gas ? OZONE * dens : 0;
+  const betaRe = betaR.map((c, i) => c + OZ_K[i] * oz * betaR[2]);
   return {
     // XK: raio "efetivo" para a massa de ar rasante (função de Chapman). O
     // planeta de 38 km tem R/H ≈ 25 — a luz rasante atravessaria pouco ar e o
@@ -58,7 +66,7 @@ export function atmoParams(body) {
     // ~750) a massa de ar no horizonte vira ~20× a vertical: sol laranja e
     // vermelho, céu em brasa, sem mudar a espessura vertical (céu do meio-dia).
     xk: gas ? 1 : 20,
-    R, top, HR, HM, betaR, betaM, betaMe, mieExt: 1.11, g: body.type === 'desert' || body.type === 'volcanic' ? 0.7 : 0.78,
+    R, top, HR, HM, betaR, betaRe, betaM, betaMe, mieExt: 1.11, g: body.type === 'desert' || body.type === 'volcanic' ? 0.7 : 0.78,
     density: dens,
   };
 }
@@ -78,7 +86,7 @@ export function sunTransmittance(A, r, mu, out = [0, 0, 0]) {
   const xk = A.xk || 1;
   const odR = A.HR * chapman(xk * A.R / A.HR, h / A.HR, mu);
   const odM = A.HM * chapman(xk * A.R / A.HM, h / A.HM, mu);
-  for (let c = 0; c < 3; c++) out[c] = Math.exp(-(A.betaR[c] * odR + A.betaMe[c] * odM));
+  for (let c = 0; c < 3; c++) out[c] = Math.exp(-(A.betaRe[c] * odR + A.betaMe[c] * odM));
   return out;
 }
 
@@ -112,7 +120,7 @@ export function scatterCPU(A, ro, rd, L, tMax = Infinity, steps = 10, out = { I:
     const mu = (px * L[0] + py * L[1] + pz * L[2]) / r;
     const lR = A.HR * chapman((A.xk || 1) * A.R / A.HR, h / A.HR, mu), lM = A.HM * chapman((A.xk || 1) * A.R / A.HM, h / A.HM, mu);
     for (let k = 0; k < 3; k++) {
-      Ts[k] = Math.exp(-(A.betaR[k] * (odR + lR) + A.betaMe[k] * (odM + lM)));
+      Ts[k] = Math.exp(-(A.betaRe[k] * (odR + lR) + A.betaMe[k] * (odM + lM)));
       sR[k] += Ts[k] * dR; sM[k] += Ts[k] * dM;
     }
     odR += dR * 0.5; odM += dM * 0.5;
@@ -123,7 +131,7 @@ export function scatterCPU(A, ro, rd, L, tMax = Infinity, steps = 10, out = { I:
   const pM = (3 / (8 * Math.PI)) * ((1 - g2) * (1 + mu * mu)) / ((2 + g2) * Math.pow(Math.max(1e-4, 1 + g2 - 2 * g * mu), 1.5));
   for (let k = 0; k < 3; k++) {
     out.I[k] = sR[k] * A.betaR[k] * pR + sM[k] * A.betaM[k] * pM;
-    out.T[k] = Math.exp(-(A.betaR[k] * odR + A.betaMe[k] * odM));
+    out.T[k] = Math.exp(-(A.betaRe[k] * odR + A.betaMe[k] * odM));
   }
   return out;
 }

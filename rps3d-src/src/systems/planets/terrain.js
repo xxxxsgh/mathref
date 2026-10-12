@@ -176,17 +176,22 @@ export class Terrain {
     // mesetas em terraços
     const t = this.fbm(n, Xw * 0.06, Yw * 0.06, Zw * 0.06, 5, 2.2, 0.5);
     const plateau = sstep(0.04, 0.085, t);
-    // degraus irregulares: altura do degrau varia por região e as bordas das
-    // bancadas são torcidas pelo ruído (nada de zigurate de curvas de nível);
-    // cada degrau = paredão de rocha dura no topo + talude de detritos abaixo
-    const st = 0.07 * (0.75 + 0.5 * (this.fbm(n2, X * 0.05 + 17, Y * 0.05, Z * 0.05, 2) + 0.5));
-    const kk = t / st + this.fbm(n2, X * 0.35 + 3, Y * 0.35, Z * 0.35, 3) * 0.45, fl = Math.floor(kk), fr = kk - fl;
-    const terr = (fl + sstep(0.5, 0.74, fr) * 0.3 + sstep(0.74, 0.9, fr) * 0.7) * st;
-    h += plateau * (120 + Math.max(0, terr) * 1500);
+    // mesetas de rocha-capa: topo quase plano, paredão íngreme com contrafortes
+    // e ravinas (borda serrilhada por ruído de alta frequência) e talude de
+    // detritos na base; um patamar intermediário (bancada) só em parte delas
+    const serr = this.fbm(n2, Xw * 0.9 + 3, Yw * 0.9, Zw * 0.9, 3) * 0.022 + this.ridged(n, Xw * 2.2, Yw * 2.2, Zw * 2.2, 2) * 0.012;
+    const tE = t + serr;
+    const Hm = 320 + 700 * clamp(this.fbm(n2, X * 0.05 + 17, Y * 0.05, Z * 0.05, 2) + 0.5, 0, 1);
+    const cliff = sstep(0.07, 0.078, tE), apron = sstep(0.035, 0.07, tE);
+    const benchOn = sstep(0.1, 0.25, this.fbm(n2, X * 0.08 + 31, Y * 0.08, Z * 0.08, 2));
+    const bench = sstep(0.115, 0.122, tE + serr * 0.6) * benchOn;
+    const cap = this.fbm(n, X * 0.6, Y * 0.6, Z * 0.6, 2) * 14;
+    const mesa = cliff * (Hm * (0.78 - 0.3 * benchOn) + cap) + apron * Hm * 0.1 + bench * Hm * 0.42;
+    h += plateau * 120 + mesa;
     // cânions cortando as mesetas
     const rv = Math.abs(this.fbm(n2, Xw * 0.035 + 7, Yw * 0.035, Zw * 0.035, 4));
     const canyon = 1 - sstep(0.012, 0.055, rv);
-    const canyonDepth = canyon * (plateau * (120 + Math.max(0, terr) * 1500) * 0.95 + 110);
+    const canyonDepth = canyon * ((plateau * 120 + mesa) * 0.95 + 110);
     h -= canyonDepth;
     // cordilheiras esparsas
     const mm = sstep(0.18, 0.42, this.fbm(n2, X * 0.025 + 11, Y * 0.025, Z * 0.025, 3));

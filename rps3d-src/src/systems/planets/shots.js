@@ -172,31 +172,37 @@ export function registerShots(ctx, api, st) {
     const b = body(ctx, 'Ashar');
     const v = api.view(b);
     const T = v.terrain;
-    const far = [3000, 4500, 6500, 9000];
+    // ângulo de elevação do relevo ao longe (paredões de mesetas dominando o
+    // quadro) com primeiro plano de dunas livre
     const dirsFor = (d) => {
       const { tan } = sunTangent(api, b, d, ctx);
-      return [70, 100, -70, -100].map((a) => tan.clone().applyAxisAngle(d, a * D2R));
+      return [110, 130, 150, 170, -110, -130, -150, -170].map((a) => tan.clone().applyAxisAngle(d, a * D2R));
+    };
+    const elevAng = (d, h, dir) => {
+      let ang = -1;
+      for (const k of [1800, 2600, 3600, 5000, 7000]) {
+        const p = d.clone().addScaledVector(dir, k / b.radius).normalize();
+        ang = Math.max(ang, (T.height(p.x, p.y, p.z) - h - 35 - k * k / (2 * b.radius)) / k);
+      }
+      return ang;
+    };
+    const rate = (d, h, dir) => {
+      const near = profile(T, b, d, dir, [150, 400, 800, 1200]) - h;
+      const a = elevAng(d, h, dir);
+      return Math.min(a, 0.11) * 3000 - Math.max(0, a - 0.15) * 5000 - Math.max(0, near - 25) * 4;
     };
     const d = search(api, b, P(ctx, 'elev', 11), (d, h) => {
       const s = T.sample(d.x, d.y, d.z, {});
       if (s.s < 0.6) return -Infinity;
       let best = -Infinity;
-      for (const dir of dirsFor(d)) {
-        // primeiro plano de areia (perto baixo) e paredões longe
-        const near = profile(T, b, d, dir, [300, 800, 1500]) - h;
-        const m = profile(T, b, d, dir, far) - h;
-        best = Math.max(best, Math.min(m, 900) - Math.max(0, near - 60) * 3);
-      }
-      return best + s.s * 100;
-    }, { tries: 360 });
+      for (const dir of dirsFor(d)) best = Math.max(best, rate(d, h, dir));
+      return best + s.s * 50;
+    }, { tries: 700 });
     let look = null, bm = -Infinity;
     const h = T.height(d.x, d.y, d.z);
-    for (const dir of dirsFor(d)) {
-      const m = profile(T, b, d, dir, far) - h - Math.max(0, profile(T, b, d, dir, [300, 800, 1500]) - h - 60) * 3;
-      if (m > bm) { bm = m; look = dir; }
-    }
+    for (const dir of dirsFor(d)) { const m = rate(d, h, dir); if (m > bm) { bm = m; look = dir; } }
     const pos = d.clone().multiplyScalar(b.radius + h + P(ctx, 'alt', 35));
-    localCam(ctx, st, b, pos, look.clone().applyAxisAngle(d, P(ctx, 'yaw', 0) * D2R).addScaledVector(d, P(ctx, 'pitch', -0.02)).normalize(), d);
+    localCam(ctx, st, b, pos, look.clone().applyAxisAngle(d, P(ctx, 'yaw', 0) * D2R).addScaledVector(d, P(ctx, 'pitch', 0.03)).normalize(), d);
     api.weather.force('sandstorm', P(ctx, 'storm', 0.0));
     api.settle();
   });
