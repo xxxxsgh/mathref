@@ -7,10 +7,13 @@
  *   noise.js    ruído Perlin-Worley 3D (forma 64³ e detalhe 32³) e o mapa de
  *               clima esférico (cubemap: cobertura, tipo, tempestade, cirros),
  *               tudo gerado na GPU no init a partir da seed do planeta
- *   shaders.js  densidade, raymarch (Beer + pó, Henyey-Greenstein duplo,
- *               multiespalhamento por oitavas, ambiente por altura, relâmpago,
- *               cirros, perspectiva aérea pela atmosfera do `sky`), reprojeção
- *               temporal, sombras no terreno e composição bilateral
+ *   shaders.js  densidade (topos em domo, base ondulada), raymarch adaptativo
+ *               grosso→fino (Beer + pó, Henyey-Greenstein duplo,
+ *               multiespalhamento por oitavas, ambiente com oclusão vertical,
+ *               relevo da base vista de baixo, relâmpago, cirros em fiapos,
+ *               perspectiva aérea pela atmosfera do `sky`, ar à sombra das
+ *               nuvens), upsampling TEMPORAL em resolução cheia (jitter
+ *               sub-texel + reprojeção), sombras no terreno e composição
  *   pass.js     alvos e passadas no estágio afterWorld do pipeline
  *
  * Integração (só por serviços):
@@ -23,10 +26,12 @@
  *
  * Serviço `clouds` (opcional para outros sistemas):
  *   layer { bottom, top } (m acima do raio), enabled, coverage,
- *   shadowAt(worldPos) → 0..1 (aproximação no CPU: só o mapa de clima)
+ *   shadowAt(worldPos) → 0..1 (aproximação no CPU pela cobertura média)
  *
  * Parâmetros de preset (preset.params): cloudCoverage (0..1), cloudType
- * (−1..1), cloudBase/cloudTop (m), cloudSun (fator), clouds: false.
+ * (−1..1), cloudBase/cloudTop (m), cloudSun (fator), cloudFrames, clouds: false.
+ * URL: ?clouds=0, ?cloudScale=, ?cloudSteps=, ?cloudFrames=,
+ *      ?cloudDebug=T|noap|noapL,norain,nofog (depuração).
  */
 import * as THREE from 'three';
 import { generateCloudNoise, generateWeatherMap } from './noise.js';
@@ -34,10 +39,10 @@ import { CloudPasses } from './pass.js';
 
 /** Qualidade → (escala de resolução, passos, passos de luz). */
 const QUALITY = [
-  { scale: 0.25, steps: 28, light: 3 },
-  { scale: 0.35, steps: 40, light: 4 },
-  { scale: 0.5, steps: 56, light: 5 },
-  { scale: 0.5, steps: 80, light: 6 },
+  { scale: 0.25, steps: 48, light: 3 },
+  { scale: 0.35, steps: 80, light: 4 },
+  { scale: 0.5, steps: 120, light: 5 },
+  { scale: 0.5, steps: 160, light: 6 },
 ];
 
 /** Altitudes da camada por bioma (m acima do nível de referência). */
@@ -57,7 +62,7 @@ export default {
     const P = ctx.shot?.preset?.params || {};
     this.P = P;
     // ajustes artísticos (mudáveis em tempo real pela depuração)
-    this.tune = { ambTop: 0.6, ambBottom: 0.3, sigma: 0.16, msA: 0.25, msB: 0.6, msC: 0.5, powder: 1, detail: 0.6, sun: 2.5 };
+    this.tune = { ambTop: 0.45, ambBottom: 0.24, sigma: 0.16, msA: 0.25, msB: 0.6, msC: 0.5, powder: 1, detail: 0.6, sun: 2.8 };
     const seedOf = () => {
       const info = ctx.services.universe?.currentPlanet;
       return (info?.seed ?? ctx.seed.hash('galaxy', ctx.start.galaxy, 'system', ctx.start.systemIndex, 'planet', ctx.start.planetIndex)) >>> 0;
@@ -91,7 +96,7 @@ export default {
     this.state = { windOff: new THREE.Vector3(), detOff: new THREE.Vector3(), drift: 0, lastT: null, coverage: 0.45 };
     // modo shot: acumula alguns frames da reprojeção antes do "pronto"
     if (ctx.shot) {
-      this.shotFrames = Number(ctx.params.get('cloudFrames')) || P.cloudFrames || 5;
+      this.shotFrames = Number(ctx.params.get('cloudFrames')) || P.cloudFrames || 8;
       this.readyDone = ctx.ready.busy('nuvens: acumulação temporal');
     }
 
@@ -200,7 +205,7 @@ export default {
     U.uDetailAmt.value = wc.detail ?? this.tune.detail;
     const dark = wc.darkness ?? 0;
     U.uSigma.value = this.tune.sigma * (1 + dark * 0.8) * (wc.density ?? 1);
-    ps._shadowStrength = 0.82 * (P.cloudShadow ?? 1);
+    ps._shadowStrength = Math.min(0.97, (0.82 + 0.15 * dark) * (P.cloudShadow ?? 1));
     M.uCirrus.value = (ctx.quality.cloudQuality ?? 2) > 0 ? (wc.cirrus ?? 0.7) * (P.cirrus ?? 1) : 0;
 
     // vento: deriva da textura (referencial do planeta) + rotação lenta do mapa de clima
@@ -303,9 +308,24 @@ export default {
       ps.fogOn = false;
     }
 
+    // depuração: ?cloudDebug=norain,nofog
+    const dbg = (this._dbg ??= ctx.params.get('cloudDebug') || '');
+    if (dbg) {
+      // T = transmitância em cinza · noap = sem perspectiva aérea · L = só a luz das nuvens
+      M.uDbg.value = dbg.includes('T') ? 1 : dbg.includes('noapL') ? 3 : dbg.includes('noap') ? 2 : 0;
+      if (dbg.includes('norain')) M.uRainShaft.value = 0;
+      if (dbg.includes('nofog')) {
+        cu.uFogSigma.value = 0;
+        ps.fogOn = false;
+      }
+    }
+
     // ─── câmera ───────────────────────────────────────────────────────
     camera.updateMatrixWorld();
     ps.setCorners(camera);
+    // VP SEM o jitter do TAA (o render só o aplica dentro do pipeline): a
+    // reprojeção do próximo frame usa esta, coerente com os raios dos cantos
+    ps.curVP.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     U.uNear.value = camera.near;
     U.uFar.value = camera.far;
     M.uMaxDist.value = camR > U.uRout.value ? 2.2e6 : 180000;

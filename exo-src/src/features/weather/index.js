@@ -339,7 +339,7 @@ export default {
     const sunC = [sc.r * sunK, sc.g * sunK, sc.b * sunK];
     const flash = this.lightning.flash;
     const fl = flash * 2.5;
-    const light = (k1, k2) => [0, 1, 2].map((i) => ambC[i] * k1 + (sunC[i] * k2) / Math.PI + fl * 0.3);
+    const light = (k1, k2) => [0, 1, 2].map((i) => ambC[i] * k1 + (sunC[i] * k2) / Math.PI + fl * 0.06 * ambC[i] / Math.max(1e-3, (ambC[0] + ambC[1] + ambC[2]) / 3));
 
     // neblina: luz do céu difusa + um pouco do sol, tingida pelo estado
     const fogL = light(0.95 * (1 - 0.45 * cur.darkness), 0.35);
@@ -351,7 +351,7 @@ export default {
     // ─── partículas ───────────────────────────────────────────────────
     const colors = (S._col ||= { rain: new THREE.Color(), acid: new THREE.Color(), snow: new THREE.Color(), dust: new THREE.Color() });
     // gotas: refletem/refratam o céu → um pouco mais claras que a neblina
-    const lr = light(2.2, 0.3);
+    const lr = light(1.4, 0.2);
     colors.rain.setRGB(lr[0] * 0.85, lr[1] * 0.9, lr[2]);
     colors.acid.setRGB(lr[0] * 0.9, lr[1] * 1.1, lr[2] * 0.45);
     const ls = light(1.15, 0.55);
@@ -381,7 +381,8 @@ export default {
     this.particlesOn = this.particlesOn || this.lightning.mesh.visible;
 
     // ─── visor ────────────────────────────────────────────────────────
-    const firstPerson = player.view !== 'third' && (player.mode === 'walk' || ctx.cockpit?.visible);
+    // 1ª pessoa: visor do capacete (a pé) ou canopi da nave (com ou sem cockpit desenhado)
+    const firstPerson = player.view !== 'third';
     const lu = this.lens.u;
     const lk = cur.lens * (firstPerson ? 1 : 0) * altFade;
     lu.uRain.value = S.levels.rain * lk;

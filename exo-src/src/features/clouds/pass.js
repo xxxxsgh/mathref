@@ -5,9 +5,11 @@
  *                     cena (alvo F) e multiplicação no HDR — DEPOIS da
  *                     perspectiva aérea (ordem 10): sob um céu fechado o ar
  *                     iluminado pelo sol também fica à sombra
- *   order 12 nuvens   raymarch em resolução reduzida (MRT: luz+T, distâncias)
- *                     → reprojeção temporal (ping-pong) → upscaling bilateral
- *                     + neblina do clima, misturado no HDR: dst·T + L
+ *   order 12 nuvens   raymarch em resolução reduzida com jitter sub-texel
+ *                     (MRT: luz+T, distâncias) → reprojeção temporal em
+ *                     RESOLUÇÃO CHEIA (ping-pong; upsampling bilateral +
+ *                     acumulação dos centros com jitter) → neblina do clima,
+ *                     misturado no HDR: dst·T + L
  *
  * Nenhuma passada lê o depth do alvo enquanto ele está preso ao framebuffer:
  * F guarda a distância de cada pixel para a composição.
@@ -40,6 +42,14 @@ function single(w, h) {
   });
 }
 
+/** Deslocamentos do jitter em texels baixos (centros dos pixels cheios de um texel com escala 0,5). */
+const JITTER = [
+  [-0.25, -0.25],
+  [0.25, 0.25],
+  [0.25, -0.25],
+  [-0.25, 0.25],
+];
+
 export class CloudPasses {
   constructor(ctx, { shape, detail, weather, atmoGlsl, atmoUniforms }) {
     this.ctx = ctx;
@@ -59,7 +69,7 @@ export class CloudPasses {
       uWeatherRot: { value: new THREE.Matrix3() },
       uRin: { value: 1 },
       uRout: { value: 2 },
-      uShapeScale: { value: 1 / 12000 },
+      uShapeScale: { value: 1 / 9000 },
       uDetailScale: { value: 1 / 800 },
       uShapeOff: { value: new THREE.Vector3() },
       uDetailOff: { value: new THREE.Vector3() },
@@ -100,6 +110,8 @@ export class CloudPasses {
       uHazeDist: { value: 60000 },
       uLowSize: { value: new THREE.Vector2(1, 1) },
       uRainShaft: { value: 0 },
+      uDbg: { value: 0 },
+      uJit: { value: new THREE.Vector2() },
     });
     const frag = MARCH_FRAG.replace('ATMO_GLSL', atmoGlsl || '').replace('RAY_GLSL_HERE', RAY_GLSL).replace('DENSITY_GLSL_HERE', DENSITY_GLSL);
     const mat = (fragmentShader, uniforms, extra = {}) =>
@@ -117,11 +129,13 @@ export class CloudPasses {
       uCurD: { value: null },
       uHistL: { value: null },
       uHistD: { value: null },
+      uF: { value: null },
       uPrevVP: { value: new THREE.Matrix4() },
       uCamDelta: { value: new THREE.Vector3() },
       uBlend: { value: 0.12 },
       uHistValid: { value: 0 },
-      uTexel: { value: new THREE.Vector2() },
+      uLowSize: marchU.uLowSize,
+      uJit: marchU.uJit,
     };
     this.mResolve = mat(RESOLVE_FRAG.replace('RAY_GLSL_HERE', RAY_GLSL), this.resolveU, { glslVersion: THREE.GLSL3 });
     this.shadowU = {
@@ -154,6 +168,7 @@ export class CloudPasses {
       uFogColor: { value: new THREE.Vector3() },
       uFogMax: { value: 60000 },
       uCloudsOn: { value: 1 },
+      uDbg: marchU.uDbg,
     };
     this.mComp = mat(COMPOSITE_FRAG, this.compU, {
       blending: THREE.CustomBlending,
@@ -173,6 +188,7 @@ export class CloudPasses {
     this.scale = 0.5;
     this.frame = 0;
     this.prevVP = new THREE.Matrix4();
+    this.curVP = new THREE.Matrix4();
     this.prevCam = null;
     this.enabled = true;
     this.cloudsOn = true;
@@ -187,11 +203,13 @@ export class CloudPasses {
     const lh = Math.max(1, Math.round(h * this.scale));
     if (this.cur.width !== lw || this.cur.height !== lh) {
       this.cur.setSize(lw, lh);
-      for (const t of this.hist) t.setSize(lw, lh);
+      this.histCount = 0;
+    }
+    if (this.hist[0].width !== w || this.hist[0].height !== h) {
+      for (const t of this.hist) t.setSize(w, h);
       this.histCount = 0;
     }
     this.marchU.uLowSize.value.set(lw, lh);
-    this.resolveU.uTexel.value.set(1 / lw, 1 / lh);
   }
 
   _draw(material, target) {
@@ -235,6 +253,9 @@ export class CloudPasses {
     let outL = null;
     let outD = null;
     if (this.cloudsOn) {
+      // jitter sub-texel (4 posições = os 2×2 pixels cheios de cada texel baixo)
+      const J = JITTER[this.frame & 3];
+      this.marchU.uJit.value.set(this.scale < 0.99 ? J[0] : 0, this.scale < 0.99 ? J[1] : 0);
       this._draw(this.mMarch, this.cur);
       // reprojeção temporal
       const src = this.hist[this.hi];
@@ -244,12 +265,14 @@ export class CloudPasses {
       ru.uCurD.value = this.cur.textures[1];
       ru.uHistL.value = src.textures[0];
       ru.uHistD.value = src.textures[1];
+      ru.uF.value = this.F.texture;
       ru.uPrevVP.value.copy(this.prevVP);
       if (this.prevCam) ru.uCamDelta.value.set(camWorld.x - this.prevCam.x, camWorld.y - this.prevCam.y, camWorld.z - this.prevCam.z);
       else ru.uCamDelta.value.set(0, 0, 0);
       ru.uHistValid.value = this.histCount > 0 ? 1 : 0;
-      // câmera parada (modo shot): média exata das amostras; em movimento: 12%
-      ru.uBlend.value = isStatic ? Math.max(1 / (this.histCount + 1), 0.04) : 0.12;
+      // câmera parada (modo shot): média das amostras (≥ 30% para o jitter
+      // reconstruir os pixels cheios); em movimento: 16% (ponderado no shader)
+      ru.uBlend.value = isStatic ? Math.max(1 / (this.histCount + 1), 0.3) : 0.16;
       this._draw(this.mResolve, dst);
       this.hi = 1 - this.hi;
       this.histCount++;
@@ -269,7 +292,8 @@ export class CloudPasses {
     this._draw(this.mComp, target);
 
     // matrizes deste frame para o próximo
-    this.prevVP.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.prevVP.copy(this.curVP);
+    void camera;
     this.prevCam = (this.prevCam || new THREE.Vector3()).set(camWorld.x, camWorld.y, camWorld.z);
     r.setRenderTarget(prevT);
     r.autoClear = prevClear;

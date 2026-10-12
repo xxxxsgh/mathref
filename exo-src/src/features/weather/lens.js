@@ -52,7 +52,7 @@ float fbm(vec2 p) {
   return s;
 }
 
-// camada de gotas paradas: devolve (deslocamento.xy, máscara, brilho)
+// camada de gotas paradas: devolve (normal da gota xy, máscara, raio em uv)
 vec4 drops(vec2 uv, float scale, float amount, float seed) {
   vec2 p = vec2(uv.x * uAspect, uv.y) * scale;
   vec2 id = floor(p);
@@ -63,15 +63,13 @@ vec4 drops(vec2 uv, float scale, float amount, float seed) {
     vec2 r = h22(c + seed);
     if (r.x > amount) continue;
     vec2 ctr = c + 0.2 + 0.6 * h22(c + seed + 7.0);
-    float rad = 0.12 + 0.3 * r.y;
+    float rad = 0.1 + 0.28 * r.y * r.y;
     vec2 d = p - ctr;
     d.y *= 1.0 + 0.25 * r.y;           // gotas levemente alongadas
     float dist = length(d);
     if (dist < rad) {
-      float m = smoothstep(rad, rad * 0.78, dist);
-      vec2 n = d / rad;
-      float spec = pow(max(0.0, 1.0 - length(n - vec2(-0.35, 0.4))), 6.0);
-      if (m > best.z) best = vec4(-n * (0.035 + 0.25 * rad / scale), m, spec);
+      float m = smoothstep(rad, rad * 0.86, dist);
+      if (m > best.z) best = vec4(d / rad, m, rad / scale);
     }
   }
   return best;
@@ -90,7 +88,7 @@ vec4 runs(vec2 uv, float amount) {
   float head = smoothstep(0.022, 0.012, length(vec2(x * 0.14, dy * 1.4)));
   float trail = smoothstep(0.06, 0.0, abs(x)) * smoothstep(0.0, 0.02, dy) * (1.0 - smoothstep(0.02, 0.32, dy)) * 0.55;
   float m = max(head, trail * step(0.0, dy));
-  return vec4(vec2(-x * 0.012, 0.004), m, head * 0.6);
+  return vec4(vec2(x * 4.0, -0.3), m * 0.8, 0.006);
 }
 
 void main() {
@@ -98,16 +96,25 @@ void main() {
   vec4 acc = vec4(0.0);          // cor pré-multiplicada + alfa
   float wet = max(uRain, uAcid);
   if (wet > 0.01) {
-    vec4 a = drops(uv, 16.0, 0.22 * wet, 1.0);
-    vec4 b = drops(uv, 7.0, 0.16 * wet, 5.0);
+    vec4 a = drops(uv, 18.0, 0.13 * wet, 1.0);
+    vec4 b = drops(uv, 8.0, 0.07 * wet, 5.0);
     vec4 c = runs(uv, wet);
     vec4 d = a;
     if (b.z > d.z) d = b;
     if (c.z > d.z) d = c;
     if (d.z > 0.0) {
-      vec3 col = texture2D(uSrc, uv + d.xy).rgb * (0.8 + 0.2 * d.z) + uLight * d.w * 0.35;
+      // cada gota é uma lente: imagem do entorno INVERTIDA e reduzida
+      vec2 n = d.xy;
+      float ln = length(n);
+      vec2 nu = vec2(n.x / uAspect, n.y);
+      vec2 suv = clamp(uv - nu * d.w * 4.5, vec2(0.002), vec2(0.998));
+      vec3 col = texture2D(uSrc, suv).rgb;
+      // borda escura (refração rasante) e brilho especular do céu
+      col *= mix(1.05, 0.22, smoothstep(0.45, 1.0, ln));
+      float spec = pow(max(0.0, 1.0 - length(n - vec2(-0.35, 0.45)) * 2.2), 3.0);
+      col += uLight * spec * 0.9;
       col = mix(col, col * uAcidTint, uAcid / max(wet, 1e-3) * 0.65);
-      float al = d.z * 0.75;
+      float al = d.z * 0.92;
       acc = vec4(col * al, al);
     }
     // borrão leve de água no vidro
@@ -118,14 +125,16 @@ void main() {
     vec2 q = uv * vec2(uAspect, 1.0);
     float e = min(min(uv.x, 1.0 - uv.x) * uAspect, min(uv.y, 1.0 - uv.y));
     float n = fbm(q * 9.0) * 0.7 + fbm(q * 32.0) * 0.3;
-    float frost = smoothstep(0.0, 0.22, (0.24 + 0.1 * uSnow) - e + (n - 0.5) * 0.25) * uSnow;
-    // agulhas de cristal
-    float needles = pow(abs(sin((q.x * 0.7 + q.y) * 140.0 + n * 18.0) * sin((q.x - q.y * 0.6) * 120.0 + n * 11.0)), 18.0);
+    float frost = smoothstep(0.0, 0.16, (0.12 + 0.07 * uSnow) - e + (n - 0.5) * 0.2) * uSnow;
+    // veios de cristal: cristas de um fBm (linhas ramificadas), mais finos longe da borda
+    float rv = 1.0 - abs(fbm(q * 14.0 + n * 2.0) * 2.0 - 1.0);
+    float rv2 = 1.0 - abs(fbm(q * 31.0 + 7.0) * 2.0 - 1.0);
+    float needles = (pow(rv, 16.0) * 0.5 + pow(rv2, 20.0) * 0.3) * frost;
     vec3 bg = texture2D(uSrc, uv + (n - 0.5) * 0.02).rgb;
-    vec3 fc = mix(bg * 0.7 + uLight * 0.55 * vec3(0.85, 0.92, 1.0), uLight * 1.1, needles * 0.6);
-    float al = clamp(frost * (0.55 + 0.35 * n), 0.0, 0.92);
+    vec3 fc = mix(bg * 0.55 + uLight * 0.6 * vec3(0.72, 0.86, 1.12), uLight * vec3(1.3, 1.45, 1.7), clamp(needles, 0.0, 1.0));
+    float al = clamp(frost * (0.45 + 0.35 * n), 0.0, 0.8);
     // flocos grudados
-    vec4 fl = drops(uv, 30.0, 0.18 * uSnow, 11.0);
+    vec4 fl = drops(uv, 24.0, 0.07 * uSnow, 11.0);
     float fa = fl.z * 0.85;
     fc = mix(fc, uLight * 1.2, fa);
     al = max(al, fa);

@@ -57,18 +57,30 @@ void main() {
   float fat = max(1.0, pix / max(size, 1e-4));
   size *= fat;
   vec3 pos;
-  if (uKind < 0.5) {
-    // risco: lado perpendicular ao risco na tela
+  if (uKind < 1.5) {
+    // risco (chuva) ou floco arrastado pelo vento (neve): lado perpendicular
+    // ao risco na tela; a neve nunca fica menor que um disco
     vec3 d = b - a;
+    if (uKind > 0.5) {
+      float L = length(d);
+      float Lmin = size * 2.0;
+      if (L < Lmin) {
+        d = (L > 1e-6 ? d / L : vec3(0.0, 1.0, 0.0)) * Lmin;
+        b = a + d;
+      }
+      a -= d * 0.5;
+      b -= d * 0.5;
+      d = b - a;
+    }
     vec3 side = normalize(cross(d + vec3(1e-5, 0.0, 0.0), a));
-    pos = mix(a, b, aCorner.y) + side * aCorner.x * size;
+    pos = mix(a, b, aCorner.y) + side * aCorner.x * size * (uKind > 0.5 ? 1.0 : 0.5);
   } else {
     pos = a + vec3(aCorner.x, aCorner.y * 2.0 - 1.0, 0.0) * size;
   }
   vC = vec2(aCorner.x, aCorner.y * 2.0 - 1.0);
   float fadeNear = smoothstep(0.25, 1.2, dist);
   float fadeFar = 1.0 - smoothstep(uBox.x * 0.32, uBox.x * 0.5, length(p));
-  vA = isOn / fat * fadeNear * fadeFar * (dist > 0.0 ? 1.0 : 0.0);
+  vA = isOn / (uKind > 0.5 && uKind < 1.5 ? fat * fat : fat) * fadeNear * fadeFar * (dist > 0.0 ? 1.0 : 0.0);
   gl_Position = projectionMatrix * vec4(pos, 1.0);
   if (vA <= 0.0) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
   #include <logdepthbuf_vertex>
@@ -96,9 +108,9 @@ void main() {
 }`;
 
 const KIND_CFG = {
-  rain: { kind: 0, count: 10000, box: [40, 40, 40], vel: [0, -11, 0], size: 0.006, stretch: 0.06, alpha: 0.3 },
-  acid: { kind: 0, count: 9000, box: [40, 40, 40], vel: [0, -8, 0], size: 0.016, stretch: 0.05, alpha: 0.55 },
-  snow: { kind: 1, count: 9000, box: [34, 34, 34], vel: [0, -1.4, 0], size: 0.035, stretch: 0, alpha: 0.9 },
+  rain: { kind: 0, count: 14000, box: [40, 40, 40], vel: [0, -11, 0], size: 0.004, stretch: 0.05, alpha: 0.16 },
+  acid: { kind: 0, count: 12000, box: [40, 40, 40], vel: [0, -8, 0], size: 0.008, stretch: 0.05, alpha: 0.3 },
+  snow: { kind: 1, count: 12000, box: [34, 34, 34], vel: [0, -1.4, 0], size: 0.03, stretch: 0.022, alpha: 0.85 },
   dust: { kind: 2, count: 2600, box: [60, 30, 60], vel: [0, -0.2, 0], size: 0.9, stretch: 0, alpha: 0.09 },
 };
 

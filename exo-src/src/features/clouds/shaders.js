@@ -85,6 +85,8 @@ vec3 cWeatherAt(vec3 dir) {
 }
 
 vec3 gW = vec3(0.0);   // último clima amostrado (cobertura, tipo, tempestade)
+float gWob = 0.0;      // ondulação da base no último ponto (+ = base mais baixa → coluna mais grossa)
+float gDet = 0.5;      // fBm de detalhe no último ponto
 // densidade normalizada (0..1). lod: 0 completo, 1 sem detalhe
 float cDensity(vec3 p, float r, float lod) {
   float h = (r - uRin) / (uRout - uRin);
@@ -94,15 +96,21 @@ float cDensity(vec3 p, float r, float lod) {
   if (w.x * cHeight(clamp(h + 0.12, 0.0, 1.0), w.y) < 0.02 && w.x * cHeight(h, w.y) < 0.02) return 0.0;
   vec4 s = texture(uShape, p * uShapeScale + uShapeOff + uShear * h);
   // base ondulada (mais nas tempestades): a camada não é uma tampa lisa
-  float hb = h - (s.b - 0.5) * (0.1 + 0.18 * w.z) * (1.0 - h);
+  gWob = s.g - 0.5;
+  float hb = h - gWob * (0.12 + 0.32 * w.z) * (1.0 - h);
   float hg = cHeight(clamp(hb, 0.0, 1.0), w.y);
   float fbm = s.g * 0.625 + s.b * 0.25 + s.a * 0.125;
-  float base = cRemap(s.r, fbm - 1.0, 1.0, 0.0, 1.0);
-  base = clamp(base * hg, 0.0, 1.0);
-  float c = clamp(cRemap(base, 1.0 - w.x, 1.0, 0.0, 1.0), 0.0, 1.0) * w.x;
+  float base = clamp(cRemap(s.r, fbm - 1.0, 1.0, 0.0, 1.0), 0.0, 1.0);
+  // limiar dependente da altura: perto do topo do perfil só os picos do
+  // ruído sobrevivem → topos em domo (couve-flor), nunca um teto plano
+  float thr = 1.0 - w.x * hg;
+  float c = clamp(cRemap(base, thr, 1.0, 0.0, 1.0), 0.0, 1.0) * smoothstep(0.0, 0.25, hg) * w.x;
   if (c <= 0.0 || lod > 0.5) return c;
   vec3 d = texture(uDetail, p * uDetailScale + uDetailOff + uShear * h * 3.0).rgb;
   float df = d.r * 0.625 + d.g * 0.25 + d.b * 0.125;
+  gDet = df;
+  // perto da câmera (lod −1): uma oitava extra de erosão, 3,7× mais fina
+  if (lod < -0.5) df = mix(df, texture(uDetail, p * uDetailScale * 3.7 + uDetailOff * 2.0).g, 0.3);
   // base: fiapos (Worley invertido) · topo: couve-flor
   float dm = mix(1.0 - df, df, clamp(h * 5.0, 0.0, 1.0));
   c = clamp(cRemap(c, dm * uDetailAmt, 1.0, 0.0, 1.0), 0.0, 1.0);
@@ -146,6 +154,8 @@ uniform vec3 uHazeColor;     // fallback sem atmosfera
 uniform float uHazeDist;
 uniform vec2 uLowSize;
 uniform float uRainShaft;
+uniform float uDbg;
+uniform vec2 uJit;
 varying vec2 vUv;
 
 vec2 cSphere(vec3 ro, vec3 rd, float R) {
@@ -184,7 +194,9 @@ float cLightOD(vec3 p, vec3 ld, float jit) {
 }
 
 void main() {
-  vec2 uv = vUv;
+  // amostra deslocada (jitter sub-texel por frame) → a reprojeção em
+  // resolução cheia reconstrói os detalhes entre os texels baixos
+  vec2 uv = vUv + uJit / uLowSize;
   vec3 ray = cRay(uv);
   float rl = length(ray);
   vec3 rd = ray / rl;
@@ -242,11 +254,11 @@ void main() {
       // colunas: ruído amostrado na base da nuvem (constante na vertical)
       vec4 n = texture(uShape, dir * uRin * uShapeScale * 2.5 + uShapeOff);
       float hcol = clamp((uRin - r) / max(1.0, uRin - uRground), 0.0, 1.0);
-      float dens = uRainShaft * (w.z * 1.6 + 0.08 * w.x) * smoothstep(0.45, 0.8, n.g) * smoothstep(0.0, 0.15, hcol);
-      float sg = dens * 0.0006;
+      float dens = uRainShaft * (w.z * 1.6 + 0.08 * w.x) * smoothstep(0.55, 0.85, n.g) * smoothstep(0.0, 0.15, hcol);
+      float sg = dens * 0.00035;
       if (sg > 0.0) {
         float st = exp(-sg * dtr);
-        vec3 Sr = uAmbBottom * 1.3 + uFlashE * 0.05;
+        vec3 Sr = uAmbBottom * 1.3 + uFlashE * 0.01;
         Lr += Tr * Sr * (1.0 - st);
         Tr *= st;
       }
@@ -254,23 +266,41 @@ void main() {
   }
 
   if (t1 > t0) {
-    float seg = t1 - t0;
-    int N = uSteps;
-    float fN = float(N);
-    float tPrev = t0;
-    for (int i = 0; i < 160; i++) {
-      if (i >= N) break;
-      // dentro da camada: passos quadráticos (finos perto da câmera)
-      float a = (float(i) + jit) / fN;
-      float an = (float(i) + 1.0 + jit) / fN;
-      float ta = inside > 0.5 ? t0 + seg * a * a : t0 + seg * a;
-      float tb = inside > 0.5 ? t0 + seg * an * an : t0 + seg * an;
-      float dt = min(tb, t1) - ta;
-      if (dt <= 0.0) break;
-      vec3 p = ro + rd * ta;
+    // marcha adaptativa (grossa → fina): passos grossos com a densidade sem
+    // detalhe até achar nuvem; aí recua e anda em passos finos (proporcionais
+    // ao tamanho do pixel na distância) enquanto houver nuvem. Silhuetas
+    // nítidas perto, alcance de ~180 km no horizonte com o mesmo orçamento.
+    float t = t0 + max(150.0, t0 * 0.035) * jit;
+    float tEmpty = t0;
+    int fine = 0;
+    for (int i = 0; i < 220; i++) {
+      if (i >= uSteps || t >= t1) break;
+      vec3 p = ro + rd * t;
       float r = length(p);
-      float den = cDensity(p, r, ta > 45000.0 ? 1.0 : 0.0);
-      if (den > 0.002) {
+      if (fine == 0) {
+        float dc = max(150.0, t * 0.035);
+        if (cDensity(p, r, 1.0) > 0.0) {
+          float tb = max(tEmpty, t - dc * 0.8);
+          fine = 10;
+          if (tb < t - 1.0) { t = tb; continue; }
+        } else {
+          tEmpty = t;
+          t += dc;
+          continue;
+        }
+      }
+      float ds = max(40.0, t * 0.008);
+      float dt = min(ds, t1 - t);
+      float ta = t;
+      t += ds;
+      float den = cDensity(p, r, ta > 45000.0 ? 1.0 : (ta < 5000.0 ? -1.0 : 0.0));
+      if (den <= 0.002) {
+        fine--;
+        tEmpty = ta;
+        continue;
+      }
+      fine = 10;
+      {
         vec3 up = p / r;
         float h = (r - uRin) / (uRout - uRin);
         if (first) {
@@ -280,6 +310,8 @@ void main() {
 #endif
         }
         vec3 wHere = gW;
+        float wob = gWob;
+        float det = gDet;
         float sig = den * uSigma;
         float od = cLightOD(p, uSunDir, jit) * uSigma;
         gW = wHere;
@@ -292,14 +324,31 @@ void main() {
         float pw = 1.0 - exp(-sig * 180.0);
         lum *= mix(1.0, pw, uPowder * (0.5 + 0.5 * clamp(-cosT, 0.0, 1.0)) + 0.25 * uPowder);
         vec3 amb = mix(uAmbBottom, uAmbTop, clamp(h * 1.25, 0.0, 1.0)) * (0.55 + 0.45 * exp(-den * 2.0));
-        amb += uGroundBounce * (1.0 - clamp(h * 3.0, 0.0, 1.0));
+        // oclusão do céu pela coluna de nuvem (proxy: profundidade óptica até o
+        // sol): núcleos grossos escuros, partes finas claras → bases com relevo
+        amb *= mix(0.45, 1.0, exp(-od * 0.012));
+        // ...e oclusão VERTICAL (duas amostras grossas acima): de baixo, partes
+        // grossas da base ficam escuras e as finas claras — relevo da base
+        {
+          vec3 q1 = p + up * 250.0;
+          vec3 q2 = p + up * 800.0;
+          float odUp = (cDensity(q1, length(q1), 1.0) * 250.0 + cDensity(q2, length(q2), 1.0) * 550.0) * uSigma;
+          amb *= mix(0.12, 1.0, exp(-odUp * 0.015));
+        }
+        // de baixo: onde a base desce a coluna é mais grossa (mais escura), e
+        // o detalhe dá o mosqueado — sem isso um teto fechado vira um cinza liso
+        float under = (1.0 - smoothstep(0.0, 0.3, h)) * clamp(dot(rd, up) * 4.0, 0.0, 1.0);
+        float relief = mix(1.0, clamp(1.0 - wob * (2.0 + 2.5 * wHere.z), 0.15, 1.8) * (0.55 + 0.9 * det), under);
+        gW = wHere;
+        // luz refletida pelo chão: só onde o sol chega ao chão (céu aberto)
+        amb += uGroundBounce * (1.0 - clamp(h * 3.0, 0.0, 1.0)) * exp(-od * 0.02);
         // núcleos de tempestade: bases mais escuras e pesadas
         float sk = gW.z;
         amb *= 1.0 - 0.7 * sk;
         lum *= 1.0 - 0.5 * sk;
-        vec3 S = sunCol * lum + amb;
+        vec3 S = (sunCol * lum + amb) * relief;
         float fd = length(p - uFlashPos);
-        S += uFlashE * (0.35 + 0.65 * exp(-od * 0.3)) / (1.0 + fd * fd * 4e-6);
+        S += uFlashE * (0.25 + 0.75 * exp(-od * 0.3)) / (1.0 + fd * fd * 1.5e-5);
         float st = exp(-sig * dt);
         float absorb = T * (1.0 - st);
         L += S * absorb;
@@ -320,9 +369,15 @@ void main() {
       vec3 dc = normalize(pc);
       vec4 cw = texture(uWeather, uWeatherRot * dc);
       vec3 q = pc * uCirrusScale;
-      vec4 n1 = texture(uShape, vec3(q.x * 0.35, q.y * 0.08, q.z * 0.35) + uShapeOff * 0.3);
-      vec4 n2 = texture(uDetail, q * 1.7 + uDetailOff * 0.2);
-      float cd = clamp((n1.g * 0.7 + n2.r * 0.45) - 0.62, 0.0, 1.0) * 2.2 * cw.a * uCirrus;
+      // fiapos: faixas em torno de uma isolinha de um ruído esticado (rabos
+      // de galo), quebradas por um segundo ruído e deformadas por um terceiro
+      vec4 nw = texture(uDetail, q * 0.6 + uDetailOff * 0.1);
+      vec3 qs = vec3(q.x * 0.22, q.y * 0.9, q.z * 0.22) + (nw.rgb - 0.5) * 0.18;
+      vec4 n1 = texture(uShape, qs + uShapeOff * 0.3);
+      float iso = n1.g * 0.65 + n1.b * 0.35;
+      float fil = clamp(1.0 - abs(iso - 0.6) * 7.0, 0.0, 1.0);
+      vec4 n2 = texture(uDetail, vec3(q.x * 1.4, q.y * 5.0, q.z * 1.4) + uDetailOff * 0.2);
+      float cd = fil * fil * smoothstep(0.3, 0.75, n2.r * 0.7 + n1.a * 0.5) * 1.25 * cw.a * uCirrus;
       float grazing = clamp(abs(dot(rd, dc)) * 6.0, 0.15, 1.0);
       float a = clamp(cd / grazing * 0.5, 0.0, 0.6);
       if (a > 0.003) {
@@ -349,7 +404,7 @@ void main() {
   T *= Tr;
   if (Tr < 0.999) { tW += (1.0 - Tr) * 3000.0; wS += 1.0 - Tr; }
   float tMean = wS > 1e-4 ? tW / wS : (t1 > t0 ? 0.5 * (t0 + t1) : min(sceneT, 2e5));
-  if (wS > 1e-4) {
+  if (wS > 1e-4 && uDbg < 1.5) {
 #ifdef HAS_ATMO
     vec3 Lap, Tap;
     atmoIntegrate(ro * 0.001, rd, tMean * 0.001, 8, Lap, Tap);
@@ -370,9 +425,12 @@ void main() {
           ods += cDensity(q, length(q), 1.0) * sg;
         }
       }
-      Lap *= 0.04 + 0.96 * exp(-ods * uSigma * 0.3);
+      float shA = exp(-ods * uSigma * 0.3);
+      // à sombra, o ar só recebe a luz difusa que atravessa a base: o véu
+      // toma a cor da própria nuvem (atenua pouco) em vez do céu ensolarado
+      vec3 tr = mix(Tap, vec3(1.0), (1.0 - shA) * 0.85);
+      L = L * tr + Lap * (0.01 + 0.99 * shA) * (1.0 - T);
     }
-    L = L * Tap + Lap * (1.0 - T);
 #else
     float f = 1.0 - exp(-tMean / uHazeDist);
     L = mix(L, uHazeColor * (1.0 - T), f);
@@ -390,15 +448,54 @@ uniform sampler2D uCurL;
 uniform sampler2D uCurD;
 uniform sampler2D uHistL;
 uniform sampler2D uHistD;
+uniform sampler2D uF;
 uniform mat4 uPrevVP;
 uniform vec3 uCamDelta;
 uniform float uBlend;
 uniform float uHistValid;
-uniform vec2 uTexel;
+uniform vec2 uLowSize;
+uniform vec2 uJit;
 varying vec2 vUv;
+// Reprojeção temporal em RESOLUÇÃO CHEIA (upsampling temporal):
+// 1) upsampling bilateral (profundidade) do quadro baixo atual, cujas
+//    amostras estão nos centros deslocados pelo jitter deste frame;
+// 2) história do frame anterior reprojetada pela distância média da nuvem;
+// 3) mistura com peso maior onde um centro de amostra cai sobre o pixel —
+//    com a câmera parada, 4 frames cobrem os 2×2 pixels de cada texel baixo.
 void main() {
-  vec4 cL = texture2D(uCurL, vUv);
-  vec4 cD = texture2D(uCurD, vUv);
+  float dist = texture2D(uF, vUv).g;       // km (6e4 = céu)
+  vec2 st = vUv * uLowSize - 0.5 - uJit;
+  vec2 i0 = floor(st);
+  vec2 f = st - i0;
+  vec4 acc = vec4(0.0), accD = vec4(0.0);
+  float ws = 0.0;
+  vec4 bestL = vec4(0.0, 0.0, 0.0, 1.0), bestD = vec4(0.0);
+  float bestErr = 1e9;
+  float wNear = 0.0;
+  vec4 mn = vec4(1e9), mx = vec4(-1e9);
+  for (int k = 0; k < 4; k++) {
+    vec2 o = vec2(float(k & 1), float(k >> 1));
+    vec2 uv = (i0 + o + 0.5) / uLowSize;
+    vec4 l = texture2D(uCurL, uv);
+    vec4 d = texture2D(uCurD, uv);
+    float bw = (o.x > 0.5 ? f.x : 1.0 - f.x) * (o.y > 0.5 ? f.y : 1.0 - f.y);
+    float rel = abs(d.y - dist) / max(1e-3, min(d.y, dist));
+    float w = bw / (0.02 + rel * rel * 40.0);
+    acc += l * w;
+    accD += d * w;
+    ws += w;
+    if (rel < bestErr) { bestErr = rel; bestL = l; bestD = d; }
+    if (rel < 0.15) {
+      mn = min(mn, l);
+      mx = max(mx, l);
+      vec2 dd = f - o;
+      wNear = max(wNear, exp(-dot(dd, dd) * 10.0));
+    }
+  }
+  vec4 cL = ws > 1e-4 ? acc / ws : bestL;
+  vec4 cD = ws > 1e-4 ? accD / ws : bestD;
+  if (mn.x > 1e8) { mn = cL; mx = cL; }
+
   vec3 rd = normalize(cRay(vUv));
   vec3 P = rd * (cD.x * 1000.0) + uCamDelta;
   vec4 c = uPrevVP * vec4(P, 1.0);
@@ -410,22 +507,15 @@ void main() {
     hL = texture2D(uHistL, puv);
     hD = texture2D(uHistD, puv);
     // rejeita onde a cena mudou de profundidade (silhuetas)
-    float rel = abs(hD.y - cD.y) / max(1e-3, min(hD.y, cD.y));
+    float rel = abs(hD.y - dist) / max(1e-3, min(hD.y, dist));
     if (rel > 0.12) ok = 0.0;
     // vizinhança: limita a história ao intervalo local (frouxo, para não perder a acumulação)
-    vec4 mn = cL, mx = cL;
-    for (int k = 0; k < 4; k++) {
-      vec2 o = vec2(k == 0 ? 1.0 : (k == 1 ? -1.0 : 0.0), k == 2 ? 1.0 : (k == 3 ? -1.0 : 0.0)) * uTexel;
-      vec4 s = texture2D(uCurL, vUv + o);
-      mn = min(mn, s);
-      mx = max(mx, s);
-    }
-    vec4 ext = (mx - mn) * 0.75 + vec4(0.02);
+    vec4 ext = (mx - mn) * 0.5 + vec4(0.02);
     hL = clamp(hL, mn - ext, mx + ext);
   }
-  float b = ok > 0.5 ? uBlend : 1.0;
+  float b = ok > 0.5 ? clamp(uBlend * (0.2 + 1.6 * wNear), uBlend * 0.2, 1.0) : 1.0;
   oL = mix(hL, cL, b);
-  oD = vec4(mix(hD.x, cD.x, b), cD.y, cD.z, 1.0);
+  oD = vec4(mix(hD.x, cD.x, b), dist, cD.z, 1.0);
 }`;
 
 export const SHADOW_FRAG = /* glsl */ `
@@ -496,32 +586,11 @@ uniform float uFogH;         // escala de altura (m)
 uniform vec3 uFogColor;
 uniform float uFogMax;       // distância máxima considerada (m)
 uniform float uCloudsOn;
+uniform float uDbg;
 varying vec2 vUv;
 void main() {
   float dist = texture2D(uF, vUv).g;       // km
-  vec4 acc = vec4(0.0);
-  float wsum = 0.0;
-  vec4 best = vec4(0.0, 0.0, 0.0, 1.0);
-  float bestErr = 1e9;
-  if (uCloudsOn > 0.5) {
-    vec2 st = vUv * uLowSize - 0.5;
-    vec2 i0 = floor(st);
-    vec2 f = st - i0;
-    for (int k = 0; k < 4; k++) {
-      vec2 o = vec2(float(k & 1), float(k >> 1));
-      vec2 uv = (i0 + o + 0.5) / uLowSize;
-      vec4 l = texture2D(uL, uv);
-      float e = texture2D(uD, uv).y;
-      float bw = (o.x > 0.5 ? f.x : 1.0 - f.x) * (o.y > 0.5 ? f.y : 1.0 - f.y);
-      float rel = abs(e - dist) / max(1e-3, min(e, dist));
-      float w = bw / (0.02 + rel * rel * 40.0);
-      acc += l * w;
-      wsum += w;
-      if (rel < bestErr) { bestErr = rel; best = l; }
-    }
-  }
-  vec4 c = wsum > 1e-4 ? acc / wsum : best;
-  if (uCloudsOn < 0.5) c = vec4(0.0, 0.0, 0.0, 1.0);
+  vec4 c = uCloudsOn > 0.5 ? texture2D(uL, vUv) : vec4(0.0, 0.0, 0.0, 1.0);
   // neblina do clima (exponencial em altura) até a "superfície" efetiva
   vec3 rd = normalize(mix(mix(uC00, uC10, vUv.x), mix(uC01, uC11, vUv.x), vUv.y));
   vec4 o = c;
@@ -534,5 +603,7 @@ void main() {
     float Tf = exp(-od);
     o = vec4(c.rgb * Tf + uFogColor * (1.0 - Tf), c.a * Tf);
   }
+  if (uDbg > 0.5 && uDbg < 1.5) o = vec4(vec3(c.a), 0.0);
+  if (uDbg > 2.5) o = vec4(c.rgb, 0.0);
   gl_FragColor = o;
 }`;

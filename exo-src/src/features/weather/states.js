@@ -20,7 +20,7 @@
 export const STATES = {
   clear: { coverage: null, typeBias: 0, storm: 0, darkness: 0, precip: 0, fog: 0, fogH: 1200, fogTint: [1, 1, 1], lightning: 0, wind: 7, cirrus: 0.75, detail: 0.6, lens: 0, heat: 0 },
   cloudy: { coverage: 0.82, typeBias: -0.2, storm: 0.1, darkness: 0.2, precip: 0, fog: 0.00004, fogH: 1500, fogTint: [0.85, 0.88, 0.92], lightning: 0, wind: 10, cirrus: 0.3, detail: 0.55, lens: 0, heat: 0 },
-  storm: { coverage: 0.84, typeBias: 0.35, storm: 1, darkness: 0.8, precip: 1, fog: 0.00007, fogH: 1100, fogTint: [0.4, 0.45, 0.52], lightning: 0.14, wind: 17, cirrus: 0, detail: 0.45, lens: 1, heat: 0 },
+  storm: { coverage: 0.7, typeBias: 0.35, storm: 1, darkness: 0.75, precip: 1, fog: 0.00003, fogH: 1100, fogTint: [0.4, 0.45, 0.52], lightning: 0.14, wind: 17, cirrus: 0, detail: 0.45, lens: 1, heat: 0 },
   acid: { coverage: 0.9, typeBias: 0.35, storm: 0.6, darkness: 0.55, precip: 0.85, fog: 0.00045, fogH: 1400, fogTint: [0.78, 0.95, 0.36], lightning: 0.05, wind: 11, cirrus: 0, detail: 0.48, lens: 1, heat: 0 },
   blizzard: { coverage: 0.97, typeBias: -0.5, storm: 0.25, darkness: 0.45, precip: 1, fog: 0.0016, fogH: 900, fogTint: [0.86, 0.91, 1.0], lightning: 0, wind: 21, cirrus: 0, detail: 0.5, lens: 1, heat: 0 },
   dust: { coverage: 0.3, typeBias: -0.25, storm: 0, darkness: 0.15, precip: 1, fog: 0.0011, fogH: 650, fogTint: null, lightning: 0, wind: 19, cirrus: 0.3, detail: 0.6, lens: 1, heat: 0.35 },
