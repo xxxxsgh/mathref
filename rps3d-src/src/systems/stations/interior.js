@@ -33,7 +33,7 @@ const POOL = { ultra: 8, high: 6, medium: 4, mobile: 0 };
 export const ROOMS = {
   hangar: { x0: -32, x1: 32, z0: 50, z1: 130, h: 26 },
   corrE: { x0: 32.4, x1: 45.6, z0: 60, z1: 64, h: 3.6 },
-  bar: { x0: 46, x1: 80, z0: 44, z1: 80, h: 6.5 },
+  bar: { x0: 46, x1: 74, z0: 46, z1: 76, h: 4.6 },
   corrW: { x0: -45.6, x1: -32.4, z0: 60, z1: 64, h: 3.6 },
   market: { x0: -84, x1: -46, z0: 40, z1: 84, h: 8 },
 };
@@ -132,7 +132,7 @@ function stool(B, x, z, h = 0.78) {
 function roundTable(B, x, z, r = 0.55, h = 0.74) {
   const k = B.k;
   k.cyl(L, r, r, 0.05, V3(x, h, z), null, Z.LACQUER, 28);
-  k.torus(L, r, 0.012, V3(x, h - 0.02, z), Z.GLOW, 28, 4);
+  k.torus(L, r, 0.012, V3(x, h - 0.02, z), Z.GLOW_WARM, 28, 4);
   k.cyl(L, 0.05, 0.07, h - 0.05, V3(x, h / 2, z), null, Z.TRIM, 10);
   k.cyl(L, 0.32, 0.36, 0.04, V3(x, 0.02, z), null, Z.TRIM, 20);
 }
@@ -151,7 +151,7 @@ function booth(B, x, z, rot, len = 2.2) {
   // mesa
   k.box(L, len * 0.85, 0.05, 0.9, V3(0, 0.74, 0), null, Z.WOOD);
   k.box(L, 0.12, 0.7, 0.12, V3(0, 0.37, 0), null, Z.TRIM);
-  k.box(L, len * 0.86, 0.015, 0.02, V3(0, 0.715, 0.45), null, Z.GLOW);
+  k.box(L, len * 0.86, 0.015, 0.02, V3(0, 0.715, 0.45), null, Z.GLOW_PINK);
   k.pop();
   const c = new THREE.Vector3(x, 0, z);
   B.col(V3(x, 0.5, z), V3(Math.abs(Math.cos(rot)) * len / 2 + Math.abs(Math.sin(rot)) * 1.3, 0.5, Math.abs(Math.sin(rot)) * len / 2 + Math.abs(Math.cos(rot)) * 1.3));
@@ -172,7 +172,7 @@ function backbar(B, x0, x1, z, y0, rows, room) {
   const w = x1 - x0, cx = (x0 + x1) / 2;
   k.box(L, w + 0.4, rows * 0.55 + 0.4, 0.3, V3(cx, y0 + rows * 0.275, z + 0.15), null, Z.LACQUER);
   // painel luminoso atrás das garrafas
-  k.box(L, w, rows * 0.55, 0.04, V3(cx, y0 + rows * 0.275, z + 0.32), null, Z.GLOW);
+  k.box(L, w, rows * 0.55, 0.04, V3(cx, y0 + rows * 0.275, z + 0.32), null, Z.GLOW_WARM);
   for (let i = 0; i <= rows; i++) {
     const y = y0 + i * 0.55;
     k.box(L, w + 0.3, 0.035, 0.34, V3(cx, y, z + 0.5), null, Z.BRASS);
@@ -190,8 +190,9 @@ function backbar(B, x0, x1, z, y0, rows, room) {
       }
     }
   }
-  B.lamp(V3(cx - w / 4, y0 + rows * 0.3, z + 0.9), [0.4, 0.95, 1.0], 1.6, 4, room);
-  B.lamp(V3(cx + w / 4, y0 + rows * 0.3, z + 0.9), [1.0, 0.55, 0.25], 1.6, 4, room);
+  B.lamp(V3(cx - w / 4, y0 + rows * 0.3, z + 0.9), [1.0, 0.7, 0.4], 6, 7, room);
+  B.lamp(V3(cx + w / 4, y0 + rows * 0.3, z + 0.9), [1.0, 0.6, 0.3], 6, 7, room);
+  B.lamp(V3(cx, y0 + rows * 0.6, z + 1.2), [1.0, 0.55, 0.3], 4, 8, room);
 }
 /** Planta alienígena em vaso (folhas em leque com pontas bioluminescentes). */
 function plant(B, x, z, s = 1) {
@@ -260,7 +261,7 @@ function buildHangar(B) {
   const door = { c: 62, w: 3.2, y0: 0, y1: 3.4 };
   B.room('hangar', R, {
     sides: { w: [door], e: [door], s: [{ c: 0, w: 10, y0: 0, y1: 7 }], n: null },
-    floorZone: Z.FLOOR, wallZone: Z.WALL, amb: [0.035, 0.038, 0.045],
+    floorZone: Z.FLOOR, wallZone: Z.WALL, ceilZone: Z.TRIM, amb: [0.035, 0.038, 0.045],
   });
   // porta grande de carga (fechada) na parede do fundo
   k.box(L, 10, 7, 0.5, V3(0, 3.5, R.z0 + 0.05), null, Z.METAL);
@@ -354,7 +355,11 @@ function buildHangar(B) {
   k.torus(L, 10.5, 0.05, V3(0, 0.23, pz), Z.GLOW, 96, 4);
   for (let i = 0; i < 24; i++) { const a = (i / 24) * TAU; k.light(V3(Math.sin(a) * 15.2, 0.25, pz + Math.cos(a) * 15.2), [0.5, 4.2, 3.2], 0.06, -0.5, i / 24); }
   for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU + 0.2; k.box(L, 2.2, 0.03, 0.5, V3(Math.sin(a) * 12.3, 0.235, pz + Math.cos(a) * 12.3), [0, a, 0], Z.HAZARD); }
-  B.sign('pad03', 6, 3, V3(0, 0.24, pz + 7.5), [-Math.PI / 2, 0, Math.PI], 'floor');
+  B.sign('pad03', 10, 2.5, V3(0, 0.24, pz + 8.5), [-Math.PI / 2, 0, Math.PI], 'floor');
+  // marcações pintadas no piso: quadro da baia, setas, manchas
+  for (const [x, z, w, d] of [[0, pz - 20, 40, 0.5], [0, pz + 20, 40, 0.5], [-20, pz, 0.5, 40], [20, pz, 0.5, 40]]) k.box(L, w, 0.02, d, V3(x, 0.012, z), null, Z.HAZARD);
+  for (let i = 0; i < 4; i++) { const z = pz + 24 + i * 6; for (const sx of [-1, 1]) k.box(L, 3.2, 0.02, 0.5, V3(sx * 1.3, 0.012, z), [0, sx * 0.7, 0], Z.GLOW_WARM); }
+  for (let i = 0; i < 10; i++) k.cyl(L, 0.6 + r() * 1.6, 0.6 + r() * 1.6, 0.012, V3((r() - 0.5) * 50, 0.008, 56 + r() * 66), null, Z.RUBBER, 18);
   // faixas-guia da boca até a plataforma
   for (const sx of [-1, 1]) {
     k.box(L, 0.3, 0.03, R.z1 - pz - 16, V3(sx * 7, 0.015, (pz + 15 + R.z1) / 2), null, Z.HAZARD);
@@ -384,7 +389,7 @@ function buildHangar(B) {
   B.col(V3(26.5, 0.5, 86), V3(1.6, 0.5, 0.6));
   B.lamp(V3(26.5, 2.4, 86), [1.0, 0.85, 0.65], 1.6, 4, 'hangar');
   // placas e letreiros
-  B.sign('hangar03', 16, 4, V3(0, 18.5, R.z0 + 0.62), [0, 0, 0], 'paint');
+  B.sign('hangar03', 26, 6.5, V3(0, 18.2, R.z0 + 0.62), [0, 0, 0], 'paint');
   B.sign('logo', 4.4, 4.4, V3(-12.5, 18.5, R.z0 + 0.64), [0, 0, 0], 'neon');
   B.sign('logo', 4.4, 4.4, V3(12.5, 18.5, R.z0 + 0.64), [0, 0, 0], 'neon');
   B.sign('toBar', 3.6, 0.9, V3(R.x1 - 0.62, 4.2, 62), [0, -Math.PI / 2, 0], 'neon');
@@ -440,8 +445,8 @@ function buildCorridor(B, name, R, dir) {
 function buildBar(B) {
   const k = B.k, R = ROOMS.bar;
   B.room('bar', R, {
-    sides: { w: [{ c: 62, w: 3.2, y0: 0, y1: 3.4 }], e: [{ c: 62, w: 30, y0: 0.7, y1: 5.7, glass: true }] },
-    floorZone: Z.FLOOR, wallZone: Z.WALL, ceilZone: Z.TRIM, amb: [0.03, 0.022, 0.018],
+    sides: { w: [{ c: 62, w: 3.2, y0: 0, y1: 3.4 }], e: [{ c: 61, w: 24, y0: 0.6, y1: 4.0, glass: true }] },
+    floorZone: Z.FLOOR, wallZone: Z.WALL, ceilZone: Z.LACQUER, amb: [0.05, 0.035, 0.03],
   });
   // painéis de madeira nas paredes (até 1,3 m) + friso de latão
   for (const [ax, a0, a1, f, n] of [['x', R.x0, R.x1, R.z0, 1], ['x', R.x0, R.x1, R.z1, -1], ['z', R.z0, R.z1, R.x0, 1]]) {
@@ -457,67 +462,69 @@ function buildBar(B) {
     }
   }
   // teto com caixotões e faixas âmbar
-  for (let x = R.x0 + 4; x < R.x1; x += 6) k.box(L, 0.5, 0.5, R.z1 - R.z0, V3(x, R.h - 0.25, (R.z0 + R.z1) / 2), null, Z.LACQUER);
-  for (let z = R.z0 + 6; z < R.z1; z += 6) k.box(L, R.x1 - R.x0, 0.5, 0.5, V3((R.x0 + R.x1) / 2, R.h - 0.25, z), null, Z.LACQUER);
-  for (let x = R.x0 + 4; x < R.x1; x += 6) k.box(L, 0.06, 0.04, R.z1 - R.z0, V3(x, R.h - 0.52, (R.z0 + R.z1) / 2), null, Z.GLOW);
+  for (let x = R.x0 + 3.5; x < R.x1; x += 4.5) k.box(L, 0.4, 0.4, R.z1 - R.z0, V3(x, R.h - 0.25, (R.z0 + R.z1) / 2), null, Z.LACQUER);
+  for (let z = R.z0 + 4.5; z < R.z1; z += 4.5) k.box(L, R.x1 - R.x0, 0.4, 0.4, V3((R.x0 + R.x1) / 2, R.h - 0.25, z), null, Z.LACQUER);
+  for (let x = R.x0 + 3.5; x < R.x1; x += 4.5) k.box(L, 0.05, 0.03, R.z1 - R.z0, V3(x, R.h - 0.42, (R.z0 + R.z1) / 2), null, Z.GLOW_WARM);
   // tapete
-  k.box(L, 16, 0.02, 20, V3(60, 0.01, 64), null, Z.FABRIC);
+  k.box(L, 12, 0.02, 14, V3(59, 0.01, 63), null, Z.CARPET);
   // balcão em L ao longo da parede sul
-  const cz = 49.2, x0 = 50, x1 = 72;
+  const cz = 51.0, x0 = 49.5, x1 = 66;
   k.box(L, x1 - x0, 1.02, 0.7, V3((x0 + x1) / 2, 0.51, cz), null, Z.LACQUER);
   k.box(L, x1 - x0 + 0.3, 0.07, 0.95, V3((x0 + x1) / 2, 1.06, cz + 0.05), null, Z.WOOD);
-  k.box(L, x1 - x0, 0.03, 0.04, V3((x0 + x1) / 2, 0.98, cz + 0.37), null, Z.GLOW);
-  k.box(L, x1 - x0, 0.05, 0.02, V3((x0 + x1) / 2, 0.12, cz + 0.37), null, Z.GLOW);
+  k.box(L, x1 - x0, 0.03, 0.04, V3((x0 + x1) / 2, 0.98, cz + 0.37), null, Z.GLOW_WARM);
+  k.box(L, x1 - x0, 0.05, 0.02, V3((x0 + x1) / 2, 0.12, cz + 0.37), null, Z.GLOW_PINK);
   k.pipe(L, V3(x0, 0.22, cz + 0.62), V3(x1, 0.22, cz + 0.62), 0.03, Z.BRASS, 8);
   for (let x = x0 + 0.5; x < x1; x += 2) k.box(L, 0.04, 0.2, 0.04, V3(x, 0.12, cz + 0.62), null, Z.BRASS);
   // perna do L
   k.box(L, 0.7, 1.02, 4, V3(x1 + 0.35, 0.51, cz + 1.65), null, Z.LACQUER);
   k.box(L, 0.95, 0.07, 4.3, V3(x1 + 0.4, 1.06, cz + 1.65), null, Z.WOOD);
-  k.box(L, 0.04, 0.03, 4, V3(x1 + 0.72, 0.98, cz + 1.65), null, Z.GLOW);
+  k.box(L, 0.04, 0.03, 4, V3(x1 + 0.72, 0.98, cz + 1.65), null, Z.GLOW_WARM);
   B.col(V3((x0 + x1) / 2, 0.55, cz), V3((x1 - x0) / 2, 0.55, 0.4));
   B.col(V3(x1 + 0.35, 0.55, cz + 1.65), V3(0.4, 0.55, 2));
   for (let x = x0 + 1; x < x1; x += 1.6) stool(B, x, cz + 1.1);
   // copos e chopeira no balcão
-  for (let i = 0; i < 7; i++) { const x = x0 + 1.5 + i * 2.9; k.cyl(L, 0.035, 0.03, 0.12, V3(x, 1.16, cz + 0.1), null, Z.GLASS, 10); }
-  for (let i = 0; i < 3; i++) { k.cyl(L, 0.03, 0.03, 0.4, V3(61 + i * 0.35, 1.3, cz - 0.15), null, Z.BRASS, 8); k.sphere(L, 0.05, V3(61 + i * 0.35, 1.52, cz - 0.15), Z.TRIM, 8, 6); }
+  for (let i = 0; i < 7; i++) { const x = x0 + 1.2 + i * 2.2; k.cyl(L, 0.035, 0.03, 0.12, V3(x, 1.16, cz + 0.1), null, Z.GLASS, 10); }
+  for (let i = 0; i < 3; i++) { k.cyl(L, 0.03, 0.03, 0.4, V3(58 + i * 0.35, 1.3, cz - 0.15), null, Z.BRASS, 8); k.sphere(L, 0.05, V3(58 + i * 0.35, 1.52, cz - 0.15), Z.TRIM, 8, 6); }
   // prateleira de garrafas
-  backbar(B, 51, 71, R.z0 + 0.05, 1.3, 4, 'bar');
-  k.box(L, 21, 1.0, 0.6, V3(61, 0.5, R.z0 + 0.4), null, Z.LACQUER);
-  B.col(V3(61, 1.5, R.z0 + 0.4), V3(10.5, 1.5, 0.5));
+  backbar(B, 50, 65, R.z0 + 0.05, 1.2, 3, 'bar');
+  k.box(L, 15.5, 1.0, 0.6, V3(57.5, 0.5, R.z0 + 0.4), null, Z.LACQUER);
+  B.col(V3(57.5, 1.5, R.z0 + 0.4), V3(8, 1.5, 0.5));
   // letreiros
-  B.sign('barNeon', 9, 2.2, V3(61, 4.35, R.z0 + 0.3), [0, 0, 0], 'neon');
-  B.sign('open', 2, 0.6, V3(53, 4.6, R.z0 + 0.3), [0, 0, 0], 'neon');
-  B.sign('news', 4.2, 2.4, V3(R.x0 + 0.12, 3.0, 70), [0, Math.PI / 2, 0], 'screen');
-  B.sign('logo', 1.6, 1.6, V3(R.x0 + 0.12, 3.0, 54), [0, Math.PI / 2, 0], 'neon');
-  B.lamp(V3(61, 4.3, R.z0 + 1.2), [1.0, 0.3, 0.6], 2.4, 7, 'bar');
+  B.sign('barNeon', 8, 1.0, V3(57.5, 3.6, R.z0 + 0.3), [0, 0, 0], 'neon');
+  B.sign('open', 1.6, 0.4, V3(68.5, 2.6, R.z0 + 0.12), [0, 0, 0], 'neon');
+  B.sign('news', 3.6, 1.8, V3(R.x0 + 0.12, 2.5, 68), [0, Math.PI / 2, 0], 'screen');
+  B.sign('logo', 1.2, 1.2, V3(R.x0 + 0.12, 2.6, 55), [0, Math.PI / 2, 0], 'neon');
+  B.lamp(V3(57.5, 3.4, R.z0 + 1.2), [1.0, 0.25, 0.6], 5, 8, 'bar');
   // cabines ao longo da janela
   B.spots.booths = [];
-  for (const z of [52, 58.5, 65, 71.5]) B.spots.booths.push(booth(B, R.x1 - 2.2, z, Math.PI / 2, 2.4));
-  for (const z of [52, 58.5, 65, 71.5]) pendant(B, R.x1 - 2.2, 2.3, z, R.h, [1.0, 0.6, 0.3], 'bar', 2.4, 0.04);
+  for (const z of [51, 57.4, 63.8, 70.2]) B.spots.booths.push(booth(B, R.x1 - 1.8, z, Math.PI / 2, 2.4));
+  for (const z of [51, 57.4, 63.8, 70.2]) pendant(B, R.x1 - 1.8, 2.15, z, R.h, [1.0, 0.6, 0.3], 'bar', 6, 0.05);
   // mesas redondas
-  B.spots.tables = [V3(57, 0, 58), V3(63.5, 0, 61), V3(56.5, 0, 67.5), V3(64, 0, 70), V3(59.5, 0, 75.5)];
+  B.spots.tables = [V3(55, 0, 58), V3(61.5, 0, 57.5), V3(56.5, 0, 64.5), V3(63, 0, 65), V3(52.5, 0, 70.5), V3(60, 0, 71.5), V3(66.5, 0, 60.5)];
   for (const t of B.spots.tables) {
     roundTable(B, t.x, t.z);
     for (let i = 0; i < 3; i++) { const a = (i / 3) * TAU + t.x; stool(B, t.x + Math.sin(a) * 1.0, t.z + Math.cos(a) * 1.0, 0.62); }
-    pendant(B, t.x, 2.6, t.z, R.h, [1.0, 0.58, 0.28], 'bar', 2.8, 0.045);
+    pendant(B, t.x, 2.6, t.z, R.h, [1.0, 0.58, 0.28], 'bar', 9, 0.06);
     B.col(V3(t.x, 0.4, t.z), V3(0.55, 0.4, 0.55));
   }
   // plantas e jukebox holográfica
-  plant(B, R.x1 - 1.0, R.z1 - 1.2, 1.2);
-  plant(B, R.x1 - 1.0, R.z0 + 1.6, 1.0);
-  plant(B, R.x0 + 1.2, R.z1 - 1.2, 1.1);
-  k.cyl(L, 0.45, 0.55, 1.1, V3(R.x0 + 1.4, 0.55, 76), null, Z.LACQUER, 20);
-  k.torus(L, 0.47, 0.02, V3(R.x0 + 1.4, 1.1, 76), Z.GLOW, 24, 4);
-  B.holos.push({ geo: new THREE.IcosahedronGeometry(0.32, 1), pos: V3(R.x0 + 1.4, 1.65, 76), color: [1.2, 0.35, 1.4] });
-  B.lamp(V3(R.x0 + 1.4, 1.8, 76), [0.9, 0.3, 1.0], 1.2, 4, 'bar');
-  B.terminals.push({ id: 'jukebox', pos: V3(R.x0 + 1.4, 1.3, 76), label: 'Jukebox', sub: 'TROCAR A MÚSICA', panel: null, room: 'bar', music: true });
-  B.col(V3(R.x0 + 1.4, 0.6, 76), V3(0.55, 0.6, 0.55));
+  plant(B, R.x1 - 0.9, R.z1 - 1.0, 1.1);
+  plant(B, R.x1 - 0.9, R.z0 + 1.0, 1.0);
+  plant(B, R.x0 + 1.0, R.z0 + 7.5, 1.0);
+  k.cyl(L, 0.45, 0.55, 1.1, V3(R.x0 + 1.2, 0.55, 74.6), null, Z.LACQUER, 20);
+  k.torus(L, 0.47, 0.02, V3(R.x0 + 1.2, 1.1, 74.6), Z.GLOW, 24, 4);
+  B.holos.push({ geo: new THREE.IcosahedronGeometry(0.32, 1), pos: V3(R.x0 + 1.2, 1.65, 74.6), color: [1.2, 0.35, 1.4] });
+  B.lamp(V3(R.x0 + 1.2, 1.8, 74.6), [0.9, 0.3, 1.0], 1.2, 4, 'bar');
+  B.terminals.push({ id: 'jukebox', pos: V3(R.x0 + 1.2, 1.3, 74.6), label: 'Jukebox', sub: 'TROCAR A MÚSICA', panel: null, room: 'bar', music: true });
+  B.col(V3(R.x0 + 1.2, 0.6, 74.6), V3(0.55, 0.6, 0.55));
   // luz da janela (reflexo do planeta) — pouca, fria
-  B.lamp(V3(R.x1 - 1.0, 3.2, 62), [0.35, 0.55, 0.9], 2.0, 9, 'bar');
-  B.spots.bartender = V3(61, 0, 46.6);
-  B.spots.barCam = V3(48.6, 1.62, 77.2);
-  B.spots.iara = V3(R.x1 - 2.2 - 0.95, 0, 58.5);
-  B.spots.counter = [V3(53, 0, 50.3), V3(56.2, 0, 50.3), V3(64.2, 0, 50.3), V3(67.4, 0, 50.3)];
+  B.lamp(V3(R.x1 - 1.0, 3.2, 62), [0.35, 0.55, 0.9], 6, 12, 'bar');
+  // arandelas quentes nas paredes
+  for (const z of [52, 58, 64, 72]) { k.box(L, 0.12, 0.5, 0.25, V3(R.x0 + 0.12, 2.6, z), null, Z.BRASS); k.box(L, 0.05, 0.4, 0.18, V3(R.x0 + 0.2, 2.6, z), null, Z.GLOW_WARM); B.lamp(V3(R.x0 + 0.5, 2.7, z), [1.0, 0.6, 0.3], 3, 5, 'bar'); }
+  B.spots.bartender = V3(57.5, 0, 48.3);
+  B.spots.barCam = V3(49, 1.62, 73.5);
+  B.spots.iara = V3(R.x1 - 1.8 - 0.95, 0, 57.4);
+  B.spots.counter = [V3(51.5, 0, 52.1), V3(54.7, 0, 52.1), V3(60.3, 0, 52.1), V3(63.5, 0, 52.1)];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -620,7 +627,7 @@ function makeAtlas() {
   A.add('open', neonText('ABERTO', '#5ff0ff', { px: 72 }), 1);
   A.add('toBar', neonText('BAR  ►', '#ffb347', { px: 70 }), 1);
   A.add('toMarket', neonText('◄  MERCADO', '#5fd0b8', { px: 60 }), 1);
-  A.add('hangar03', paintedText('HANGAR 03', { fg: '#e6a62a', px: 104, weight: 900 }), 4);
+  A.add('hangar03', paintedText('HANGAR 03', { fg: '#e6a62a', px: 200, weight: 900 }), 4, 2);
   A.add('pad03', paintedText('03', { fg: '#d9dde0', px: 118, weight: 900 }), 1);
   A.add('warn', paintedText('CUIDADO · CARGA SUSPENSA', { fg: '#141414', bg: '#d9a21c', px: 50 }), 2);
   A.add('noFire', paintedText('PROIBIDO ARMAS', { fg: '#f2ede2', bg: '#b3261e', px: 58 }), 2);

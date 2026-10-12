@@ -121,6 +121,7 @@ export default {
       const v = S.docking.view;
       if (v) S.docking.radio(v, 'Partida autorizada. Campo de contenção aberto — boa viagem, piloto.');
       S.docking.release();
+      if (S.activeInterior) { S.activeInterior.deactivate(); S.activeInterior = null; }
     });
     ctx.bus.on('player:exitShip', (e) => {
       // saiu da nave atracada numa estação com interior → entra no interior

@@ -28,13 +28,15 @@ function gateMaterial(color) {
   m.userData.U = U;
   const ph = attribute('aPhase', 'float');
   const kind = attribute('aKind', 'float'); // 0 moldura, 1 seta, 2 plataforma
-  const wave = pow(fract(ph.mul(-1).add(time.mul(0.55))), 6.0).mul(2.2).add(0.35);
+  const wave = pow(fract(ph.mul(-1).add(time.mul(0.55))), 6.0).mul(1.4).add(0.22);
   const flick = vnoise(vec3(time.mul(11.0), ph.mul(3.0), 0.0)).mul(0.25).add(0.85);
   const facing = abs(dot(normalize(normalView), normalize(positionView.negate())));
-  const edge = pow(float(1).sub(facing), 1.5).mul(0.8).add(0.5);
+  const edge = pow(float(1).sub(facing), 1.5).mul(0.6).add(0.4);
+  // some perto da câmera (o pórtico que a nave atravessa não ofusca)
+  const near = smoothstep(18.0, 90.0, positionView.length());
   const arrow = smoothstep(0.5, 1.0, kind).mul(sin(time.mul(4.0).sub(ph.mul(20.0))).mul(0.3).add(0.9));
   const k = wave.mul(float(1).sub(smoothstep(0.5, 1.0, kind))).add(arrow);
-  m.colorNode = vec4(U.color.mul(k).mul(flick).mul(edge).mul(U.on), 1.0);
+  m.colorNode = vec4(U.color.mul(k).mul(flick).mul(edge).mul(near).mul(U.on), 1.0);
   return m;
 }
 
@@ -66,7 +68,7 @@ function corridorGeometry(bay) {
       const s = (acc + (j / n) * L) / total;
       const c = a.clone().addScaledVector(f, (j / n) * L);
       const grow = 1 + (1 - s) * 0.6; // pórticos maiores longe da boca
-      const w = W * grow / 2, h = H * grow / 2, t = 0.5 * grow;
+      const w = W * grow / 2, h = H * grow / 2, t = 0.22 * grow;
       quadBox(c.clone().addScaledVector(u, h), r, u, f, w, t, t, s, 0);
       quadBox(c.clone().addScaledVector(u, -h), r, u, f, w, t, t, s, 0);
       quadBox(c.clone().addScaledVector(r, w), r, u, f, t, h, t, s, 0);

@@ -5,7 +5,8 @@
 // Refúgio, construído quando o jogador está a poucos km).
 import * as THREE from 'three/webgpu';
 import { lightsGeometry, V3 } from './geo.js';
-import { makeHullMaterial, makeLightsMaterial, makeFieldMaterial, ZONE } from './materials.js';
+import { makeHullMaterial, makeLightsMaterial, makeFieldMaterial, makeSignMaterial, ZONE } from './materials.js';
+import { SignAtlas, neonText, guildLogo } from './signs.js';
 import { buildMeridiana, bayBasis, bayCavity, MERIDIANA } from './meridiana.js';
 import { buildPlatform, buildRebel, buildMilitary, buildGeneric } from './others.js';
 
@@ -40,7 +41,13 @@ export function stationQuat(st, sys) {
   const arch = archetypeOf(st);
   let Y;
   if (arch === 'platform' || arch === 'rebel') Y = out.clone(); // convés virado para fora do planeta / do sol
-  else Y = tan.clone().multiplyScalar(0.94).addScaledVector(out, 0.34).normalize();
+  else if (arch === 'meridiana') {
+    // espinha inclinada para o sol (o lado de cima do disco recebe luz; Verídia
+    // aparece iluminada pelas janelas)
+    const sun = st.pos.clone().negate().normalize();
+    const sp = sun.addScaledVector(out, -sun.dot(out));
+    Y = (sp.lengthSq() > 1e-4 ? sp.normalize() : tan.clone()).multiplyScalar(0.8).addScaledVector(tan, -0.55).addScaledVector(out, 0.22).normalize();
+  } else Y = tan.clone().multiplyScalar(0.94).addScaledVector(out, 0.34).normalize();
   // X: perpendicular a Y, girando um pouco por semente
   const ref = Math.abs(Y.dot(out)) < 0.95 ? out : V3(0, 1, 0);
   const Zv = V3().crossVectors(ref, Y).normalize();
@@ -49,10 +56,9 @@ export function stationQuat(st, sys) {
   const q = new THREE.Quaternion().setFromRotationMatrix(m);
   let spin = ((st.seed || 1) % 628) / 100;
   if (arch === 'meridiana' && body) {
-    // gira em torno da espinha para Verídia aparecer a ~30° da boca do hangar 03 (+Z)
-    // e na diagonal da janela do bar (+X)
+    // gira em torno da espinha para Verídia aparecer pela janela do bar (+X, um pouco para −Z)
     const dL = body.pos.clone().sub(st.pos).normalize().applyQuaternion(q.clone().invert());
-    spin = Math.atan2(dL.x, dL.z) - 30 * Math.PI / 180;
+    spin = Math.atan2(dL.x, dL.z) - 120 * Math.PI / 180;
   }
   return q.multiply(new THREE.Quaternion().setFromAxisAngle(V3(0, 1, 0), spin));
 }
@@ -139,6 +145,7 @@ export class StationView {
       this.bay0Cavity = new THREE.Group(); this.bay0Cavity.name = 'hangar0-simples';
       this.group.add(this.bay0Cavity);
       addKit(kc, this.bay0Cavity, 'hangar0');
+      this.addSigns();
     } else {
       const spec = { platform: buildPlatform, rebel: buildRebel, military: buildMilitary, generic: buildGeneric }[this.arch];
       const out = spec.build(this.st, { lite });
@@ -165,6 +172,26 @@ export class StationView {
       m.renderOrder = 7;
       this.group.add(m);
       this.fields.push(m);
+    }
+  }
+
+  /** Letreiro em néon "MERIDIANA" + logotipo da Guilda no topo do disco. */
+  addSigns() {
+    const A = new SignAtlas(4, 4, 512, 128);
+    A.add('name', neonText('MERIDIANA', '#6ff5dc', { px: 104, glow: 34, weight: 800 }), 4, 1);
+    A.add('sub', neonText('GUILDA DOS MERCADORES', '#ffd27a', { px: 70, glow: 22 }), 4, 1);
+    A.add('logo', guildLogo('#6ff5dc'), 1, 1);
+    const m = makeSignMaterial(A.texture(), { gain: 6, flicker: 0.04, additive: true });
+    this.mats.push(m);
+    const y = MERIDIANA.hubY1;
+    for (const a of [Math.PI / 4, Math.PI * 1.25]) {
+      const g = new THREE.Group();
+      g.rotation.y = a;
+      g.position.set(Math.sin(a) * (MERIDIANA.hubR - 6), y + 16, Math.cos(a) * (MERIDIANA.hubR - 6));
+      const name = new THREE.Mesh(A.plane('name', 110, 13.75), m); name.position.set(0, 4, 0.6);
+      const sub = new THREE.Mesh(A.plane('sub', 70, 4.4), m); sub.position.set(0, -6.5, 0.6);
+      for (const o of [name, sub]) { o.renderOrder = 7; g.add(o); }
+      this.group.add(g);
     }
   }
 

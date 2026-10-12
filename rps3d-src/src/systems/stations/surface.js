@@ -105,7 +105,7 @@ function buildRuins(k, s, lite) {
   for (let i = 0; i < 26; i++) {
     const a = r() * TAU, d = 48 + r() * 50;
     const sz = 1.5 + r() * 5;
-    k.box(L, sz * (1 + r()), sz, sz * (0.6 + r()), V3(Math.cos(a) * d, sz * 0.2 - 1, Math.sin(a) * d), [r() * 0.6, r() * TAU, r() * 0.5], Z.ALIEN);
+    k.box(L, sz * (1 + r()), sz, sz * (0.6 + r()), V3(Math.cos(a) * d, s.gy(Math.cos(a) * d, Math.sin(a) * d) + sz * 0.15 - 0.6, Math.sin(a) * d), [r() * 0.6, r() * TAU, r() * 0.5], Z.ALIEN);
   }
   // pedestais do quebra-cabeça (três prismas)
   const prisms = [V3(-14, top, 4), V3(14, top, 4), V3(0, top, 16)];
@@ -159,12 +159,13 @@ function buildOutpost(k, s, lite) {
   for (let i = 0; i < 5; i++) k.box(L, 6, 2.6, 2.5, V3(-2 + (i % 3) * 0.4, 1.7 + Math.floor(i / 3) * 2.6, 16 + (i % 3) * 2.7), [0, r() * 0.1, 0], i % 2 ? Z.ACCENT : Z.RUST);
   // campo solar
   for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) {
-    const p = V3(-38 - j * 7, 1.6, -10 + i * 8);
+    const p = V3(-38 - j * 7, 0, -10 + i * 8); p.y = s.gy(p.x, p.z) + 1.6;
     k.box(L, 6, 0.15, 3.4, p.clone().add(V3(0, 1.0, 0)), [0.5, 0, 0], Z.SOLAR);
     k.box(L, 0.2, 1.6, 0.2, p.clone(), null, Z.DARK);
   }
   // postes de holofote (luzes quentes) + cones
   for (const p of [V3(-30, 0.4, 20), V3(26, 0.4, 20), V3(26, 0.4, -20), V3(-30, 0.4, -22)]) {
+    p.y = Math.min(0.4, s.gy(p.x, p.z));
     k.cyl(L, 0.18, 0.24, 9, p.clone().add(V3(0, 4.5, 0)), null, Z.DARK, 8);
     k.box(L, 1.2, 0.5, 0.6, p.clone().add(V3(0, 9.1, 0)), null, Z.DARK);
     k.light(p.clone().add(V3(0, 8.8, 0)), [14, 11, 7], 0.35, 0);
@@ -172,10 +173,31 @@ function buildOutpost(k, s, lite) {
   // barreiras
   for (let i = 0; i < 22; i++) {
     const a = (i / 22) * TAU;
-    const p = V3(Math.cos(a) * 40, 0.6, Math.sin(a) * 30);
+    const p = V3(Math.cos(a) * 40, 0, Math.sin(a) * 30); p.y = s.gy(p.x, p.z) + 0.45;
     k.box(L, 3, 1.2, 0.6, p, [0, -a + Math.PI / 2, 0], i % 4 ? Z.CONCRETE : Z.HAZARD);
   }
   lightRing(k, 8.6, 5.2, 12, [1.0, 4, 3], 0.08, 0);
+  // tubos pressurizados entre os módulos
+  k.cylX(L, 1.2, 10, V3(-1, 2.4, -10), Z.DARK, 16);
+  k.cylX(L, 1.2, 8, V3(-2, 2.4, 2), Z.DARK, 16);
+  for (const x of [-4, 2]) { k.torus(L, 1.25, 0.12, V3(x, 2.4, -10), Z.ACCENT, 20, 4, null, [0, 0, Math.PI / 2]); }
+  // veículo de superfície (rover)
+  k.push(mat(V3(-6, 0.4, 12), [0, 0.6, 0]));
+  k.box(L, 2.6, 1.2, 4.8, V3(0, 1.4, 0), null, Z.ACCENT);
+  k.box(L, 2.2, 0.9, 2, V3(0, 2.4, 0.9), null, Z.PAINT);
+  k.box(L, 2.0, 0.6, 0.1, V3(0, 2.5, 1.92), [-0.3, 0, 0], Z.GLASS);
+  for (const [x, z] of [[-1.35, 1.6], [1.35, 1.6], [-1.35, -1.6], [1.35, -1.6]]) k.cylX(L, 0.6, 0.5, V3(x, 0.6, z), Z.DARK, 14);
+  k.light(V3(-0.8, 1.6, 2.45), [14, 12, 9], 0.12, 0); k.light(V3(0.8, 1.6, 2.45), [14, 12, 9], 0.12, 0);
+  k.light(V3(0, 2.95, -0.4), [12, 6, 1], 0.1, 1.2);
+  k.pop();
+  // caixotes e tambores perto da porta
+  for (let i = 0; i < 6; i++) k.box(L, 1.1, 0.9, 1.1, V3(-21 + (i % 3) * 1.2, 0.85 + Math.floor(i / 3) * 0.9, 7.5), [0, r() * 0.3, 0], i % 2 ? Z.DARK : Z.HAZARD);
+  for (let i = 0; i < 5; i++) k.cyl(L, 0.35, 0.35, 1.0, V3(-16 + i * 0.8, 0.9, 9 + (i % 2) * 0.7), null, i % 2 ? Z.ACCENT : Z.RUST, 12);
+  // estandarte da Frente Livre (painel laranja num mastro)
+  k.cyl(L, 0.08, 0.08, 8, V3(2, 4.4, -2), null, Z.METAL, 8);
+  k.box(L, 2.4, 3.2, 0.05, V3(3.25, 6.6, -2), null, Z.ACCENT);
+  // janelas acesas extras e luzes de porta
+  for (const z of [-10, 2]) for (const x of [-22.1, -5.9]) k.light(V3(x, 3.6, z), [12, 7, 3], 0.25, 0);
   void lite; void solarWing; void portholes;
   return { pad: V3(14, 0.7, 12) };
 }
@@ -280,6 +302,14 @@ export class Surface {
     const g = new THREE.Group(); g.name = 'estrutura:' + s.id;
     let info = {};
     let style = s.faction === 'hegemonia' ? 'hegemonia' : s.faction === 'frente' ? 'frente' : 'industrial';
+    // altura do relevo (m) no plano local da estrutura — para assentar peças afastadas no chão
+    const pl = ctx.services.planets, b0 = s.body, R0 = s.local.length();
+    s.gy = (x, z) => {
+      const loc = s.local.clone().add(V3(x, 0, z).applyQuaternion(s.quatL));
+      let h = 0; try { h = pl?.heightAtLocal?.(b0, loc) ?? 0; } catch { h = 0; }
+      const v = pl?.view?.(b0); if (v?.terrain?.hasSea) h = Math.max(h, 0);
+      return Math.max(-8, Math.min(8, b0.radius + h - R0 - (x * x + z * z) / (2 * R0)));
+    };
     if (s.kind === 'ruins') { info = buildRuins(k, s, lite); style = 'guilda'; }
     else if (s.kind === 'outpost') info = buildOutpost(k, s, lite);
     else if (s.kind === 'bunker') info = buildBunker(k, s, lite);

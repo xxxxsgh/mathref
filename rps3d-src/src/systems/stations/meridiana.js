@@ -21,7 +21,7 @@ const TAU = Math.PI * 2;
 export const MERIDIANA = {
   hubY0: 388, hubY1: 452, hubR: 130, floorY: 392,
   bay: { w: 64, h: 26, d: 80, rIn: 50, rOut: 130 },
-  ringR: 540, ringW: 40, ringH: 60,
+  ringR: 540, ringW: 62, ringH: 74,
   radius: 760,
 };
 
@@ -101,6 +101,21 @@ function spine(k, lite) {
     k.truss(L, o.clone().setY(80), o.clone().setY(300), 7, 0.9, 10, Z.DARK);
   }
   tankRing(k, L, 140, 62, 8, 16, true);
+  // racks de contêineres (escala e cor)
+  const zs = [Z.ACCENT, Z.PAINT, Z.RUST, Z.ACCENT, Z.HAZARD, Z.DARK, Z.PAINT, Z.RUST];
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * TAU + 0.1;
+    const n = V3(Math.sin(a), 0, Math.cos(a));
+    for (let j = 0; j < 3; j++) for (let l = 0; l < 2; l++) {
+      if (((i * 7 + j * 3 + l) % 5) === 0) continue; // vagas
+      const p = n.clone().multiplyScalar(44 + l * 13).setY(186 + j * 6.2);
+      k.box(L, 5.6, 5.6, 12.5, p, [0, a, 0], zs[(i * 3 + j * 5 + l) % zs.length]);
+    }
+    k.box(L, 1.2, 22, 1.2, n.clone().multiplyScalar(37).setY(192), [0, a, 0], Z.DARK);
+  }
+  k.cyl(L, 72, 72, 1.5, V3(0, 181.5, 0), null, Z.DARK, 48);
+  k.cyl(L, 72, 72, 1.5, V3(0, 205, 0), null, Z.DARK, 48);
+  lightRing(k, 206.5, 72, 36, [3.2, 2.4, 1.4], 0.5, 0);
   tankRing(k, L, 236, 58, 6, 11, false);
   k.cyl(L, 70, 70, 4, V3(0, 112, 0), null, Z.DARK, 48);
   k.cyl(L, 70, 70, 4, V3(0, 168, 0), null, Z.DARK, 48);
@@ -125,18 +140,33 @@ function habitatRing(k, lite) {
   const { ringR: R, ringW: W, ringH: H } = MERIDIANA;
   const seg = lite ? 48 : 96;
   const ro = R + W / 2, ri = R - W / 2;
-  // face externa em faixas
-  k.ring(L, R, W, 14, -H / 2 + 7, seg, { outer: Z.PAINT, inner: Z.PAINT, top: null, bottom: Z.PAINT });
-  k.ring(L, R, W, 11, -H / 2 + 19.5, seg, { outer: Z.WINDOW, inner: Z.WINDOW, top: null, bottom: null });
-  k.ring(L, R, W, 4, -H / 2 + 27, seg, { outer: Z.ACCENT, inner: Z.DARK, top: null, bottom: null });
-  k.ring(L, R, W, 11, -H / 2 + 34.5, seg, { outer: Z.WINDOW, inner: Z.WINDOW, top: null, bottom: null });
-  k.ring(L, R, W, 20, H / 2 - 10, seg, { outer: Z.PAINT, inner: Z.PAINT, top: Z.PAINT, bottom: null });
+  // face externa em faixas (de baixo para cima)
+  const y0 = -H / 2;
+  const band = (a, b, f) => k.ring(L, R, W, b - a, y0 + (a + b) / 2, seg, f);
+  band(0, 16, { outer: Z.PAINT, inner: Z.PAINT, top: null, bottom: Z.PAINT });
+  band(16, 29, { outer: Z.WINDOW, inner: Z.WINDOW, top: null, bottom: null });
+  band(29, 33, { outer: Z.ACCENT, inner: Z.DARK, top: null, bottom: null });
+  band(33, 46, { outer: Z.WINDOW, inner: Z.WINDOW, top: null, bottom: null });
+  band(46, H, { outer: Z.PAINT, inner: Z.PAINT, top: Z.PAINT, bottom: null });
   // faixa luminosa contínua (teal da Guilda) e frisos
-  k.ring(L, R, W + 1.2, 0.8, -H / 2 + 27, seg, { outer: Z.GLOW, inner: null, top: null, bottom: null });
+  k.ring(L, R, W + 1.2, 0.8, y0 + 31, seg, { outer: Z.GLOW, inner: null, top: null, bottom: null });
   k.ring(L, R, W + 2.4, 1.6, -H / 2 + 0.8, seg, { outer: Z.DARK, inner: Z.DARK, top: Z.DARK, bottom: Z.DARK });
   k.ring(L, R, W + 2.4, 1.6, H / 2 - 0.8, seg, { outer: Z.DARK, inner: Z.DARK, top: Z.DARK, bottom: Z.DARK });
-  // jardins: faixa de vidro no teto do anel com brilho verde (estufas)
-  k.ring(L, R, W * 0.55, 0.6, H / 2 + 0.3, seg, { outer: null, inner: null, top: Z.GLASS, bottom: null });
+  // quilha inferior contínua (dutos e trilho de manutenção)
+  k.ring(L, R + W * 0.1, W * 0.45, 8, -H / 2 - 4, seg, { outer: Z.DARK, inner: Z.DARK, top: null, bottom: Z.METAL });
+  k.ring(L, R - W * 0.32, 3, 3, -H / 2 - 9, seg, { outer: Z.ACCENT, inner: Z.ACCENT, top: null, bottom: Z.ACCENT });
+  // jardins: abóbadas de vidro no teto do anel (estufas iluminadas)
+  for (let i = 0; i < seg; i += 2) {
+    const a0 = (i / seg) * Math.PI * 2;
+    const am = a0 + Math.PI / seg;
+    const n = V3(Math.sin(am), 0, Math.cos(am));
+    const t = V3(Math.cos(am), 0, -Math.sin(am));
+    const len = (2 * Math.PI * R / seg) * 1.6;
+    const g = new THREE.CylinderGeometry(W * 0.26, W * 0.26, len, 16, 1, false, 0, Math.PI);
+    g.rotateZ(Math.PI / 2);
+    k.add(L, g, mat(n.clone().multiplyScalar(R).setY(H / 2), new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(t, V3(0, 1, 0), V3().crossVectors(t, V3(0, 1, 0))))), Z.GLASS);
+    if (i % 4 === 0) k.light(n.clone().multiplyScalar(R).setY(H / 2 + W * 0.12), [0.8, 2.6, 0.9], 1.6, 0);
+  }
   // cavernas estruturais, módulos e luzes
   const nRib = lite ? 24 : 48;
   for (let i = 0; i < nRib; i++) {
@@ -148,8 +178,10 @@ function habitatRing(k, lite) {
     k.box(L, 3.6, 2.4, W + 5, V3(0, H / 2 + 1.2, 0), null, Z.METAL);
     if (i % 2 === 0) {
       // módulo externo (carga/hidroponia) com escotilhas
-      k.box(L, 26, 10, 7, V3(14, -H / 2 + 8, -W / 2 - 3.5), null, i % 4 ? Z.PAINT : Z.ACCENT);
-      k.box(L, 22, 2, 7.6, V3(14, -H / 2 + 8, -W / 2 - 3.5), null, Z.DARK);
+      k.box(L, 26, 12, 9, V3(14, -H / 2 + 9, -W / 2 - 4.5), null, i % 4 ? Z.PAINT : Z.ACCENT);
+      k.box(L, 22, 2, 9.6, V3(14, -H / 2 + 9, -W / 2 - 4.5), null, Z.DARK);
+      k.box(L, 20, 10, 18, V3(14, -H / 2 - 6, 0), null, Z.PAINT);
+      k.light(V3(14, -H / 2 - 11.2, 0), [3.2, 2.4, 1.4], 0.6, 0);
       greebleRect(k, L, V3(14, H / 2, 0), V3(1, 0, 0), V3(0, 0, 1), V3(0, 1, 0), 22, W - 6, 0.06, 0.9);
     }
     k.light(V3(0, H / 2 + 2.6, -W / 2 - 2), i % 6 === 0 ? [12, 12, 12] : [0.6, 3.0, 2.6], i % 6 === 0 ? 0.9 : 0.5, i % 6 === 0 ? 0.7 : 0);
@@ -163,20 +195,22 @@ function habitatRing(k, lite) {
     const p0 = n.clone().multiplyScalar(86), p1 = n.clone().multiplyScalar(ri - 1);
     const q = new THREE.Quaternion().setFromUnitVectors(V3(0, 1, 0), n);
     const mid = p0.clone().add(p1).multiplyScalar(0.5), len = p0.distanceTo(p1);
-    k.add(L, new THREE.BoxGeometry(16, len, 12), mat(mid, q), Z.PAINT);
-    k.add(L, new THREE.BoxGeometry(17, len, 3), mat(mid.clone().add(V3(0, 7.5, 0)), q), Z.DARK);
-    k.add(L, new THREE.BoxGeometry(17, len, 3), mat(mid.clone().add(V3(0, -7.5, 0)), q), Z.DARK);
-    k.add(L, new THREE.BoxGeometry(16.4, len - 20, 3.6), mat(mid.clone().add(V3(0, 0, 0)), q), Z.WINDOW);
+    k.add(L, new THREE.BoxGeometry(26, len, 20), mat(mid, q), Z.PAINT);
+    k.add(L, new THREE.BoxGeometry(27, len, 3), mat(mid.clone().add(V3(0, 11.5, 0)), q), Z.DARK);
+    k.add(L, new THREE.BoxGeometry(27, len, 3), mat(mid.clone().add(V3(0, -11.5, 0)), q), Z.DARK);
+    k.add(L, new THREE.BoxGeometry(26.4, len - 20, 5), mat(mid.clone().add(V3(0, 0, 0)), q), Z.WINDOW);
     const side = V3().crossVectors(V3(0, 1, 0), n);
-    k.pipe(L, p0.clone().addScaledVector(side, 11).add(V3(0, 4, 0)), p1.clone().addScaledVector(side, 11).add(V3(0, 4, 0)), 2.2, Z.METAL, 12);
-    k.pipe(L, p0.clone().addScaledVector(side, -11).add(V3(0, -4, 0)), p1.clone().addScaledVector(side, -11).add(V3(0, -4, 0)), 1.6, Z.ACCENT, 12);
+    k.pipe(L, p0.clone().addScaledVector(side, 17).add(V3(0, 5, 0)), p1.clone().addScaledVector(side, 17).add(V3(0, 5, 0)), 3.2, Z.METAL, 12);
+    k.pipe(L, p0.clone().addScaledVector(side, -17).add(V3(0, -5, 0)), p1.clone().addScaledVector(side, -17).add(V3(0, -5, 0)), 2.4, Z.ACCENT, 12);
+    k.truss(L, p0.clone().add(V3(0, 18, 0)), p1.clone().add(V3(0, 18, 0)), 6, 0.8, 12, Z.DARK);
     for (let j = 1; j < 8; j++) {
       const p = p0.clone().lerp(p1, j / 8);
-      k.add(L, new THREE.BoxGeometry(26, 3, 18), mat(p, q), Z.DARK);
-      k.light(p.clone().addScaledVector(side, 13).add(V3(0, 2, 0)), [0.6, 3.0, 2.6], 0.4, 0);
+      k.add(L, new THREE.BoxGeometry(36, 4, 26), mat(p, q), Z.DARK);
+      k.light(p.clone().addScaledVector(side, 18.5).add(V3(0, 2, 0)), [0.6, 3.0, 2.6], 0.5, 0);
+      k.light(p.clone().addScaledVector(side, -18.5).add(V3(0, 2, 0)), [0.6, 3.0, 2.6], 0.5, 0);
     }
     // junção com o anel
-    k.add(L, new THREE.BoxGeometry(30, 10, 36), mat(n.clone().multiplyScalar(ri - 6), q), Z.ACCENT);
+    k.add(L, new THREE.BoxGeometry(44, 14, 50), mat(n.clone().multiplyScalar(ri - 8), q), Z.ACCENT);
   }
   // letreiro: faixas de destaque grandes em 4 posições (lado de fora)
   for (let i = 0; i < 4; i++) {
@@ -215,6 +249,16 @@ function hub(k, lite) {
     greebleRect(k, L, n.clone().multiplyScalar(80).setY(y1 + 2), V3().crossVectors(V3(0, 1, 0), n), n, V3(0, 1, 0), 60, 60, 0.05, 1.4);
     dish(k, L, n.clone().multiplyScalar(96).setY(y1 + 12), V3(0, 1, 0).addScaledVector(n, 0.8).normalize(), i % 2 ? 16 : 11);
     k.cyl(L, 3, 4, 10, n.clone().multiplyScalar(96).setY(y1 + 5), null, Z.DARK, 12);
+  }
+  // armações dos letreiros em néon (o texto é montado em station.js)
+  for (const a of [Math.PI / 4, Math.PI * 1.25]) {
+    const n = V3(Math.sin(a), 0, Math.cos(a));
+    const c = n.clone().multiplyScalar(R - 7.2).setY(y1 + 16);
+    k.box(L, 116, 24, 1.4, c, [0, a, 0], Z.DARK);
+    k.box(L, 118, 1.2, 2.4, c.clone().add(V3(0, 12.6, 0)), [0, a, 0], Z.METAL);
+    k.box(L, 118, 1.2, 2.4, c.clone().add(V3(0, -12.6, 0)), [0, a, 0], Z.METAL);
+    const t = V3(Math.cos(a), 0, -Math.sin(a));
+    for (const s2 of [-50, -17, 17, 50]) k.beam(L, c.clone().addScaledVector(t, s2).add(V3(0, -12, 0)).addScaledVector(n, -1), c.clone().addScaledVector(t, s2).setY(y1 + 1).addScaledVector(n, -14), 1.6, Z.DARK);
   }
   // torre de controle
   k.lathe(L, [[58, y1 + 2], [56, y1 + 22], [44, y1 + 40], [40, y1 + 58]], V3(), Z.PAINT, 64);

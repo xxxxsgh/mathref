@@ -25,7 +25,7 @@ import { hash13, vnoise, fbm, panelGrid, aaLine, bumpNormal } from './tsl.js';
 export const ZONE = {
   PAINT: 0, ACCENT: 1, DARK: 2, METAL: 3, WINDOW: 4, SOLAR: 5, RADIATOR: 6, GLOW: 7, HAZARD: 8, GLASS: 9,
   // interiores
-  FLOOR: 10, GRATE: 11, WALL: 12, TRIM: 13, LACQUER: 14, FABRIC: 15, SCREEN: 16, WOOD: 17, RUBBER: 18, BRASS: 19,
+  FLOOR: 10, GRATE: 11, GLOW_WARM: 25, GLOW_PINK: 26, CARPET: 27, WALL: 12, TRIM: 13, LACQUER: 14, FABRIC: 15, SCREEN: 16, WOOD: 17, RUBBER: 18, BRASS: 19,
   // estruturas de superfície / ruínas
   CONCRETE: 20, ALIEN: 21, ALIEN_GLOW: 22, ROCK: 23, RUST: 24,
 };
@@ -88,7 +88,7 @@ export function makeHullMaterial(styleName = 'guilda', { lite = false, scale = 3
   const al1 = fbm(P.mul(0.18).add(seed.mul(4.0)));
   const al2 = vnoise(P.mul(vec3(0.08, 1.6, 0.08)).add(seed));
   const alienCol = mix(vec3(0.018, 0.02, 0.026), vec3(0.06, 0.065, 0.075), al1).add(vec3(0.02, 0.03, 0.05).mul(al2));
-  const gu = UV.x.div(1.4), gv = UV.y.div(1.4);
+  const gu = UV.x.div(1.1), gv = UV.y.div(1.4);
   const gcell = vec2(floor(gu), floor(gv));
   const gf = vec2(fract(gu), fract(gv));
   const gh = hash13(vec3(gcell, seed.mul(3.0)));
@@ -96,7 +96,10 @@ export function makeHullMaterial(styleName = 'guilda', { lite = false, scale = 3
   const barH = step(abs(gf.y.sub(0.5)), 0.045).mul(step(0.2, gf.x)).mul(step(gf.x, 0.8)).mul(step(0.5, gh));
   const barV = step(abs(gf.x.sub(gh.mul(0.6).add(0.2))), 0.045).mul(step(0.15, gf.y)).mul(step(gf.y, 0.85)).mul(step(0.3, fract(gh.mul(7.0))));
   const ringG = step(abs(length(gf.sub(0.5)).sub(0.28)), 0.035).mul(step(0.78, fract(gh.mul(13.0))));
-  const glyph = clamp(barH.add(barV).add(ringG), 0, 1).mul(step(0.35, fract(gh.mul(31.0))));
+  // inscrições só em faixas (a cada 7 m) e em canais verticais raros — superfície lisa no resto
+  const inBand = step(abs(fract(UV.y.div(7.0)).sub(0.5)), 0.1);
+  const chan = step(abs(fract(UV.x.div(9.0)).sub(0.5)), 0.012).mul(step(0.6, hash13(vec3(floor(UV.x.div(9.0)), seed, 5.0))));
+  const glyph = clamp(barH.add(barV).add(ringG), 0, 1).mul(step(0.45, fract(gh.mul(31.0)))).mul(inBand).add(chan).min(1);
   const pulse = sin(time.mul(0.8).add(gh.mul(6.283)).add(UV.y.mul(0.15))).mul(0.5).add(0.5);
 
   // ── rocha (asteroides escavados) e ferrugem
@@ -216,14 +219,17 @@ export function makeFieldMaterial(color = [0.2, 0.6, 1.0]) {
   const U = { color: uniform(C(color)), strength: uniform(1) };
   m.userData.U = U;
   const p = uv();
-  const hexA = fract(p.mul(vec2(0.55, 0.95)).add(vec2(0, time.mul(0.03))));
-  const cellEdge = max(abs(hexA.x.sub(0.5)), abs(hexA.y.sub(0.5))).mul(2.0);
-  const grid = smoothstep(0.86, 0.98, cellEdge).mul(0.4);
+  // células hexagonais finas (só as bordas acendem, e pouco)
+  const q = p.mul(0.42);
+  const hx = vec2(q.x.add(q.y.mul(0.5)), q.y.mul(0.866));
+  const fa = fract(hx).sub(0.5);
+  const cellEdge = max(abs(fa.x), abs(fa.y)).mul(2.0);
+  const grid = smoothstep(0.9, 0.99, cellEdge).mul(0.18).mul(vnoise(vec3(floor(hx), time.mul(0.3))).mul(0.8).add(0.2));
   const wave = sin(p.x.mul(0.5).add(p.y.mul(0.3)).add(time.mul(1.6))).mul(0.5).add(0.5).pow(6.0);
   const n = vnoise(vec3(p.mul(0.25), time.mul(0.4)));
   const facing = abs(dot(normalize(normalView), normalize(positionView.negate())));
   const graze = pow(float(1).sub(facing), 3.0).mul(1.5);
-  const a = grid.add(wave.mul(0.25)).add(n.mul(0.06)).add(graze).add(0.03);
+  const a = grid.add(wave.mul(0.06)).add(n.mul(0.025)).add(graze.mul(0.45)).add(0.008);
   m.colorNode = vec4(U.color.mul(a).mul(U.strength), 1.0);
   return m;
 }
@@ -287,18 +293,28 @@ export function makeInteriorMaterial(styleName = 'guilda', { lite = false, pool 
   const zP = isZ(zone, 0), zA = isZ(zone, 1), zD = isZ(zone, 2), zM = isZ(zone, 3), zG = isZ(zone, 7), zH = isZ(zone, 8), zGl = isZ(zone, 9);
 
   // piso: placas 1,2 m com juntas, desgaste no meio (trilhas), sujeira nos cantos
-  const fp = panelGrid(UV.x.div(1.2), UV.y.div(1.2), seed.mul(3.0), float(1.0));
-  const fSeam = aaLine(fp.x, float(0.02));
+  const fp = panelGrid(UV.x.div(2.4), UV.y.div(1.2), seed.mul(3.0), float(2.0));
+  const fSeam = aaLine(fp.x, float(0.008));
+  const zGw = isZ(zone, 25), zGp = isZ(zone, 26), zCa = isZ(zone, 27);
   const n1 = fbm(P.mul(0.7));
-  const floorCol = mix(vec3(0.075, 0.078, 0.082), vec3(0.11, 0.105, 0.1), fp.y.mul(0.6).add(n1.mul(0.4))).mul(float(1).sub(fSeam.mul(0.6)));
+  const fGrime = fbm(P.mul(0.22).add(3.0));
+  const floorCol = mix(vec3(0.085, 0.088, 0.092), vec3(0.12, 0.118, 0.112), fp.y.mul(0.35).add(n1.mul(0.3))).mul(float(1).sub(fSeam.mul(0.5))).mul(fGrime.mul(0.35).add(0.8));
+  // tapete: padrão geométrico bordô e ocre
+  const cu = fract(UV.x.mul(0.8)), cv2 = fract(UV.y.mul(0.8));
+  const diamond = step(abs(cu.sub(0.5)).add(abs(cv2.sub(0.5))), 0.32);
+  const carpet = mix(vec3(0.09, 0.018, 0.02), vec3(0.22, 0.12, 0.04), diamond.mul(0.6)).mul(vnoise(P.mul(30.0)).mul(0.2).add(0.85));
   // grade metálica: losangos
   const gu = fract(UV.x.mul(5.0).add(UV.y.mul(5.0))), gv = fract(UV.x.mul(5.0).sub(UV.y.mul(5.0)));
   const holes = smoothstep(0.32, 0.4, min(abs(gu.sub(0.5)), abs(gv.sub(0.5))));
   const grateCol = mix(vec3(0.24, 0.24, 0.25), vec3(0.01), holes);
   // parede: painéis 2 × 1 m com frisos
-  const wp = panelGrid(UV.x.div(1.8), UV.y.div(0.9), seed.mul(9.0), float(2.0));
+  const wp = panelGrid(UV.x.div(4.8), UV.y.div(3.0), seed.mul(9.0), float(0.8));
   const wSeam = aaLine(wp.x, float(0.018));
-  const wallCol = mix(U.primary.mul(0.9), U.primary.mul(1.08), wp.y).mul(float(1).sub(wSeam.mul(0.7))).mul(n1.mul(0.25).add(0.85));
+  // parede: chapas grandes cinza-azuladas, faixas horizontais, sujeira escorrida
+  const band = step(0.5, fract(UV.y.div(6.0).add(0.08))).mul(0.06);
+  const streakW = vnoise(P.mul(vec3(1.8, 0.08, 1.8)).add(seed)).mul(0.25);
+  const wallBase = mix(vec3(0.2, 0.21, 0.22), vec3(0.27, 0.275, 0.28), wp.y.mul(0.6).add(n1.mul(0.4))).add(band);
+  const wallCol = mix(wallBase, U.primary.mul(0.55), float(0.25)).mul(float(1).sub(wSeam.mul(0.4))).mul(float(1).sub(streakW));
   // laca escura (balcão do bar), madeira sintética, tecido, latão
   const grain = vnoise(vec3(UV.x.mul(0.6), UV.y.mul(28.0), seed)).mul(0.6).add(vnoise(vec3(UV.x.mul(2.0), UV.y.mul(90.0), seed)).mul(0.4));
   const wood = mix(vec3(0.09, 0.035, 0.015), vec3(0.22, 0.09, 0.035), grain);
@@ -311,15 +327,15 @@ export function makeInteriorMaterial(styleName = 'guilda', { lite = false, pool 
     .add(vec3(0.03, 0.032, 0.036).mul(zT)).add(vec3(0.012, 0.012, 0.014).mul(zL)).add(U.accent.mul(fab).mul(zFa))
     .add(vec3(0.01).mul(zSc)).add(wood.mul(zWo)).add(vec3(0.02).mul(zRu)).add(vec3(0.55, 0.38, 0.14).mul(zB))
     .add(U.accent.mul(0.9).mul(zA)).add(vec3(0.03).mul(zD)).add(vec3(0.45, 0.46, 0.48).mul(n1.mul(0.3).add(0.8)).mul(zM))
-    .add(vec3(0.05).mul(zG)).add(haz.mul(zH)).add(vec3(0.01).mul(zGl));
+    .add(vec3(0.05).mul(zG.add(zGw).add(zGp))).add(haz.mul(zH)).add(vec3(0.01).mul(zGl)).add(carpet.mul(zCa));
   m.colorNode = albedo;
   m.metalnessNode = clamp(zGr.mul(0.85).add(zT.mul(0.7)).add(zB.mul(1.0)).add(zM.mul(0.9)).add(zD.mul(0.5)).add(zF.mul(0.15)).add(zL.mul(0.1)), 0, 1);
-  m.roughnessNode = clamp(zF.mul(float(0.38).add(n1.mul(0.35)).sub(fp.y.mul(0.1))).add(zGr.mul(0.45)).add(zW.mul(0.5)).add(zP.mul(0.5))
+  m.roughnessNode = clamp(zCa.mul(0.95).add(zGw.mul(0.3)).add(zGp.mul(0.3)).add(zF.mul(float(0.26).add(fGrime.mul(0.35)).sub(fp.y.mul(0.06)))).add(zGr.mul(0.45)).add(zW.mul(0.5)).add(zP.mul(0.5))
     .add(zT.mul(0.3)).add(zL.mul(0.08)).add(zFa.mul(0.9)).add(zSc.mul(0.15)).add(zWo.mul(float(0.25).add(grain.mul(0.2)))).add(zRu.mul(0.85))
     .add(zB.mul(0.22)).add(zA.mul(0.4)).add(zD.mul(0.5)).add(zM.mul(0.25)).add(zG.mul(0.3)).add(zH.mul(0.5)).add(zGl.mul(0.05)), 0.03, 1);
   // luz assada (difusa) + telas e faixas luminosas
   const scrE = vec3(0.15, 0.6, 0.9).mul(scr).mul(1.5);
-  m.emissiveNode = albedo.mul(bake).mul(U.bakeGain).add(U.glow.mul(zG).mul(1.6)).add(scrE.mul(zSc));
+  m.emissiveNode = albedo.mul(bake).mul(U.bakeGain).add(U.glow.mul(zG).mul(1.6)).add(vec3(3.2, 1.7, 0.7).mul(zGw)).add(vec3(3.0, 0.5, 1.6).mul(zGp)).add(scrE.mul(zSc));
   if (!lite) {
     const H = fSeam.mul(-1.0).mul(zF).add(holes.mul(-1.5).mul(zGr)).add(wSeam.mul(-1.0).mul(zW.add(zP))).add(grain.mul(0.15).mul(zWo));
     m.normalNode = bumpNormal(H, float(0.012));

@@ -98,8 +98,8 @@ export function registerShots(ctx, api, S) {
     S.docking.grant(view, { silent: true });
     S.docking.s = S.docking.total * 0.5;
     // câmera de perseguição: atrás e acima da nave, olhando para a boca
-    const camL = shipL.clone().addScaledVector(bay.out, P(ctx, 'back', 30)).addScaledVector(bay.up, P(ctx, 'up', 6.5)).addScaledVector(new THREE.Vector3().crossVectors(bay.up, bay.out), P(ctx, 'side', 6));
-    const tgtL = mouth.clone().addScaledVector(bay.up, P(ctx, 'tgy', 30)).addScaledVector(bay.out, P(ctx, 'tgz', 60));
+    const camL = shipL.clone().addScaledVector(bay.out, P(ctx, 'back', 26)).addScaledVector(bay.up, P(ctx, 'up', 4)).addScaledVector(new THREE.Vector3().crossVectors(bay.up, bay.out), P(ctx, 'side', 9));
+    const tgtL = shipL.clone().lerp(mouth, P(ctx, 'tlerp', 0.25)).addScaledVector(bay.up, P(ctx, 'tgy', -12));
     stationCam(ctx, S, view, camL, tgtL);
     ctx.bus.emit('radio', { faction: 'guilda', speaker: 'CONTROLE MERIDIANA', text: 'Autorização concedida, piloto. Siga para o hangar 03 pelo corredor iluminado. Velocidade máxima no corredor: oitenta metros por segundo.', priority: 2 });
     ctx.services.rendering?.cut?.();
@@ -113,8 +113,8 @@ export function registerShots(ctx, api, S) {
     const it = api.interiorOf('kessa:st0');
     it.build();
     parkShip(ctx, view, it);
-    const cam = V(P(ctx, 'cx', -15), P(ctx, 'cy', 1.75), P(ctx, 'cz', 66));
-    const tgt = V(P(ctx, 'tx', 4), P(ctx, 'ty', 5.5), P(ctx, 'tz', 118));
+    const cam = V(P(ctx, 'cx', 13), P(ctx, 'cy', 1.7), P(ctx, 'cz', 113));
+    const tgt = V(P(ctx, 'tx', -4), P(ctx, 'ty', 6.5), P(ctx, 'tz', 66));
     deckCam(ctx, S, it, cam, tgt);
     ctx.services.rendering?.cut?.();
   });
@@ -126,8 +126,8 @@ export function registerShots(ctx, api, S) {
     view.build();
     const it = api.interiorOf('kessa:st0');
     it.build();
-    const cam = V(P(ctx, 'cx', 48.4), P(ctx, 'cy', 1.68), P(ctx, 'cz', 46.4));
-    const tgt = V(P(ctx, 'tx', 72), P(ctx, 'ty', 1.6), P(ctx, 'tz', 66));
+    const cam = V(P(ctx, 'cx', 48.6), P(ctx, 'cy', 1.62), P(ctx, 'cz', 73.8));
+    const tgt = V(P(ctx, 'tx', 68), P(ctx, 'ty', 1.25), P(ctx, 'tz', 52));
     deckCam(ctx, S, it, cam, tgt);
     ctx.services.rendering?.cut?.();
   });
@@ -138,7 +138,7 @@ export function registerShots(ctx, api, S) {
     const sys = ctx.universe.system;
     const body = sys.bodies.find((b) => b.name === (ctx.params.get('body') || 'Verídia'));
     const site = S.surface.list.find((x) => x.body === body && x.kind === 'ruins');
-    await siteCam(ctx, S, site, { elev: P(ctx, 'elev', 6), rel: P(ctx, 'rel', 35), dist: P(ctx, 'dist', 78), height: P(ctx, 'h', 4.5), lookH: P(ctx, 'lh', 16), center: V(0, 6.6, -6), side: P(ctx, 'side', 0) });
+    await siteCam(ctx, S, site, { elev: P(ctx, 'elev', 6), rel: P(ctx, 'rel', 35), dist: P(ctx, 'dist', 78), height: P(ctx, 'h', 4.5), lookH: P(ctx, 'lh', 16), center: V(0, 6.6, -6), side: P(ctx, 'side', 0), minClear: P(ctx, 'clr', 2.2) });
     ctx.services.rendering?.cut?.();
   });
 
@@ -148,7 +148,7 @@ export function registerShots(ctx, api, S) {
     const sys = ctx.universe.system;
     const body = sys.bodies.find((b) => b.name === (ctx.params.get('body') || 'Ashar'));
     const site = S.surface.list.find((x) => x.body === body && x.kind === (ctx.params.get('kind') || 'outpost'));
-    await siteCam(ctx, S, site, { elev: P(ctx, 'elev', 4), rel: P(ctx, 'rel', 30), dist: P(ctx, 'dist', 62), height: P(ctx, 'h', 9), lookH: P(ctx, 'lh', 2), center: V(0, 0, 0), side: P(ctx, 'side', 10) });
+    await siteCam(ctx, S, site, { elev: P(ctx, 'elev', 1.5), rel: P(ctx, 'rel', 28), dist: P(ctx, 'dist', 40), height: P(ctx, 'h', 3.2), lookH: P(ctx, 'lh', 3.5), center: V(-6, 0, -2), side: P(ctx, 'side', 7), minClear: P(ctx, 'clr', 3) });
     // nave estacionada no pátio
     try {
       const inst = ctx.services.ships?.create?.('freighter', 'frente', { id: 'shot-outpost-ship', seed: 21, throttle: 0, gear: 1, lite: false });
@@ -203,6 +203,15 @@ async function siteCam(ctx, S, site, o) {
   const vd = V(Math.sin(vAz), 0, Math.cos(vAz));
   const center = o.center.clone();
   const camL = center.clone().addScaledVector(vd, -o.dist).add(V(0, o.height, 0)).addScaledVector(V(vd.z, 0, -vd.x), o.side || 0);
+  // não deixa a câmera abaixo do relevo (a estrutura está num platô; o entorno varia)
+  {
+    const loc = site.local.clone().add(camL.clone().applyQuaternion(site.quatL));
+    let h = 0; try { h = ctx.services.planets?.heightAtLocal?.(b, loc) ?? 0; } catch { h = 0; }
+    const v = ctx.services.planets?.view?.(b);
+    if (v?.terrain?.hasSea) h = Math.max(h, 0);
+    const above = loc.length() - (b.radius + h);
+    if (above < o.minClear) camL.y += o.minClear - above;
+  }
   const tgtL = center.clone().add(V(0, o.lookH, 0));
   const qLook = look(tgtL.clone().sub(camL).normalize(), V(0, 1, 0));
   const apply = (c) => {
@@ -231,7 +240,7 @@ function parkShip(ctx, view, it) {
   const gh = inst.gearHeight || 1.8;
   const pos = it.toWorld(V(0, gh, 94), new THREE.Vector3());
   ctx.world.add(inst.group, pos);
-  const fwd = view.dirToWorld(V(Math.sin(P(ctx, 'syaw', 0.35)), 0, -Math.cos(P(ctx, 'syaw', 0.35))).normalize(), new THREE.Vector3());
+  const fwd = view.dirToWorld(V(Math.sin(P(ctx, 'syaw', 2.5)), 0, -Math.cos(P(ctx, 'syaw', 2.5))).normalize(), new THREE.Vector3());
   inst.group.quaternion.copy(look(fwd.negate().negate(), it.up));
   return inst;
 }
