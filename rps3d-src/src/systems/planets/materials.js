@@ -136,12 +136,16 @@ function surface(type, P, U, S, I) {
     const sandMask = clamp(s.mul(1.2).add(float(1).sub(smoothstep(0.1, 0.3, slope.add(vMicro.mul(0.1))))).mul(0.85), 0, 1)
       .mul(float(1).sub(smoothstep(0.28, 0.5, slope.add(vMicro.mul(0.15)))));
     // estratos coloridos nas paredes das mesetas e cânions
-    const band = h.mul(1 / 31).add(vMicro.mul(0.9)).add(macro.g.mul(3));
+    const band = h.mul(1 / 31).add(vMicro.mul(0.22)).add(vMeso.mul(0.5)).add(macro.g.mul(3));
     const b1 = sin(band.mul(2.1)).mul(0.5).add(0.5), b2 = sin(band.mul(5.3).add(1.3)).mul(0.5).add(0.5);
     const b3 = sin(band.mul(13.7).add(2.1)).mul(0.5).add(0.5);
-    let strataCol = mix(mix(C3(P.rock), C3(P.rock2), b1), C3(P.high), b2.mul(b2).mul(0.55));
+    let strataCol = mix(mix(C3(P.rock), C3(P.rock2), b1), C3(P.high), b2.mul(b2).mul(b2).mul(0.4));
     strataCol = strataCol.mul(b3.mul(0.25).add(0.85)).mul(mix(float(0.75), float(1.1), micro.b));
-    const varnish = smoothstep(0.5, 0.85, slope).mul(0.35);
+    // verniz do deserto: escorridos escuros verticais nos paredões (ruído
+    // constante ao longo da vertical → listras que descem a face)
+    const tanP = det.sub(up.mul(dot(det, up)));
+    const drip = N3(tanP.mul(fq(9))).r.mul(0.6).add(N3(tanP.mul(fq(31))).g.mul(0.4));
+    const varnish = smoothstep(0.45, 0.8, slope).mul(smoothstep(0.45, 0.75, drip)).mul(0.55).mul(fade(dist, 9).mul(0.6).add(0.4));
     const rockCol = strataCol.mul(float(1).sub(varnish)).mul(vFine.mul(0.7).add(vMicro.mul(0.6)).add(1));
     // salinas nas bacias
     const salt = smoothstep(-80, -200, h).mul(smoothstep(0.08, 0.02, slope));
@@ -150,7 +154,7 @@ function surface(type, P, U, S, I) {
     albedo = g;
     rough = mix(float(0.8), float(0.95), sandMask);
     // rocha: degraus finos dos estratos (erosão diferencial) em vez de caroços
-    const ledge = fract(band.mul(3.0)).mul(fade(dist, 4.0));
+    const ledge = fract(band.mul(3.0)).mul(fade(dist, 4.0)).mul(0.6);
     bump = mix(vFine.mul(0.5).add(vMicro.mul(1.6)).add(ledge.mul(0.8)), ripple.mul(0.14).add(vMicro.mul(0.05)), sandMask);
     bumpScale = float(1);
   } else if (type === 'ice') {
@@ -161,7 +165,7 @@ function surface(type, P, U, S, I) {
     const crev = smoothstep(0.45, 0.8, q).mul(s);
     // rocha exposta: limite nítido e irregular (a neve gruda nas partes menos
     // íngremes e nas fendas), com estratos e ressaltos claros/escuros
-    const rockMask = smoothstep(0.47, 0.53, slope.add(vMicro.mul(0.22)).add(vMeso.mul(0.18)).add(vFine.mul(0.06)));
+    const rockMask = smoothstep(0.36, 0.42, slope.add(vMicro.mul(0.22)).add(vMeso.mul(0.18)).add(vFine.mul(0.06)));
     const iceStrata = N3(vec3(h.mul(1 / 140).add(macro.g.mul(0.7)), up.x.mul(2.0), up.z.mul(2.0))).g;
     const rockCol = mix(C3(P.rock), C3(P.rock2), iceStrata.mul(0.8).add(micro.r.mul(0.4)).sub(0.1)).mul(vFine.mul(0.5).add(vMicro.mul(0.4)).add(1));
     // neve presa nas saliências da rocha (manchas finas)

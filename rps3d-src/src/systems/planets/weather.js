@@ -22,7 +22,7 @@ export const KINDS = {
   lush: { kind: 'rain', ov: 0.85, drift: 0, fog: 1 / 900, color: [0.55, 0.6, 0.66], fall: 11, wind: 6, len: 0.9, width: 0.012, alpha: 0.32, p: [0.75, 0.8, 0.88], clouds: 0.45 },
   ocean: { kind: 'rain', ov: 0.85, drift: 0, fog: 1 / 800, color: [0.55, 0.62, 0.7], fall: 12, wind: 10, len: 1.0, width: 0.012, alpha: 0.32, p: [0.75, 0.82, 0.9], clouds: 0.45 },
   desert: { kind: 'sandstorm', ov: 0.7, drift: 70, fog: 1 / 300, color: [0.86, 0.55, 0.3], fall: 0.6, wind: 26, len: 0.35, width: 0.02, alpha: 0.45, p: [1.0, 0.72, 0.45], clouds: 0.1 },
-  ice: { kind: 'blizzard', ov: 0.8, drift: 45, fog: 1 / 200, color: [0.74, 0.86, 1.05], fall: 2.2, wind: 18, len: 0.12, width: 0.022, alpha: 0.85, p: [1, 1, 1], clouds: 0.5 },
+  ice: { kind: 'blizzard', ov: 0.8, drift: 45, fog: 1 / 200, color: [0.74, 0.86, 1.05], fall: 2.2, wind: 18, len: 0.2, width: 0.034, alpha: 0.9, p: [1, 1, 1], clouds: 1.35 },
   volcanic: { kind: 'ash', ov: 0.6, drift: 0, fog: 1 / 420, color: [0.32, 0.29, 0.28], fall: 1.1, wind: 4, len: 0.05, width: 0.025, alpha: 0.6, p: [0.22, 0.2, 0.19], clouds: 0.3 },
   toxic: { kind: 'acid', ov: 0.55, drift: 90, fog: 1 / 260, color: [0.55, 0.68, 0.25], fall: 6, wind: 5, len: 0.5, width: 0.014, alpha: 0.3, p: [0.75, 0.95, 0.35], clouds: 0.35 },
   dead: { kind: 'electric', ov: 0.3, drift: 0, fog: 1 / 3000, color: [0.3, 0.32, 0.38], fall: 0, wind: 9, len: 0.2, width: 0.02, alpha: 0.25, p: [0.6, 0.7, 0.8], clouds: 0 },

@@ -120,7 +120,7 @@ export function makeCloudMaterials(body, U, S, opts) {
     const pm0 = ro.add(rd.mul(tStart.add(seg.mul(0.3))));
     const pm = normalize(pm0).mul(min(length(pm0), U.R.add(900.0)));
     const sunC = S.sunCol.mul(body.atmosphere ? sunTrans(U, pm, S.sunL) : vec3(1)).mul(C.tint).mul(0.8).toVar();
-    const ambC = S.amb.mul(2.4).add(S.skyZ.mul(0.25)).mul(C.tint).toVar();
+    const ambC = S.amb.mul(1.7).add(S.skyZ.mul(0.2)).mul(C.tint).toVar();
     const sigma = C.density;
     const k = float(curve);
     If(seg.greaterThan(1.0), () => {
@@ -142,7 +142,7 @@ export function makeCloudMaterials(body, U, S, opts) {
             const l2 = density(pb, wb, cloudCoverage(U, S, null, wb));
             const od = l1.mul(180.0).add(l2.mul(520.0)).mul(sigma);
             // espalhamento múltiplo aproximado: soma de lóbulos de Beer cada vez mais fracos
-            const Tl = exp(od.negate()).add(exp(od.mul(-0.25)).mul(0.4)).add(exp(od.mul(-0.06)).mul(0.16));
+            const Tl = exp(od.negate()).add(exp(od.mul(-0.25)).mul(0.3)).add(exp(od.mul(-0.06)).mul(0.1));
             const powder = float(1).sub(exp(d.mul(sigma).mul(-480.0))).mul(0.65).add(0.35);
             const hn = length(p).sub(C.base).div(C.top.sub(C.base));
             // bases úmidas (chuva) escurecem; topos recebem mais céu

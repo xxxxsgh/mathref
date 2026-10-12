@@ -212,15 +212,28 @@ export function registerShots(ctx, api, st) {
     setup(ctx, 'kessa', 66);
     const b = body(ctx, 'Nivália');
     const v = api.view(b);
-    const d = search(api, b, 14, (d, h, T) => {
-      const { tan } = sunTangent(api, b, d, ctx);
-      const m = profile(T, b, d, tan.clone().applyAxisAngle(d, 70 * D2R), [400, 900, 1600]) - h;
-      return Math.min(m, 500) - Math.abs(h - 200) * 0.1;
-    }, { tries: 240 });
-    const { tan } = sunTangent(api, b, d, ctx);
-    const look = tan.clone().applyAxisAngle(d, 70 * D2R).addScaledVector(d, 0.08).normalize();
-    const h = v.terrain.height(d.x, d.y, d.z);
-    localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + 2.2), look, d);
+    const T = v.terrain;
+    const elevAng = (d, h, dir, ks) => {
+      let ang = -1;
+      for (const k of ks) {
+        const p = d.clone().addScaledVector(dir, k / b.radius).normalize();
+        ang = Math.max(ang, (T.height(p.x, p.y, p.z) - h - k * k / (2 * b.radius)) / k);
+      }
+      return ang;
+    };
+    // serra a 1,2–3,5 km subindo ~10° no quadro, primeiro plano aberto
+    const rate = (d, h, dir) => {
+      const far = elevAng(d, h, dir, [1200, 1800, 2500, 3500]);
+      const near = elevAng(d, h, dir, [60, 150, 300, 600]);
+      return -Math.abs(far - 0.17) * 3000 - Math.max(0, near - 0.05) * 4000;
+    };
+    const dirsOf = (d) => { const { tan } = sunTangent(api, b, d, ctx); return [40, 70, 100, -40, -70, -100].map((a) => tan.clone().applyAxisAngle(d, a * D2R)); };
+    const d = search(api, b, 14, (d, h) => Math.max(...dirsOf(d).map((dir) => rate(d, h, dir))), { tries: 400 });
+    const h = T.height(d.x, d.y, d.z);
+    let look = null, bl = -Infinity;
+    for (const dir of dirsOf(d)) { const r = rate(d, h, dir); if (r > bl) { bl = r; look = dir; } }
+    look = look.clone().applyAxisAngle(d, P(ctx, 'yaw', 0) * D2R).addScaledVector(d, P(ctx, 'pitch', 0.1)).normalize();
+    localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + 1.8), look, d);
     api.weather.force('blizzard', P(ctx, 'storm', 0.72));
     api.settle();
   });
@@ -235,13 +248,13 @@ export function registerShots(ctx, api, st) {
     const axisW = b.dirToWorld(axisL, ctx.time.world, new THREE.Vector3());
     const perp = new THREE.Vector3().crossVectors(sunW, axisW).normalize();
     // de lado em relação ao sol, um pouco acima do plano dos anéis
-    const ph = P(ctx, 'phase', 100) * D2R;
+    const ph = P(ctx, 'phase', 62) * D2R;
     const D = sunW.clone().multiplyScalar(Math.cos(ph)).addScaledVector(perp, Math.sin(ph)).normalize();
     D.addScaledVector(axisW, 0.2).normalize();
-    const cam = b.pos.clone().addScaledVector(D, b.radius * P(ctx, 'dist', 3.6));
+    const cam = b.pos.clone().addScaledVector(D, b.radius * P(ctx, 'dist', 3.3));
     const toC = b.pos.clone().sub(cam).normalize();
     const right = new THREE.Vector3().crossVectors(toC, axisW).normalize();
-    const look = toC.clone().applyAxisAngle(axisW, P(ctx, 'yaw', -16) * D2R).applyAxisAngle(right, P(ctx, 'pitch', 4) * D2R);
+    const look = toC.clone().applyAxisAngle(axisW, P(ctx, 'yaw', -16) * D2R).applyAxisAngle(right, P(ctx, 'pitch', -7) * D2R);
     worldCam(ctx, st, cam, look, axisW.clone().applyAxisAngle(toC, 0.35));
     api.settle();
   });
@@ -257,7 +270,7 @@ export function registerShots(ctx, api, st) {
     // ponto dentro de um banco de nuvens com uma abertura à frente (vê-se o chão)
     let best = null, bs = -Infinity, bestLook = null;
     for (let i = 0; i < 500; i++) {
-      const el = P(ctx, 'elev', 24) + (i % 5) * 3;
+      const el = P(ctx, 'elev', 12) + (i % 5) * 3;
       const d = api.dirForSun(b, el, i * 0.73 * 57.3);
       const c0 = cov(d);
       if (c0 < 0.45) continue;
@@ -271,9 +284,9 @@ export function registerShots(ctx, api, st) {
       }
     }
     const d = best || api.dirForSun(b, 24, 140);
-    const look = (bestLook || sunTangent(api, b, d, ctx).tan).clone().addScaledVector(d, P(ctx, 'pitch', -0.16)).normalize();
+    const look = (bestLook || sunTangent(api, b, d, ctx).tan).clone().addScaledVector(d, P(ctx, 'pitch', -0.2)).normalize();
     const L = v.cloud.layer;
-    const r = L.base + (L.top - L.base) * P(ctx, 'hn', 0.92);
+    const r = L.base + (L.top - L.base) * P(ctx, 'hn', 1.0);
     localCam(ctx, st, b, d.clone().multiplyScalar(r), look, d);
     ctx.services.rendering?.setExposure?.(P(ctx, 'exp', 0.85), { speed: 200 });
     v.cloudBoost = P(ctx, 'boost', 0.0);

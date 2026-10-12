@@ -107,7 +107,7 @@ export function makeGasGiant(body, P, U, S) {
   const term = smoothstep(0.25, 0.0, NdL).mul(smoothstep(-0.15, 0.05, NdL));
   mat.colorNode = lit.add(col.mul(S.sunCol).mul(term.mul(0.03)).mul(vec3(1.0, 0.5, 0.25))).add(col.mul(S.amb).mul(0.05).mul(smoothstep(-0.15, 0.3, NdL)))
     // lado noturno: luz refletida pelos anéis e pelas luas (nunca preto absoluto)
-    .add(col.mul(S.sunCol).mul(float(1).sub(smoothstep(-0.2, 0.1, NdL))).mul(body.rings ? 0.006 : 0.002));
+    .add(col.mul(S.sunCol).mul(float(1).sub(smoothstep(-0.2, 0.1, NdL))).mul(body.rings ? 0.0022 : 0.0008));
   const sphere = new THREE.Mesh(new THREE.SphereGeometry(R, 192, 96), mat);
   sphere.frustumCulled = false;
 
