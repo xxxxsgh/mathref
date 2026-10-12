@@ -18,7 +18,7 @@ const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q = new THREE.Quater
 
 /** Cor de plasma: t 0 (frio, cauda) → 1 (proa quente). HDR linear. */
 const plasmaColor = (t) => {
-  const red = vec3(1.0, 0.16, 0.03), orange = vec3(1.0, 0.42, 0.09), hot = vec3(1.0, 0.78, 0.55), white = vec3(0.95, 0.88, 1.0);
+  const red = vec3(1.0, 0.2, 0.025), orange = vec3(1.0, 0.48, 0.08), hot = vec3(1.0, 0.72, 0.36), white = vec3(1.0, 0.93, 0.82);
   return mix(mix(red, orange, smoothstep(0.0, 0.45, t)), mix(hot, white, smoothstep(0.82, 1.0, t)), smoothstep(0.45, 0.85, t));
 };
 
@@ -49,8 +49,8 @@ function makeSheathMaterial(U) {
     const tailFade = pow(float(1.0).sub(smoothstep(-0.2, 1.0, zf)), 1.6);
     // de fora: borda luminosa da onda de choque + estrias finas; o miolo fica
     // quase transparente (a nave aparece dentro); de dentro: só a proa à frente
-    const cap = pow(bow, 5.0).mul(pow(ndv, 2.0)).mul(0.55);
-    const outside = rim.mul(bow.mul(2.2).add(0.25)).add(cap).add(streak.mul(rim.mul(0.8).add(0.12)).mul(tailFade));
+    const cap = pow(bow, 2.6).mul(ndv.mul(0.5).add(0.5)).mul(0.9).add(pow(bow, 6.0).mul(1.4));
+    const outside = rim.mul(pow(bow.add(0.04), 1.6).mul(2.6)).add(cap).add(streak.mul(pow(rim, 0.7).mul(1.3).add(0.06)).mul(pow(tailFade, 1.3)).mul(1.1));
     const inside = pow(bow, 3.0).mul(ndv.mul(0.6).add(0.4)).mul(0.6).add(streak.mul(0.08).mul(bow));
     const shape = select(frontFacing, outside, inside);
     const flick = sin(time.mul(41.0).add(ang.mul(5.0))).mul(0.06).add(0.94);
@@ -72,12 +72,12 @@ function makeSkinMaterial(U) {
   m.colorNode = Fn(() => {
     const n = normalize(normalWorld);
     const facing = max(dot(n, U.flowDir.negate()), 0.0);  // face contra o vento
-    const lead = pow(facing, 2.2);
+    const lead = pow(facing, 3.0);
     const n1 = mx_noise_float(positionGeometry.mul(0.9).add(vec3(0.0, 0.0, time.mul(3.0)))).mul(0.5).add(0.5);
     const I = U.intensity;
     const t = clamp(lead.mul(I).mul(1.2).add(n1.mul(0.2)), 0.0, 1.0);
     const col = plasmaColor(t.mul(0.8));
-    return col.mul(lead.mul(n1.mul(0.6).add(0.7)).add(pow(facing, 0.6).mul(0.12))).mul(I.mul(I).mul(U.skinGain));
+    return col.mul(lead.mul(n1.mul(0.6).add(0.7)).add(pow(facing, 1.2).mul(0.05))).mul(I.mul(I).mul(U.skinGain));
   })();
   return m;
 }
@@ -86,7 +86,7 @@ export class FlightFx {
   constructor(ctx) {
     this.ctx = ctx;
     this.U = {
-      intensity: uniform(0), tail: uniform(3), gain: uniform(3.2), skinGain: uniform(3.2),
+      intensity: uniform(0), tail: uniform(3), gain: uniform(3.0), skinGain: uniform(1.8),
       flowDir: uniform(new THREE.Vector3(0, 0, -1)),
     };
     const q = ctx.quality?.name;
@@ -140,7 +140,7 @@ export class FlightFx {
       _m.lookAt(new THREE.Vector3(), flow, up);
       this.sheath.quaternion.setFromRotationMatrix(_m);
       const R = s.radius;
-      this.sheath.scale.set(R * 0.72, R * 0.42, R * 0.78);
+      this.sheath.scale.set(R * 0.6, R * 0.3, R * 0.66);
       U.tail.value = 2.2 + I * 5.5;
       this.sheathPos.copy(s.pos).addScaledVector(flow, R * 0.18);
       // brasas e faíscas da reentrada
@@ -148,7 +148,7 @@ export class FlightFx {
       this.emitT -= dt;
       if (rp && this.emitT <= 0 && s.exterior) {
         this.emitT = 1 / 30;
-        const n = Math.round(2 + I * 6);
+        const n = Math.round(1 + I * 4);
         const tailPos = _v2.copy(s.pos).addScaledVector(flow, -R * 0.5);
         const vx = s.velW.x, vy = s.velW.y, vz = s.velW.z;
         try {
@@ -156,7 +156,7 @@ export class FlightFx {
             const j = 0.55 + Math.random() * 0.3;
             o.x = (Math.random() - 0.5) * R * 0.8; o.y = (Math.random() - 0.5) * R * 0.4; o.z = (Math.random() - 0.5) * R * 0.8;
             o.vx = vx * j + (Math.random() - 0.5) * 30; o.vy = vy * j + (Math.random() - 0.5) * 30; o.vz = vz * j + (Math.random() - 0.5) * 30;
-            o.life = 0.25 + Math.random() * 0.4; o.s0 = 0.5 + I; o.s1 = 0.15; o.drag = 2.2; o.g = 0; o.a = 0.9; o.b = 8 + I * 10; o.spin = 0.02;
+            o.life = 0.2 + Math.random() * 0.35; o.s0 = 0.3 + I * 0.5; o.s1 = 0.1; o.drag = 2.2; o.g = 0; o.a = 0.9; o.b = 3 + I * 4; o.spin = 0.012;
           });
           rp.emit('glow', tailPos, Math.round(1 + I * 2), (k, o) => {
             const j = 0.75 + Math.random() * 0.15;

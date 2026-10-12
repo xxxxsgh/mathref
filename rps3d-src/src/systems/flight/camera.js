@@ -72,7 +72,9 @@ export class FlightCamera {
       if (g && g.height < 1.6) camPos.addScaledVector(g.up, 1.6 - g.height);
     }
     // olha para um ponto um pouco à frente da nave
-    const aim = _v.set(0, L * 0.12, -L * 0.9).applyQuaternion(shipQ).add(shipPos);
+    // olha um pouco à frente da nave; orbitando, o alvo volta para a própria nave
+    const ahead = Math.max(0, Math.cos(this.orbit.yaw)) * Math.max(0, Math.cos(this.orbit.pitch * 1.5));
+    const aim = _v.set(0, L * 0.12 * ahead, -L * 0.9 * ahead).applyQuaternion(shipQ).add(shipPos);
     const up = _v2.set(0, 1, 0).applyQuaternion(this.chaseQ);
     const m = new THREE.Matrix4().lookAt(camPos, aim, up);
     cam.quaternion.setFromRotationMatrix(m);

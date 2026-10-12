@@ -741,6 +741,14 @@ function frame(dt, ctx) {
     sunColor: ctx.services.rendering?.sun?.color || null,
   });
   if (m.reentry > 0.02) ctx.bus.emit('reentry', { intensity: m.reentry });
+  // trepidação da reentrada / turbulência no ar denso em alta velocidade
+  S.shakeT = (S.shakeT || 0) - dt;
+  const buffet = Math.max(m.reentry * 0.8, m.env.inAtmo ? Math.min(0.3, m.dynPressure / 2e5) * 0.5 : 0, m.stall * 0.3);
+  if (inShip && buffet > 0.05 && S.shakeT <= 0 && !S.shotHold) {
+    S.shakeT = 0.22;
+    ctx.bus.emit('shake', { amount: buffet * 0.22, duration: 0.3 });
+    ctx.input.rumble?.(buffet * 0.5, buffet * 0.3, 200);
+  }
 }
 
 export default {

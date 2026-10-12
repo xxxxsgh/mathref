@@ -53,13 +53,13 @@ export function registerShots(ctx, api, S) {
     const b = bodyByName(ctx, ctx.params.get('body') || 'Verídia');
     const pl = ctx.services.planets;
     const t = ctx.time.world;
-    const elev = P(ctx, 'elev', 18), az = P(ctx, 'az', 0);
+    const elev = P(ctx, 'elev', 42), az = P(ctx, 'az', 70);
     const up = pl?.dirForSun ? pl.dirForSun(b, elev, az, t) : sunLocal(ctx, b);
     const sunL = sunLocal(ctx, b, t);
     const sunT = sunL.clone().addScaledVector(up, -sunL.dot(up)).normalize();
     // rumo: sol à frente-esquerda (contraluz quente na borda da nave, planeta com relevo marcado)
     const side = new THREE.Vector3().crossVectors(up, sunT).normalize();
-    const hdg = P(ctx, 'hdg', 128) * D2R;
+    const hdg = P(ctx, 'hdg', 145) * D2R;
     const fwd = sunT.clone().multiplyScalar(Math.cos(hdg)).addScaledVector(side, Math.sin(hdg)).normalize();
     const pitch = P(ctx, 'pitch', -34) * D2R;
     const f2 = fwd.clone().multiplyScalar(Math.cos(pitch)).addScaledVector(up, Math.sin(pitch)).normalize();
@@ -100,7 +100,7 @@ export function registerShots(ctx, api, S) {
     // nariz um pouco acima do vetor (ângulo de ataque da reentrada)
     const aoa = P(ctx, 'aoa', 9) * D2R;
     const nose = fwdH.clone().multiplyScalar(Math.cos(dive + aoa)).addScaledVector(up, Math.sin(dive + aoa)).normalize();
-    const alt = P(ctx, 'alt', 9500);
+    const alt = P(ctx, 'alt', 7000);
     const pos = up.clone().multiplyScalar(b.radius + alt);
     const q = look(nose, up).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), -P(ctx, 'roll', -14) * D2R));
     const spd = P(ctx, 'spd', 1450);
@@ -126,8 +126,8 @@ export function registerShots(ctx, api, S) {
     const pl = ctx.services.planets;
     const t = ctx.time.world;
     const v = pl?.view?.(b);
-    const elev = P(ctx, 'elev', 9), sunOff = P(ctx, 'sun', 48) * D2R;
-    const oy = P(ctx, 'oy', 148), op = P(ctx, 'op', 11);
+    const elev = P(ctx, 'elev', 12), sunOff = P(ctx, 'sun', 155) * D2R;
+    const oy = P(ctx, 'oy', 152), op = P(ctx, 'op', 10);
     let best = null, bs = -Infinity;
     // procura: lugar plano e seco cujo fundo (na direção do olhar) tenha relevo alto
     if (pl?.dirForSun && v?.terrain) {
@@ -172,9 +172,12 @@ export function registerShots(ctx, api, S) {
     const set = () => { S.controls.head.yaw = oy * D2R; S.controls.head.pitch = op * D2R; S.cam.orbit.yaw = oy * D2R; S.cam.orbit.pitch = op * D2R; };
     set();
     const m = S.model;
-    S.shotHold = () => { m.prevPos.copy(m.pos); m.prevQuat.copy(m.quat); set(); };
+    // (o motion blur de câmera do rendering assume mundo parado; no chão de um
+    // planeta que gira ele borra o terreno — na captura corta o histórico)
+    S.shotHold = () => { m.prevPos.copy(m.pos); m.prevQuat.copy(m.quat); set(); if (ctx.params.get('mb') !== '1') ctx.services.rendering?.cut?.(); };
     ctx.camera.fov = P(ctx, 'fov', 56); ctx.camera.updateProjectionMatrix(); S.cam.fov = ctx.camera.fov; S.cam.chaseFov = ctx.camera.fov;
     S.ctx.services.rendering?.sun?.setShadowRange?.(80);
+    try { pl?.weather?.force?.(ctx.params.get('wx') || 'clear', P(ctx, 'wi', 0)); } catch { /* sem clima */ }
     S.frameNow?.();
     pl?.settle?.();
   });
