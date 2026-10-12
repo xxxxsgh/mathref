@@ -262,7 +262,7 @@ export const CSS = `
 
 /* modo toque: rádio no alto, notificações abaixo dos atalhos */
 #hud.touchmode .radio{bottom:auto;top:calc(92px + var(--safe-t))}
-#hud.touchmode .notes{top:calc(78px + var(--safe-t))}
+#hud.touchmode .notes{top:calc(200px + var(--safe-t));width:min(300px,30vw)}
 #hud.touchmode .prompt{top:calc(50% + 90px)}
 
 /* tela de dano / vinheta */
