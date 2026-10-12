@@ -209,7 +209,7 @@ function smokeMaterial(U) {
     const smokeCol = C.xyz.mul(U.sun.mul(lit.mul(0.55)).add(U.ambient.mul(2.0)));
     // fogo: perto da boca (idade baixa) e onde há calor
     const heat = E.y.mul(pow(float(1).sub(smoothstep(0.0, 0.16, age)), 2.0)).mul(smoothstep(0.25, 0.8, n).mul(0.8).add(0.2));
-    const fire = blackbody(heat.min(1)).mul(heat.mul(heat).mul(9.0));
+    const fire = blackbody(heat.min(1)).mul(heat.mul(heat).mul(5.0));
     const a = clamp(dens.mul(0.85), 0, 1);
     return vec4(smokeCol.mul(a).add(fire.mul(a.mul(0.7).add(0.3).mul(edge))), a);
   })();
@@ -225,7 +225,7 @@ function glowMaterial() {
     const across = exp(q.x.mul(q.x).mul(-3.5));
     const core = pow(across, 6.0);
     const fade = pow(float(1).sub(q.y), 2.2).mul(smoothstep(0.0, 0.02, q.y).mul(0.6).add(0.4));
-    const col = mix(C.xyz, vec3(1, 0.95, 0.9), core.mul(0.35)).mul(C.w).mul(across.add(core)).mul(fade).mul(E.x);
+    const col = mix(C.xyz, vec3(1, 0.95, 0.9), core.mul(0.15)).mul(C.w).mul(across.add(core)).mul(fade).mul(E.x);
     return vec4(col, float(1));
   })();
   return mat;

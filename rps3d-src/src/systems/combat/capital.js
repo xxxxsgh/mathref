@@ -106,6 +106,25 @@ export class CapitalCtl {
       const fuse = t.def.flak ? dist : 0;
       sim.projectiles.fire(s, t.def, mw, fdir, { inherit: s.vel, muzzleLocal: muzzleL, spreadMul: t.def.kind === 'flak' ? 1 : 1.6, fuse, color: t.def.kind === 'heavy' ? s.boltColor : undefined });
     }
+    // torpedos contra naves grandes hostis (fragatas, cargueiros, capitais)
+    this.torpCd = (this.torpCd ?? 8 + sim.rand() * 10) - dt;
+    if (this.torpCd <= 0 && (s.missiles.torpedo ?? 0) > 0) {
+      this.torpCd = 18 + sim.rand() * 14;
+      let best = null, bd = Infinity;
+      for (const o of sim.combatants()) {
+        if (!o.alive || o.state === 'dead' || !sim.relations.shipsHostile(s, o)) continue;
+        const big = o.capital || o.classId === 'frigate' || o.classId === 'freighter';
+        if (!big) continue;
+        const d = o.pos.distanceTo(s.pos);
+        if (d < 8000 && d > 900 && d < bd) { bd = d; best = o; }
+      }
+      if (best) {
+        s.missiles.torpedo--;
+        const dir = best.pos.clone().sub(s.pos).normalize();
+        const pos = s.toWorld(_a.set(0, s.box.max.y * 0.5, s.box.min.z * 0.6), new THREE.Vector3());
+        sim.missiles.launch(s, best, 'torpedo', { pos, dir });
+      }
+    }
     // hangares
     const L = this.launch;
     if (L.enabled && this.hangars.length && L.launched < L.max) {

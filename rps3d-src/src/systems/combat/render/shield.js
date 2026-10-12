@@ -11,14 +11,15 @@ let _geo = null;
 
 export class ShieldBubble {
   /** parent: grupo da nave; box: caixa local da nave (Box3). color: [r,g,b] HDR. */
-  constructor(parent, box, color = [0.35, 0.65, 1.0]) {
+  constructor(parent, box, color = [0.35, 0.65, 1.0], big = false) {
+    this.flashK = big ? 0.22 : 1;
     if (!_geo) _geo = new THREE.SphereGeometry(1, 40, 24);
     const size = box.getSize(new THREE.Vector3());
     const c = box.getCenter(new THREE.Vector3());
     this.scale = size.multiplyScalar(0.62).addScalar(1.2);
     this.U = {
       hits: uniformArray(Array.from({ length: MAXI }, () => new THREE.Vector4(0, 0, 1, -100)), 'vec4'),
-      now: uniform(0), flash: uniform(0), level: uniform(1), color: uniform(new THREE.Color(...color)), broken: uniform(0),
+      now: uniform(0), flash: uniform(0), level: uniform(1), bodyK: uniform(big ? 0.04 : 1), color: uniform(new THREE.Color(...color)), broken: uniform(0),
     };
     this.mat = makeMaterial(this.U);
     this.mesh = new THREE.Mesh(_geo, this.mat);
@@ -39,7 +40,7 @@ export class ShieldBubble {
     v.set(d.x, d.y, d.z, this.t);
     this.idx++;
     this.lastHit = this.t;
-    this.U.flash.value = Math.min(1.0, this.U.flash.value + 0.18 + strength * 0.25);
+    this.U.flash.value = Math.min(1.0, this.U.flash.value + (0.18 + strength * 0.25) * this.flashK);
     this.mesh.visible = true;
   }
   shatter() { this.U.broken.value = 1; this.U.flash.value = 2.2; this.lastHit = this.t; this.mesh.visible = true; }
@@ -85,7 +86,7 @@ function makeMaterial(U) {
     });
     const low = float(1).sub(U.level);
     const tint = mix(U.color, vec3(1.0, 0.35, 0.18), smoothstep(0.55, 0.95, low));
-    const body = fres.mul(U.flash.mul(0.55)).add(lines.mul(fres.mul(0.6).add(0.2)).mul(U.flash.mul(0.25)));
+    const body = fres.mul(U.flash.mul(0.55)).add(lines.mul(fres.mul(0.6).add(0.2)).mul(U.flash.mul(0.25))).mul(U.bodyK);
     const impact = hitSum.mul(lines.mul(0.7).add(0.45)).add(ringSum.mul(lines.mul(1.2).add(0.25)));
     const shards = U.broken.mul(lines).mul(smoothstep(0.55, 0.95, sparkle)).mul(3.0);
     const total = body.add(impact).add(shards);

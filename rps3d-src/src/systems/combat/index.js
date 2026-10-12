@@ -102,7 +102,7 @@ const api = {
   },
   get playerTarget() { return S.sim.playerTarget; },
   set playerTarget(t) { S.sim.playerTarget = t || null; },
-  lead(target, speed) { return S.sim.lead(target || S.sim.playerTarget, speed ?? 1750); },
+  lead(target, speed) { return S.sim.lead(target || S.sim.playerTarget, speed ?? S.pw.weaponSpeed); },
   startBattle, endBattle,
   get battle() { return S.battle; },
   defect() { const b = S.battle; if (b?.defect) { b.defect(); return true; } return false; },
@@ -121,7 +121,7 @@ const api = {
     const d = S.pw.cockpitData(S.ctx);
     if (!d) return null;
     const inc = sim.missiles.incoming(sim.player);
-    return { ...d, lead: sim.playerTarget ? sim.lead(sim.playerTarget) : null, incoming: inc ? { dist: inc.dist, kind: inc.missile.def.id } : null, board: S.pw.boardCandidate ? { id: S.pw.boardCandidate.eventId, label: S.pw.boardCandidate.label } : null, firing: S.pw.firing };
+    return { ...d, lead: sim.playerTarget ? sim.lead(sim.playerTarget, S.pw.weaponSpeed) : null, incoming: inc ? { dist: inc.dist, kind: inc.missile.def.id } : null, board: S.pw.boardCandidate ? { id: S.pw.boardCandidate.eventId, label: S.pw.boardCandidate.label } : null, firing: S.pw.firing };
   },
   ownsPlayerDamage: false,
   get sim() { return S.sim; },

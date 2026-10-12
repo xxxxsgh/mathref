@@ -106,7 +106,7 @@ export class Combatant {
     }
     this.trail = null;
     if (!this.stats.capital && sim.fx) {
-      this.trail = sim.fx.engineTrails.alloc({ life: this.classId === 'fighter' || this.classId === 'interceptor' ? 0.55 : 1.0, width: Math.max(0.25, this.nozzleR * 0.45), minDist: 5, color: this.engineColor, intensity: 1.6, alpha: 0.85, seed: Math.random() });
+      this.trail = sim.fx.engineTrails.alloc({ life: this.classId === 'fighter' || this.classId === 'interceptor' ? 0.4 : 0.9, width: Math.max(0.25, this.nozzleR * 0.45), minDist: 5, color: this.engineColor, intensity: 1.6, alpha: 0.85, seed: Math.random() });
     }
     this.shieldFx = null;
     this.t = 0; this.flicker = 0; this.sparkT = 0;
@@ -184,8 +184,10 @@ export class Combatant {
     const inst = this.inst;
     if (inst) {
       const ok = this.state === 'ok';
-      inst.setThrottle?.(ok ? 0.15 + this.throttle * 0.85 : this.state === 'dying' ? 0.2 + Math.random() * 0.3 : 0);
-      inst.setBoost?.(ok && this.boost ? 1 : 0);
+      // fxThrottle/fxBoost: cenas podem forçar o visual do motor independente da física
+      const th = this.fxThrottle ?? this.throttle, bo = this.fxBoost ?? this.boost;
+      inst.setThrottle?.(ok ? 0.15 + th * 0.85 : this.state === 'dying' ? 0.2 + Math.random() * 0.3 : 0);
+      inst.setBoost?.(ok && bo ? 1 : 0);
       if (this.state === 'disabled') {
         this.flicker -= dt;
         if (this.flicker <= 0) { this.flicker = 0.05 + Math.random() * (Math.random() < 0.2 ? 1.5 : 0.25); inst.setLights?.(Math.random() < 0.35); }
@@ -193,8 +195,9 @@ export class Combatant {
     }
     if (this.shieldFx) this.shieldFx.frame(dt, this.shieldFrac);
     if (this.trail) {
-      if (this.state === 'ok' && this.throttle > 0.05) this.trail.push(this.toWorldRender(this.nozzle, _v), this.sim.renderNow);
-      this.trail.intensity = 0.4 + this.throttle * 0.9 + (this.boost ? 0.8 : 0);
+      const th = this.fxThrottle ?? this.throttle;
+      if (this.state === 'ok' && th > 0.05) this.trail.push(this.toWorldRender(this.nozzle, _v), this.sim.renderNow);
+      this.trail.intensity = 0.4 + th * 0.9 + ((this.fxBoost ?? this.boost) ? 0.8 : 0);
     }
   }
 
@@ -203,7 +206,7 @@ export class Combatant {
   ensureShield() {
     if (this.shieldFx || this.shieldMax <= 0 || !this.sim.fx) return this.shieldFx;
     const col = this.faction === 'vigilantes' ? [0.5, 0.9, 1.0] : this.faction === 'corsarios' ? [0.9, 0.35, 1.0] : this.faction === 'frente' ? [1.0, 0.55, 0.3] : this.faction === 'guilda' ? [0.35, 1.0, 0.8] : [0.45, 0.7, 1.0];
-    try { this.shieldFx = new ShieldBubble(this.group, this.box, col); } catch (e) { this.sim.err('shield', e); this.shieldMax = this.shieldMax; }
+    try { this.shieldFx = new ShieldBubble(this.group, this.box, col, !!this.stats.capital || this.classId === 'frigate'); } catch (e) { this.sim.err('shield', e); this.shieldMax = this.shieldMax; }
     return this.shieldFx;
   }
 

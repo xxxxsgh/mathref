@@ -26,6 +26,9 @@ export class PlayerWeapons {
     this.firing = false;
   }
 
+  /** Velocidade do projétil do grupo de armas atual (para a antecipação). */
+  get weaponSpeed() { return (WEAPONS[this.loadout[0]] || WEAPONS.laser).speed; }
+
   get guns() {
     const inst = this.sim.player.inst;
     const hp = (inst?.hardpoints || []).filter((h) => h.type === 'gun');
@@ -194,8 +197,7 @@ export class PlayerWeapons {
     let target = null;
     if (T && T.alive) {
       const d = _a.copy(T.pos).sub(p.pos); const dist = d.length();
-      const def = WEAPONS[this.loadout[0]] || WEAPONS.laser;
-      const L = sim.lead(T, def.speed);
+      const L = sim.lead(T, this.weaponSpeed);
       target = {
         name: T.callsign ? `${T.label} · ${T.callsign}` : T.label, faction: FACTION_LABEL[T.faction] || T.faction,
         rel: sim.relations.shipsHostile(p, T) ? 'hostile' : sim.relations.isAllied('player', T.faction) ? 'friendly' : 'neutral',

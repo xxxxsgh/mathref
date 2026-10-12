@@ -156,7 +156,7 @@ function makeMaterial() {
     const head = sstep(1.0, 0.86, q.y);
     const along = tail.mul(head).mul(q.y.mul(0.3).add(0.75));
     const white = vec3(1.0, 0.97, 0.92);
-    const boltCol = mix(tint, white.mul(max(max(tint.x, tint.y), tint.z)), core.mul(0.8)).mul(across.mul(0.4).add(core.mul(2.2))).mul(along);
+    const boltCol = mix(tint, white.mul(max(max(tint.x, tint.y), tint.z)), core.mul(0.8)).mul(across.mul(0.55).add(core.mul(1.5))).mul(along);
     // ── clarão / anel ──────────────────────────────────────────────────
     const r2 = q.x.mul(q.x).add(q.y.mul(q.y));
     const halo = exp(r2.mul(-4.2)).sub(0.015).max(0);

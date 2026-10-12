@@ -44,7 +44,7 @@ export class Sim {
     try {
       this.fx = {
         bolts: new BoltBatch(ctx, BOLT_BUDGET[q] || 600),
-        smoke: new RibbonBatch(ctx, { trails: q === 'mobile' ? 24 : 48, points: q === 'mobile' ? 28 : 40, mode: 'smoke' }),
+        smoke: new RibbonBatch(ctx, { trails: q === 'mobile' ? 24 : 56, points: q === 'mobile' ? 28 : 44, mode: 'smoke' }),
         puffs: new RibbonBatch(ctx, { trails: q === 'mobile' ? 16 : 40, points: 3, mode: 'smoke' }),
         engineTrails: new RibbonBatch(ctx, { trails: this.budget + 8, points: q === 'mobile' ? 14 : 22, mode: 'glow' }),
       };
@@ -377,6 +377,8 @@ export class Sim {
     }
     B.end();
     if (this.debug && !this.quiet && ctx.time.frame % 2 === 0) {
+      _b.setFromMatrixColumn(ctx.camera.matrixWorld, 2).negate();
+      ctx.errors.push(`DBG t=${this.now.toFixed(2)} naves ` + this.ships.filter((x) => x.renderPos.distanceTo(origin) < 700).map((x) => `${x.classId}@${x.group.position.toArray().map((v) => v.toFixed(0))}·f${(x.group.position.clone().normalize().dot(_b)).toFixed(2)}·${x.group.parent?.type}·${x.group.visible}·q${x.group.quaternion.toArray().map((v) => v.toFixed(2))}·s${x.group.scale.x}`).join(' | '));
       const near = this.projectiles.active.filter((b) => b.pos.distanceTo(origin) < 400);
       const b0 = near[0] || this.projectiles.active[0];
       ctx.errors.push(`DBG perto=${near.length} dono=${b0?.owner?.callsign} dir=${b0?.dir.toArray().map((v) => v.toFixed(2))} cor=${b0?.color} pos=${b0 ? b0.pos.clone().sub(origin).toArray().map((v) => v.toFixed(1)).join(',') : '-'} q0=${Array.from(B.pos.slice(0, 12)).map((v) => v.toFixed(1)).join(',')} c0=${Array.from(B.col.slice(0, 4)).map((v) => v.toFixed(1)).join(',')}`);

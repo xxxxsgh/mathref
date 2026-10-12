@@ -127,6 +127,15 @@ function volley(sim, s, T, spread = 0.7, rate = 1) {
   }
 }
 
+/** Cenas paradas: naves lentas (sem borrão da câmera que as acompanha) com o motor visual a pleno. */
+function slow(ctx, s, dir, k = 1) {
+  const spd = P(ctx, 'spd', 60) * k;
+  s.vel.copy(dir).multiplyScalar(spd);
+  s.ctl.throttle = spd / s.stats.speed; s.throttle = s.ctl.throttle;
+  s.fxThrottle = 1;
+  return s;
+}
+
 function body(ctx, name) { return ctx.universe.system.bodies.find((b) => b.name === name) || ctx.universe.system.bodies[0]; }
 
 function finish(ctx, S) {
@@ -171,21 +180,20 @@ export function registerShots(ctx, api, S) {
     const b = S.battle;
     // dupla principal
     const hero = sim.spawn('hegemonia', 'fighter', fr.pos.clone(), { quat: lookQuat(B.F, B.U), vel: B.F.clone().multiplyScalar(235), ai: false, battle: b, side: 'hegemonia', toughness: 20, callsign: 'ÁGUIA-1', shadows: true, force: true });
-    const pp = fr.pos.clone().addScaledVector(B.F, P(ctx, 'gap', 300)).addScaledVector(B.R, 9).addScaledVector(B.U, 5);
+    const pp = fr.pos.clone().addScaledVector(B.F, P(ctx, 'gap', 170)).addScaledVector(B.R, 9).addScaledVector(B.U, 5);
     const preyF = B.F.clone().addScaledVector(B.R, 0.16).addScaledVector(B.U, 0.05).normalize();
     const prey = sim.spawn('frente', 'fighter', pp, { quat: lookQuat(preyF, B.U.clone().applyAxisAngle(preyF, -0.55)), vel: B.F.clone().multiplyScalar(232), ai: false, battle: b, side: 'frente', toughness: 30, callsign: 'FAÍSCA-2', shadows: true, force: true });
     b?.ships.push(hero, prey);
-    prey.ctl.throttle = 0.95; prey.ctl.roll = -0.25; prey.ctl.yaw = 0.06;
-    hero.ctl.throttle = 0.95;
+    slow(ctx, hero, B.F); slow(ctx, prey, B.F, 0.99);
+    prey.ctl.roll = -0.12; prey.ctl.yaw = 0.03;
     // rajadas contínuas nos últimos 0,9 s (raios no ar + impactos no escudo)
     const w = P(ctx, 'warm', 2.2);
     const fireFrom = Math.round((w - 0.9) / STEP);
     warm(S, w, (i) => { if (i >= fireFrom) volley(sim, hero, prey, 0.5, 1.6); });
     // durante a captura continua atirando
-    S.shotHook = () => volley(sim, hero, prey, 0.5, 1.6);
+    S.shotHook = () => volley(sim, hero, prey, 0.5, 3);
     const off = B.R.clone().multiplyScalar(P(ctx, 'cx', 5)).addScaledVector(B.U, P(ctx, 'cy', 5.5)).addScaledVector(B.F, -P(ctx, 'cz', 30));
-    const hA = ahead(hero), pA = ahead(prey);
-    S.rig = staticRig(ctx, hA.clone().add(off), hA.clone().lerp(pA, P(ctx, 'look', 0.22)), B.U);
+    S.rig = followRig(ctx, hero, off, (out) => out.copy(hero.renderPos).lerp(prey.renderPos, P(ctx, 'look', 0.22)), B.U);
     finish(ctx, S);
   });
 
@@ -209,7 +217,7 @@ export function registerShots(ctx, api, S) {
       const a = (i / 9) * Math.PI * 2;
       const p = fr.pos.clone().addScaledVector(F, Math.cos(a) * L * 0.65).addScaledVector(R, Math.sin(a) * L * 0.5 + L * 0.15).addScaledVector(U, L * (0.18 + 0.12 * Math.sin(a * 2)));
       const d = des.pos.clone().sub(p).normalize();
-      const s = sim.spawn('frente', i % 3 === 2 ? 'interceptor' : 'fighter', p, { quat: lookQuat(d, U), battle: b, side: 'frente', ai: { mode: 'strafe', focus: des, target: des }, toughness: 8, tags: ['nofuga'], force: true });
+      const s = sim.spawn('frente', i % 3 === 2 ? 'interceptor' : 'fighter', p, { quat: lookQuat(d, U), battle: b, side: 'frente', ai: { mode: 'strafe', focus: des, target: des }, toughness: 8, tags: ['nofuga'], force: true, invulnerable: true });
       if (s) { b.ships.push(s); mil.push(s); }
     }
     for (let i = 0; i < 4; i++) {
@@ -227,21 +235,39 @@ export function registerShots(ctx, api, S) {
       for (let i = 0; i < 3; i++) des.capital.addBreach(des.capital.randomHullPoint(), 0.9);
     }
     warm(S, 1.0);
-    // a milícia que sobreviveu faz uma passada rasante sobre o convés, no quadro
-    const runs = mil.filter((x) => x.alive && x.state === 'ok').slice(0, P(ctx, 'nrun', 5));
-    runs.forEach((x, i) => {
-      const p = des.pos.clone().addScaledVector(U, L * (0.12 + 0.05 * i)).addScaledVector(R, L * (0.05 + 0.09 * i)).addScaledVector(F, L * (0.35 - 0.16 * i));
-      const d = F.clone().negate().addScaledVector(R, (i % 2 ? 0.25 : -0.15)).addScaledVector(U, -0.06).normalize();
+    const camPos = des.pos.clone().addScaledVector(R, P(ctx, 'cr', 0.42) * L).addScaledVector(U, P(ctx, 'cu', 0.4) * L).addScaledVector(F, P(ctx, 'cf', 0.3) * L);
+    const lookAt = des.pos.clone().addScaledVector(F, -L * P(ctx, 'lf', 0.08)).addScaledVector(R, -L * P(ctx, 'lr', 0.1)).addScaledVector(U, -L * P(ctx, 'lu', 0.05));
+    // a milícia mergulha sobre o convés vindo do céu (fundo de céu/planeta, não
+    // o casco), e interceptadores dourados atrás dela; tudo em velocidade de
+    // cena (câmera parada, sem fantasma do TAA)
+    const view = lookAt.clone().sub(camPos).normalize();
+    const cb = basis(view, U);
+    const crawl = P(ctx, 'crawl', 8);
+    const runs = mil.filter((x) => x.alive && x.state === 'ok').slice(0, 3);
+    const hegs = b.ships.filter((x) => x.alive && x.faction === 'hegemonia' && x.classId === 'interceptor').slice(0, 2);
+    const place = (x, [d, sx, sy], dir, roll) => {
+      const p = camPos.clone().addScaledVector(view, d).addScaledVector(cb.R, sx * d).addScaledVector(cb.U, sy * d);
       x.pos.copy(p); x.prevPos.copy(p); x.renderPos.copy(p);
-      x.quat.copy(lookQuat(d, U)); x.prevQuat.copy(x.quat);
-      x.vel.copy(d).multiplyScalar(210);
-      x.ai.setMode('strafe');
-      x.trail?.stop(sim.renderNow);
-      if (sim.fx) x.trail = sim.fx.engineTrails.alloc({ life: 0.55, width: Math.max(0.25, x.nozzleR * 0.45), minDist: 5, color: x.engineColor, intensity: 1.6, alpha: 0.85, seed: i });
-    });
-    warm(S, 0.25, (i) => { if (i % 3 === 0) for (const x of runs) if (x.alive) volley(sim, x, des, 1.2); });
-    const camPos = des.pos.clone().addScaledVector(R, P(ctx, 'cr', 0.55) * L).addScaledVector(U, P(ctx, 'cu', 0.62) * L).addScaledVector(F, P(ctx, 'cf', 0.3) * L);
-    const lookAt = des.pos.clone().addScaledVector(F, -L * P(ctx, 'lf', 0.05)).addScaledVector(R, -L * P(ctx, 'lr', 0.12)).addScaledVector(U, -L * P(ctx, 'lu', 0.05));
+      const dd = typeof dir === 'function' ? dir(p) : dir;
+      x.quat.copy(lookQuat(dd, U.clone().applyAxisAngle(dd, roll))); x.prevQuat.copy(x.quat);
+      x.vel.copy(dd).multiplyScalar(crawl);
+      x.ctl.pitch = 0; x.ctl.yaw = 0; x.ctl.roll = 0; x.angRate.set(0, 0, 0);
+      x.ctl.throttle = crawl / x.stats.speed; x.fxThrottle = 1;
+      x.ai = null;
+      x.trail?.stop(sim.renderNow); x.trail = null;
+      return x;
+    };
+    const toDeck = (k) => (p) => des.pos.clone().addScaledVector(F, L * (0.1 - 0.2 * k)).sub(p).normalize().addScaledVector(cb.R, 0.25).normalize();
+    const mSlots = [[105, -0.4, 0.2], [165, -0.12, 0.3], [235, 0.2, 0.34]];
+    runs.forEach((x, i) => place(x, mSlots[i], toDeck(i), i % 2 ? 0.6 : -0.5));
+    const hSlots = [[150, -0.62, 0.1], [300, 0.42, 0.3]];
+    hegs.forEach((x, i) => { const t = runs[i] || runs[0]; if (t) place(x, hSlots[i], (p) => t.pos.clone().sub(p).normalize(), i ? -0.4 : 0.5); });
+    const shoot = () => {
+      for (const x of runs) if (x.alive) { const t = des.capital?.turrets.find((q) => q.alive); volley(sim, x, t ? { pos: des.capital.turretWorld(t, V()), vel: des.vel, hitR: 10 } : des, 1.2, 1.4); }
+      hegs.forEach((x, i) => { const t = runs[i] || runs[0]; if (x.alive && t) volley(sim, x, t, 0.8, 1.4); });
+    };
+    warm(S, 0.35, (i) => { if (i % 2 === 0) shoot(); });
+    S.shotHook = shoot;
     S.rig = () => setCam(ctx, camPos, lookAt, U);
     // uma torre do lado da câmera explode durante a captura
     if (des.capital) {
@@ -254,44 +280,59 @@ export function registerShots(ctx, api, S) {
 
   // ── míssil e flares em Kessa ──────────────────────────────────────────────
   ctx.shots.register('combat-missile', async (ctx) => {
-    prepare(ctx, S, 'kessa', P(ctx, 'fov', 52));
+    prepare(ctx, S, 'kessa', P(ctx, 'fov', 50));
     const sim = S.sim;
     const ver = body(ctx, 'Verídia');
-    const fr = orbitFrame(ctx, ver, { alt: P(ctx, 'alt', 0.38), phase: P(ctx, 'phase', 58), hdg: P(ctx, 'hdg', 105) });
-    const dive = pitched(fr, P(ctx, 'pitch', fr.hb - P(ctx, 'e', -6)));
-    const B = basis(dive, fr.U);
-    const preyF = B.F.clone().addScaledVector(B.R, -0.12).normalize();
-    const prey = sim.spawn('corsarios', 'fighter', fr.pos.clone(), { quat: lookQuat(preyF, B.U.clone().applyAxisAngle(preyF, 0.6)), vel: preyF.clone().multiplyScalar(240), ai: false, tags: ['nofuga'], toughness: 40, callsign: 'NAVALHA-3', shadows: true, force: true });
-    prey.ctl.throttle = 1; prey.ctl.boost = true; prey.ctl.roll = 0.3; prey.ctl.pitch = 0.08;
-    const shooter = sim.spawn('frente', 'fighter', fr.pos.clone().addScaledVector(B.F, -950).addScaledVector(B.R, 40).addScaledVector(B.U, 25), { quat: lookQuat(B.F, B.U), vel: B.F.clone().multiplyScalar(230), ai: false, toughness: 40, force: true });
-    // corsários de escolta ao fundo
+    const fr = orbitFrame(ctx, ver, { alt: P(ctx, 'alt', 0.45), phase: P(ctx, 'phase', 50), hdg: P(ctx, 'hdg', 120) });
+    // olhar levemente para baixo: Verídia ocupa o terço de baixo
+    const look = pitched(fr, P(ctx, 'pitch', fr.hb - P(ctx, 'e', 12)));
+    const B = basis(look, fr.U);
+    // corsário cruzando da esquerda para a direita, à frente do míssil
+    const preyF = B.F.clone().multiplyScalar(0.55).addScaledVector(B.R, 0.83).normalize();
+    const P0 = fr.pos.clone();
+    const prey = sim.spawn('corsarios', 'fighter', P0.clone(), { quat: lookQuat(preyF, B.U.clone().applyAxisAngle(preyF, 0.5)), vel: preyF.clone().multiplyScalar(220), ai: false, tags: ['nofuga'], toughness: 40, callsign: 'NAVALHA-3', shadows: true, force: true });
+    prey.ctl.throttle = 0.95; prey.fxBoost = true; prey.ctl.roll = 0.12;
+    const shooter = sim.spawn('frente', 'fighter', P0.clone().addScaledVector(B.F, -1500).addScaledVector(B.R, -500), { quat: lookQuat(B.F, B.U), vel: B.F.clone().multiplyScalar(200), ai: false, toughness: 40, force: true });
+    // escolta corsária ao fundo
     for (let i = 0; i < 2; i++) {
-      const s = sim.spawn('corsarios', 'interceptor', fr.pos.clone().addScaledVector(B.F, 700 + i * 300).addScaledVector(B.R, -380 + i * 650).addScaledVector(B.U, 120 - i * 220), { quat: lookQuat(B.F.clone().addScaledVector(B.R, 0.4 - i * 0.8).normalize(), B.U), ai: false, force: true });
-      if (s) s.ctl.throttle = 0.9;
+      const sp = sim.spawn('corsarios', 'interceptor', P0.clone().addScaledVector(B.F, 600 + i * 380).addScaledVector(B.R, 250 - i * 520).addScaledVector(B.U, 90 - i * 160), { quat: lookQuat(preyF.clone().addScaledVector(B.U, 0.1 * i).normalize(), B.U), vel: preyF.clone().multiplyScalar(200), ai: false, force: true });
+      if (sp) sp.ctl.throttle = 0.85;
     }
-    warm(S, 0.3);
-    const m = sim.missiles.launch(shooter, prey, 'ir');
+    // míssil vindo de trás à esquerda (perseguição proporcional → rastro curvo)
+    const mPos = P0.clone().addScaledVector(B.F, -P(ctx, 'mback', 900)).addScaledVector(B.R, -P(ctx, 'mleft', 650)).addScaledVector(B.U, -40);
+    const m = sim.missiles.launch(shooter, prey, 'ir', { pos: mPos, dir: B.F.clone().addScaledVector(B.R, 0.4).normalize() });
     m.def = { ...m.def, life: 60 };
-    // voa até ficar a ~gap m do alvo; flares quando o alvo percebe (~650 m)
+    m.vel.copy(m.dir).multiplyScalar(420);
     let flared = false;
-    const gap = P(ctx, 'gap', 210);
-    for (let k = 0; k < 400 && m.alive; k++) {
+    const gap = P(ctx, 'gap', 170);
+    for (let k = 0; k < 600 && m.alive; k++) {
       const d = m.pos.distanceTo(prey.pos);
-      if (!flared && d < 700) {
+      if (!flared && d < 750) {
         flared = true; sim.missiles.deploy(prey, 'flare', 6);
         for (const dc of sim.missiles.decoys) m.checked.add(dc); // na captura o míssil não morde o flare
       }
       if (d < gap) break;
       warm(S, STEP * 2);
     }
-    // a captura mostra o míssil a caminho (sem detonar)
-    if (m.alive) { m.decoyed = true; m.target = null; }
-    // câmera à frente do alvo olhando para trás: o corsário soltando flares
-    // em primeiro plano e o míssil chegando com o rastro de fumaça
-    const off = V().addScaledVector(B.R, P(ctx, 'cx', 26)).addScaledVector(B.U, P(ctx, 'cy', 7)).addScaledVector(B.F, P(ctx, 'cz', 8));
-    const tgt = m.alive ? m : shooter;
-    const pA = ahead(prey), tA = ahead(tgt);
-    S.rig = staticRig(ctx, pA.clone().add(off), pA.clone().lerp(tA, P(ctx, 'look', 0.35)), B.U);
+    // congela a cena: tudo bem lento a partir daqui (câmera parada e robusta ao
+    // instante exato da captura); o rastro já desenhado fica
+    const crawl = P(ctx, 'crawl', 10);
+    if (m.alive) {
+      m.target = null; m.decoyed = true;
+      m.def = { ...m.def, speed: crawl * 1.6, accel: 0, life: 60 };
+      m.vel.setLength(crawl * 1.6);
+    }
+    for (const x of sim.ships) { x.vel.setLength(Math.min(x.vel.length(), crawl)); x.ctl.throttle = crawl / x.stats.speed; x.fxThrottle = 1; }
+    for (const dc of sim.missiles.decoys) dc.vel.setLength(Math.min(dc.vel.length(), crawl * 0.5));
+    const ref = m.alive ? m : prey;
+    if (sim.debug) ctx.errors.push(`DBG míssil vivo=${m.alive} d=${m.pos.distanceTo(prey.pos).toFixed(0)} t=${sim.now.toFixed(2)} vel=${m.vel.length().toFixed(0)} smoke=${!!m.smoke} pts=${m.smoke?.count}`);
+    // à frente do corsário olhando para trás: ele em primeiro plano soltando
+    // flares, o míssil chegando com o rastro de fumaça curvo, Verídia ao fundo
+    const along = prey.pos.clone().sub(ref.pos).normalize();
+    const side = new THREE.Vector3().crossVectors(along, fr.U).normalize();
+    const camPos = prey.pos.clone().addScaledVector(side, P(ctx, 'side', 10)).addScaledVector(fr.U, P(ctx, 'up', 4)).addScaledVector(along, P(ctx, 'ahead', 17));
+    const lookAt = prey.pos.clone().lerp(ref.pos, P(ctx, 'look', 0.3));
+    S.rig = staticRig(ctx, camPos, lookAt, B.U);
     finish(ctx, S);
   });
 
@@ -329,8 +370,10 @@ export function registerShots(ctx, api, S) {
     // câmera fixa no ponto previsto da explosão (a vítima continua andando até lá)
     const boom = P(ctx, 'boom', 0.0);
     const at = victim.pos.clone().addScaledVector(victim.vel, boom + 1 / 60);
-    const camPos = at.clone().addScaledVector(R, P(ctx, 'cr', 75)).addScaledVector(U, P(ctx, 'cu', 22)).addScaledVector(F, P(ctx, 'cf', 45));
-    const lookAt = at.clone().addScaledVector(R, -P(ctx, 'lr', 25)).addScaledVector(U, -P(ctx, 'lu', 22)).addScaledVector(F, -P(ctx, 'lf', 28));
+    // a bola de fogo deriva com metade da velocidade da nave (captura ~0,8 s depois)
+    at.addScaledVector(victim.vel, 0.5 * P(ctx, 'tcap', 0.8));
+    const camPos = at.clone().addScaledVector(R, P(ctx, 'cr', 56)).addScaledVector(U, P(ctx, 'cu', 16)).addScaledVector(F, P(ctx, 'cf', 34));
+    const lookAt = at.clone().addScaledVector(R, -P(ctx, 'lr', 12)).addScaledVector(U, -P(ctx, 'lu', 20)).addScaledVector(F, -P(ctx, 'lf', 24));
     S.rig = () => setCam(ctx, camPos, lookAt, U);
     S.timers.push({ t: boom, fn: () => { victim.dieT = 0; } });
     finish(ctx, S);

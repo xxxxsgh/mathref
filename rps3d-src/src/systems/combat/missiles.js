@@ -21,7 +21,7 @@ class Missile {
     const sim = sys.sim;
     this.mesh = makeMissileMesh(def.id === 'torpedo' ? 2.4 : 1);
     this.entry = sim.ctx.world.add(this.mesh, this.renderPos);
-    this.smoke = sim.fx?.smoke.alloc({ life: def.id === 'torpedo' ? 6 : 4.2, width: def.id === 'torpedo' ? 1.6 : 0.75, grow: 7, minDist: 5, color: [0.62, 0.6, 0.58], alpha: 0.95, heat: 1, seed: sim.rand() });
+    this.smoke = sim.fx?.smoke.alloc({ life: def.id === 'torpedo' ? 6 : 3.6, width: def.id === 'torpedo' ? 2.2 : 1.3, grow: 12, minDist: def.id === 'torpedo' ? 10 : 14, color: [0.62, 0.6, 0.58], alpha: 0.95, heat: 0.5, seed: sim.rand() });
     this.motorT = 0;
   }
 
@@ -105,7 +105,7 @@ class Missile {
     this.renderPos.lerpVectors(this.prev, this.pos, alpha);
     this.mesh.quaternion.copy(this.quat);
     // fumaça sai do bocal
-    if (this.smoke) this.smoke.push(_a.set(0, 0, 1.45 * this.mesh.scale.x).applyQuaternion(this.quat).add(this.renderPos), this.sys.sim.renderNow, 1);
+    if (this.smoke) this.smoke.push(_a.set(0, 0, 1.45 * this.mesh.scale.x).applyQuaternion(this.quat).add(this.renderPos), this.sys.sim.renderNow, 0.45);
   }
 
   dispose() {
@@ -121,7 +121,7 @@ class Decoy {
     this.pos = pos.clone(); this.vel = vel.clone();
     this.t = 0; this.life = kind === 'flare' ? 4.5 : 6; this.alive = true;
     this.hitR = 6; this.seed = sys.sim.rand();
-    if (kind === 'flare') this.smoke = sys.sim.fx?.smoke.alloc({ life: 2.6, width: 0.6, grow: 6, minDist: 3, color: [0.85, 0.84, 0.82], alpha: 0.75, heat: 0.7, seed: this.seed });
+    if (kind === 'flare') this.smoke = sys.sim.fx?.smoke.alloc({ life: 2.2, width: 1.0, grow: 9, minDist: 3, color: [0.85, 0.84, 0.82], alpha: 0.7, heat: 0.35, seed: this.seed });
     else {
       // lâminas de chaff: pontos espalhados que crescem e cintilam
       const r = () => sys.sim.rand() * 2 - 1;
