@@ -8,5 +8,5 @@ export default {
   camera: { lat: 15.16442, lon: -131.81776, alt: 1.7, heading: 315, pitch: 8, fov: 72 },
   timeOfDay: 0.4,
   weather: 'clear',
-  params: { biome: 'exotic', atmoBiome: 'lush', terrainSeed: 5150, radius: 110000, cloudCoverage: 0.25 },
+  params: { biome: 'exotic', atmoBiome: 'lush', terrainSeed: 5150, radius: 110000, cloudCoverage: 0.12, clouds: false },
 };
