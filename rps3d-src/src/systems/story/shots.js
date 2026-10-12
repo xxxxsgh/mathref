@@ -88,7 +88,7 @@ export function registerShots(ctx, S) {
     // Lança-8 à frente, cruzando a mira; Davi rompendo a formação
     const l8 = cast.actors.lanca8, l6 = cast.actors.davi;
     if (l8) {
-      const p8 = pose.pos.clone().addScaledVector(F, P('l8f', 110)).addScaledVector(R, P('l8r', 22)).addScaledVector(U, P('l8u', -6));
+      const p8 = pose.pos.clone().addScaledVector(F, P('l8f', 80)).addScaledVector(R, P('l8r', 16)).addScaledVector(U, P('l8u', -6));
       const d8 = F.clone().addScaledVector(R, 0.7).normalize();
       l8.motion = (dt, t, a) => { a.pos.addScaledVector(d8, 150 * dt); a.vel.copy(d8).multiplyScalar(150); };
       l8.pos.copy(p8); l8.quat.copy(lookQuat(d8, U.clone().applyAxisAngle(d8, 0.9)));
@@ -105,8 +105,10 @@ export function registerShots(ctx, S) {
     S.stage.after(0.05, () => S.playerShoot(() => l8, l8), 0.1);
     const r = ctx.services.rendering;
     if (r && l8) {
-      r.particles.sparks(l8.pos.clone().add(V(0, 1, 0)), null, 40, { energy: true, speed: 50 });
-      r.explosion?.(l8.pos.clone().addScaledVector(F, 40).addScaledVector(R, 30), P('es', 16), 'ship');
+      // impactos no escudo do Lança-8 (não uma explosão: ele sobrevive à primeira rajada)
+      for (let i = 0; i < 3; i++) r.particles.sparks(l8.pos.clone().add(V((i - 1) * 2.5, 0.8, i * 1.5)), null, 30, { energy: i !== 1, speed: 45 });
+      // o dogfight continua lá atrás: um caça da Águia explodindo sobre Aurora
+      r.explosion?.(fr.at(P('ef', 1300), P('er', -380), P('eu', -160)), P('es', 34), 'ship', { normal: fr.U.clone().addScaledVector(fr.F, 0.35).normalize() });
     }
     S.ui.letterbox(1, true);
     S.say('davi', LINES.betrayal[0][1], { hold: true });
@@ -124,7 +126,7 @@ export function registerShots(ctx, S) {
   // ── chegada em Kessa ───────────────────────────────────────────────────
   ctx.shots.register('story-jump-arrival', async () => {
     useSystem('kessa');
-    const a = arrivalPose(ctx);
+    const a = arrivalPose(ctx, ctx.universe.system, { phi: P('phi', 75), sep: P('sep', 50), dist: P('dist', 3.1) });
     const look = a.look.clone().applyAxisAngle(V(0, 1, 0), P('hy', 0) * D2R);
     const q = lookQuat(look, V(0, 1, 0)).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), P('roll', -8) * D2R));
     S.spawnPlayer(a.pos, q, { vel: look.clone().multiplyScalar(P('spd', 25)), throttle: 0.4, enter: false, faction: 'hegemonia' });
@@ -133,7 +135,7 @@ export function registerShots(ctx, S) {
     S.ui.letterbox(1, true);
     S.ui.location('KESSA', 'FENDA DE ÓRION · ESPAÇO LIVRE', 1e6);
     S.say('iara', DIALOGS.contato.lines[0].text, { hold: true });
-    const sh = arrivalShot(S, 1e9, { side: P('side', -11), up: P('up', 3.5), fwd: P('fwd', 20), push: 0, fov: P('fov', 50), lookUp: P('lu', 0.5), ahead: P('ahead', 30), roll: P('croll', 0.04) });
+    const sh = arrivalShot(S, 1e9, { side: P('side', 3), up: P('up', -5), fwd: P('fwd', 30), push: 0, fov: P('fov', 50), lookUp: P('lu', 0.5), ahead: P('ahead', 30), neb: P('neb', 0.45), roll: P('croll', 0.04) });
     sh.hold = true;
     S.dir.play(sh);
     try { ctx.services.space?.jumpFx?.('stop', {}); } catch { /* */ }

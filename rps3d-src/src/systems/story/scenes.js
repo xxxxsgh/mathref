@@ -150,16 +150,37 @@ export async function betrayalBeat(S, choice) {
 }
 
 // ─── CHEGADA EM KESSA ───────────────────────────────────────────────────────
-export function arrivalPose(ctx, sys = ctx.universe.system) {
+/**
+ * Direção (mundo) do coração da nebulosa da Fenda vista de Kessa. Espelha a
+ * composição do céu do `deepspace` (nebulosa ~34° da estrela, vista de
+ * Verídia); se o serviço expuser a direção, ela vence.
+ */
+export function nebulaDir(ctx, sys = ctx.universe.system) {
+  try { const d = ctx.services.space?.nebulaDir; if (d && d.isVector3) return d.clone(); } catch { /* */ }
+  const ver = sys.bodies.find((b) => b.name === 'Verídia');
+  const toStar = ver ? sys.star.pos.clone().sub(ver.pos).normalize() : V(-0.93, 0, -0.36);
+  return toStar.applyAxisAngle(V(0, 1, 0), -0.45).add(V(0, 0.42, 0)).normalize();
+}
+
+/**
+ * Ponto de chegada do salto em Kessa: Verídia em crescente largo abaixo da
+ * nebulosa da Fenda, o sol de lado — o primeiro quadro do "espaço livre".
+ *   o.sep  separação nebulosa→planeta (graus)   o.phi  direção da separação
+ *   o.dist distância em raios de Verídia
+ */
+export function arrivalPose(ctx, sys = ctx.universe.system, o = {}) {
   const ver = sys.bodies.find((b) => b.name === 'Verídia');
   const toS = sys.star.pos.clone().sub(ver.pos).normalize();
-  // chegada a ~2,6 raios do centro, lado diurno em crescente largo
   const up = V(0, 1, 0);
+  const n = nebulaDir(ctx, sys);
+  const a1 = new THREE.Vector3().crossVectors(n, up).normalize();
+  const a2 = new THREE.Vector3().crossVectors(a1, n).normalize();
+  const phi = (o.phi ?? 75) * Math.PI / 180, sep = (o.sep ?? 50) * Math.PI / 180;
+  const off = a2.clone().multiplyScalar(-Math.cos(phi)).addScaledVector(a1, Math.sin(phi));
+  const look = n.clone().multiplyScalar(Math.cos(sep)).addScaledVector(off, Math.sin(sep)).normalize();
+  const pos = ver.pos.clone().addScaledVector(look, -ver.radius * (o.dist ?? 3.1));
   const side = new THREE.Vector3().crossVectors(toS, up).normalize();
-  const dir = toS.clone().multiplyScalar(-0.25).addScaledVector(side, 0.95).addScaledVector(up, 0.18).normalize();
-  const pos = ver.pos.clone().addScaledVector(dir, ver.radius * 2.6);
-  const look = ver.pos.clone().sub(pos).normalize().addScaledVector(side, -0.28).normalize();
-  return { pos, look, ver, toS, side, up };
+  return { pos, look, ver, toS, side, up, neb: n };
 }
 
 export async function arrival(S) {
@@ -210,12 +231,15 @@ export function spawnFrenteEscort(S, { pose = null } = {}) {
 }
 
 export function arrivalShot(S, dur = 8, o = {}) {
-  const k = { side: o.side ?? -11, up: o.up ?? 3.5, fwd: o.fwd ?? 20, push: o.push ?? -5, fov: o.fov ?? 50, lookUp: o.lookUp ?? 0.5, ahead: o.ahead ?? 30 };
+  const k = { side: o.side ?? 3, up: o.up ?? -5, fwd: o.fwd ?? 30, push: o.push ?? -5, fov: o.fov ?? 50, lookUp: o.lookUp ?? 0.5, ahead: o.ahead ?? 30, neb: o.neb ?? 0.45 };
+  const n = S.ctx.universe.systemId === 'kessa' ? nebulaDir(S.ctx) : null;
   return custom(dur, (u) => {
     const p = S.playerPose();
     const F = V(0, 0, -1).applyQuaternion(p.quat), U = V(0, 1, 0).applyQuaternion(p.quat), R = V(1, 0, 0).applyQuaternion(p.quat);
     const pos = p.pos.clone().addScaledVector(F, -k.fwd - k.push * u).addScaledVector(R, k.side).addScaledVector(U, k.up);
-    const look = p.pos.clone().addScaledVector(U, k.lookUp).addScaledVector(F, k.ahead).addScaledVector(R, -1.5 * u);
+    // o olhar sobe da nave para a nebulosa (o céu da Fenda domina o quadro)
+    const aim = n ? F.clone().multiplyScalar(1 - k.neb).addScaledVector(n, k.neb).normalize() : F;
+    const look = pos.clone().addScaledVector(aim, k.ahead + k.fwd).addScaledVector(U, k.lookUp).addScaledVector(R, -1.5 * u);
     return { pos, look, up: U, fov: k.fov - 3 * u, focus: p.pos, roll: o.roll ?? 0.04 };
   }, { handheld: 0.002, ease: ease.inOut });
 }

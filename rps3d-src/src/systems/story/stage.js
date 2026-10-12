@@ -33,9 +33,10 @@ function beamMaterial(color, intensity) {
 }
 
 export class Beam {
-  constructor(stage, { from, to, width = 18, color = '#ffd27a', intensity = 40 }) {
+  constructor(stage, { from, to, width = 18, color = '#ffd27a', intensity = 40, flare = 1 }) {
     this.stage = stage;
-    const geo = new THREE.CylinderGeometry(1, 1, 1, 16, 1, true);
+    // alarga em direção ao alvo (a perspectiva não afina a lança a 80 km)
+    const geo = new THREE.CylinderGeometry(flare, 1, 1, 16, 1, true);
     geo.translate(0, 0.5, 0);
     this.mat = beamMaterial(color, intensity);
     this.mesh = new THREE.Mesh(geo, this.mat);

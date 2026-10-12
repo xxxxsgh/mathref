@@ -47,7 +47,7 @@ const CSS = `
 #story-ui .choice{position:absolute;left:50%;bottom:calc(var(--lb) * 10.5vh + 4.2vh + 124px);transform:translate(-50%,10px);width:min(600px,86vw);z-index:5;opacity:0;transition:opacity .45s,transform .45s;pointer-events:none}
 #story-ui .choice.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 #story-ui .choice .list{display:flex;flex-direction:column}
-#story-ui .choice .q{font:600 11px/1 Inter,system-ui;letter-spacing:.42em;color:var(--cy);text-transform:uppercase;margin:0 0 12px 4px;display:flex;align-items:center;gap:12px}
+#story-ui .choice .q{font:600 11px/1 Inter,system-ui;letter-spacing:.42em;color:var(--cy);text-transform:uppercase;margin:0 0 10px 0;padding:7px 0 7px 6px;display:flex;align-items:center;gap:12px;text-shadow:0 0 6px rgba(0,8,16,.95),0 0 2px #000;background:linear-gradient(90deg,rgba(4,10,18,.62),rgba(4,10,18,.25) 60%,rgba(4,10,18,0));backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
 #story-ui .choice .q:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(143,216,255,.55),transparent)}
 #story-ui .opt{position:relative;display:flex;align-items:center;gap:16px;margin:4px 0;padding:8px 18px 8px 12px;background:linear-gradient(90deg,rgba(6,14,24,.72),rgba(6,14,24,.3) 70%,rgba(6,14,24,0));border-left:2px solid rgba(143,216,255,.35);cursor:pointer;transition:background .2s,border-color .2s,transform .2s;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 #story-ui .opt .n{flex:none;width:22px;height:22px;display:grid;place-items:center;font:600 12px/1 Inter,system-ui;color:#0b1520;background:rgba(143,216,255,.75);clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)}

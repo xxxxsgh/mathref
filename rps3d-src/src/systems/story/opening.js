@@ -133,7 +133,7 @@ export function startBombardment(story, cast, { count = 2 } = {}) {
       return hit.copy(aur.pos).addScaledVector(d, aur.radius + 200);
     };
     const muzzle = (out) => { const s = src(); return out.set((i - 0.5) * 70, -40, -260).applyQuaternion(s.quat).add(s.pos); };
-    const b = story.stage.beam({ from: muzzle, to: (out) => out.copy(target()), width: 9 + i * 3, color: i ? '#ffb45a' : '#ffd890', intensity: 60 });
+    const b = story.stage.beam({ from: muzzle, to: (out) => out.copy(target()), width: 10 + i * 4, flare: 9, color: i ? '#ffb45a' : '#ffd890', intensity: 70 });
     beams.push(b);
     // clarões de impacto na superfície
     story.stage.after(0.2 + i * 0.4, () => {
