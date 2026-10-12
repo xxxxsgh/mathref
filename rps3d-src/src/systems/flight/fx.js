@@ -42,22 +42,24 @@ function makeSheathMaterial(U) {
     // estrias de plasma correndo para trás
     const s1 = mx_noise_float(vec3(ang.mul(3.2), zf.mul(3.0).sub(time.mul(11.0)), time.mul(0.7))).mul(0.5).add(0.5);
     const s2 = mx_fractal_noise_float(vec3(ang.mul(7.0), zf.mul(6.0).sub(time.mul(17.0)), 3.1), 3, 2.0, 0.5).mul(0.5).add(0.5);
-    const streak = pow(s1.mul(0.6).add(s2.mul(0.6)), 2.2);
+    const streak = pow(s1.mul(0.55).add(s2.mul(0.55)), 3.5).mul(1.8);
     const V = normalize(positionView).negate();
     const ndv = abs(dot(normalize(normalView), V));
-    const rim = pow(float(1.0).sub(ndv), 1.7);
-    const tailFade = float(1.0).sub(smoothstep(-0.1, 1.0, zf).mul(0.92));
-    // de fora: borda luminosa + capa da proa; de dentro (cockpit): só a proa à frente
-    const outside = rim.mul(bow.mul(1.6).add(0.45)).add(pow(bow, 3.0).mul(ndv).mul(0.9));
-    const inside = pow(bow, 2.4).mul(ndv.mul(0.6).add(0.4)).mul(0.75);
+    const rim = pow(float(1.0).sub(ndv), 3.0);
+    const tailFade = pow(float(1.0).sub(smoothstep(-0.2, 1.0, zf)), 1.6);
+    // de fora: borda luminosa da onda de choque + estrias finas; o miolo fica
+    // quase transparente (a nave aparece dentro); de dentro: só a proa à frente
+    const cap = pow(bow, 5.0).mul(pow(ndv, 2.0)).mul(0.55);
+    const outside = rim.mul(bow.mul(2.2).add(0.25)).add(cap).add(streak.mul(rim.mul(0.8).add(0.12)).mul(tailFade));
+    const inside = pow(bow, 3.0).mul(ndv.mul(0.6).add(0.4)).mul(0.6).add(streak.mul(0.08).mul(bow));
     const shape = select(frontFacing, outside, inside);
     const flick = sin(time.mul(41.0).add(ang.mul(5.0))).mul(0.06).add(0.94);
     const I = U.intensity;
-    const heatT = clamp(bow.mul(0.75).add(streak.mul(0.25)).add(I.sub(0.6).mul(0.4)), 0.0, 1.0);
+    const heatT = clamp(bow.mul(0.8).add(streak.mul(0.15)).add(I.sub(0.6).mul(0.4)), 0.0, 1.0);
     const col = plasmaColor(heatT);
     // ionização forte: franja violeta na borda
-    const ion = vec3(0.55, 0.42, 1.0).mul(rim.mul(bow).mul(smoothstep(0.6, 1.0, I)).mul(0.9));
-    return col.mul(shape.mul(streak.mul(1.3).add(0.35)).mul(tailFade).mul(flick)).add(ion).mul(I.mul(I).mul(U.gain));
+    const ion = vec3(0.55, 0.42, 1.0).mul(rim.mul(bow).mul(smoothstep(0.6, 1.0, I)).mul(0.6));
+    return col.mul(shape.mul(tailFade.mul(0.7).add(0.3)).mul(flick)).add(ion).mul(I.mul(I).mul(U.gain));
   })();
   return m;
 }
@@ -84,7 +86,7 @@ export class FlightFx {
   constructor(ctx) {
     this.ctx = ctx;
     this.U = {
-      intensity: uniform(0), tail: uniform(3), gain: uniform(5.5), skinGain: uniform(2.6),
+      intensity: uniform(0), tail: uniform(3), gain: uniform(3.2), skinGain: uniform(3.2),
       flowDir: uniform(new THREE.Vector3(0, 0, -1)),
     };
     const q = ctx.quality?.name;
@@ -160,8 +162,8 @@ export class FlightFx {
             const j = 0.75 + Math.random() * 0.15;
             o.x = (Math.random() - 0.5) * R * 0.5; o.y = (Math.random() - 0.5) * R * 0.3; o.z = (Math.random() - 0.5) * R * 0.5;
             o.vx = vx * j; o.vy = vy * j; o.vz = vz * j;
-            o.life = 0.3 + Math.random() * 0.25; o.s0 = R * (0.6 + I * 0.7); o.s1 = R * (1.4 + I); o.drag = 1.5; o.g = 0;
-            o.a = 3.5 * I; o.b = 1.1 * I; o.c = 0.25 * I; o.w = 1.2;
+            o.life = 0.25 + Math.random() * 0.2; o.s0 = R * (0.3 + I * 0.3); o.s1 = R * (0.7 + I * 0.5); o.drag = 1.5; o.g = 0;
+            o.a = 1.4 * I; o.b = 0.42 * I; o.c = 0.09 * I; o.w = 1.2;
           }, { ttl: 2 });
         } catch { /* partículas indisponíveis */ }
       }

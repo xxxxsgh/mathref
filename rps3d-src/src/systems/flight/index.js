@@ -36,6 +36,7 @@ import { FlightModel } from './model.js';
 import { FlightControls } from './controls.js';
 import { FlightCamera } from './camera.js';
 import { FlightFx } from './fx.js';
+import { WingTrails } from './trails.js';
 import { Quantum, Jump, resolveTarget } from './travel.js';
 import { Autopilot } from './autopilot.js';
 import { Frame } from './frames.js';
@@ -52,7 +53,7 @@ const S = {
   target: null, autoT: 0, climbT: 0, msg: '', msgT: 0, deadT: 0, platT: 0, shotHold: null, lastSafe: null,
   ctl: { pitch: 0, yaw: 0, roll: 0, strafeX: 0, strafeY: 0, throttle: 0, boost: false, takeoff: false },
   neutral: { pitch: 0, yaw: 0, roll: 0, strafeX: 0, strafeY: 0, throttle: 0, boost: false, takeoff: false },
-  pendingRestore: null, dockStation: null, groundInfo: { height: Infinity, up: new THREE.Vector3(), point: new THREE.Vector3(), material: null },
+  pendingRestore: null, dockStation: null, interior: null, frameObj: { pos: new THREE.Vector3(), quat: new THREE.Quaternion() }, groundInfo: { height: Infinity, up: new THREE.Vector3(), point: new THREE.Vector3(), material: null },
 };
 
 function notify(text, kind = 'info') {
@@ -98,6 +99,15 @@ function spawnPlayerShip(pos, quat, classId = 'fighter', opts = {}) {
   // olho: o cockpit do caça (ships) ou o olho do blueprint
   let eye = null;
   try { if (classId === 'fighter' && ships?.cockpit?.eye) eye = ships.cockpit.eye.clone(); } catch { /* sem cockpit */ }
+  try { ships?.cockpit?.show?.(classId === 'fighter' ? 'auto' : false); } catch { /* sem cockpit */ }
+  // naves grandes: interior andável preso ao referencial da nave; olho na cadeira do piloto
+  if (S.interior) { try { S.interior.remove?.(); } catch { /* */ } S.interior = null; }
+  if (inst && classId !== 'fighter' && ships?.attachInterior) {
+    try {
+      S.interior = ships.attachInterior(inst, S.frameObj);
+      if (S.interior?.seat) eye = S.interior.seat.clone().add(new THREE.Vector3(0, 0.8, -0.1));
+    } catch (e) { ctx.errors.push('flight: interior: ' + (e.stack || e)); S.interior = null; }
+  }
   if (!eye && inst?.eye) eye = inst.eye.clone();
   S.eye.copy(eye || new THREE.Vector3(0, m.radius * 0.12, -m.length * 0.28));
   // pose
@@ -127,8 +137,10 @@ function spawnPlayerShip(pos, quat, classId = 'fighter', opts = {}) {
   ctx.player.ship = S.ship;
   S.cam.third = !!opts.third; S.cam.reset();
   S.fx.attachShip(inst);
+  S.trails.setShip(m.radius);
   // colisores do próprio interior (naves grandes) ficam fora da colisão do voo
-  m.ownShapes = [];
+  m.ownShapes = inst ? [...ctx.collision.shapes].filter((sh) => sh.tag === 'interior:' + inst.id) : [];
+  m.worldPos(t, S.frameObj.pos); m.worldQuat(t, S.frameObj.quat);
   syncState(t, 1);
   if (opts.enter !== false && ctx.game.mode !== 'ship') ctx.game.setMode('ship', { ship: S.ship });
   return S.ship;
@@ -267,8 +279,21 @@ function dockAt(station) {
 function exitSeat() {
   const ctx = S.ctx, m = S.model;
   if (!S.ship || ctx.game.mode !== 'ship') return false;
-  if (!m.landed && !m.docked) { notify('POUSE ANTES DE SAIR DA NAVE', 'warn'); return false; }
   const t = ctx.time.world;
+  if (S.interior) {
+    // levanta da cadeira e anda dentro da nave (que pode estar voando)
+    const local = (S.interior.spawn || new THREE.Vector3()).clone();
+    const wq = m.worldQuat(t, new THREE.Quaternion());
+    const pos = local.clone().applyQuaternion(wq).add(m.worldPos(t, new THREE.Vector3()));
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(wq);
+    S.cam.third = false;
+    ctx.player.pos.copy(pos); ctx.player.camWorld.copy(pos).addScaledVector(up, S.interior.eyeHeight || 1.65);
+    if (!m.landed && !m.docked && m.coupled) m.throttle = 0;
+    ctx.game.setMode('foot', { from: 'ship', interior: true, frame: S.frameObj, local, pos: pos.clone(), up, ship: S.ship, seat: S.interior.seat?.clone() });
+    ctx.bus.emit('player:exitShip', { ship: S.ship, pos: pos.clone(), up, interior: true, frame: S.frameObj });
+    return true;
+  }
+  if (!m.landed && !m.docked) { notify('POUSE ANTES DE SAIR DA NAVE', 'warn'); return false; }
   const wq = m.worldQuat(t, new THREE.Quaternion());
   const up = new THREE.Vector3(0, 1, 0).applyQuaternion(wq);
   // escada do lado esquerdo do cockpit
@@ -316,6 +341,11 @@ const api = {
   refuel(q = 1, j = 1) { S.model.qfuel = Math.min(1, S.model.qfuel + q); S.model.fuel = Math.min(1, S.model.fuel + j); S.model.boostFuel = 1; },
   targetUnderCrosshair,
   jumpRange() { return S.jump.range(); },
+  /** Sistemas ao alcance do salto: [{id, name, ly, starType, faction}] (mais perto primeiro). */
+  jumpTargets() {
+    const u = S.ctx.universe, r = S.jump.range();
+    return u.galaxy.neighbors(u.systemId, r).map((e) => ({ id: e.id, name: e.name, ly: u.galaxy.distance(u.systemId, e.id), starType: e.starType, faction: e.faction, region: e.region })).sort((a, b) => a.ly - b.ly);
+  },
   canJump(id) { return S.jump.check(id, false) || ''; },
   get state() { return S.ship; },
   get instance() { return S.inst; },
@@ -386,13 +416,15 @@ function update(dt, ctx) {
   const mode = ctx.game.mode;
   const piloting = mode === 'ship' && ctx.input.enabled !== false;
   let ctl;
-  if (S.controls.override || piloting) ctl = S.controls.read(dt, m, S.cam.third);
+  if ((S.controls.override || piloting) && S.deadT <= 0) ctl = S.controls.read(dt, m, S.cam.third);
   else { ctl = S.neutral; ctl.throttle = m.throttle; }
-  if (piloting) handleEdges(S.controls.edges());
+  if (piloting && S.deadT <= 0) handleEdges(S.controls.edges());
   // re-embarque sem o sistema de interação
-  if (mode === 'foot' && !ctx.services.interact && ctx.input.pressed('interact')) {
-    const d = ctx.player.pos.distanceTo(S.wp);
-    if (d < m.radius + 5) enterSeat();
+  if (mode === 'foot' && !S.interactHooked && ctx.input.pressed('interact')) {
+    if (S.interior?.seat) {
+      const seatW = S.interior.seat.clone().applyQuaternion(S.frameObj.quat).add(S.frameObj.pos);
+      if (ctx.player.pos.distanceTo(seatW) < 2.2) enterSeat();
+    } else if (ctx.player.pos.distanceTo(S.wp) < m.radius + 5) enterSeat();
   }
   // subida automática após decolar
   if (S.climbT > 0) {
@@ -410,6 +442,7 @@ function update(dt, ctx) {
   if (m.landed) S.gearAuto = true;
   // plataformas (formas de colisão sob o trem)
   platformCheck(dt, t);
+  m.worldPos(t, S.frameObj.pos); m.worldQuat(t, S.frameObj.quat);
   for (const ev of m.events) onModelEvent(ev, t);
   if (S.msgT > 0) S.msgT -= dt;
   // morte → renascer (sem story)
@@ -679,7 +712,7 @@ function frame(dt, ctx) {
     inst.setThrottle?.(thr);
     inst.setBoost?.(m.boosting ? 1 : m.cruise.on ? 0.6 : 0);
     inst.setGear?.(m.gear);
-    inst.group.visible = !cockpitView && m.hull > 0;
+    inst.group.visible = (!cockpitView || !!S.interior) && m.hull > 0;
   }
   // câmera
   if (inShip) {
@@ -701,6 +734,12 @@ function frame(dt, ctx) {
     pos: S.wp, quat: S.wq, velW: S.wv, reentry: m.reentry, radius: m.radius, length: m.length,
     exterior: !cockpitView, thrust: Math.max(0, -m.thrustLocal.z), boost: m.boosting, groundInfo: gi, hover: !m.landed && m.env.ground < 30,
   });
+  const E = m.env;
+  S.trails.frame(dt, {
+    pos: S.wp, quat: S.wq, velW: S.wv, density: E.density, gforce: m.gforce, speed: m.speed, exterior: !cockpitView && m.mode !== 'quantum',
+    contrail: E.inAtmo && E.density > 0.008 && E.density < 0.25 && m.speed > 260 && m.reentry < 0.1 ? 0.3 : 0,
+    sunColor: ctx.services.rendering?.sun?.color || null,
+  });
   if (m.reentry > 0.02) ctx.bus.emit('reentry', { intensity: m.reentry });
 }
 
@@ -713,6 +752,7 @@ export default {
     S.controls = new FlightControls(ctx);
     S.cam = new FlightCamera(ctx);
     S.fx = new FlightFx(ctx);
+    S.trails = new WingTrails(ctx);
     S.quantum = new Quantum(ctx, S.model);
     S.jump = new Jump(ctx, S.model);
     S.ap = new Autopilot(ctx, S.model);
@@ -736,6 +776,25 @@ export default {
     ctx.bus.on('mode:change', (e) => {
       if (e?.to === 'ship') { S.cam.reset(); S.cam.fov = ctx.camera.fov; }
     });
+    // interação (sistema foot/interact): embarcar na nave pousada
+    const hookInteract = (it) => {
+      if (!it || S.interactHooked) return;
+      const def = {
+        id: 'flight:embarcar', label: 'EMBARCAR', text: 'Embarcar na nave', radius: 4.5, kind: 'ship',
+        pos: (out = new THREE.Vector3()) => {
+          if (!S.ship) return out.set(1e12, 0, 0);
+          if (S.interior?.seat) return out.copy(S.interior.seat).applyQuaternion(S.frameObj.quat).add(S.frameObj.pos);
+          return out.set(-(S.model.radius * 0.42 + 1.2), 0, -S.model.length * 0.12).applyQuaternion(S.wq).add(S.wp);
+        },
+        enabled: () => !!S.ship && ctx.game.mode === 'foot',
+        onUse: () => enterSeat(), use: () => enterSeat(),
+      };
+      for (const k of ['register', 'add', 'addTarget']) {
+        if (typeof it[k] === 'function') { try { it[k](def); S.interactHooked = true; break; } catch { /* tenta outro */ } }
+      }
+    };
+    if (ctx.services.interact) hookInteract(ctx.services.interact);
+    ctx.bus.on('service:interact', hookInteract);
     ctx.save.register('flight', { serialize, deserialize: (d) => { S.pendingRestore = d; } });
     registerShots(ctx, api, S);
   },
@@ -743,6 +802,7 @@ export default {
   frame(dt, ctx) { frame(dt, ctx); },
   dispose() {
     S.fx?.dispose();
+    S.trails?.dispose();
     try { S.inst?.dispose(); } catch { /* */ }
     S.instEntry?.remove();
   },

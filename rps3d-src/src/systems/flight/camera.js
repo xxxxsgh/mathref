@@ -17,7 +17,7 @@ export class FlightCamera {
     this.lag = new THREE.Vector3();
     this.headExtra = new THREE.Quaternion();
     this.look = { yaw: 0, pitch: 0 };   // cabeça (cockpit) acompanhando curvas
-    this.fov = 72; this.baseFov = 72;
+    this.fov = 72; this.baseFov = 72; this.chaseFov = 64;
     this.init = false;
     this.orbit = { yaw: 0, pitch: 0 };
   }
@@ -32,7 +32,7 @@ export class FlightCamera {
     const av = model.angVel;
     // FOV: abre com boost/quântico/cruzeiro
     const qk = model.mode === 'quantum' ? 1 : model.mode === 'jump' ? 1 : model.cruise.on ? 0.5 : 0;
-    const target = (this.third ? 64 : this.baseFov) + (model.boosting ? 5 : 0) + qk * 10 + Math.min(4, model.speed / 300) * (this.third ? 1 : 0.5);
+    const target = (this.third ? this.chaseFov : this.baseFov) + (model.boosting ? 5 : 0) + qk * 10 + Math.min(4, model.speed / 300) * (this.third ? 1 : 0.5);
     this.fov += (target - this.fov) * (1 - Math.exp(-dt * 2.5));
     if (Math.abs(cam.fov - this.fov) > 0.01) { cam.fov = this.fov; cam.updateProjectionMatrix(); }
 
@@ -51,7 +51,7 @@ export class FlightCamera {
     }
     // ─── perseguição ───────────────────────────────────────────────────
     const L = Math.max(10, length);
-    const dist = L * 1.65 + 6, height = L * 0.32 + 1.2;
+    const dist = L * 1.4 + 5, height = L * 0.3 + 1.2;
     if (!this.init) { this.chaseQ.copy(shipQ); this.lag.set(0, 0, 0); this.init = true; }
     // rotação com atraso (a nave "gira dentro" do quadro)
     this.chaseQ.slerp(shipQ, 1 - Math.exp(-dt * 4.2)).normalize();

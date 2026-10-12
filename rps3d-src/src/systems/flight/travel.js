@@ -107,7 +107,8 @@ export class Quantum {
   /** Direção (mundo) até o alvo, a partir da nave. */
   dirTo(out) {
     const t = this.ctx.time.world;
-    return out.copy(this.target.pos(_v2)).sub(this.m.worldPos(t, _v)).normalize();
+    const p = this.m.worldPos(t, new THREE.Vector3());
+    return this.target.pos(out).sub(p).normalize();
   }
 
   step(dt, ctl) {
