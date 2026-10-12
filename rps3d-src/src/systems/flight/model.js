@@ -289,7 +289,7 @@ export class FlightModel {
   step(dt, ctl, t) {
     this.time += dt;
     this.prevPos.copy(this.pos); this.prevQuat.copy(this.quat);
-    this.events.length = 0;
+    // (eventos acumulam até o sistema consumi-los — o autopiloto também emite)
     this.updateFrame(t);
     this.sampleEnv(t);
     this.stepSystems(dt, ctl);

@@ -257,7 +257,7 @@ function dockAt(station) {
   ctx.bus.emit('dock:request', { station });
   const pad = padFor(station);
   const frame = Frame.anchor(pad.frame);
-  ctx.bus.emit('dock:granted', { station, pad });
+  if (pad.reserve) ctx.bus.emit('dock:granted', { station, pad }); // com `stations`, quem autoriza é ele
   S.dockStation = station;
   S.ap.engage({
     frame, pos: pad.pos.clone(), up: (pad.up || new THREE.Vector3(0, 1, 0)).clone(), fwd: pad.fwd ? pad.fwd.clone() : null,
@@ -444,6 +444,7 @@ function update(dt, ctx) {
   platformCheck(dt, t);
   m.worldPos(t, S.frameObj.pos); m.worldQuat(t, S.frameObj.quat);
   for (const ev of m.events) onModelEvent(ev, t);
+  m.events.length = 0;
   if (S.msgT > 0) S.msgT -= dt;
   // morte → renascer (sem story)
   if (S.deadT > 0) {
