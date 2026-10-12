@@ -146,7 +146,8 @@ export class Crowd {
     const set = (k, i, col) => { c.setRGB(col[0], col[1], col[2]); this.meshes[k].setColorAt(i, c); };
     this.people.forEach((p, i) => {
       set('pelvis', i, p.cBot); set('torso', i, p.cTop); set('chest', i, p.cAcc); set('neck', i, p.skin); set('head', i, p.skin);
-      set('hair', i, p.helmet ? [0.6, 0.38, 0.05] : p.hairC); set('visor', i, p.helmet ? [0.05, 0.12, 0.16] : p.skin);
+      set('hair', i, p.helmet ? [0.6, 0.38, 0.05] : p.hairC);
+      set('visor', i, p.helmet ? [0.05, 0.12, 0.16] : [0.015, 0.012, 0.01]);
       for (const s of [0, 1]) {
         set('uArm', i * 2 + s, p.cTop); set('lArm', i * 2 + s, p.role === 'mechanic' ? p.cTop : p.cAcc); set('hand', i * 2 + s, p.role === 'mechanic' ? [0.05, 0.05, 0.05] : p.skin);
         set('thigh', i * 2 + s, p.cBot); set('shin', i * 2 + s, p.cBot); set('foot', i * 2 + s, [0.03, 0.025, 0.02]);
@@ -277,7 +278,7 @@ export class Crowd {
     const head = neck.clone().multiply(T(0, 0.06, 0)).multiply(R(headPitch - lean * 0.5, headYaw, 0));
     this.meshes.head.setMatrixAt(i, head);
     this.meshes.hair.setMatrixAt(i, head);
-    this.meshes.visor.setMatrixAt(i, p.helmet ? head : head.clone().multiply(new THREE.Matrix4().makeScale(0.001, 0.001, 0.001)));
+    this.meshes.visor.setMatrixAt(i, p.helmet ? head : head.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.012, -0.012)).multiply(new THREE.Matrix4().makeScale(0.72, 0.42, 1)));
     // braços
     for (const [s, a, el, side] of [[0, armL, elbowL, -1], [1, armR, elbowR, 1]]) {
       const sh = spine.clone().multiply(T(side * 0.21, 0.47, 0)).multiply(R(-a, 0, side * (s ? armSideR : armSideL)));

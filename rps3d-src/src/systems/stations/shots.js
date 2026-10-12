@@ -59,7 +59,7 @@ export function registerShots(ctx, api, S) {
     const spine = view.dirToWorld(V(0, 1, 0), new THREE.Vector3());
     const side = new THREE.Vector3().crossVectors(d, spine).normalize();
     const up = new THREE.Vector3().crossVectors(side, d).normalize();
-    const az = P(ctx, 'az', 28) * Math.PI / 180, el = P(ctx, 'el', 14) * Math.PI / 180, dist = P(ctx, 'dist', 1900);
+    const az = P(ctx, 'az', 28) * Math.PI / 180, el = P(ctx, 'el', 32) * Math.PI / 180, dist = P(ctx, 'dist', 1900);
     const back = d.clone().negate();
     const dir = back.clone().multiplyScalar(Math.cos(az) * Math.cos(el)).addScaledVector(side, Math.sin(az) * Math.cos(el)).addScaledVector(up, Math.sin(el)).normalize();
     const center = view.toWorld(V(0, P(ctx, 'ty', 40), 0), new THREE.Vector3());
@@ -121,13 +121,13 @@ export function registerShots(ctx, api, S) {
 
   // ── 4. bar ─────────────────────────────────────────────────────────────
   ctx.shots.register('stations-interior-bar', async (ctx) => {
-    setup(ctx, 'kessa', P(ctx, 'fov', 72));
+    setup(ctx, 'kessa', P(ctx, 'fov', 60));
     const view = api.viewOf('kessa:st0');
     view.build();
     const it = api.interiorOf('kessa:st0');
     it.build();
-    const cam = V(P(ctx, 'cx', 48.6), P(ctx, 'cy', 1.62), P(ctx, 'cz', 73.8));
-    const tgt = V(P(ctx, 'tx', 68), P(ctx, 'ty', 1.25), P(ctx, 'tz', 52));
+    const cam = V(P(ctx, 'cx', 48.7), P(ctx, 'cy', 1.62), P(ctx, 'cz', 74.9));
+    const tgt = V(P(ctx, 'tx', 69), P(ctx, 'ty', 1.35), P(ctx, 'tz', 52.5));
     deckCam(ctx, S, it, cam, tgt);
     ctx.services.rendering?.cut?.();
   });
@@ -138,7 +138,7 @@ export function registerShots(ctx, api, S) {
     const sys = ctx.universe.system;
     const body = sys.bodies.find((b) => b.name === (ctx.params.get('body') || 'Verídia'));
     const site = S.surface.list.find((x) => x.body === body && x.kind === 'ruins');
-    await siteCam(ctx, S, site, { elev: P(ctx, 'elev', 6), rel: P(ctx, 'rel', 35), dist: P(ctx, 'dist', 78), height: P(ctx, 'h', 4.5), lookH: P(ctx, 'lh', 16), center: V(0, 6.6, -6), side: P(ctx, 'side', 0), minClear: P(ctx, 'clr', 2.2) });
+    await siteCam(ctx, S, site, { elev: P(ctx, 'elev', 5), rel: P(ctx, 'rel', 35), front: P(ctx, 'front', 14), dist: P(ctx, 'dist', 74), height: P(ctx, 'h', 8), lookH: P(ctx, 'lh', 15), center: V(0, 6.6, -6), side: P(ctx, 'side', 0), minClear: P(ctx, 'clr', 2.2) });
     ctx.services.rendering?.cut?.();
   });
 
@@ -148,7 +148,7 @@ export function registerShots(ctx, api, S) {
     const sys = ctx.universe.system;
     const body = sys.bodies.find((b) => b.name === (ctx.params.get('body') || 'Ashar'));
     const site = S.surface.list.find((x) => x.body === body && x.kind === (ctx.params.get('kind') || 'outpost'));
-    await siteCam(ctx, S, site, { elev: P(ctx, 'elev', 1.5), rel: P(ctx, 'rel', 28), dist: P(ctx, 'dist', 40), height: P(ctx, 'h', 3.2), lookH: P(ctx, 'lh', 3.5), center: V(-6, 0, -2), side: P(ctx, 'side', 7), minClear: P(ctx, 'clr', 3) });
+    await siteCam(ctx, S, site, { elev: P(ctx, 'elev', 1.5), rel: P(ctx, 'rel', 28), dist: P(ctx, 'dist', 26), height: P(ctx, 'h', 2.1), lookH: P(ctx, 'lh', 3.0), center: V(-4, 0, -2), side: P(ctx, 'side', 5), minClear: P(ctx, 'clr', 3) });
     // nave estacionada no pátio
     try {
       const inst = ctx.services.ships?.create?.('freighter', 'frente', { id: 'shot-outpost-ship', seed: 21, throttle: 0, gear: 1, lite: false });
@@ -165,6 +165,22 @@ export function registerShots(ctx, api, S) {
     } catch { /* sem naves */ }
     ctx.services.rendering?.cut?.();
   });
+
+
+  // ── extras: as outras estações da fatia vertical ────────────────────────
+  for (const [name, id, sysId, d0, az0, el0] of [['stations-tharsos', 'kessa:st1', 'kessa', 1500, 40, 12], ['stations-refugio', 'kessa:rebel', 'kessa', 1500, 20, 8], ['stations-bastiao', 'halden:st0', 'halden', 2200, 30, 10]]) {
+    ctx.shots.register(name, async (ctx) => {
+      setup(ctx, sysId, P(ctx, 'fov', 55));
+      const view = api.viewOf(id) || api.list().map((x) => api.viewOf(x.id))[0];
+      view.build();
+      const az = P(ctx, 'az', az0) * Math.PI / 180, el = P(ctx, 'el', el0) * Math.PI / 180, dist = P(ctx, 'dist', d0);
+      const sunL = ctx.universe.system.star.pos.clone().sub(view.frame.pos).normalize().applyQuaternion(view.frame.quat.clone().invert());
+      const sAz = Math.atan2(sunL.x, sunL.z) + az;
+      const posL = V(Math.sin(sAz) * Math.cos(el), Math.sin(el), Math.cos(sAz) * Math.cos(el)).multiplyScalar(dist);
+      stationCam(ctx, S, view, posL, V(0, P(ctx, 'ty', 0), 0));
+      ctx.services.rendering?.cut?.();
+    });
+  }
 
 }
 
@@ -199,7 +215,7 @@ async function siteCam(ctx, S, site, o) {
   const sunL = ctx.universe.system.star.pos.clone().sub(pW).normalize().applyQuaternion(qS.clone().invert());
   const sunAz = Math.atan2(sunL.x, sunL.z);
   // direção de visada = azimute do sol + rel; câmera do lado oposto
-  const vAz = sunAz + o.rel * Math.PI / 180;
+  const vAz = o.front !== undefined ? Math.PI + o.front * Math.PI / 180 : sunAz + o.rel * Math.PI / 180;
   const vd = V(Math.sin(vAz), 0, Math.cos(vAz));
   const center = o.center.clone();
   const camL = center.clone().addScaledVector(vd, -o.dist).add(V(0, o.height, 0)).addScaledVector(V(vd.z, 0, -vd.x), o.side || 0);

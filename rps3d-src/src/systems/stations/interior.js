@@ -355,7 +355,7 @@ function buildHangar(B) {
   k.torus(L, 10.5, 0.05, V3(0, 0.23, pz), Z.GLOW, 96, 4);
   for (let i = 0; i < 24; i++) { const a = (i / 24) * TAU; k.light(V3(Math.sin(a) * 15.2, 0.25, pz + Math.cos(a) * 15.2), [0.5, 4.2, 3.2], 0.06, -0.5, i / 24); }
   for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU + 0.2; k.box(L, 2.2, 0.03, 0.5, V3(Math.sin(a) * 12.3, 0.235, pz + Math.cos(a) * 12.3), [0, a, 0], Z.HAZARD); }
-  B.sign('pad03', 10, 2.5, V3(0, 0.24, pz + 8.5), [-Math.PI / 2, 0, Math.PI], 'floor');
+  B.sign('pad03', 10, 2.5, V3(0, 0.24, pz + 8.5), [-Math.PI / 2, 0, 0], 'floor');
   // marcações pintadas no piso: quadro da baia, setas, manchas
   for (const [x, z, w, d] of [[0, pz - 20, 40, 0.5], [0, pz + 20, 40, 0.5], [-20, pz, 0.5, 40], [20, pz, 0.5, 40]]) k.box(L, w, 0.02, d, V3(x, 0.012, z), null, Z.HAZARD);
   for (let i = 0; i < 4; i++) { const z = pz + 24 + i * 6; for (const sx of [-1, 1]) k.box(L, 3.2, 0.02, 0.5, V3(sx * 1.3, 0.012, z), [0, sx * 0.7, 0], Z.GLOW_WARM); }
@@ -446,7 +446,7 @@ function buildBar(B) {
   const k = B.k, R = ROOMS.bar;
   B.room('bar', R, {
     sides: { w: [{ c: 62, w: 3.2, y0: 0, y1: 3.4 }], e: [{ c: 61, w: 24, y0: 0.6, y1: 4.0, glass: true }] },
-    floorZone: Z.FLOOR, wallZone: Z.WALL, ceilZone: Z.LACQUER, amb: [0.05, 0.035, 0.03],
+    floorZone: Z.WOOD, wallZone: Z.WALL, ceilZone: Z.LACQUER, amb: [0.05, 0.035, 0.03],
   });
   // painéis de madeira nas paredes (até 1,3 m) + friso de latão
   for (const [ax, a0, a1, f, n] of [['x', R.x0, R.x1, R.z0, 1], ['x', R.x0, R.x1, R.z1, -1], ['z', R.z0, R.z1, R.x0, 1]]) {
@@ -498,13 +498,13 @@ function buildBar(B) {
   // cabines ao longo da janela
   B.spots.booths = [];
   for (const z of [51, 57.4, 63.8, 70.2]) B.spots.booths.push(booth(B, R.x1 - 1.8, z, Math.PI / 2, 2.4));
-  for (const z of [51, 57.4, 63.8, 70.2]) pendant(B, R.x1 - 1.8, 2.15, z, R.h, [1.0, 0.6, 0.3], 'bar', 6, 0.05);
+  for (const z of [51, 57.4, 63.8, 70.2]) pendant(B, R.x1 - 1.8, 2.15, z, R.h, [1.0, 0.6, 0.3], 'bar', 6, 0.03);
   // mesas redondas
   B.spots.tables = [V3(55, 0, 58), V3(61.5, 0, 57.5), V3(56.5, 0, 64.5), V3(63, 0, 65), V3(52.5, 0, 70.5), V3(60, 0, 71.5), V3(66.5, 0, 60.5)];
   for (const t of B.spots.tables) {
     roundTable(B, t.x, t.z);
     for (let i = 0; i < 3; i++) { const a = (i / 3) * TAU + t.x; stool(B, t.x + Math.sin(a) * 1.0, t.z + Math.cos(a) * 1.0, 0.62); }
-    pendant(B, t.x, 2.6, t.z, R.h, [1.0, 0.58, 0.28], 'bar', 9, 0.06);
+    pendant(B, t.x, 2.6, t.z, R.h, [1.0, 0.58, 0.28], 'bar', 9, 0.03);
     B.col(V3(t.x, 0.4, t.z), V3(0.55, 0.4, 0.55));
   }
   // plantas e jukebox holográfica
@@ -858,12 +858,28 @@ export class Interior {
     this.active = true;
     this.syncFrame();
     for (const c of this.B.cols) this.shapes.push(this.ctx.collision.addBox({ frame: this.colFrame, center: c.center, half: c.half, tag: 'estacao:interior' }));
+    // com o sistema `foot`, terminais e NPCs entram no registro de interações dele
+    const reg = this.ctx.services.interact;
+    this.handles = [];
+    if (reg?.register) {
+      try {
+        for (const t of this.terminals) {
+          this.handles.push(reg.register({ id: 'estacao:' + t.id, kind: 'terminal', radius: 2.6, label: t.label.toUpperCase(), sub: t.sub, getPos: (out) => this.toWorld(t.pos, out), onUse: () => this.use({ kind: 'terminal', ref: t }) }));
+        }
+        for (const c of this.crowd?.talkables() || []) {
+          const p = c.ref.ref;
+          this.handles.push(reg.register({ id: 'estacao:npc:' + p.talk, kind: 'npc', radius: 2.6, label: 'FALAR COM ' + p.name.toUpperCase(), sub: c.ref.role, getPos: (out) => this.toWorld(p.pos.clone().add(V3(0, p.pose === 'sit' ? 1.15 : 1.55, 0)), out), onUse: () => this.use({ kind: 'npc', ref: c.ref }) }));
+        }
+      } catch (e) { this.ctx.errors.push('stations interact: ' + (e.stack || e)); }
+    }
   }
   deactivate() {
     if (!this.active) return;
     this.active = false;
     for (const s of this.shapes) s.remove();
     this.shapes = [];
+    for (const h of this.handles || []) { try { h(); } catch { /* */ } }
+    this.handles = [];
   }
   syncFrame() {
     this.colFrame.quat.copy(this.view.frame.quat);
@@ -940,7 +956,7 @@ export class Interior {
     }
     this.near = best;
     const hud = ctx.services.hud;
-    if (best) {
+    if (best && !this.handles?.length) {
       const label = best.kind === 'terminal' ? best.ref.label : best.ref.name;
       const sub = best.kind === 'terminal' ? best.ref.sub : best.ref.role;
       try { hud?.prompt?.(label.toUpperCase(), { id: 'stations', sub, action: 'interact', ttl: 0.25 }); } catch { /* */ }

@@ -143,7 +143,10 @@ export default {
   },
   frame(dt, ctx) {
     if (S.shotCam) S.shotCam(ctx);
-    for (const v of S.views.values()) v.frameUpdate(dt, ctx);
+    for (const v of S.views.values()) {
+      if (v.failed) continue;
+      try { v.frameUpdate(dt, ctx); } catch (e) { v.failed = true; v.group.visible = false; ctx.errors.push(`stations: ${v.st.name}: ${e.stack || e}`); }
+    }
     S.docking.frame(dt);
     S.traffic.frame(dt, ctx, S.views);
     // interior: monta/ativa perto da estação (o hangar detalhado aparece já na aproximação)

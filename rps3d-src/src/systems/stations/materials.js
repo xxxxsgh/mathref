@@ -82,8 +82,8 @@ export function makeHullMaterial(styleName = 'guilda', { lite = false, scale = 3
 
   // ── concreto (bunkers): placas moldadas, manchas de água, poeira
   const co1 = fbm(P.mul(0.4).add(seed.mul(9.0)));
-  const coForm = aaLine(panelGrid(UV.x.div(2.4), UV.y.div(1.2), seed, float(2.0)).x, float(0.01));
-  const concCol = mix(vec3(0.24, 0.23, 0.21), vec3(0.36, 0.34, 0.31), co1).mul(float(1).sub(coForm.mul(0.35)));
+  const coForm = aaLine(panelGrid(UV.x.div(6.0), UV.y.div(3.0), seed, float(2.0)).x, float(0.006));
+  const concCol = mix(vec3(0.24, 0.23, 0.21), vec3(0.36, 0.34, 0.31), co1).mul(float(1).sub(coForm.mul(0.2)));
   // ── pedra dos Arquitetos: basalto escuro polido com veios e inscrições luminosas
   const al1 = fbm(P.mul(0.18).add(seed.mul(4.0)));
   const al2 = vnoise(P.mul(vec3(0.08, 1.6, 0.08)).add(seed));
@@ -147,7 +147,7 @@ export function makeHullMaterial(styleName = 'guilda', { lite = false, scale = 3
     .add(vec3(0.01, 0.012, 0.015).mul(zGl))
     .add(rockCol.mul(zRk)).add(rustCol.mul(zRu))
     .add(concCol.mul(zCo)).add(alienCol.mul(zAl)).add(vec3(0.02, 0.03, 0.05).mul(zAg));
-  albedo = albedo.mul(float(1).sub(seam.mul(0.55).mul(zP.add(zA).add(zD).add(zM).add(zRu)))).mul(float(1).sub(macroLine.mul(0.35).mul(zP.add(zA).add(zD))));
+  albedo = albedo.mul(float(1).sub(seam.mul(0.38).mul(zP.add(zA).add(zD).add(zM).add(zRu)))).mul(float(1).sub(macroLine.mul(0.35).mul(zP.add(zA).add(zD))));
   m.colorNode = albedo;
 
   const metal = zAl.mul(0.25).add(zD.mul(0.6)).add(zM.mul(0.92)).add(zS.mul(0.35)).add(zR.mul(0.7)).add(zP.add(zA).mul(chip.mul(0.9).add(0.08))).add(zW.mul(inWin.oneMinus().mul(0.6)));
@@ -308,16 +308,21 @@ export function makeInteriorMaterial(styleName = 'guilda', { lite = false, pool 
   const holes = smoothstep(0.32, 0.4, min(abs(gu.sub(0.5)), abs(gv.sub(0.5))));
   const grateCol = mix(vec3(0.24, 0.24, 0.25), vec3(0.01), holes);
   // parede: painéis 2 × 1 m com frisos
-  const wp = panelGrid(UV.x.div(4.8), UV.y.div(3.0), seed.mul(9.0), float(0.8));
+  // grade alinhada (sem fiadas desencontradas — nada de "tijolo")
+  const wpu = UV.x.div(4.8), wpv = UV.y.div(3.0);
+  const wfu = fract(wpu), wfv = fract(wpv);
+  const wp = vec2(min(min(wfu, wfu.oneMinus()).mul(1.6), min(wfv, wfv.oneMinus())), hash13(vec3(floor(wpu), floor(wpv), seed.mul(9.0))));
   const wSeam = aaLine(wp.x, float(0.018));
   // parede: chapas grandes cinza-azuladas, faixas horizontais, sujeira escorrida
   const band = step(0.5, fract(UV.y.div(6.0).add(0.08))).mul(0.06);
   const streakW = vnoise(P.mul(vec3(1.8, 0.08, 1.8)).add(seed)).mul(0.25);
-  const wallBase = mix(vec3(0.2, 0.21, 0.22), vec3(0.27, 0.275, 0.28), wp.y.mul(0.6).add(n1.mul(0.4))).add(band);
+  const wallBase = mix(vec3(0.21, 0.22, 0.23), vec3(0.25, 0.255, 0.26), wp.y.mul(0.5).add(n1.mul(0.5))).add(band);
   const wallCol = mix(wallBase, U.primary.mul(0.55), float(0.25)).mul(float(1).sub(wSeam.mul(0.4))).mul(float(1).sub(streakW));
   // laca escura (balcão do bar), madeira sintética, tecido, latão
   const grain = vnoise(vec3(UV.x.mul(0.6), UV.y.mul(28.0), seed)).mul(0.6).add(vnoise(vec3(UV.x.mul(2.0), UV.y.mul(90.0), seed)).mul(0.4));
-  const wood = mix(vec3(0.09, 0.035, 0.015), vec3(0.22, 0.09, 0.035), grain);
+  const plank = aaLine(panelGrid(UV.y.div(0.22), UV.x.div(2.4), seed, float(0.09)).x, float(0.02));
+  const plankId = hash13(vec3(floor(UV.x.div(0.22)), floor(UV.y.div(2.4)), 3.0));
+  const wood = mix(vec3(0.07, 0.03, 0.014), vec3(0.2, 0.085, 0.035), grain.mul(0.7).add(plankId.mul(0.3))).mul(float(1).sub(plank.mul(0.5)));
   const fab = vnoise(P.mul(40.0)).mul(0.15).add(0.85);
   const stripe = step(0.5, fract(UV.x.add(UV.y).mul(1.6)));
   const haz = mix(vec3(0.015), vec3(0.6, 0.4, 0.03), stripe);

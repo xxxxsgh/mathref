@@ -85,9 +85,17 @@ function buildRuins(k, s, lite) {
   k.box(L, 26, 4, 6, V3(0, 20, 0), null, Z.ALIEN);
   k.box(L, 26.4, 0.4, 6.4, V3(0, 18.2, 0), null, Z.ALIEN_GLOW);
   k.pop();
-  // obelisco
-  k.lathe(L, [[4.2, 0], [3.8, 8], [2.6, 30], [1.6, 46], [0.05, 52]], V3(30, top - 2.2, 26), Z.ALIEN, 5, null, [0, 0.3, 0]);
-  k.light(V3(30, top + 47, 26), [3, 7, 14], 0.9, -0.2);
+  // obeliscos flanqueando o portal (um partido)
+  for (const sx of [-1, 1]) {
+    const base = V3(sx * 38, top - 2.2, -16);
+    const tall = sx < 0 ? 58 : 34;
+    k.lathe(L, [[4.6, 0], [4.2, 8], [3.0, tall * 0.55], [1.9, tall * 0.85], [0.05, tall]], base, Z.ALIEN, 5, null, [0, 0.3 * sx, 0]);
+    k.cyl(L, 5.4, 6.0, 2.2, base.clone().add(V3(0, 1.1, 0)), null, Z.ALIEN, 5);
+    if (sx < 0) k.light(base.clone().add(V3(0, tall + 0.5, 0)), [3, 7, 14], 1.0, -0.2);
+    else { // topo partido caído ao lado
+      k.lathe(L, [[1.9, 0], [1.2, 14], [0.05, 20]], base.clone().add(V3(9, 1.4, 6)), Z.ALIEN, 5, null, [1.45, 0.4, 0.2]);
+    }
+  }
   // colunata hexagonal (algumas tombadas)
   for (let i = 0; i < 10; i++) {
     const a = (i / 10) * Math.PI - Math.PI * 0.05;
@@ -290,7 +298,7 @@ export class Surface {
 
   material(style, lite) {
     const key = style + (lite ? ':l' : '');
-    if (!this.mats.has(key)) this.mats.set(key, makeHullMaterial(style, { lite, scale: 2.2 }));
+    if (!this.mats.has(key)) this.mats.set(key, makeHullMaterial(style, { lite, scale: 4.5 }));
     return this.mats.get(key);
   }
 
@@ -388,6 +396,13 @@ export class Surface {
       const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1, 8, 1, true), beamMat);
       g.add(beam);
       pz.prisms.push(crystal); pz.beams.push(beam);
+      // registro de interação do `foot` (quando existe)
+      const reg = this.ctx.services.interact;
+      if (reg?.register) {
+        try {
+          (s.handles ||= []).push(reg.register({ id: `${s.id}:prisma${i}`, kind: 'puzzle', radius: 3.4, label: 'GIRAR PRISMA', sub: 'ARQUITETOS · FEIXE ' + (i + 1), enabled: () => !pz.solved, getPos: (out) => out.copy(crystal.position).applyQuaternion(s.frame.quat).add(s.frame.pos), onUse: () => this.rotatePrism(s, i) }));
+        } catch { /* */ }
+      }
     });
     // porta antiga (laje que desce quando resolvido)
     const dm = this.material('guilda', lite);
@@ -457,6 +472,8 @@ export class Surface {
     s.entry?.remove();
     for (const sh of s.shapes) sh.remove();
     s.shapes = [];
+    for (const h of s.handles || []) { try { h(); } catch { /* */ } }
+    s.handles = [];
     try { s.inst?.dispose?.(); } catch { /* */ }
     s.group?.traverse((o) => { if (o.isMesh && !o.isInstancedMesh) o.geometry.dispose(); });
     s.group = null;
@@ -479,7 +496,7 @@ export class Surface {
         const inv = _q.copy(s.frame.quat).invert();
         const pl = _v.copy(ctx.player.pos).sub(s.frame.pos).applyQuaternion(inv);
         s.puzzle.prisms.forEach((c, i) => {
-          if (pl.distanceTo(c.position) < 3.2) {
+          if (pl.distanceTo(c.position) < 3.2 && !s.handles?.length) {
             this.near = { s, i };
             try { ctx.services.hud?.prompt?.('GIRAR PRISMA', { id: 'stations-prisma', sub: 'ARQUITETOS · FEIXE ' + (i + 1), ttl: 0.25 }); } catch { /* */ }
             if (!ctx.services.interact && ctx.input.pressed('interact')) this.rotatePrism(s, i);
