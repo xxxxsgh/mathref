@@ -45,7 +45,7 @@ export class Projectiles {
     b.fuse = def.flak ? (opts.fuse ?? 0) : 0; // flak: distância até detonar perto de um alvo
     this.active.push(b);
     // clarão da boca do cano (preso à nave)
-    if (owner && opts.muzzleLocal) this.flash({ owner, local: opts.muzzleLocal.clone(), size: def.width * (def.kind === 'heavy' ? 4 : 3.2), color: col, life: def.kind === 'heavy' ? 0.16 : 0.07, intensity: def.intensity * 0.55 });
+    if (owner && opts.muzzleLocal) this.flash({ owner, local: opts.muzzleLocal.clone(), size: def.width * (def.kind === 'heavy' ? 3 : 1.7), color: col, life: def.kind === 'heavy' ? 0.14 : 0.05, intensity: def.intensity * 0.32 });
     else if (opts.flashPos) this.flash({ pos: opts.flashPos.clone(), size: def.width * 3.5, color: col, life: 0.08, intensity: def.intensity * 0.5 });
     if (!this.sim.quiet) this.sim.emit('ship:fire', { owner: owner?.eventId || null, weapon: def.id, pos: pos.clone(), dir: b.dir.clone(), faction: b.faction });
     return b;
@@ -142,8 +142,9 @@ export class Projectiles {
 
   flakBurst(b, pos) {
     const sim = this.sim;
-    this.flash({ pos: pos.clone(), size: b.def.flak * 0.55, color: [1.0, 0.62, 0.3], life: 0.22, intensity: 9, kind: 1 });
-    this.flash({ pos: pos.clone(), size: b.def.flak * 0.9, color: [1.0, 0.5, 0.25], life: 0.35, intensity: 3, kind: 2 });
+    // estouro de flak: clarão curto + núcleo quente; a nuvem de fumaça fica
+    this.flash({ pos: pos.clone(), size: b.def.flak * 0.32, color: [1.0, 0.6, 0.28], life: 0.18, intensity: 7, kind: 1 });
+    this.flash({ pos: pos.clone(), size: b.def.flak * 0.1, color: [1.0, 0.9, 0.7], life: 0.07, intensity: 16, kind: 1 });
     sim.flakSmoke(pos);
     for (const s of sim.colliders()) {
       if (s.capital || !s.alive || s === b.owner) continue;

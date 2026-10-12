@@ -10,9 +10,10 @@
 // (energia conservada), como um traçador real visto de longe.
 import * as THREE from 'three/webgpu';
 import { Fn, attribute, uv, vec3, vec4, float, exp, pow, smoothstep, abs, max, select, mix } from 'three/tsl';
+import { sstep } from './tsl.js';
 
-const _h = new THREE.Vector3(), _t = new THREE.Vector3(), _s = new THREE.Vector3(), _m = new THREE.Vector3();
-const _r = new THREE.Vector3(), _u = new THREE.Vector3();
+const _h2 = new THREE.Vector3(), _h = new THREE.Vector3(), _t = new THREE.Vector3(), _s = new THREE.Vector3(), _m = new THREE.Vector3();
+const _r = new THREE.Vector3(), _u = new THREE.Vector3(), _f = new THREE.Vector3();
 
 export class BoltBatch {
   constructor(ctx, capacity = 800) {
@@ -56,6 +57,7 @@ export class BoltBatch {
     cam.updateMatrixWorld();
     _r.setFromMatrixColumn(cam.matrixWorld, 0);
     _u.setFromMatrixColumn(cam.matrixWorld, 1);
+    _f.setFromMatrixColumn(cam.matrixWorld, 2).negate();
   }
 
   _quad(ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, r, g, b, kind) {
@@ -76,6 +78,18 @@ export class BoltBatch {
    * comprimento `len`, largura `w`. rgb já multiplicado pela intensidade.
    */
   bolt(head, dir, len, w, r, g, b) {
+    // recorta o raio no plano da câmera: um quad que atravessa o plano próximo
+    // some com o depth logarítmico (profundidade inválida atrás da câmera)
+    const NEAR = 0.6;
+    const dh = head.dot(_f), dd = dir.dot(_f);
+    const dt = dh - dd * len;
+    if (dh < NEAR && dt < NEAR) return;
+    if (dh < NEAR) { // cabeça atrás, cauda na frente (raio vindo na direção da câmera)
+      const k = (dt - NEAR) / Math.max(1e-4, dt - dh);
+      _h.copy(head).addScaledVector(dir, -len * (1 - k));
+      len *= k;
+      head = _h2.copy(_h);
+    } else if (dt < NEAR) len = Math.max(0.01, (dh - NEAR) / Math.max(1e-4, dd));
     const dist = Math.max(1, head.length());
     const minW = dist * this.pxAngle * 1.4;
     let k = 1;
@@ -139,16 +153,16 @@ function makeMaterial() {
     const across = exp(q.x.mul(q.x).mul(-5.5));
     const core = pow(across, 9.0);
     const tail = smoothstep(-1.0, 0.1, q.y);
-    const head = smoothstep(1.0, 0.86, q.y);
+    const head = sstep(1.0, 0.86, q.y);
     const along = tail.mul(head).mul(q.y.mul(0.3).add(0.75));
     const white = vec3(1.0, 0.97, 0.92);
-    const boltCol = mix(tint, white.mul(max(max(tint.x, tint.y), tint.z)), core.mul(0.8)).mul(across.mul(0.7).add(core.mul(2.4))).mul(along);
+    const boltCol = mix(tint, white.mul(max(max(tint.x, tint.y), tint.z)), core.mul(0.8)).mul(across.mul(0.4).add(core.mul(2.2))).mul(along);
     // ── clarão / anel ──────────────────────────────────────────────────
     const r2 = q.x.mul(q.x).add(q.y.mul(q.y));
     const halo = exp(r2.mul(-4.2)).sub(0.015).max(0);
     const hot = exp(r2.mul(-28.0));
     const glowCol = tint.mul(halo).add(white.mul(max(max(tint.x, tint.y), tint.z)).mul(hot).mul(0.9));
-    const ring = exp(abs(r2.sqrt().sub(0.72)).mul(-14.0)).mul(smoothstep(1.0, 0.85, r2.sqrt()));
+    const ring = exp(abs(r2.sqrt().sub(0.72)).mul(-14.0)).mul(sstep(1.0, 0.85, r2.sqrt()));
     const ringCol = tint.mul(ring).add(tint.mul(halo).mul(0.25));
     const col = select(C.w.lessThan(0.5), boltCol, select(C.w.lessThan(1.5), glowCol, ringCol));
     return vec4(col, float(1));

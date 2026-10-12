@@ -22,8 +22,8 @@ export const BOLT_COLORS = {
  *  spread (rad), length/width (visual, m), shieldMul/hullMul (eficácia)
  */
 export const WEAPONS = {
-  laser: { id: 'laser', label: 'CANHÃO DE LASER', kind: 'energy', speed: 1750, range: 2400, damage: 7, rof: 7.5, heat: 0.028, spread: 0.0016, length: 26, width: 0.85, intensity: 26, shieldMul: 1.25, hullMul: 0.85 },
-  massa: { id: 'massa', label: 'CANHÃO DE MASSA', kind: 'kinetic', speed: 2600, range: 3200, damage: 12, rof: 4.2, heat: 0.04, spread: 0.0012, length: 34, width: 0.42, intensity: 18, shieldMul: 0.7, hullMul: 1.35 },
+  laser: { id: 'laser', label: 'CANHÃO DE LASER', kind: 'energy', speed: 1750, range: 2400, damage: 9, rof: 7.5, heat: 0.028, spread: 0.0016, length: 42, width: 1.2, intensity: 16, shieldMul: 1.25, hullMul: 0.85 },
+  massa: { id: 'massa', label: 'CANHÃO DE MASSA', kind: 'kinetic', speed: 2600, range: 3200, damage: 15, rof: 4.2, heat: 0.04, spread: 0.0012, length: 40, width: 0.6, intensity: 12, shieldMul: 0.7, hullMul: 1.35 },
   ion: { id: 'ion', label: 'CANHÃO DE ÍONS', kind: 'ion', speed: 1500, range: 2000, damage: 5, rof: 3, heat: 0.05, spread: 0.002, length: 18, width: 1.4, intensity: 30, shieldMul: 3.2, hullMul: 0.25, disable: 1 },
   pd: { id: 'pd', label: 'DEFESA DE PONTO', kind: 'flak', speed: 1500, range: 2600, damage: 4, rof: 9, heat: 0, spread: 0.012, length: 16, width: 0.7, intensity: 16, shieldMul: 1, hullMul: 1, flak: 26 },
   heavy: { id: 'heavy', label: 'CANHÃO PESADO', kind: 'heavy', speed: 1050, range: 6000, damage: 80, rof: 0.55, heat: 0, spread: 0.003, length: 70, width: 4.2, intensity: 34, shieldMul: 1, hullMul: 1.1 },
@@ -44,8 +44,8 @@ export const MISSILES = {
  *  weapons (ids), missiles {tipo: qtd}, cm {flare, chaff}, boardable
  */
 export const CLASS_STATS = {
-  fighter: { speed: 235, boost: 400, accel: 95, grip: 2.4, turn: { pitch: 1.55, yaw: 0.85, roll: 3.4 }, hull: 100, shield: 80, regen: 9, weapons: ['laser', 'laser'], missiles: { ir: 2 }, cm: { flare: 8, chaff: 4 }, boardable: false },
-  interceptor: { speed: 285, boost: 470, accel: 120, grip: 2.8, turn: { pitch: 1.95, yaw: 1.0, roll: 4.0 }, hull: 70, shield: 60, regen: 10, weapons: ['laser', 'massa'], missiles: { ir: 2 }, cm: { flare: 10, chaff: 4 }, boardable: false },
+  fighter: { speed: 235, boost: 400, accel: 95, grip: 2.4, turn: { pitch: 1.55, yaw: 0.85, roll: 3.4 }, hull: 80, shield: 60, regen: 7, weapons: ['laser', 'laser'], missiles: { ir: 2 }, cm: { flare: 8, chaff: 4 }, boardable: false },
+  interceptor: { speed: 285, boost: 470, accel: 120, grip: 2.8, turn: { pitch: 1.95, yaw: 1.0, roll: 4.0 }, hull: 60, shield: 45, regen: 8, weapons: ['laser', 'massa'], missiles: { ir: 2 }, cm: { flare: 10, chaff: 4 }, boardable: false },
   explorer: { speed: 175, boost: 300, accel: 50, grip: 1.4, turn: { pitch: 0.75, yaw: 0.45, roll: 1.4 }, hull: 260, shield: 200, regen: 10, weapons: ['laser', 'laser'], missiles: { radar: 2 }, cm: { flare: 6, chaff: 6 }, boardable: true },
   freighter: { speed: 125, boost: 210, accel: 28, grip: 0.9, turn: { pitch: 0.35, yaw: 0.25, roll: 0.7 }, hull: 620, shield: 320, regen: 12, weapons: ['massa'], missiles: {}, cm: { flare: 6, chaff: 6 }, boardable: true },
   frigate: { speed: 95, boost: 150, accel: 16, grip: 0.7, turn: { pitch: 0.2, yaw: 0.15, roll: 0.35 }, hull: 1700, shield: 900, regen: 20, weapons: ['massa', 'massa'], missiles: { radar: 4 }, cm: { flare: 10, chaff: 10 }, boardable: true },

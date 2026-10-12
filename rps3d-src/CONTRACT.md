@@ -156,6 +156,10 @@ Emita/escute com estes nomes e payloads. Novos eventos: documente aqui.
 | `npc:talk` | `{npc, station?}` — `stations`/`foot` emitem ao falar com um NPC (ex.: `iara`, `okonkwo`, `oren`); a missão de conversa avança |
 | `prefs:change` | `{quality?, sensitivity?, invertY?, volume?, subtitles?}` — configurações mudadas no título |
 | `battle:start` / `battle:end` | `{id, kind, center}` / `{id, kind, result:'vitoria'|'derrota'|'fuga'|..., winner}` (combat) |
+| `board` | `{ship, classId, faction, pos, quat, instance, combatant}` — abordagem de nave desativada (combat → `foot.board(payload)` se existir) |
+| `ship:disabled` / `ship:jumpout` | `{id, faction, classId?, pos, boardable?, byPlayer?}` (combat) |
+| `turret:destroyed` / `capital:launch` | `{ship, turret, pos, byPlayer, left}` / `{ship, fighter, pos}` (combat) |
+| `shield:down` / `combat:defect` / `combat:target` | `{id, faction}` / `{battle}` / `{id, faction}` (combat) |
 
 ## Screenshots e testes
 
@@ -173,5 +177,6 @@ Emita/escute com estes nomes e payloads. Novos eventos: documente aqui.
 
 ## Mudanças no núcleo
 (registre aqui: data, quem, o quê)
+- 2026-10-12, combat: catálogo de eventos ganhou `board`, `ship:disabled`, `ship:jumpout`, `turret:destroyed`, `capital:launch`, `shield:down`, `combat:defect`, `combat:target`.
 - 2026-10-12, story: catálogo de eventos ganhou `game:new`, `story:*`, `dialog:choice`, `npc:talk`, `prefs:change`, `battle:*`. Eventos `radio`/`notify` emitidos pela história levam `story: true` (a legenda já está na tela durante cenas; a HUD pode ignorar os que têm `subtitle: true`).
 - 2026-10-07, rendering: `tools/shot.mjs` — `page.screenshot` usa `--timeout` (antes 30 s fixos; cenas pesadas no SwiftShader passavam disso).

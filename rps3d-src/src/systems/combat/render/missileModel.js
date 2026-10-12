@@ -2,6 +2,7 @@
 // faixa de identificação e bocal). Geometrias e materiais compartilhados.
 import * as THREE from 'three/webgpu';
 import { color, float, positionLocal, smoothstep, abs, mix, vec3, sin } from 'three/tsl';
+import { sstep } from './tsl.js';
 
 let shared = null;
 
@@ -27,9 +28,9 @@ function build() {
   const body = new THREE.MeshStandardNodeMaterial({ metalness: 0.55, roughness: 0.38 });
   // faixas: ogiva escura de sensor, corpo claro, faixa amarela de ogiva explosiva
   const z = positionLocal.z;
-  const sensor = smoothstep(-1.12, -1.2, z);
-  const band = smoothstep(0.04, 0.0, abs(z.add(0.62)).sub(0.07));
-  const band2 = smoothstep(0.03, 0.0, abs(z.sub(0.55)).sub(0.03));
+  const sensor = sstep(-1.12, -1.2, z);
+  const band = sstep(0.04, 0.0, abs(z.add(0.62)).sub(0.07));
+  const band2 = sstep(0.03, 0.0, abs(z.sub(0.55)).sub(0.03));
   body.colorNode = mix(mix(mix(color(0x9aa1a8), color(0xd8a531), band), color(0x30343a), band2), color(0x1a1d22), sensor);
   body.roughnessNode = mix(float(0.42), float(0.12), sensor);
   body.metalnessNode = mix(float(0.5), float(0.2), sensor);

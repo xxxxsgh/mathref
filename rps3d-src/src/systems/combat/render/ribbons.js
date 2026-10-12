@@ -6,7 +6,7 @@
 // fitas são reconstruídas relativas à câmera numa única malha dinâmica.
 import * as THREE from 'three/webgpu';
 import { Fn, attribute, uv, uniform, vec3, vec4, float, pow, exp, smoothstep, abs, mix, clamp } from 'three/tsl';
-import { fbm3, blackbody } from './tsl.js';
+import { fbm3, blackbody, sstep } from './tsl.js';
 
 const STRIDE = 7; // x y z t w heat s
 const _p = new THREE.Vector3(), _q = new THREE.Vector3(), _tan = new THREE.Vector3(), _side = new THREE.Vector3(), _view = new THREE.Vector3();
@@ -200,7 +200,7 @@ function smokeMaterial(U) {
     const age = q.y, across = q.x;
     const n = fbm3(vec3(across.mul(0.9), E.z.mul(0.42), E.w.add(age.mul(1.3))));
     const n2 = fbm3(vec3(across.mul(2.3).add(4.0), E.z.mul(1.1), E.w.mul(0.5).sub(age.mul(2.0))));
-    const edge = smoothstep(1.0, 0.15, abs(across).add(n.sub(0.5).mul(0.85)).add(n2.sub(0.5).mul(0.3)));
+    const edge = sstep(1.0, 0.15, abs(across).add(n.sub(0.5).mul(0.85)).add(n2.sub(0.5).mul(0.3)));
     const fadeIn = smoothstep(0.0, 0.025, age);
     const fade = pow(float(1).sub(age), 1.4);
     const dens = edge.mul(n.mul(0.9).add(0.35)).mul(fade).mul(fadeIn).mul(E.x);

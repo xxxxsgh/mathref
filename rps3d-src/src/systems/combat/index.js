@@ -163,6 +163,7 @@ export default {
     }
     for (let i = S.timers.length - 1; i >= 0; i--) { const tm = S.timers[i]; tm.t -= dt; if (tm.t <= 0) { S.timers.splice(i, 1); try { tm.fn(); } catch (e) { sim.err('timer', e); } } }
     S.director.step(dt);
+    if (S.shotHook && ctx.shot) { try { S.shotHook(); } catch (e) { sim.err('shotHook', e); } }
   },
   frame(dt, ctx) {
     const sim = S.sim;

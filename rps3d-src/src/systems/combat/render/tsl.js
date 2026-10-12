@@ -1,6 +1,6 @@
 // Funções TSL do combate: hash/ruído baratos (sem seno, estáveis em GPU móvel)
 // e corpo negro aproximado para fogo/metal quente.
-import { Fn, vec3, float, floor, fract, dot, mix, clamp, pow, exp } from 'three/tsl';
+import { Fn, vec3, float, floor, fract, dot, mix, clamp, pow, exp, smoothstep } from 'three/tsl';
 
 export const hash13 = Fn(([p]) => {
   const q = fract(vec3(p).mul(0.1031)).toVar();
@@ -37,3 +37,12 @@ export const blackbody = Fn(([tIn]) => {
   const b = clamp(pow(t, 3.5).mul(1.6), 0, 1).mul(0.7);
   return vec3(r, g, b).mul(exp(t.mul(1.5)).sub(0.9));
 });
+
+/**
+ * smoothstep que aceita bordas invertidas (a > b → 1 − smoothstep(b, a, x)).
+ * O GLSL deixa smoothstep(a, b, x) com a ≥ b indefinido (o SwiftShader/ANGLE
+ * devolve 0), então nunca passe bordas invertidas direto ao smoothstep.
+ */
+export function sstep(a, b, x) {
+  return a <= b ? smoothstep(a, b, x) : float(1).sub(smoothstep(b, a, x));
+}

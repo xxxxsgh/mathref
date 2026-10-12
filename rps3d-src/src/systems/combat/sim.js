@@ -12,10 +12,16 @@ import { Projectiles } from './weapons.js';
 import { MissileSystem } from './missiles.js';
 import { BoltBatch } from './render/bolts.js';
 import { RibbonBatch } from './render/ribbons.js';
+import { Wrecks } from './render/wreck.js';
 import { leadPoint, lookQuat } from './math.js';
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _sun = new THREE.Vector3();
 const STEP = 1 / 60;
+/** Cor de casco (linear) dos destroços por facção. */
+const HULL_TINT = {
+  hegemonia: new THREE.Color(0.86, 0.84, 0.8), frente: new THREE.Color(0.5, 0.36, 0.27), corsarios: new THREE.Color(0.24, 0.22, 0.25),
+  guilda: new THREE.Color(0.42, 0.52, 0.5), vigilantes: new THREE.Color(0.16, 0.2, 0.26),
+};
 
 export class Sim {
   constructor(ctx) {
@@ -45,8 +51,10 @@ export class Sim {
     } catch (e) { this.err('fx', e); this.fx = null; }
     this.projectiles = new Projectiles(this, BOLT_BUDGET[q] || 600);
     this.missiles = new MissileSystem(this);
+    this.wrecks = new Wrecks(this);
     this._comb = []; this._combStep = -1; this.stepN = 0;
     this.listeners = [];
+    this.debug = ctx.params?.get?.('cdebug') === '1';
   }
 
   err(where, e) { this.ctx.errors?.push(`combat ${where}: ${e?.stack || e}`); console.error('[combat]', where, e); }
@@ -67,7 +75,7 @@ export class Sim {
       id: opts.id || `cb${this.nextId++}`, faction, classId, pos: pos.clone(), quat: opts.quat || (opts.dir ? lookQuat(opts.dir, opts.up) : new THREE.Quaternion()),
       vel: opts.vel, throttle: opts.throttle, name: opts.name, callsign: opts.callsign, battle: opts.battle, side: opts.side,
       toughness: opts.toughness, hull: opts.hull, weapons: opts.weapons, missiles: opts.missiles, boardable: opts.boardable, disableOnly: opts.disableOnly,
-      tags: opts.tags, seed: opts.seed ?? this.nextId, lite: opts.lite, shadows: opts.shadows, invulnerable: opts.invulnerable, paint: opts.paint, shieldMul: opts.shieldMul,
+      tags: opts.tags, skill: opts.skill, seed: opts.seed ?? this.nextId, lite: opts.lite, shadows: opts.shadows, invulnerable: opts.invulnerable, paint: opts.paint, shieldMul: opts.shieldMul,
     });
     if (!opts.vel) s.vel.copy(s.fwd(_a)).multiplyScalar(s.stats.speed * (opts.throttle ?? 0.7));
     if (CLASS_STATS[s.classId].capital) new CapitalCtl(this, s, opts);
@@ -127,7 +135,17 @@ export class Sim {
     if (from) { t.lastHitBy = from; t.lastHitT = this.now; }
     // jogador: o voo aplica (escudo por quadrante); o combate só emite
     if (t.isPlayer) {
-      const dmg = amount * (def.kind === 'ion' ? 0.6 : 1);
+      // cenas (modo cinematic) não matam o jogador; batalhas roteirizadas
+      // (abertura) podem amaciar o dano para a fuga ser emocionante, não injusta
+      const cine = this.ctx.game.mode === 'cinematic';
+      let dmg = cine ? 0 : amount * (def.kind === 'ion' ? 0.6 : 1) * (this.playerDamageMul ?? 1);
+      // diretor de dano: limita o dano por segundo no jogador (balde que reabastece);
+      // sem balde o tiro ainda arranha (20%) — a pressão continua, a morte não é instantânea
+      if (dmg > 0) {
+        const take = Math.min(dmg, Math.max(0, this.pBucket));
+        dmg = take + (dmg - take) * 0.2;
+        this.pBucket -= dmg;
+      }
       this.emit('ship:hit', { target: 'player', owner: from?.eventId || null, damage: dmg, pos: opts.pos ? opts.pos.clone() : null, shield: (this.player.shieldFrac ?? 0) > 0.05, normal: opts.normal?.clone?.() });
       return { shield: (this.player.shieldFrac ?? 0) > 0.05 };
     }
@@ -156,13 +174,14 @@ export class Sim {
       t.hull -= dmg * (def.hullMul ?? 1);
       shieldHit = shieldHit && t.shield > 0;
       t.hitsTaken++;
-      if (def.kind === 'ion' || def.disable) t.ion += amount * 2.5;
+      if (def.kind === 'ion' || def.disable) t.ion += amount * 6;
       if (t.ai && t.hullFrac < 0.75 && this.rand() < 0.08) t.ai.chat('hit');
     }
     t.shieldDelay = 3.5;
     if (opts.pos && !opts.splash) this.emit('ship:hit', { target: t.eventId, owner: from?.eventId || null, damage: amount, pos: opts.pos.clone(), shield: shieldHit, normal: opts.normal?.clone?.() });
     // desativação (abordável) ou morte
-    if (t.state === 'ok' && t.boardable && (t.disableOnly || t.ion > t.hullMax * 0.6) && t.hull < t.hullMax * 0.25) this.disable(t, from);
+    // desativação: íons sobrecarregam os sistemas (sem escudo) ou casco baixo em alvo "só desativar"
+    if (t.state === 'ok' && t.boardable && ((t.ion > t.hull * 0.9 && t.shield <= 0) || (t.disableOnly && t.hull < t.hullMax * 0.25))) this.disable(t, from);
     else if (t.hull <= 0) {
       if (t.state === 'disabled' && t.disableOnly) t.hull = 1;
       else this.die(t, from);
@@ -188,12 +207,12 @@ export class Sim {
     if (this.playerTarget === t) this.playerTarget = t; // continua como alvo (para abordar)
   }
 
-  die(t, from) {
+  die(t, from, opts = {}) {
     if (t.state === 'dying' || t.state === 'dead') return;
     if (t.capital) { t.capital.die(from); return; }
     const small = t.classId === 'fighter' || t.classId === 'interceptor';
     t.killer = from;
-    if (small && this.rand() < 0.5) {
+    if (small && (opts.burn ?? this.rand() < 0.5)) {
       // descontrolado em chamas antes de explodir
       t.state = 'dying';
       t.dieT = 0.9 + this.rand() * 1.6;
@@ -208,7 +227,9 @@ export class Sim {
     if (t.state === 'dead') return;
     t.state = 'dead';
     const pos = t.pos.clone();
-    if (!t.capital) this.explode(pos, t.radius * (t.classId === 'fighter' || t.classId === 'interceptor' ? 2.2 : 2.8), 'ship', { vel: t.vel.clone().multiplyScalar(0.5) });
+    const small = t.classId === 'fighter' || t.classId === 'interceptor';
+    if (!t.capital) this.explode(pos, t.radius * (small ? 2.2 : 2.8), 'ship', { vel: t.vel.clone().multiplyScalar(0.5) });
+    try { this.wrecks.burst(pos, t.vel, t.radius, t.capital ? 9 : small ? 3 + Math.floor(this.rand() * 2) : 6, HULL_TINT[t.faction]); } catch (e) { this.err('wreck', e); }
     this.emit('ship:destroyed', { id: t.eventId, faction: t.faction, classId: t.classId, pos, byPlayer: !!from?.isPlayer, size: t.radius * 2, battle: t.battle?.id || null });
     if (from?.ai) from.ai.chat('kill');
     if (from?.isPlayer) this.emit('notify', { text: `${t.label} ABATIDA`, kind: 'reward' });
@@ -288,6 +309,9 @@ export class Sim {
   // ─── laço ──────────────────────────────────────────────────────────────
   step(dt) {
     this.now += dt; this.stepN++;
+    // balde do diretor de dano do jogador (pontos/s e máximo)
+    const cap = this.playerDps ?? 16;
+    this.pBucket = Math.min(cap * 2.5, (this.pBucket ?? cap * 2.5) + cap * dt);
     this.player.sync(this.ctx);
     this._combStep = -1;
     this.stepping = true;
@@ -310,6 +334,7 @@ export class Sim {
     }
     this.projectiles.step(dt);
     this.missiles.step(dt);
+    this.wrecks.step(dt);
     for (let i = this.ships.length - 1; i >= 0; i--) if (!this.ships[i].alive) this.ships.splice(i, 1);
   }
 
@@ -333,6 +358,7 @@ export class Sim {
       }
     }
     this.missiles.frame(alpha);
+    this.wrecks.frame(dt, alpha);
     if (beforeDraw) { try { beforeDraw(); } catch (e) { this.err('beforeDraw', e); } }
     if (!this.fx) return;
     const origin = ctx.world.origin;
@@ -350,6 +376,12 @@ export class Sim {
       B.glow(_a, s.radius * 0.7 * f, 14 * f, 5 * f, 1.2 * f, 1);
     }
     B.end();
+    if (this.debug && !this.quiet && ctx.time.frame % 2 === 0) {
+      const near = this.projectiles.active.filter((b) => b.pos.distanceTo(origin) < 400);
+      const b0 = near[0] || this.projectiles.active[0];
+      ctx.errors.push(`DBG perto=${near.length} dono=${b0?.owner?.callsign} dir=${b0?.dir.toArray().map((v) => v.toFixed(2))} cor=${b0?.color} pos=${b0 ? b0.pos.clone().sub(origin).toArray().map((v) => v.toFixed(1)).join(',') : '-'} q0=${Array.from(B.pos.slice(0, 12)).map((v) => v.toFixed(1)).join(',')} c0=${Array.from(B.col.slice(0, 4)).map((v) => v.toFixed(1)).join(',')}`);
+      ctx.errors.push(`DBG f=${ctx.time.frame} quads=${B.n} vis=${B.mesh.visible} parent=${!!B.mesh.parent} ativos=${this.projectiles.active.length} b0=${b0 ? b0.pos.clone().sub(origin).toArray().map((v) => v.toFixed(0)).join(',') : '-'} cam=${ctx.camera.quaternion.toArray().map((v) => v.toFixed(2)).join(',')}`);
+    }
     // luz do sol na fumaça
     const rs = ctx.services.rendering?.sun;
     const U = this.fx.smoke.U;
@@ -366,6 +398,7 @@ export class Sim {
     for (const s of [...this.ships]) this.remove(s);
     this.projectiles.clear();
     this.missiles.clear();
+    this.wrecks.clear();
     this.playerTarget = null;
   }
 

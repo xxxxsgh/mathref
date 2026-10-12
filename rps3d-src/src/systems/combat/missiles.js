@@ -143,9 +143,9 @@ class Decoy {
     if (this.kind === 'flare') {
       _a.copy(this.pos).sub(origin);
       const fl = 0.75 + 0.25 * Math.sin(now * 47 + this.seed * 20) * Math.sin(now * 31);
-      const I = 22 * k * fl;
-      bolts.glow(_a, 4.5 + 2 * k, 1.0 * I, 0.78 * I, 0.5 * I, 1);
-      bolts.glow(_a, 1.4, 6 * k, 6 * k, 6 * k, 1);
+      const I = 7 * k * fl;
+      bolts.glow(_a, 2.4 + 1.2 * k, 1.0 * I, 0.72 * I, 0.42 * I, 1);
+      bolts.glow(_a, 0.55, 10 * k, 9 * k, 8 * k, 1);
     } else {
       const R = 6 + this.t * 9;
       for (const g of this.glints) {
@@ -233,10 +233,11 @@ export class MissileSystem {
       _a.set(0, 0, 1.6 * m.mesh.scale.x).applyQuaternion(m.quat).add(m.renderPos).sub(origin);
       const f = 0.85 + Math.sin(now * 61 + m.t * 13) * 0.15;
       const s = m.mesh.scale.x;
-      bolts.glow(_a, 3.2 * s * f, 14 * f, 6.5 * f, 2.2 * f, 1);
-      bolts.glow(_a, 0.9 * s, 30, 26, 20, 1);
+      // halo laranja moderado + núcleo branco pequeno + pluma esticada para trás
+      bolts.glow(_a, 1.5 * s * f, 5 * f, 2.2 * f, 0.7 * f, 1);
+      bolts.glow(_a, 0.42 * s, 14, 12, 9, 1);
       _b.copy(m.vel).normalize();
-      bolts.bolt(_a, _b, 7 * s * f, 0.55 * s, 9, 4, 1.4);
+      bolts.bolt(_a, _b, 4.2 * s * f, 0.32 * s, 7, 3.2, 1.1);
     }
     for (const d of this.decoys) d.draw(bolts, origin, now);
   }

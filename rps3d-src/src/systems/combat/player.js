@@ -12,7 +12,11 @@ const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3
 export class PlayerWeapons {
   constructor(sim) {
     this.sim = sim;
-    this.loadout = ['laser', 'laser'];
+    // grupos de armas (R alterna): laser (escudos), massa (casco), íons (desativa sem destruir)
+    this.groups = [['laser', 'laser'], ['massa', 'massa'], ['ion', 'ion']];
+    this.group = 0;
+    this.loadout = this.groups[0];
+    this.missileKinds = ['ir', 'radar'];
     this.missileKind = 'ir';
     this.cd = 0; this.gun = 0;
     this.lock = 0; this.lockTarget = null; this.lockAnnounced = false;
@@ -42,8 +46,20 @@ export class PlayerWeapons {
     this.firing = false;
     if (!p.alive) { this.lock = 0; return; }
     const fight = this.canFight(ctx);
-    // seleção de alvo
+    // seleção de alvo · grupo de armas (R) · tipo de míssil (G)
     if (fight && inp.pressed('target')) this.cycleTarget();
+    if (fight && inp.pressed('reload')) {
+      this.group = (this.group + 1) % this.groups.length;
+      this.loadout = this.groups[this.group];
+      const def = WEAPONS[this.loadout[0]];
+      ctx.bus.emit('notify', { text: `ARMAS: ${def.label}${def.kind === 'ion' ? ' — DESATIVA SEM DESTRUIR' : ''}`, kind: 'info' });
+    }
+    if (fight && inp.pressed('grenade')) {
+      const i = this.missileKinds.indexOf(this.missileKind);
+      this.missileKind = this.missileKinds[(i + 1) % this.missileKinds.length];
+      this.lock = 0;
+      ctx.bus.emit('notify', { text: `MÍSSEIS: ${MISSILES[this.missileKind].label} (${p.missiles[this.missileKind] ?? 0})`, kind: 'info' });
+    }
     const T = sim.playerTarget;
     if (T && (!T.alive || T.state === 'dead')) sim.playerTarget = null;
     // disparo
@@ -192,6 +208,6 @@ export class PlayerWeapons {
     const warnings = [];
     if (inc) warnings.push(inc.dist < 1200 ? 'MÍSSIL — CONTRAMEDIDAS!' : 'MÍSSIL TRAVADO');
     if (this.boardCandidate) warnings.push('F — ABORDAR');
-    return { contacts, target, lock: this.lock, missiles: p.missiles[this.missileKind] ?? 0, radarRange: R, warnings, cm: { ...p.cm } };
+    return { contacts, target, lock: this.lock, missiles: p.missiles[this.missileKind] ?? 0, missileKind: this.missileKind, weapon: (WEAPONS[this.loadout[0]] || WEAPONS.laser).label, radarRange: R, warnings, cm: { ...p.cm } };
   }
 }

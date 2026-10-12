@@ -4,7 +4,7 @@
 // instante. Escudo baixo → cintila e fica avermelhado; colapso → estilhaça.
 import * as THREE from 'three/webgpu';
 import { Fn, uniform, uniformArray, normalLocal, positionLocal, positionView, normalView, vec3, vec4, float, abs, dot, normalize, pow, exp, smoothstep, fract, min, max, mix, Loop, int, acos, clamp } from 'three/tsl';
-import { hash13 } from './tsl.js';
+import { hash13, sstep } from './tsl.js';
 
 const MAXI = 4;
 let _geo = null;
@@ -39,7 +39,7 @@ export class ShieldBubble {
     v.set(d.x, d.y, d.z, this.t);
     this.idx++;
     this.lastHit = this.t;
-    this.U.flash.value = Math.min(1.6, this.U.flash.value + 0.35 + strength * 0.4);
+    this.U.flash.value = Math.min(1.0, this.U.flash.value + 0.18 + strength * 0.25);
     this.mesh.visible = true;
   }
   shatter() { this.U.broken.value = 1; this.U.flash.value = 2.2; this.lastHit = this.t; this.mesh.visible = true; }
@@ -68,7 +68,7 @@ function makeMaterial(U) {
     const a2 = abs(fract(p.z.mul(0.866).add(p.y.mul(0.5))).sub(0.5));
     const a3 = abs(fract(p.y.add(p.x.mul(-0.5)).add(p.z.mul(0.3))).sub(0.5));
     const cell = min(min(a1, a2), a3);
-    const lines = smoothstep(0.07, 0.0, cell);
+    const lines = sstep(0.07, 0.0, cell);
     const sparkle = hash13(p.mul(3.0).floor());
     const hitSum = float(0).toVar();
     const ringSum = float(0).toVar();
@@ -78,10 +78,10 @@ function makeMaterial(U) {
       const ang = acos(clamp(dot(n, h.xyz), -1, 1));
       const life = exp(age.mul(-3.0)).mul(smoothstep(0.0, 0.02, age));
       // mancha quente no ponto de impacto
-      hitSum.addAssign(exp(ang.mul(ang).mul(-26.0)).mul(life).mul(2.2));
+      hitSum.addAssign(exp(ang.mul(ang).mul(-38.0)).mul(life).mul(1.6));
       // onda que corre pela bolha
       const front = age.mul(2.6);
-      ringSum.addAssign(exp(abs(ang.sub(front)).mul(-18.0)).mul(life).mul(smoothstep(1.6, 0.2, ang)));
+      ringSum.addAssign(exp(abs(ang.sub(front)).mul(-18.0)).mul(life).mul(sstep(1.6, 0.2, ang)));
     });
     const low = float(1).sub(U.level);
     const tint = mix(U.color, vec3(1.0, 0.35, 0.18), smoothstep(0.55, 0.95, low));
@@ -89,7 +89,7 @@ function makeMaterial(U) {
     const impact = hitSum.mul(lines.mul(0.7).add(0.45)).add(ringSum.mul(lines.mul(1.2).add(0.25)));
     const shards = U.broken.mul(lines).mul(smoothstep(0.55, 0.95, sparkle)).mul(3.0);
     const total = body.add(impact).add(shards);
-    return vec4(tint.mul(total).mul(2.4), float(1));
+    return vec4(tint.mul(total).mul(1.1), float(1));
   })();
   return mat;
 }

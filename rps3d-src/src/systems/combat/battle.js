@@ -41,6 +41,7 @@ export class Battle {
     this.scripts = [];
     this.wing = [];
     this.musicT = 0;
+    sim.playerDamageMul = spec.playerDamage ?? 1;
     if (spec.hostile) for (const [a, b, h] of spec.hostile) sim.relations.set(a, b, h);
     if (spec.allied) for (const [a, b, on] of spec.allied) sim.relations.setAllied(a, b, on);
     for (const g of spec.groups || []) this.addGroup(g);
@@ -83,7 +84,7 @@ export class Battle {
       const slot = i && leader ? V(off.x, off.y, off.z) : null;
       const opts = {
         quat: q.clone(), battle: this, side: g.side || g.faction, name: g.name ? (n > 1 ? `${g.name} ${i + 1}` : g.name) : undefined,
-        tags: g.tags, throttle: g.throttle, toughness: g.toughness, weapons: g.weapons, missiles: g.missiles, boardable: g.boardable, disableOnly: g.disableOnly,
+        tags: g.tags, skill: g.skill, throttle: g.throttle, toughness: g.toughness, weapons: g.weapons, missiles: g.missiles, boardable: g.boardable, disableOnly: g.disableOnly,
         launch: g.launch, launchInterval: g.launchInterval, maxLaunch: g.maxLaunch, firstLaunch: g.firstLaunch, passive: g.passive, cruise: g.cruise, force: g.force, hull: g.hull, invulnerable: g.invulnerable,
         ai: g.ai === false ? false : { ...(g.ai || {}), leader: g.wing ? sim.player : (slot ? leader : null), slot: g.wing ? V(side * (40 + k * 35), -6 * k, 30 + k * 25) : slot, anchor: base, holdFormation: g.wing ? !!g.holdFormation : false },
         callsign: g.callsigns?.[i],
@@ -138,6 +139,7 @@ export class Battle {
     if (this.ended) return;
     this.ended = true;
     this.result = result;
+    this.sim.playerDamageMul = 1;
     this.sim.emit('battle:end', { id: this.id, kind: this.kind, result, winner });
     this.sim.emit('music', { mood: 'explore', intensity: 0.4 });
     this.spec.onEnd?.(this, result);
@@ -172,11 +174,11 @@ function presetAurora(sim, o = {}) {
     { faction: 'hegemonia', classId: 'carrier', at: [-900, -1500, 350], dir: [1, 0.12, 0], name: 'Soberano', launch: true, launchInterval: 26, maxLaunch: 8, firstLaunch: 10, cruise: 0.25, tags: ['capital'] },
     { faction: 'hegemonia', classId: 'destroyer', at: [600, 1450, -260], dir: [1, -0.05, 0], name: 'Inflexível', cruise: 0.3, tags: ['capital'] },
     // esquadrilhas da Hegemonia já engajadas à frente
-    { faction: 'hegemonia', classId: 'fighter', count: 4, at: [1600, -300, 120], formation: 'cunha', spread: 90, callsigns: ['ÁGUIA-1', 'ÁGUIA-2', 'ÁGUIA-3', 'ÁGUIA-4'] },
-    { faction: 'hegemonia', classId: 'interceptor', count: 4, at: [2100, 500, -150], formation: 'par', spread: 110, callsigns: ['CETRO-1', 'CETRO-2', 'CETRO-3', 'CETRO-4'] },
-    // defensores da colônia vindo do planeta
-    { faction: 'frente', classId: 'fighter', count: 6, at: [3600, 200, 60], dir: [-1, 0, 0.05], formation: 'enxame', spread: 260, name: 'Milícia de Aurora' },
-    { faction: 'frente', classId: 'fighter', count: 4, at: [3200, -900, 300], dir: [-1, 0.2, 0.1], formation: 'par', spread: 180 },
+    { faction: 'hegemonia', classId: 'fighter', count: 4, at: [1600, -300, 120], formation: 'cunha', spread: 90, callsigns: ['ÁGUIA-1', 'ÁGUIA-2', 'ÁGUIA-3', 'ÁGUIA-4'], toughness: 1.5, skill: 1.3 },
+    { faction: 'hegemonia', classId: 'interceptor', count: 4, at: [2100, 500, -150], formation: 'par', spread: 110, callsigns: ['CETRO-1', 'CETRO-2', 'CETRO-3', 'CETRO-4'], toughness: 1.5, skill: 1.3 },
+    // defensores da colônia vindo do planeta (milícia: naves velhas, pilotos civis)
+    { faction: 'frente', classId: 'fighter', count: 6, at: [3600, 200, 60], dir: [-1, 0, 0.05], formation: 'enxame', spread: 260, name: 'Milícia de Aurora', toughness: 0.7, skill: 0.6 },
+    { faction: 'frente', classId: 'fighter', count: 4, at: [3200, -900, 300], dir: [-1, 0.2, 0.1], formation: 'par', spread: 180, toughness: 0.7, skill: 0.6 },
     { faction: 'frente', classId: 'frigate', at: [5200, -400, -500], dir: [-1, 0, 0.2], name: 'Esperança', tags: ['colonia'], boardable: false, cruise: 0.4 },
     { faction: 'frente', classId: 'freighter', count: 2, at: [6500, 900, 200], dir: [0.2, 0.1, 1], formation: 'par', spread: 300, name: 'Transporte de Evacuação', tags: ['civil', 'colonia'], ai: { mode: 'flee' }, weapons: [] },
   ];

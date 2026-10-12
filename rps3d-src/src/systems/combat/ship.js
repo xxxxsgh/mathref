@@ -65,6 +65,7 @@ export class Combatant {
     this.boardable = o.boardable ?? this.stats.boardable;
     this.disableOnly = !!o.disableOnly;
     this.invulnerable = !!o.invulnerable;
+    this.skill = o.skill ?? 1;
     // armas
     const wl = o.weapons || this.persona.weapons || this.stats.weapons;
     this.inst = null;
@@ -87,7 +88,9 @@ export class Combatant {
     this.cm = { flare: 0, chaff: 0, ...(this.stats.cm || {}) };
     this.cmCd = 0; this.missileCd = 2 + Math.random() * 3;
     this.boltColor = BOLT_COLORS[this.faction] || BOLT_COLORS.hegemonia;
-    this.engineColor = this.inst?.style?.engine || [0.6, 0.75, 1.0];
+    const ec = this.inst?.style?.engine || [0.6, 0.75, 1.0];
+    const em = Math.max(ec[0], ec[1], ec[2], 1e-3);
+    this.engineColor = [ec[0] / em, ec[1] / em, ec[2] / em]; // só a cor; a intensidade é do rastro
     this.entry = ctx.world.add(this.group, this.renderPos);
     // rastro do motor (média dos bocais)
     this.nozzle = new THREE.Vector3(0, 0, this.length * 0.45);
@@ -103,7 +106,7 @@ export class Combatant {
     }
     this.trail = null;
     if (!this.stats.capital && sim.fx) {
-      this.trail = sim.fx.engineTrails.alloc({ life: this.classId === 'fighter' || this.classId === 'interceptor' ? 0.9 : 1.4, width: Math.max(0.35, this.nozzleR * 0.75), minDist: 6, color: this.engineColor, intensity: 5.5, alpha: 0.9, seed: Math.random() });
+      this.trail = sim.fx.engineTrails.alloc({ life: this.classId === 'fighter' || this.classId === 'interceptor' ? 0.55 : 1.0, width: Math.max(0.25, this.nozzleR * 0.45), minDist: 5, color: this.engineColor, intensity: 1.6, alpha: 0.85, seed: Math.random() });
     }
     this.shieldFx = null;
     this.t = 0; this.flicker = 0; this.sparkT = 0;
@@ -167,7 +170,7 @@ export class Combatant {
     if (this.heat >= 1) this.overheat = true;
     if (this.shieldDelay > 0) this.shieldDelay -= dt;
     else if (this.shield < this.shieldMax && this.state === 'ok') this.shield = Math.min(this.shieldMax, this.shield + S.regen * dt);
-    this.ion = Math.max(0, this.ion - dt * this.hullMax * 0.02);
+    this.ion = Math.max(0, this.ion - dt * this.hullMax * 0.012);
     this.cmCd = Math.max(0, this.cmCd - dt);
     this.missileCd = Math.max(0, this.missileCd - dt);
     for (const w of this.weapons) w.cd = Math.max(0, w.cd - dt);
@@ -191,7 +194,7 @@ export class Combatant {
     if (this.shieldFx) this.shieldFx.frame(dt, this.shieldFrac);
     if (this.trail) {
       if (this.state === 'ok' && this.throttle > 0.05) this.trail.push(this.toWorldRender(this.nozzle, _v), this.sim.renderNow);
-      this.trail.intensity = 2.5 + this.throttle * 4 + (this.boost ? 5 : 0);
+      this.trail.intensity = 0.4 + this.throttle * 0.9 + (this.boost ? 0.8 : 0);
     }
   }
 

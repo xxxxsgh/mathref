@@ -54,6 +54,7 @@ export class FighterAI {
     this.evadedMissile = null;
     this.aimErr = new THREE.Vector3();
     this.aimErrT = 0;
+    this.aimPoint = new THREE.Vector3();
     ship.ai = this;
     if (!ship.callsign) {
       const list = CALLSIGNS[ship.faction] || ['UNIDADE'];
@@ -252,11 +253,13 @@ export class FighterAI {
         this.aimErrT -= dt;
         if (this.aimErrT <= 0) {
           this.aimErrT = 0.5 + sim.rand();
-          const e = (1 - P.accuracy) * 22;
+          // contra o jogador a IA erra mais (jogo justo); `skill` vem do grupo da batalha
+          const e = (1 - P.accuracy) * 22 * (T.isPlayer ? 2.0 : 1) / (s.skill || 1);
           this.aimErr.set((sim.rand() - 0.5) * e, (sim.rand() - 0.5) * e, (sim.rand() - 0.5) * e);
         }
         const dist = _b.copy(aimAt).sub(s.pos).length();
         _a.addScaledVector(this.aimErr, clamp(dist / 800, 0.3, 2));
+        this.aimPoint.copy(_a);
         _want.copy(_a).sub(s.pos).normalize();
         // aproximação rápida demais / muito perto → rompe
         const closing = -_b.normalize().dot(_c.copy(tv).sub(s.vel));
@@ -350,25 +353,26 @@ export class FighterAI {
     if (s.overheat || !s.weapons.length) return;
     const w0 = s.weapons[0].def;
     if (dist > w0.range * 0.85) return;
-    _a.copy(_want);
+    // canhões com cardã (±4°): basta o nariz estar perto da antecipação
+    _a.copy(this.aimPoint).sub(s.pos).normalize();
     const ang = Math.acos(clamp(fwd.dot(_a), -1, 1));
-    const cone = Math.max(0.02, Math.atan2(T.hitR * 1.6, dist)) + (1 - s.persona.accuracy) * 0.03;
-    if (ang > cone) return;
+    const gimbal = 0.07 + (s.persona.aggression - 0.5) * 0.02;
+    if (ang > gimbal) return;
     // não atira através de aliados
     this.fireHold -= dt;
     if (this.fireHold > 0) return;
     for (const o of sim.combatants()) {
       if (o === s || o === T || !o.alive || sim.relations.shipsHostile(s, o)) continue;
       _b.copy(o.pos).sub(s.pos);
-      const along = _b.dot(fwd);
+      const along = _b.dot(_a);
       if (along < 0 || along > dist) continue;
-      if (_b.addScaledVector(fwd, -along).lengthSq() < (o.hitR + 12) ** 2) { this.fireHold = 0.4; return; }
+      if (_b.addScaledVector(_a, -along).lengthSq() < (o.hitR + 12) ** 2) { this.fireHold = 0.4; return; }
     }
     for (const w of s.weapons) {
       if (w.cd > 0) continue;
       w.cd = 1 / w.def.rof * (0.9 + sim.rand() * 0.25);
       const muzzle = s.toWorld(w.hp, _c);
-      _d.copy(fwd).multiplyScalar(Math.min(dist, w.def.range * 0.8)).add(s.pos).sub(muzzle).normalize();
+      _d.copy(this.aimPoint).sub(muzzle).normalize();
       sim.projectiles.fire(s, w.def, muzzle, _d, { inherit: s.vel, muzzleLocal: w.hp, spreadMul: 1 + (1 - s.persona.accuracy) * 2 });
       s.heat = Math.min(1.05, s.heat + w.def.heat);
     }
