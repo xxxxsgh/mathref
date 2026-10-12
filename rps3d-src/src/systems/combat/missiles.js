@@ -21,7 +21,7 @@ class Missile {
     const sim = sys.sim;
     this.mesh = makeMissileMesh(def.id === 'torpedo' ? 2.4 : 1);
     this.entry = sim.ctx.world.add(this.mesh, this.renderPos);
-    this.smoke = sim.fx?.smoke.alloc({ life: def.id === 'torpedo' ? 6 : 3.6, width: def.id === 'torpedo' ? 2.2 : 1.3, grow: 12, minDist: def.id === 'torpedo' ? 10 : 14, color: [0.62, 0.6, 0.58], alpha: 0.95, heat: 0.5, seed: sim.rand() });
+    this.smoke = sim.fx?.smoke.alloc({ life: def.id === 'torpedo' ? 6 : 3.6, width: def.id === 'torpedo' ? 2.2 : 1.3, grow: 12, minDist: def.id === 'torpedo' ? 10 : 8, color: [0.78, 0.76, 0.73], alpha: 0.95, heat: 0.5, seed: sim.rand() });
     this.motorT = 0;
   }
 
