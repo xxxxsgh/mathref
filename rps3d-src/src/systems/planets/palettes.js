@@ -18,9 +18,9 @@ const BASE = {
     rock: '#5a544e', rock2: '#8a8070', high: '#6f6a5a', snow: '#f2f5f8', wet: '#1f4a30', glow: '#ffd27a',
   },
   toxic: {
-    deep: '#1f2c06', shallow: '#7fa21a', sand: '#7d7a3a', seabed: '#3a4012',
-    lowA: '#6f8f1c', lowB: '#b7c43a', forest: '#2a3510', alien: '#5c1f6e',
-    rock: '#3e3a2c', rock2: '#5d553a', high: '#4f4a36', snow: '#c8d49a', wet: '#2c3a0e', glow: '#b6ff3a',
+    deep: '#1c2408', shallow: '#8fae1e', sand: '#c2ae46', seabed: '#3a3a10',
+    lowA: '#4e4a22', lowB: '#8a8034', forest: '#2e1438', alien: '#8a2e8e',
+    rock: '#3a3328', rock2: '#6f6046', high: '#5a5038', snow: '#ece6b0', wet: '#232a10', glow: '#6dffc0',
   },
   // desértico: dunas laranja, mesetas com estratos vermelho/ocre/creme
   desert: {

@@ -85,7 +85,59 @@ function surface(type, P, U, S, I) {
   const vMeso = meso.r.sub(0.5).mul(fMeso);
   let albedo, rough, emissive = vec3(0), bump, bumpScale = float(1), metal = float(0);
 
-  if (type === 'lush' || type === 'ocean' || type === 'toxic') {
+  if (type === 'toxic') {
+    // tóxico: lodo oliva e crostas de enxofre, tapetes de fungos violeta e
+    // magenta (colônias em manchas de km até chapéus de ~1 m), poças ácidas com
+    // borda de sal amarelo-esbranquiçado, pináculos de fungo petrificado em
+    // camadas e pontos bioluminescentes que se acendem ao anoitecer
+    // lama rachada em polígonos (~0,7 m) com bordas levantadas
+    const mudC = N3(det.mul(fq(0.7)).add(0.47)).b;
+    const mudCrack = smoothstep(0.16, 0.04, mudC).mul(fade(dist, 0.7));
+    const mud = mix(C3(P.lowA), C3(P.lowB), smoothstep(0.35, 0.75, macro.r.add(m.sub(0.5).mul(0.7)).add(vMeso.mul(0.5))))
+      .mul(vFine.mul(0.45).add(vMicro.mul(0.6)).add(1)).mul(float(1).sub(mudCrack.mul(0.45)));
+    // colônias: manchas grandes (macro2) recortadas por bordas de crescimento (meso)
+    const colony = smoothstep(0.4, 0.5, m.mul(0.55).add(macro2.g.mul(0.5)).add(meso.g.sub(0.5).mul(0.45)).add(vMicro.mul(0.25)).sub(slope.mul(0.9)));
+    const capsN = N3(det.mul(fq(1.4)).add(0.21));
+    const caps = smoothstep(0.55, 0.85, capsN.b).mul(fade(dist, 1.4));        // chapéus de ~1 m
+    const clumps = N3(det.mul(fq(7))).b.mul(fade(dist, 7));                     // tufos de ~7 m
+    const hue = smoothstep(0.3, 0.7, macro.g.add(meso.b.sub(0.5).mul(0.6)));
+    const fungus = mix(C3(P.forest), C3(P.alien).mul(1.35), hue.mul(0.7).add(clumps.mul(0.5)).clamp(0, 1))
+      .mul(caps.mul(0.7).add(clumps.mul(0.4)).add(0.7));
+    // halo amarelado nas bordas da colônia (micélio exposto)
+    const rim = smoothstep(0.0, 0.5, colony).mul(smoothstep(1.0, 0.5, colony));
+    // crosta de enxofre/sal perto das poças e nas baixadas úmidas, rachada em placas
+    const shoreM = smoothstep(14, 2, h.add(vMicro.mul(8))).mul(float(1).sub(smoothstep(0.12, 0.3, slope)));
+    const plates = N3(det.mul(fq(3))).b;
+    const crack = smoothstep(0.1, 0.0, plates).mul(fade(dist, 3));
+    const crust = mix(C3(P.sand).mul(1.25), C3(P.snow), smoothstep(6, 1, h)).mul(float(1).sub(crack.mul(0.6)));
+    // pináculos e encostas: rocha em camadas com prateleiras de fungo
+    const bands = h.mul(1 / 7).add(vMicro.mul(0.8)).add(macro.b.mul(4));
+    const b1 = sin(bands.mul(2.3)).mul(0.5).add(0.5), b2 = sin(bands.mul(6.1).add(1.7)).mul(0.5).add(0.5);
+    const rockCol = mix(C3(P.rock), C3(P.rock2), b1.mul(0.8).add(vFine.mul(0.6))).mul(b2.mul(0.18).add(0.88))
+      .mul(vMicro.mul(0.6).add(1));
+    const shelf = smoothstep(0.82, 0.95, b2).mul(fade(dist, 25));
+    const rockF = mix(rockCol, C3(P.alien).mul(1.2), shelf.mul(0.7));
+    const rockMask = smoothstep(0.3, 0.46, slope.add(vMicro.mul(0.15)).add(q.mul(0.1)));
+    const wet = s.mul(smoothstep(0.3, 0.1, slope));
+    let g = mix(mud, C3(P.wet).mul(vMicro.mul(0.5).add(1)), wet.mul(0.55));
+    g = mix(g, C3(P.sand).mul(1.1), rim.mul(0.35).mul(float(1).sub(wet)));
+    g = mix(g, fungus, colony.mul(float(1).sub(shoreM)));
+    g = mix(g, crust, shoreM);
+    g = mix(g, rockF, rockMask);
+    const bed = mix(C3(P.sand), C3(P.seabed), smoothstep(-2, -40, h));
+    albedo = mix(bed.mul(vMicro.add(1)), g, smoothstep(-3, 0.5, h));
+    rough = mix(mix(float(0.86), float(0.55), colony.mul(caps).mul(0.6)), float(0.4), max(wet.mul(0.5), shoreM.mul(0.3)));
+    rough = mix(rough, float(0.8), rockMask);
+    bump = vFine.mul(0.35).add(vMicro.mul(2.0)).add(caps.mul(colony).mul(0.9)).add(clumps.mul(colony).mul(1.1)).sub(mudCrack.mul(float(1).sub(colony)).mul(0.12))
+      .sub(crack.mul(shoreM).mul(0.3)).add(rockMask.mul(b2.mul(0.9)));
+    bumpScale = mix(float(0.7), float(1.3), rockMask);
+    // bioluminescência: chapéus e veios do micélio (ciano-esverdeado); de dia
+    // quase não aparece, ao anoitecer pontilha os campos
+    const glowSpots = smoothstep(0.82, 0.95, N3(det.mul(fq(2.2)).add(0.63)).b).mul(colony).mul(fade(dist, 2.2).mul(0.8).add(0.2));
+    const veins = smoothstep(0.035, 0.0, abs(N3(det.mul(fq(11)).add(0.4)).r.sub(0.5))).mul(rim.add(colony.mul(0.3))).mul(fade(dist, 11));
+    const dusk = float(1).sub(smoothstep(-0.05, 0.3, dot(up, S.sunL))).mul(0.96).add(0.04);
+    emissive = C3(P.glow).mul(glowSpots.mul(0.5).add(veins.mul(0.2))).mul(dusk);
+  } else if (type === 'lush' || type === 'ocean') {
     // vegetação
     const meadow = mix(C3(P.lowA), C3(P.lowB), smoothstep(0.3, 0.75, macro.r.add(m.sub(0.5).mul(0.9)).add(vMeso.mul(0.6))));
     const alienPatch = smoothstep(0.6, 0.74, macro2.g.add(vMeso.mul(0.35)).add(vMicro.mul(0.2)));
@@ -224,18 +276,33 @@ function surface(type, P, U, S, I) {
     // manchas de poeira fina e pedregulhos escuros perto das crateras
     const highland = smoothstep(0.35, 0.65, macro2.g.add(vMeso.mul(0.3)));
     const reg = mix(mix(C3(P.lowA), C3(P.lowB), smoothstep(0.3, 0.7, macro.r.add(vMeso.mul(0.6)))), C3(P.high).mul(0.85), highland.mul(0.5))
-      .mul(vFine.mul(0.35).add(vMicro.mul(0.5)).add(1));
+      .mul(vFine.mul(0.25).add(vMicro.mul(0.3)).add(1));
+    // crateras pequenas (de ~1,5 m a ~25 m) como relevo de pixel: tigela
+    // (Worley) com borda levantada — o sol rasante as recorta em meias-luas
+    const crat = (lambda, salt) => {
+      const w = float(1).sub(N3(det.mul(fq(lambda)).add(salt)).b); // distância ao centro (Worley F1, 0..~1)
+      const bowl = smoothstep(0.0, 0.32, w).sub(1.0);              // −1 no fundo → 0 na borda
+      const rimB = smoothstep(0.26, 0.34, w).mul(smoothstep(0.48, 0.34, w)).mul(0.45);
+      // nem toda célula tem cratera (máscara de ruído numa escala maior)
+      const keep = smoothstep(0.38, 0.62, N3(det.mul(fq(lambda * 2.7)).add(salt + 0.2)).g);
+      return bowl.add(rimB).mul(keep).mul(fade(dist, lambda));
+    };
+    const c1 = crat(22, 0.13), c2 = crat(6, 0.57), c3 = crat(1.6, 0.91);
     const boulders = smoothstep(0.8, 0.92, N3(det.mul(fq(1.6))).b).mul(fade(dist, 1.6)).mul(s.mul(0.8).add(q.mul(0.6)).add(0.15));
     const ej = s.mul(smoothstep(0.4, 0.7, micro.r.add(meso.g.mul(0.5))));
+    // raios de ejeção finos e claros em volta das crateras jovens
+    const rays = smoothstep(0.6, 0.85, N3(det.mul(fq(40)).add(0.3)).g).mul(s).mul(0.5);
     const rockMask = smoothstep(0.3, 0.5, slope.add(vMicro.mul(0.2)));
     let g = mix(reg, C3(P.deep).mul(vMicro.mul(0.5).add(1.2)), mare);
-    g = mix(g, C3(P.snow), ej.mul(0.75));
+    g = mix(g, C3(P.snow), ej.mul(0.6).add(rays).clamp(0, 0.85));
+    // fundo das crateras pequenas um pouco mais escuro (poeira compactada)
+    g = g.mul(c1.mul(0.08).add(c2.mul(0.05)).add(1));
     g = mix(g, mix(C3(P.rock), C3(P.rock2), micro.g), rockMask);
     g = mix(g, C3(P.rock).mul(0.6), boulders);
     albedo = g;
-    rough = float(0.92);
-    bump = vFine.mul(0.5).add(vMicro.mul(1.2)).add(boulders.mul(1.2));
-    bumpScale = float(0.7);
+    rough = float(0.94);
+    bump = c1.mul(2.2).add(c2.mul(0.7)).add(c3.mul(0.18)).add(vFine.mul(0.12)).add(vMicro.mul(0.35)).add(boulders.mul(0.5));
+    bumpScale = float(0.8);
   }
   albedo = albedo.mul(grain.mul(type === 'ice' ? 0.03 : 0.08).add(1));
   bump = bump.add(grain.mul(type === 'ice' ? 0.012 : 0.04));
@@ -262,6 +329,9 @@ export function stateUniforms() {
     skyHs: uniform(new THREE.Vector3(0.4, 0.5, 0.6)), skyHo: uniform(new THREE.Vector3(0.4, 0.5, 0.6)), // horizonte do lado do sol / resto
     axis: uniform(new THREE.Vector3(0, 1, 0)),
     city: uniform(0),
+    // luz noturna (estrelas, nebulosa e brilho de planetas/anéis no céu): o
+    // relevo do lado noturno nunca vira silhueta preta
+    nightAmb: uniform(new THREE.Vector3(0.06, 0.075, 0.12)),
     flash: uniform(0),
   };
 }
@@ -323,6 +393,9 @@ export function makeTerrainMaterials(body, P, U, S, opts) {
       const clus = smoothstep(0.6, 0.78, N3(up.mul(U.R.div(2500))).r).mul(smoothstep(0.5, 0.95, N3(up.mul(U.R.div(260))).b));
       night = vec3(1.0, 0.6, 0.28).mul(clus.mul(land).mul(S.city).mul(float(1).sub(dayAmt)).mul(1.4));
     }
+    // visão noturna (escotópica): cores quase somem, tudo puxa para o azul
+    const albL = dot(surf.albedo, vec3(0.2126, 0.7152, 0.0722));
+    night = night.add(mix(vec3(albL), surf.albedo, 0.3).mul(S.nightAmb).mul(0.6).mul(float(1).sub(smoothstep(-0.15, 0.02, dot(up, S.sunL)))));
     const mat = mat0;
     mat.fog = false;
     if (near) {
@@ -420,7 +493,15 @@ export function makeWaterMaterial(body, P, U, S, opts) {
   const foamCol = vec3(0.9, 0.93, 0.95).mul(sunDiff.add(S.amb));
   let col = mix(lit, sky.mul(0.9), fres).add(S.sunCol.mul(sunG).mul(spec).mul(day).mul(float(1).sub(foam)));
   col = mix(col, foamCol, foam.mul(0.85));
-  if (toxic) col = col.add(C3(P.glow).mul(0.02).mul(float(1).sub(day)));
+  if (toxic) {
+    // ácido: líquido turvo amarelo-esverdeado que reflete pouco, com nata de
+    // espuma sulfurosa à deriva e brilho fraco à noite
+    const scum = smoothstep(0.62, 0.8, N3(aDet.mul(fq(9)).add(vec3(T.mul(0.004), 0, 0))).b.add(foamN.mul(0.25))).mul(fade(dist, 30));
+    const murk = C3(P.shallow).mul(sunDiff.mul(1.1).add(S.amb.mul(0.6)));
+    col = mix(col, murk, float(0.55).mul(float(1).sub(fres.mul(0.6))));
+    col = mix(col, C3(P.snow).mul(sunDiff.add(S.amb)).mul(0.9), scum.mul(0.7));
+    col = col.add(C3(P.glow).mul(0.02).mul(float(1).sub(day)));
+  }
   // água rasa já tinge a areia de turquesa logo no primeiro metro
   let alpha = clamp(smoothstep(0.0, 2.5, depth).mul(0.72).add(smoothstep(2.5, 12.0, depth).mul(0.23)).add(fres.mul(0.5)).add(foam), 0, 1);
   let o = col;

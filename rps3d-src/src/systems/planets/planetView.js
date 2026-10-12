@@ -32,7 +32,7 @@ export class PlanetView {
     this.S.city.value = body.colony ? 1 : 0;
     this.S.cloudCov.value = 0;
     // neblina de altura por bioma: densidade no nível do mar (1/m) e escala (m)
-    const HF = { lush: [1 / 26000, 160], ocean: [1 / 30000, 140], toxic: [1 / 3500, 260], volcanic: [1 / 9000, 380], ice: [1 / 22000, 200], desert: [1 / 30000, 300] }[body.type];
+    const HF = { lush: [1 / 26000, 160], ocean: [1 / 30000, 140], toxic: [1 / 6000, 220], volcanic: [1 / 9000, 380], ice: [1 / 22000, 200], desert: [1 / 30000, 300] }[body.type];
     if (HF && body.atmosphere && body.kind !== 'gas_giant') { this.S.hfA.value = HF[0]; this.S.hfH.value = HF[1]; }
     this.hfBase = [this.S.hfA.value, this.S.hfH.value];
     this.group = new THREE.Group();

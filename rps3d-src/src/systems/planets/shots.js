@@ -234,7 +234,7 @@ export function registerShots(ctx, api, st) {
     for (const dir of dirsOf(d)) { const r = rate(d, h, dir); if (r > bl) { bl = r; look = dir; } }
     look = look.clone().applyAxisAngle(d, P(ctx, 'yaw', 0) * D2R).addScaledVector(d, P(ctx, 'pitch', 0.1)).normalize();
     localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + 1.8), look, d);
-    api.weather.force('blizzard', P(ctx, 'storm', 0.72));
+    api.weather.force('blizzard', P(ctx, 'storm', 0.6));
     api.settle();
   });
 
@@ -352,26 +352,35 @@ export function registerShots(ctx, api, st) {
       const yy = 1 - (2 * (i + 0.5)) / N, rr = Math.sqrt(1 - yy * yy), ph = i * 2.39996;
       const d = new THREE.Vector3(Math.cos(ph) * rr, yy, Math.sin(ph) * rr);
       const gEl = Math.asin(d.dot(toG)) / D2R, sEl = Math.asin(d.dot(sunL)) / D2R;
-      if (gEl < 8 || gEl > 26 || sEl < 3 || sEl > 14) continue;
+      if (gEl < 8 || gEl > 26 || sEl < 10 || sEl > 30) continue;
       const h0 = T.height(d.x, d.y, d.z);
       const gT = toG.clone().addScaledVector(d, -toG.dot(d)).normalize();
       const sT = sunL.clone().addScaledVector(d, -sunL.dot(d)).normalize();
       const side = 1 - Math.abs(gT.dot(sT)); // sol de lado em relação ao olhar
-      let ang = -1;
-      for (const k of [600, 1200, 2000, 3200]) {
+      // borda de cratera: o chão cai à frente (tigela) e sobe de novo na borda
+      // oposta, que fica abaixo do planeta no céu
+      let lo = Infinity, far = -Infinity, ang = -1;
+      for (const k of [400, 900, 1500, 2200, 3000, 4000]) {
         const p = d.clone().addScaledVector(gT, k / b.radius).normalize();
-        ang = Math.max(ang, (T.height(p.x, p.y, p.z) - h0 - k * k / (2 * b.radius)) / k);
+        lo = Math.min(lo, T.height(p.x, p.y, p.z) - k * k / (2 * b.radius));
       }
-      const s = -Math.abs(gEl - 16) * 2 - Math.abs(ang - 0.06) * 300 + side * 60 - Math.abs(sEl - 7);
+      for (const k of [5000, 6500, 8000, 10000]) {
+        const p = d.clone().addScaledVector(gT, k / b.radius).normalize();
+        const hh = T.height(p.x, p.y, p.z) - k * k / (2 * b.radius);
+        far = Math.max(far, hh); ang = Math.max(ang, (hh - h0) / k);
+      }
+      const depth = Math.min(h0 - lo, 500), wall = Math.min(far - lo, 500);
+      const blocked = Math.max(0, Math.atan(ang) / D2R - (gEl - 6)) * 40;
+      const s = depth * 0.6 + wall * 0.3 - Math.abs(gEl - 15) * 4 + side * 60 - Math.abs(sEl - 18) * 3 - blocked;
       if (s > bs) { bs = s; best = d; }
     }
     const d = best || api.dirForSun(b, 8, 0);
     const gT = toG.clone().addScaledVector(d, -toG.dot(d)).normalize();
     const gEl = Math.asin(d.dot(toG));
-    const look = gT.clone().multiplyScalar(Math.cos(gEl * 0.55)).addScaledVector(d, Math.sin(gEl * 0.55)).normalize()
+    const look = gT.clone().multiplyScalar(Math.cos(gEl * 0.4)).addScaledVector(d, Math.sin(gEl * 0.4)).normalize()
       .applyAxisAngle(d, P(ctx, 'yaw', 8) * D2R);
     const h = T.height(d.x, d.y, d.z);
-    localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + P(ctx, 'alt', 6)), look, d);
+    localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + P(ctx, 'alt', 14)), look, d);
     api.settle();
   });
 
@@ -421,8 +430,12 @@ export function registerShots(ctx, api, st) {
     setup(ctx, 'halden', 60);
     const sys = ctx.universe.system;
     const b = body(ctx, 'Aurora');
-    const poi = sys.pois.find((p) => p.kind === 'opening_battle');
-    const cam = poi ? poi.pos.clone() : b.pos.clone().add(new THREE.Vector3(-b.radius * 2.4, b.radius * 0.5, b.radius * 1.2));
+    // fase gibosa (sol a ~70° do olhar): terminador, halo fino no limbo e
+    // brilho especular do oceano — longe do campo de destroços da batalha
+    const sunDir = sys.star.pos.clone().sub(b.pos).normalize();
+    const camDir = sunDir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), P(ctx, 'phase', 68) * D2R)
+      .applyAxisAngle(new THREE.Vector3(1, 0, 0), P(ctx, 'tilt', 12) * D2R).normalize();
+    const cam = b.pos.clone().addScaledVector(camDir, b.radius * P(ctx, 'dist', 2.9));
     const toC = b.pos.clone().sub(cam).normalize();
     const up = new THREE.Vector3(0, 1, 0);
     const right = new THREE.Vector3().crossVectors(toC, up).normalize();
@@ -462,7 +475,7 @@ export function registerShots(ctx, api, st) {
     setup(ctx, 's6', 64);
     const b = ctx.universe.system.bodies.find((x) => x.type === 'toxic') || ctx.universe.system.bodies[0];
     const v = api.view(b);
-    const d = search(api, b, P(ctx, 'elev', 5), (d, h, T) => {
+    const d = search(api, b, P(ctx, 'elev', 16), (d, h, T) => {
       if (h < 10 || h > 200) return -Infinity;
       const { tan } = sunTangent(api, b, d, ctx);
       const side = new THREE.Vector3().crossVectors(d, tan).normalize();
@@ -473,7 +486,7 @@ export function registerShots(ctx, api, st) {
     const look = tan.clone().applyAxisAngle(d, P(ctx, 'yaw', 55) * D2R).addScaledVector(d, P(ctx, 'pitch', -0.04)).normalize();
     const h = v.terrain.height(d.x, d.y, d.z);
     localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + Math.max(h, 0) + P(ctx, 'alt', 8)), look, d);
-    api.weather.force('acid', P(ctx, 'storm', 0.35));
+    api.weather.force('acid', P(ctx, 'storm', 0.12));
     api.settle();
   });
 }

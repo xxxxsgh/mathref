@@ -122,12 +122,16 @@ export function makeCloudMaterials(body, U, S, opts) {
     // luz do sol nas nuvens: transmitância avaliada perto do chão (≈350 m) para
     // que os pores do sol tinjam as nuvens como numa atmosfera "grande"
     const pm0 = ro.add(rd.mul(tStart.add(seg.mul(0.3))));
-    const pm = normalize(pm0).mul(min(length(pm0), U.R.add(mix(float(900.0), float(2600.0), S.cloudFar))));
+    const pm = normalize(pm0).mul(min(length(pm0), U.R.add(mix(float(900.0), float(4200.0), S.cloudFar))));
     const sunC0 = S.sunCol.mul(body.atmosphere ? sunTrans(U, pm, S.sunL) : vec3(1)).mul(C.tint).mul(0.8);
     // nuvem de dia é branca: tira metade do tom da estrela (o avermelhado do
     // pôr do sol, que vem da transmitância, continua inteiro)
     const starTint = S.sunCol.div(max(dot(S.sunCol, vec3(0.2126, 0.7152, 0.0722)), 1e-4));
-    const sunC = sunC0.div(mix(vec3(1.0), starTint, 0.5)).toVar();
+    const sunC1 = sunC0.div(mix(vec3(1.0), starTint, 0.5));
+    // vistas da órbita, as nuvens do terminador ficam salmão/rosadas e
+    // escurecem — não vermelho saturado de brasa (parte do tom é dessaturada)
+    const sunL1 = dot(sunC1, vec3(0.2126, 0.7152, 0.0722));
+    const sunC = mix(sunC1, vec3(sunL1).mul(vec3(1.0, 0.86, 0.8)), S.cloudFar.mul(0.65)).toVar();
     const ambC = S.amb.mul(1.7).add(S.skyZ.mul(0.2)).mul(C.tint).toVar();
     const sigma = C.density;
     const k = float(curve);
