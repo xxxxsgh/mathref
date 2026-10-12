@@ -146,7 +146,7 @@ export class Maps {
     const X = x * cy - z * sy, Z = x * sy + z * cy;
     const cp = Math.cos(S.pitch), sp = Math.sin(S.pitch);
     const Y = y * cp - Z * sp, D = y * sp + Z * cp;
-    out.x = (W - side) * 0.5 + X * scale; out.y = H * 0.54 - Y * scale; out.d = D; out.s = scale;
+    out.x = (W - side) * 0.5 + X * scale; out.y = H * 0.56 - Y * scale; out.d = D; out.s = scale;
     return out;
   }
 

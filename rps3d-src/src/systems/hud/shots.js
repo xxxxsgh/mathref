@@ -62,12 +62,13 @@ export function registerShots(ctx, H, api) {
   ctx.shots.register('hud-flight-combat', async (ctx) => {
     prep(ctx, 'kessa');
     const ver = body(ctx, 'Verídia');
-    const fr = orbitFrame(ctx, ver, { alt: P(ctx, 'alt', 2.2), phase: P(ctx, 'phase', 58), hdg: P(ctx, 'hdg', 70) });
-    // nariz ligeiramente para baixo: o planeta ocupa a parte de baixo do vidro
-    const pitch = P(ctx, 'pitch', -61) * D2R;
-    const fwd = fr.F.clone().multiplyScalar(Math.cos(pitch)).addScaledVector(fr.U, Math.sin(pitch)).normalize();
+    const fr = orbitFrame(ctx, ver, { alt: P(ctx, 'alt', 2.6), phase: P(ctx, 'phase', 35), hdg: P(ctx, 'hdg', 70) });
+    // olhar: o planeta iluminado embaixo à direita do para-brisa
+    const toP = ver.pos.clone().sub(fr.pos).normalize();
+    const side0 = new THREE.Vector3().crossVectors(toP, fr.F).normalize();
+    const fwd = toP.clone().applyAxisAngle(side0, P(ctx, 'up', 58) * D2R).applyAxisAngle(fr.U, P(ctx, 'yaw', 14) * D2R).normalize();
     const up = fr.U.clone().addScaledVector(fwd, -fr.U.dot(fwd)).normalize();
-    const q = look(fwd, up).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), P(ctx, 'roll', 8) * D2R));
+    const q = look(fwd, up).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), P(ctx, 'roll', 10) * D2R));
     spawnShip(ctx, fr.pos, q, fwd.clone().multiplyScalar(160), { throttle: 0.62, third: false });
     const R = new THREE.Vector3(1, 0, 0).applyQuaternion(q), Uq = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
     const cb = ctx.services.combat;
@@ -76,10 +77,10 @@ export function registerShots(ctx, H, api) {
         cb.setHostile('player', 'corsarios', true);
         const at = (f, r, u) => fr.pos.clone().addScaledVector(fwd, f).addScaledVector(R, r).addScaledVector(Uq, u);
         const fly = (d) => look(d, Uq);
-        const e1 = cb.spawn('corsarios', 'fighter', at(P(ctx, 'tf', 210), P(ctx, 'tr', 46), P(ctx, 'tu', 12)), { quat: fly(R.clone().multiplyScalar(-1).addScaledVector(fwd, 0.3).normalize()), vel: R.clone().multiplyScalar(-150).addScaledVector(fwd, 120), ai: false, callsign: 'GARRA-3', force: true });
+        const e1 = cb.spawn('corsarios', 'fighter', at(P(ctx, 'tf', 120), P(ctx, 'tr', -14), P(ctx, 'tu', 22)), { quat: fly(fwd.clone().addScaledVector(R, -0.25).normalize()), vel: fwd.clone().multiplyScalar(158).addScaledVector(R, -14), ai: false, callsign: 'GARRA-3', force: true });
         const e2 = cb.spawn('corsarios', 'interceptor', at(900, -260, 80), { quat: fly(fwd.clone().negate()), vel: fwd.clone().multiplyScalar(-140), ai: false, force: true });
         const e3 = cb.spawn('corsarios', 'fighter', at(1500, 380, -60), { quat: fly(R), vel: R.clone().multiplyScalar(120), ai: false, force: true });
-        const fz = cb.spawn('guilda', 'freighter', at(2600, 520, -180), { quat: fly(R.clone().negate()), vel: R.clone().multiplyScalar(-40), ai: false, name: 'Cargueiro Tessaly', force: true });
+        const fz = cb.spawn('guilda', 'freighter', at(2600, 520, -180), { quat: fly(R.clone().negate()), vel: R.clone().multiplyScalar(-40), ai: false, name: 'Cargueiro Tessaly', callsign: '', force: true });
         const al = cb.spawn('frente', 'fighter', at(260, -150, -40), { quat: fly(fwd), vel: fwd.clone().multiplyScalar(165), ai: false, callsign: 'FAÍSCA-2', force: true });
         void fz; void al; void e3;
         if (e1) { e1.hull = e1.hullMax * 0.62; e1.shield = e1.shieldMax * 0.18; }
@@ -100,7 +101,31 @@ export function registerShots(ctx, H, api) {
       radio: { faction: 'frente', speaker: 'IARA VOSS', text: 'Paoli, o cargueiro está perdendo os escudos! Tire esse corsário da cauda dele — *agora*.', priority: 3 },
       notes: [['ALVO TRAVADO — GARRA-3', 'info'], ['+250 CRÉDITOS', 'reward', 'Abate confirmado']],
     });
-    hold(H, () => {});
+    // no 1º quadro a câmera real do cockpit já existe: recoloca as naves no
+    // referencial DELA (o olho do cockpit pode não coincidir com o nariz)
+    let placed = false;
+    hold(H, () => {
+      if (!cb?.ships) return;
+      placed = true;
+      const cq = ctx.camera.quaternion, c0 = ctx.player.camWorld.clone();
+      const F2 = V(0, 0, -1).applyQuaternion(cq), R2 = V(1, 0, 0).applyQuaternion(cq), U2 = V(0, 1, 0).applyQuaternion(cq);
+      const pv = ctx.player.vel.clone();
+      const put = (s, f, r, u, dir, spd) => {
+        if (!s) return;
+        const p = c0.clone().addScaledVector(F2, f).addScaledVector(R2, r).addScaledVector(U2, u);
+        s.pos.copy(p); s.prevPos.copy(p); s.renderPos?.copy(p);
+        const q2 = look(dir, U2); s.quat.copy(q2); s.prevQuat?.copy(q2);
+        s.vel.copy(pv).addScaledVector(dir, spd);
+      };
+      const list = cb.ships;
+      const find = (cs) => list.find((x) => x.callsign === cs);
+      put(find('GARRA-3'), P(ctx, 'tf', 130), P(ctx, 'tr', 26), P(ctx, 'tu', 18), F2.clone().addScaledVector(R2, 0.35).addScaledVector(U2, 0.1).normalize(), 12);
+      put(find('FAÍSCA-2'), 240, -95, -36, F2.clone().addScaledVector(R2, 0.15).normalize(), 8);
+      const others = list.filter((x) => !x.callsign);
+      put(others.find((x) => x.classId === 'interceptor'), 820, -240, 90, F2.clone().negate().addScaledVector(R2, 0.4).normalize(), 40);
+      put(others.find((x) => x.classId === 'fighter'), 1300, 300, -40, R2.clone().negate(), 60);
+      put(others.find((x) => x.classId === 'freighter'), 2200, 420, -150, R2.clone().negate(), 20);
+    });
     ctx.services.planets?.settle?.();
   });
 
@@ -177,7 +202,7 @@ export function registerShots(ctx, H, api) {
     api.openMap('system');
     H.maps.sys.sel = ash;
     H.maps.sys.yaw = P(ctx, 'yaw', -0.35); H.maps.sys.pitch = P(ctx, 'pitch', 0.92);
-    H.maps.sys.zoom = H.maps.sys.tz = P(ctx, 'zoom', 1.15);
+    H.maps.sys.zoom = H.maps.sys.tz = P(ctx, 'zoom', 1.0);
     H.maps.dirtyInfo = true;
   });
   ctx.shots.register('hud-galaxy-map', async (ctx) => {

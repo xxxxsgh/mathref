@@ -274,9 +274,10 @@ export default {
     H.P.begin(W, Hh);
     const playing = mode === 'ship' || mode === 'foot' || mode === 'map';
     const pref0 = ctx.prefs?.touch || 'auto';
-    const touchMode = pref0 === 'on' || (pref0 === 'auto' && (ctx.input.device === 'touch' || H.forceTouch));
+    const touchMode = pref0 === 'on' || (pref0 === 'auto' && (ctx.input.device === 'touch' || !!H.forceTouch));
     H.root.classList.toggle('touchmode', touchMode);
-    const show = H.visible && playing && !H.maps.isOpen && !H.modal;
+    const cine = !!ctx.services.story?.inCinematic;
+    const show = H.visible && playing && !H.maps.isOpen && !H.modal && !cine;
     H.root.classList.toggle('hidden-hud', !show);
     if (show) {
       try {
@@ -298,7 +299,7 @@ export default {
     if (H.modal || H.comms.choosing) padNav(real);
     // toque
     const pref = ctx.prefs?.touch || 'auto';
-    const touchOn = pref === 'on' || (pref === 'auto' && (ctx.input.device === 'touch' || H.forceTouch));
+    const touchOn = pref === 'on' || (pref === 'auto' && (ctx.input.device === 'touch' || !!H.forceTouch));
     const sh = ctx.player.ship;
     const near = mode === 'ship' && sh && !sh.landed && ((sh.body && sh.altitude < 1500) || sh.station);
     const pr = [...H.comms.prompts.values()][0];
