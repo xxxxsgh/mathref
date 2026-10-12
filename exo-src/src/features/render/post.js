@@ -354,7 +354,7 @@ export class ExposurePass {
       uRate: { value: 1 },
       uKey: { value: 0.18 },
       uMin: { value: 0.25 },
-      uMax: { value: 3.5 },
+      uMax: { value: 2.6 },
       uComp: { value: 0.72 },
       uBase: { value: 1 },
       uFirst: { value: 1 },
@@ -379,6 +379,8 @@ export class ExposurePass {
     const u = this.uA;
     u.tPrev.value = this.a.texture;
     u.uBase.value = base;
+    // no espaço o preto domina a média: limite menor (estrelas não estouram)
+    u.uMax.value = 1.5 + 1.1 * airFactor(this.ctx);
     // modo shot e 1º frame: instantâneo; jogo: ~1,2 s para adaptar
     u.uRate.value = this.first || this.ctx.shot ? 1 : 1 - Math.exp(-Math.max(dt, 0) * 1.6);
     u.uFirst.value = this.first ? 1 : 0;
@@ -422,7 +424,7 @@ void main() {
   float wa = 1.0 / (1.0 + exoLuma(a * e)), wb = 1.0 / (1.0 + exoLuma(b * e));
   float wc = 1.0 / (1.0 + exoLuma(c * e)), wd = 1.0 / (1.0 + exoLuma(d * e));
   vec3 col = (a * wa + b * wb + c * wc + d * wd) / (wa + wb + wc + wd) * e;
-  col = min(max(col, 0.0), vec3(200.0));
+  col = min(max(col, 0.0), vec3(48.0));
   // joelho suave
   float br = max(col.r, max(col.g, col.b));
   float rq = clamp(br - uThreshold + uKnee, 0.0, 2.0 * uKnee);
@@ -581,6 +583,16 @@ export class BloomPass {
   }
 }
 
+/** 1 dentro do ar, 0 no espaço (altitude relativa à espessura da atmosfera). */
+export function airFactor(ctx) {
+  const atmo = ctx.services.sky?.atmosphere;
+  const R = ctx.services.planet?.radius;
+  if (atmo === null) return 0;
+  const H = atmo?.radius && R ? Math.max(1000, atmo.radius - R) : 12000;
+  const alt = ctx.player?.altitude ?? 0;
+  return 1 - THREE.MathUtils.smoothstep(alt, 0.3 * H, 0.9 * H);
+}
+
 // ─── raios crepusculares ──────────────────────────────────────────────────
 const RAYMASK_FRAG = /* glsl */ `
 ${DEPTH_GLSL}
@@ -684,10 +696,7 @@ export class GodRaysPass {
     // mais forte com o sol baixo (caminho longo no ar) e com névoa densa
     const low = 0.55 + 0.45 * (1 - THREE.MathUtils.smoothstep(el, 0.05, 0.6));
     // fora da atmosfera não há meio para espalhar
-    const atmo = sky?.atmosphere;
-    const alt = ctx.player?.altitude ?? 0;
-    const inAir = atmo ? 1 - THREE.MathUtils.smoothstep(alt, 8000, 40000) : 1;
-    this.intensity = onScreen * above * low * inAir * this.strength;
+    this.intensity = onScreen * above * low * airFactor(ctx) * this.strength;
     return this.intensity;
   }
   render(blit, src, depth, expTex) {

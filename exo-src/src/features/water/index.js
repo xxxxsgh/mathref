@@ -49,7 +49,21 @@ uniform vec3 uInscat;
 uniform float uMode;
 uniform vec3 uUpV;       // "para cima" local em espaço de visão
 uniform float uCamDepth; // m abaixo da superfície
+uniform sampler2D tDetail;
+uniform vec4 uL1, uL2;   // camadas de ondulação (1/T, A, rolagem)
+uniform vec3 uCamMod;    // câmera mod período (double na CPU)
+uniform mat3 uCamRot;    // visão → mundo
+uniform vec3 uUpW;
+uniform float uTime;
+uniform float uCaus;     // força das cáusticas (sol)
 varying vec2 vUv;
+float hTri(vec3 p, vec3 bw, vec4 L) {
+  float l = 0.0;
+  if (bw.x > 0.02) l += texture2D(tDetail, p.zy * L.x + L.zw).z * bw.x;
+  if (bw.y > 0.02) l += texture2D(tDetail, p.xz * L.x + L.zw).z * bw.y;
+  if (bw.z > 0.02) l += texture2D(tDetail, p.xy * L.x + L.zw).z * bw.z;
+  return l;
+}
 void main() {
   float z = texture2D(tZ, vUv).r;
   vec3 rv = vec3((vUv * 2.0 - 1.0) * uTan, -1.0);
@@ -65,6 +79,18 @@ void main() {
       float pd = max(uCamDepth + dot(-rv / len, uUpV) * d, 0.0);
       Tl = exp(-uSigma * pd * 0.8);
       Tl = mix(Tl, vec3(dot(Tl, vec3(0.33))), 0.35);
+      // cáusticas no leito: luz focada pelas ondulações da superfície
+      if (uCaus > 0.0 && d < 90.0) {
+        vec3 p = uCamRot * (rv / len) * d + uCamMod;
+        vec3 bw = pow(abs(uUpW), vec3(6.0));
+        bw /= (bw.x + bw.y + bw.z);
+        // rede de cáusticas: cruzamentos de zero de duas alturas que rolam
+        // em direções diferentes (linhas finas que se cruzam)
+        float r1 = 1.0 - abs(hTri(p * 1.3 + vec3(uTime * 0.11, 0.0, uTime * 0.07), bw, uL2));
+        float r2 = 1.0 - abs(hTri(p * 1.9 - vec3(uTime * 0.05, uTime * 0.04, 0.0), bw, uL2));
+        float c = pow(min(r1, r2), 9.0) * 3.0 * exp(-pd * 0.08) * (1.0 - smoothstep(30.0, 90.0, d));
+        Tl *= 1.0 + c * uCaus;
+      }
     }
     gl_FragColor = vec4(T * Tl, 1.0);
   } else gl_FragColor = vec4(uInscat * (1.0 - T), 1.0);
@@ -103,7 +129,9 @@ export default {
       tDepth: { value: null },
     };
     this.mZ = fs(COPY_Z, this.uZ);
-    this.uFog = { tZ: { value: this.sceneZ.texture }, uTan: { value: new THREE.Vector2(1, 1) }, uSigma: { value: new THREE.Vector3() }, uInscat: { value: new THREE.Color() }, uMode: { value: 0 }, uUpV: { value: new THREE.Vector3(0, 1, 0) }, uCamDepth: { value: 0 } };
+    this.uFog = { tZ: { value: this.sceneZ.texture }, uTan: { value: new THREE.Vector2(1, 1) }, uSigma: { value: new THREE.Vector3() }, uInscat: { value: new THREE.Color() }, uMode: { value: 0 }, uUpV: { value: new THREE.Vector3(0, 1, 0) }, uCamDepth: { value: 0 },
+      tDetail: { value: this.detail }, uL1: { value: new THREE.Vector4() }, uL2: { value: new THREE.Vector4() }, uCamMod: { value: new THREE.Vector3() },
+      uCamRot: { value: new THREE.Matrix3() }, uUpW: { value: new THREE.Vector3(0, 1, 0) }, uTime: { value: 0 }, uCaus: { value: 0 } };
     const blendMul = { blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.ZeroFactor, blendDst: THREE.SrcColorFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor };
     const blendAdd = { blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor };
     this.mFogMul = fs(FOG, this.uFog, blendMul);
@@ -124,6 +152,7 @@ export default {
     this.inscat = new THREE.Color();
     this._c = new THREE.Color();
     this._qi = new THREE.Quaternion();
+    this._m4 = new THREE.Matrix4();
 
     const P = ctx.shot?.preset?.params || {};
     this.seaStateOverride = typeof P.seaState === 'number' ? P.seaState : null;
@@ -343,6 +372,16 @@ export default {
       const up = ctx.player?.up;
       if (up) this.uFog.uUpV.value.copy(up).applyQuaternion(this._qi.copy(cam.quaternion).invert());
       this.uFog.uCamDepth.value = Math.max(0, -this.camAlt);
+      const OU = this.ocean.uniforms;
+      this.uFog.uL1.value.copy(OU.uLayer.value[1]);
+      this.uFog.uL2.value.copy(OU.uLayer.value[2]);
+      this.uFog.uCamMod.value.copy(OU.uCamMod.value);
+      this.uFog.uCamRot.value.setFromMatrix4(this._m4.makeRotationFromQuaternion(cam.quaternion));
+      if (up) this.uFog.uUpW.value.copy(up);
+      this.uFog.uTime.value = OU.uTime.value;
+      const sky = ctx.services.sky;
+      const sd = up && sky?.sunDirection ? Math.max(0, sky.sunDirection.dot(up)) : 0.5;
+      this.uFog.uCaus.value = this.ocean.uniforms.uCaustics.value * THREE.MathUtils.smoothstep(sd, 0.0, 0.3) * 1.3;
       r.setRenderTarget(target);
       this.quad.material = this.mFogMul;
       this.quad.render(r);

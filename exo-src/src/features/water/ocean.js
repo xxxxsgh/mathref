@@ -238,12 +238,12 @@ void main() {
   if (uCaustics > 0.0 && rZ < 1e11) {
     vec3 bp = (V * -1.0) * (rZ * rayK) + uCamMod;    // ponto do leito (mod)
     vec3 bpL = bp;
-    float hc, lc1, lc2;
-    vec3 g1 = detailGrad(bpL * 1.0 + vec3(uTime * 0.11, 0.0, uTime * 0.07), up, bw, uLayer[1], hc, lc1);
-    vec3 g2 = detailGrad(bpL * 1.7 - vec3(uTime * 0.05, uTime * 0.04, 0.0), up, bw, uLayer[2], hc, lc2);
-    float focus = max(0.0, -(lc1 * 0.8 + lc2 * 0.6));
+    float h1, h2, lc;
+    detailGrad(bpL * 1.3 + vec3(uTime * 0.11, 0.0, uTime * 0.07), up, bw, uLayer[2], h1, lc);
+    detailGrad(bpL * 1.9 - vec3(uTime * 0.05, uTime * 0.04, 0.0), up, bw, uLayer[2], h2, lc);
+    float focus = pow(min(1.0 - abs(h1), 1.0 - abs(h2)), 9.0);
     float cz = rThick * max(dot(V, up), 0.05);
-    float caus = pow(focus, 2.0) * 4.5 * smoothstep(0.05, 0.6, cz) * exp(-cz * 0.18);
+    float caus = focus * 3.0 * smoothstep(0.05, 0.6, cz) * exp(-cz * 0.18);
     caus *= 1.0 - smoothstep(60.0, 220.0, dist);
     bed += bed * caus * uCaustics * sunUp * max(dot(L, up), 0.0) * 1.4;
   }
