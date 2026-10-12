@@ -258,10 +258,33 @@ function buildSegment(P, sg, F, col, lamps, cones, rng) {
   for (const s of [1, -1]) col(V(s * (W + 0.25), midY, midZ), V(0.25, H / 2 + 0.3, L / 2));
 
   // piso: chapas de grade com canaleta central e frisos de luz nas bordas
-  for (let z = z0 + 0.6; z < z1 - 0.3; z += 1.2) {
-    P.add(box(W * 2 - 0.2, 0.04, 1.1, 0.01), Z.METAL, { m: M(0, F + 0.02, z), wear: 0.8 });
-    const n = Math.max(3, Math.round(W * 2));
-    for (let k = -n; k <= n; k++) P.add(box(0.03, 0.05, 1.0), Z.DARK, { m: M(k * (W - 0.2) / n, F + 0.045, z), detail: true });
+  // Cada chapa (1,2 m) tem moldura em perfil, grade fina de barras chatas
+  // (passo ~9 cm) em duas metades com uma travessa no meio e a canaleta
+  // central lisa; o padrão alterna o sentido a cada chapa (as grades reais
+  // são montadas assim para não "correr" o pé).
+  const gw = W - 0.32;   // meia-largura útil da grade
+  let pi = 0;
+  for (let z = z0 + 0.6; z < z1 - 0.3; z += 1.2, pi++) {
+    P.add(box(W * 2 - 0.2, 0.03, 1.16, 0.008), Z.DARK, { m: M(0, F + 0.015, z), wear: 0.8 });
+    // moldura em L ao redor da chapa e travessa central
+    for (const sz of [1, -1]) P.add(box(W * 2 - 0.24, 0.035, 0.045), Z.METAL, { m: M(0, F + 0.04, z + sz * 0.555), wear: 0.95 });
+    P.add(box(W * 2 - 0.24, 0.03, 0.035), Z.METAL, { m: M(0, F + 0.038, z), detail: true, wear: 0.9 });
+    // baia de carga: chapa lisa (recebe a pintura de piso), sem grade
+    if (kind === 'hold') { P.add(box(W * 2 - 0.24, 0.012, 1.06), Z.SECONDARY, { m: M(0, F + 0.036, z), wear: 1 }); continue; }
+    // canaleta central (passadiço liso com textura de piso antiderrapante)
+    P.add(box(0.36, 0.035, 1.06, 0.008), Z.SECONDARY, { m: M(0, F + 0.04, z), wear: 0.95 });
+    for (let b = -2; b <= 2; b++) P.add(box(0.3, 0.008, 0.035), Z.METAL, { m: M(0, F + 0.06, z + b * 0.19), detail: true, wear: 1 });
+    // barras chatas da grade
+    const alongX = pi % 2 === 1;
+    for (const s of [1, -1]) {
+      const x0 = s * 0.22, x1 = s * gw, xm = (x0 + x1) / 2, xl = Math.abs(x1 - x0);
+      if (!alongX) {
+        const n = Math.max(2, Math.round(xl / 0.09));
+        for (let k = 0; k <= n; k++) P.add(box(0.016, 0.034, 1.06), Z.METAL, { m: M(x0 + (x1 - x0) * k / n, F + 0.035, z), detail: true, wear: 0.9 });
+      } else {
+        for (let k = -5; k <= 5; k++) P.add(box(xl, 0.034, 0.016), Z.METAL, { m: M(xm, F + 0.035, z + k * 0.096), detail: true, wear: 0.9 });
+      }
+    }
   }
   for (const s of [1, -1]) P.glowPart(box(0.04, 0.012, L - 1), [0.45, 0.8, 1.0], 1.6, { m: M(s * (W - 0.42), F + 0.06, midZ) });
 
