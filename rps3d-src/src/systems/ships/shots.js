@@ -218,14 +218,14 @@ export function registerShots(ctx, api, st) {
     // fileiras: mais perto embaixo (caças) → mais longe em cima (fragatas);
     // cada nave ocupa ~o mesmo ângulo na tela (distância ∝ comprimento)
     const rows = [['fighter', -15], ['interceptor', -7], ['explorer', 1], ['freighter', 8.5], ['frigate', 15.5]];
-    const span = Number(ctx.params.get('span') ?? 9.5) * D2R;
+    const span = Number(ctx.params.get('span') ?? 11) * D2R;
     const nose = cv(-0.72, -0.08, 0.69).normalize();
     const upS = cv(0, 1, 0);
     rows.forEach(([cls, el], r) => {
       factions.forEach((fac, i) => {
         const s = api.create(cls, fac, { throttle: 0.3, gear: 0 });
         const dist = s.length / Math.tan(span);
-        const az = ((i - 2) * 11.5 + (r % 2 ? 2 : -2)) * D2R;
+        const az = ((i - 2) * 13 + (r % 2 ? 1.5 : -1.5)) * D2R;
         const dir = cv(Math.sin(az) * Math.cos(el * D2R), Math.sin(el * D2R), -Math.cos(az) * Math.cos(el * D2R)).normalize();
         // fileiras altas inclinam o dorso para a câmera (senão só se vê a barriga)
         const upR = upS.clone().lerp(dir.clone().negate(), THREE.MathUtils.clamp(el / 22, 0, 0.7)).normalize();
@@ -266,7 +266,10 @@ export function registerShots(ctx, api, st) {
     const cPos = C.clone().addScaledVector(F, Number(ctx.params.get('cf') ?? 1600)).addScaledVector(R, Number(ctx.params.get('cr') ?? 900)).addScaledVector(U, 90);
     const cNose = cv(-0.35, 0.02, 0.94).normalize();
     const car = api.create('carrier', 'hegemonia', { throttle: 0.4 });
-    car.group.quaternion.copy(look(cNose, U));
+    // rola o dorso para o sol (à esquerda) e para a câmera: senão o casco
+    // branco só recebe a luz azulada do planeta
+    const cUp = U.clone().multiplyScalar(0.8).addScaledVector(R, -Number(ctx.params.get('cro') ?? 0.5)).addScaledVector(F, -Number(ctx.params.get('cba') ?? 0.35)).normalize();
+    car.group.quaternion.copy(look(cNose, cUp));
     ctx.world.add(car.group, cPos);
     const objs = [];
     const hg = car.hangars.find((h) => h.id === 'hangar_e') || car.hangars[0];

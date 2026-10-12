@@ -319,17 +319,38 @@ export class Cockpit {
       // a moldura fica na periferia da vista, não na frente do HUD
       const zb = Math.min(-0.5, cz0 + L * 0.3) > cz0 + 0.05 ? Math.max(cz0 + L * 0.3, -0.52) : cz0 + 0.05;
       const F = new Parts(4343);
-      const pts = [], pts2 = [];
-      for (let k = 0; k <= 24; k++) {
-        const a = (k / 24) * Math.PI;
+      const pts = [], pts2 = [], nrm = [];
+      for (let k = 0; k <= 32; k++) {
+        const a = (k / 32) * Math.PI;
         const r = gl2.at(zb, a);
         if (r.pos.y < sill - 0.01) continue;
-        pts.push(r.pos.clone().addScaledVector(r.normal, -0.028).toArray());
-        pts2.push(r.pos.clone().addScaledVector(r.normal, -0.05).add(V(0, 0, 0.022)).toArray());
+        pts.push(r.pos.clone().addScaledVector(r.normal, -0.026));
+        nrm.push(r.normal.clone().negate());
+        pts2.push(r.pos.clone().addScaledVector(r.normal, -0.052).add(V(0, 0, 0.03)).toArray());
       }
       if (pts.length > 3) {
-        F.add(pipe(pts, 0.03, 48), Z.DARK, { wear: 0.25 });
-        F.add(pipe(pts2, 0.008, 48), Z.TRIM, { wear: 0.1 });
+        // perfil estrutural em caixa (aba larga + alma), segmento a segmento,
+        // com parafusos de cabeça sextavada a cada dois segmentos
+        const basisM = new THREE.Matrix4();
+        for (let k = 0; k < pts.length - 1; k++) {
+          const a0 = pts[k], a1 = pts[k + 1];
+          const t = a1.clone().sub(a0); const len = t.length(); t.normalize();
+          const n = nrm[k].clone().add(nrm[k + 1]).normalize();
+          const b = new THREE.Vector3().crossVectors(t, n).normalize();
+          n.crossVectors(b, t).normalize();
+          const mid = a0.clone().add(a1).multiplyScalar(0.5);
+          basisM.makeBasis(b, n, t).setPosition(mid);
+          F.add(box(0.085, 0.022, len * 1.02), Z.DARK, { m: basisM.clone(), wear: 0.3 });
+          const web = basisM.clone().multiply(M(0, 0.024, 0));
+          F.add(box(0.03, 0.03, len * 1.02), Z.SECONDARY, { m: web, wear: 0.2 });
+          if (k % 3 === 1) {
+            for (const sx of [-0.033, 0.033]) {
+              const bm = basisM.clone().multiply(M(sx, 0.012, 0));
+              F.add(cyl(0.0042, 0.0042, 0.006, 6), Z.SECONDARY, { m: bm, wear: 0.1 });
+            }
+          }
+        }
+        F.add(pipe(pts2, 0.006, 48), Z.TRIM, { wear: 0.1 });
         // espelho retrovisor no topo do arco
         const top = gl2.at(zb, Math.PI / 2).pos;
         F.add(box(0.16, 0.035, 0.012, 0.006), Z.DARK, { m: M(0, top.y - 0.07, zb + 0.03, -0.25, 0, 0) });
