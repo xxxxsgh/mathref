@@ -234,7 +234,7 @@ export function registerShots(ctx, api, st) {
     for (const dir of dirsOf(d)) { const r = rate(d, h, dir); if (r > bl) { bl = r; look = dir; } }
     look = look.clone().applyAxisAngle(d, P(ctx, 'yaw', 0) * D2R).addScaledVector(d, P(ctx, 'pitch', 0.1)).normalize();
     localCam(ctx, st, b, d.clone().multiplyScalar(b.radius + h + 1.8), look, d);
-    api.weather.force('blizzard', P(ctx, 'storm', 0.6));
+    api.weather.force('blizzard', P(ctx, 'storm', 0.66));
     api.settle();
   });
 
@@ -352,7 +352,7 @@ export function registerShots(ctx, api, st) {
       const yy = 1 - (2 * (i + 0.5)) / N, rr = Math.sqrt(1 - yy * yy), ph = i * 2.39996;
       const d = new THREE.Vector3(Math.cos(ph) * rr, yy, Math.sin(ph) * rr);
       const gEl = Math.asin(d.dot(toG)) / D2R, sEl = Math.asin(d.dot(sunL)) / D2R;
-      if (gEl < 8 || gEl > 26 || sEl < 10 || sEl > 30) continue;
+      if (gEl < 8 || gEl > 26 || sEl < 2) continue;
       const h0 = T.height(d.x, d.y, d.z);
       const gT = toG.clone().addScaledVector(d, -toG.dot(d)).normalize();
       const sT = sunL.clone().addScaledVector(d, -sunL.dot(d)).normalize();
@@ -371,7 +371,7 @@ export function registerShots(ctx, api, st) {
       }
       const depth = Math.min(h0 - lo, 500), wall = Math.min(far - lo, 500);
       const blocked = Math.max(0, Math.atan(ang) / D2R - (gEl - 6)) * 40;
-      const s = depth * 0.6 + wall * 0.3 - Math.abs(gEl - 15) * 4 + side * 60 - Math.abs(sEl - 18) * 3 - blocked;
+      const s = depth * 0.6 + wall * 0.3 - Math.abs(gEl - 15) * 4 + side * 60 - Math.abs(sEl - 18) * 6 - blocked;
       if (s > bs) { bs = s; best = d; }
     }
     const d = best || api.dirForSun(b, 8, 0);

@@ -329,6 +329,7 @@ export function stateUniforms() {
     skyHs: uniform(new THREE.Vector3(0.4, 0.5, 0.6)), skyHo: uniform(new THREE.Vector3(0.4, 0.5, 0.6)), // horizonte do lado do sol / resto
     axis: uniform(new THREE.Vector3(0, 1, 0)),
     city: uniform(0),
+    shineL: uniform(new THREE.Vector3(0, 1, 0)), shineCol: uniform(new THREE.Vector3(0, 0, 0)), // luz do planeta-mãe
     // luz noturna (estrelas, nebulosa e brilho de planetas/anéis no céu): o
     // relevo do lado noturno nunca vira silhueta preta
     nightAmb: uniform(new THREE.Vector3(0.06, 0.075, 0.12)),
@@ -393,9 +394,13 @@ export function makeTerrainMaterials(body, P, U, S, opts) {
       const clus = smoothstep(0.6, 0.78, N3(up.mul(U.R.div(2500))).r).mul(smoothstep(0.5, 0.95, N3(up.mul(U.R.div(260))).b));
       night = vec3(1.0, 0.6, 0.28).mul(clus.mul(land).mul(S.city).mul(float(1).sub(dayAmt)).mul(1.4));
     }
+    // luz refletida pelo planeta-mãe (luas de gigantes gasosos)
+    night = night.add(surf.albedo.mul(S.shineCol).mul(max(dot(nG, S.shineL), 0.0).div(PI)).mul(smoothstep(-0.08, 0.06, dot(up, S.shineL))));
     // visão noturna (escotópica): cores quase somem, tudo puxa para o azul
     const albL = dot(surf.albedo, vec3(0.2126, 0.7152, 0.0722));
-    night = night.add(mix(vec3(albL), surf.albedo, 0.3).mul(S.nightAmb).mul(0.6).mul(float(1).sub(smoothstep(-0.15, 0.02, dot(up, S.sunL)))));
+    // luz do céu noturno vem de cima: encostas viradas para o alto recebem mais (o relevo se lê)
+    const skyFacing = dot(nG, up).mul(0.5).add(0.5);
+    night = night.add(mix(vec3(albL), surf.albedo, 0.3).mul(S.nightAmb).mul(skyFacing.mul(skyFacing).mul(0.75).add(0.08)).mul(float(1).sub(smoothstep(-0.15, 0.02, dot(up, S.sunL)))).mul(float(1).sub(S.cloudFar)));
     const mat = mat0;
     mat.fog = false;
     if (near) {

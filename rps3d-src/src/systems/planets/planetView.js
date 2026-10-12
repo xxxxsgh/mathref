@@ -15,6 +15,7 @@ import { QuadTree } from './quadtree.js';
 import { weatherTexture } from './weatherMap.js';
 
 const _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _w = new THREE.Vector3();
+const SHINE_BOOST = 10; // luz do planeta-mãe (exagero artístico sobre o valor físico: o olho se adapta ao lado noturno)
 const SKY_SCALE = 8;     // intensidade do sol para a dispersão (calibrada com o pipeline AgX)
 
 export class PlanetView {
@@ -22,6 +23,8 @@ export class PlanetView {
     this.ctx = ctx; this.body = body; this.sys = sys;
     this.desc = terrainDesc(body);
     this.terrain = body.kind === 'gas_giant' ? null : getTerrain(this.desc);
+    const par = body.parent ? sys.body(body.parent) : null;
+    this.parent = par && par.kind === 'gas_giant' ? par : null;
     this.A = atmoParams(body);
     this.P = paletteFor(body);
     this.U = atmoUniforms(body);
@@ -106,6 +109,21 @@ export class PlanetView {
     const sk = I / 4.2 * SKY_SCALE;
     S.skyI.value.set(sc[0] * sk, sc[1] * sk, sc[2] * sk);
     S.comp.value = info.comp;
+    // luz refletida pelo planeta-mãe (lua de gigante gasoso): disco enorme no
+    // céu, iluminado pelo sol conforme a fase — ilumina o lado da lua virado
+    // para ele mesmo quando o sol está abaixo do horizonte
+    if (this.parent) {
+      const pb = this.parent;
+      _w.copy(pb.pos).sub(b.pos);
+      const dP = _w.length();
+      b.dirToLocal(_w.normalize(), t, S.shineL.value);
+      // fase vista da lua: cos do ângulo sol–planeta–lua
+      const sunAtP = _v.copy(this.sys.star.pos).sub(pb.pos).normalize();
+      const cosA = -sunAtP.dot(_w);
+      const phase = Math.max(0, (1 + cosA) / 2) ** 1.5;
+      const k = 0.45 * (pb.radius / dP) ** 2 * phase * SHINE_BOOST;
+      S.shineCol.value.set(sc[0] * I * k, sc[1] * I * k * 0.94, sc[2] * I * k * 0.84);
+    }
     // vento das nuvens (período 10 mantém continuidade com os multiplicadores)
     const w = S.wind.value;
     w.set((t * 0.0011) % 10, (t * 0.0002) % 10, (t * 0.0007) % 10);

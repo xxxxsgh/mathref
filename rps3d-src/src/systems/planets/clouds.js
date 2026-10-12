@@ -46,8 +46,9 @@ export function makeCloudMaterials(body, U, S, opts) {
   const C = {
     base: uniform(L.base), top: uniform(L.top), density: uniform(0.0042),
     tint: uniform(new THREE.Vector3(1, 1, 1)), dark: uniform(new THREE.Vector3(0.62, 0.66, 0.74)),
+    glow: uniform(0), // brilho da lava refletido na base das nuvens (vulcânico)
   };
-  if (body.type === 'volcanic') { C.tint.value.set(0.62, 0.56, 0.52); C.dark.value.set(0.25, 0.22, 0.21); }
+  if (body.type === 'volcanic') { C.tint.value.set(0.5, 0.46, 0.44); C.dark.value.set(0.2, 0.18, 0.17); C.glow.value = 0.05; }
   if (body.type === 'toxic') { C.tint.value.set(0.86, 0.95, 0.62); C.dark.value.set(0.45, 0.5, 0.3); }
   if (body.type === 'desert') { C.tint.value.set(1.0, 0.92, 0.82); C.dark.value.set(0.7, 0.6, 0.52); }
   if (body.type === 'ice') { C.tint.value.set(0.95, 0.98, 1.0); C.dark.value.set(0.6, 0.66, 0.76); }
@@ -161,7 +162,9 @@ export function makeCloudMaterials(body, U, S, opts) {
             // céu só ilumina o lado diurno (no lado noturno as nuvens apagam)
             const dayF = smoothstep(-0.1, 0.45, dot(p, S.sunL).div(length(p)));
             const amb = ambC.mul(mix(C.dark, vec3(1.0), clamp(hn.mul(1.2).add(0.15).sub(w.z.mul(0.35)), 0.0, 1.0))).mul(dayF.mul(0.97).add(0.03));
-            const lum = sunC.mul(Tl).mul(phase).mul(powder).add(amb);
+            // base das nuvens tingida de laranja pelos campos de lava lá embaixo
+            const under = vec3(1.0, 0.3, 0.07).mul(C.glow).mul(pow(float(1).sub(clamp(hn, 0.0, 1.0)), 2.0));
+            const lum = sunC.mul(Tl).mul(phase).mul(powder).add(amb).add(under);
             const Ts = exp(d.mul(sigma).mul(ds).negate());
             acc.addAssign(lum.mul(trans).mul(float(1).sub(Ts)));
             trans.mulAssign(Ts);
