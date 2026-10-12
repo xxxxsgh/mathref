@@ -6,7 +6,7 @@
 // Navegação: teclado (setas/WASD, Enter, Esc, Q/E abas), gamepad (direcional
 // ou analógico, A confirma, B volta, LB/RB abas) e toque/mouse.
 import { PRESETS, PRESET_ORDER } from '../../core/Quality.js';
-import { ICONS, esc, rich, fmtTime, hexA } from './draw.js';
+import { ICONS, esc, rich, fmtTime, hexA, holo } from './draw.js';
 import { FACTION_COLORS } from './portrait.js';
 
 const el = (tag, cls, html = '') => { const e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; };
@@ -190,7 +190,8 @@ export class Menus {
     if (T.custom) this.cBody.innerHTML = T.custom();
     else {
       this.cBody.innerHTML = T.rows.map((r, i) => `<div class="opt2${i === this.cfgSel ? ' sel' : ''}" data-i="${i}"><div class="nm">${esc(r.name)}${r.desc ? `<small>${esc(r.desc)}</small>` : ''}</div><div class="val">${this.rowVal(r)}</div></div>`).join('');
-      [...this.cBody.children].forEach((n, i) => {
+      if (this.cfgTab === 0) this.cBody.insertAdjacentHTML('beforeend', this.presetCard());
+      [...this.cBody.querySelectorAll('.opt2')].forEach((n, i) => {
         n.addEventListener('pointerenter', () => { this.cfgSel = i; this.markSel(this.cBody, '.opt2', this.cfgSel); });
         n.addEventListener('click', (e) => {
           const r = T.rows[i];
@@ -203,6 +204,19 @@ export class Menus {
     const dev = this.ctx.input.device;
     const K = (a, b) => `<span><span class="k2">${dev === 'gamepad' ? b : a}</span>`;
     this.cFoot.innerHTML = `${K('⇅', '✥')}Navegar</span>${K('◀ ▶', '◀ ▶')}Ajustar</span>${K('ESC', 'B')}Voltar</span>`;
+  }
+  presetCard() {
+    const q = this.ctx.quality, ctx = this.ctx;
+    const W = Math.round(innerWidth * Math.min(devicePixelRatio || 1, q.dprCap) * (q.dynamicScale ?? q.renderScale));
+    const Hh = Math.round(innerHeight * Math.min(devicePixelRatio || 1, q.dprCap) * (q.dynamicScale ?? q.renderScale));
+    const on = (b, t) => `<span class="chip${b ? '' : ' off'}" style="${b ? '' : 'opacity:.35;text-decoration:line-through'}">${t}</span>`;
+    return `<div style="margin:18px 14px 0;padding:16px 18px;border:1px solid rgba(166,236,255,.12);background:linear-gradient(180deg,rgba(166,236,255,.04),transparent)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px"><span class="lbl">PRESET ATIVO</span><span style="font:300 22px/1 'Inter Display',Inter,sans-serif;letter-spacing:.12em;color:#fff">${esc(String(q.label || q.name).toUpperCase())}</span></div>
+      <div class="row"><span>Renderizador</span><b>${ctx.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2'} · ${W}×${Hh}</b></div>
+      <div class="row"><span>Sombras</span><b>${q.shadows ? `${q.shadowMapSize} px · ${q.shadowCascades} cascata${q.shadowCascades > 1 ? 's' : ''}` : 'Desligadas'}</b></div>
+      <div class="row"><span>Nuvens · atmosfera · nebulosas</span><b>${q.cloudSteps} · ${q.atmosphereSteps} · ${q.nebulaSteps} passos</b></div>
+      <div class="row"><span>Terreno</span><b>LOD ${q.terrainLod} · malha ${q.terrainChunkRes}² · vegetação ${Math.round(q.foliageDensity * 100)}%</b></div>
+      <div style="margin-top:10px">${on(q.bloom, 'Bloom')}${on(q.taa, 'TAA')}${on(q.motionBlur, 'Desfoque')}${on(q.dof, 'Prof. de campo')}${on(q.lensFlare, 'Lens flare')}${on(q.godRays, 'Raios de luz')}${on(q.ssao, 'SSAO')}${on(q.filmGrain, 'Granulação')}</div></div>`;
   }
   rowVal(r) {
     const v = r.get();
@@ -348,6 +362,12 @@ export function listView(root, items, { empty = 'Nada aqui', emptyIcon = 'inv', 
     const it = items[sel];
     det.innerHTML = `<div class="gh">${esc(it.kicker || 'DETALHES')}<span>${esc(it.right || '')}</span></div><div class="gb dt">${it.detail ? it.detail() : `<h3>${esc(it.name)}</h3><p>${rich(it.text || '')}</p>`}<div class="acts">${(it.actions || []).map((a, k) => `<div class="btn${a.ghost ? ' ghost' : ''}${k === act ? ' sel' : ''}" data-k="${k}">${esc(a.label)}</div>`).join('')}</div></div>`;
     det.querySelectorAll('.btn').forEach((b) => b.addEventListener('click', () => { const a = it.actions[Number(b.dataset.k)]; a?.run?.(); }));
+    if (it.icon) {
+      const col = /^#/.test(it.holoColor || '') ? it.holoColor : '#a6ecff';
+      const hv = holo(it.icon, col, 440, 230, (sel + 1) * 17);
+      hv.style.margin = '6px auto 4px';
+      det.querySelector('.gb').prepend(hv);
+    }
   };
   draw();
   return {
@@ -427,7 +447,7 @@ const DEFAULTS = {
     let list = [];
     try { list = life?.catalog?.() || []; } catch { list = []; }
     if (!list.length) list = hud.discoveries || [];
-    const items = list.map((d) => ({ id: d.id, name: d.name, sub: `${d.kind === 'fauna' ? 'Fauna' : d.kind === 'flora' ? 'Flora' : d.kind === 'mineral' ? 'Mineral' : 'Ruína'} · ${d.bodyName || d.body || ''}`, icon: d.kind === 'fauna' ? 'creature' : d.kind === 'flora' ? 'leaf' : d.kind === 'ruin' ? 'ruin' : 'ore', color: d.kind === 'fauna' ? 'var(--ok)' : d.kind === 'ruin' ? '#8cc4ff' : 'var(--c)', tag: d.sold ? 'VENDIDO' : 'NOVO', kicker: 'REGISTRO DE DESCOBERTA', right: d.date || '', text: d.desc || 'Espécime registrado pelo scanner do traje.' }));
+    const items = list.map((d) => ({ id: d.id, name: d.name, sub: `${d.kind === 'fauna' ? 'Fauna' : d.kind === 'flora' ? 'Flora' : d.kind === 'mineral' ? 'Mineral' : 'Ruína'} · ${d.bodyName || d.body || ''}`, icon: d.kind === 'fauna' ? 'creature' : d.kind === 'flora' ? 'leaf' : d.kind === 'ruin' ? 'ruin' : 'ore', color: d.kind === 'fauna' ? 'var(--ok)' : d.kind === 'ruin' ? '#8cc4ff' : 'var(--c)', holoColor: d.kind === 'fauna' ? '#72f0a8' : d.kind === 'ruin' ? '#8cc4ff' : d.kind === 'flora' ? '#b8f07a' : '#a6ecff', tag: d.sold ? 'VENDIDO' : 'NOVO', kicker: 'REGISTRO DE DESCOBERTA', right: d.date || '', text: d.desc || 'Espécime registrado pelo scanner do traje.' }));
     return listView(root, items, { empty: 'Nenhuma descoberta registrada', emptyIcon: 'scan', emptySub: 'Use o scanner (Z) em criaturas, plantas e ruínas' });
   },
 };

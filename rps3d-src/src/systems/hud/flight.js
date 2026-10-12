@@ -63,7 +63,7 @@ export class FlightHud {
     if (!opts.noPanels) {
       this.drawSystems(g, sh, W, H, compact);
       this.drawWeapons(g, sh, ch, W, H, compact);
-    }
+    } else if (opts.strip) this.drawStrip(g, sh, ch, W, H);
     // ── alertas ─────────────────────────────────────────────────────────
     this.drawAlerts(g, P, sh, ch, W, H, dt);
     this.drawHits(g, P, W, H, dt);
@@ -481,6 +481,28 @@ export class FlightHud {
     segBar(g, x + 174, y + h - 4, compact ? 30 : 54, 3, sh.qfuel ?? 1, { n: 8, gap: 1.5, on: '#c9b8ff' });
   }
 
+  /** Faixa compacta (toque): escudo, casco, calor, mísseis, flares — sob a faixa de modo. */
+  drawStrip(g, sh, ch, W, H) {
+    const S = sh.shields || { f: 1, b: 1, l: 1, r: 1 };
+    const shv = (S.f + S.b + S.l + S.r) / 4;
+    const items = [
+      ['ESC', shv, shCol(shv)], ['CAS', sh.hull ?? 1, (sh.hull ?? 1) < 0.35 ? PAL.bad : '#eaf8ff'], ['CALOR', Math.min(1, sh.heat ?? 0), heatCol(sh.heat ?? 0)],
+    ];
+    const w = 70, gap = 18;
+    const total = items.length * (w + gap) + 120;
+    let x = W / 2 - total / 2;
+    const y = H - 26;
+    fadePlate(g, x - 16, y - 22, total + 32, 34, 1, 0.0);
+    g.fillStyle = 'rgba(5,12,21,0.5)'; g.fillRect(x - 14, y - 20, total + 28, 30);
+    for (const [lab, v, col] of items) {
+      text(g, lab, x, y - 6, { size: 8, weight: 700, color: PAL.c2, track: 0.24 });
+      segBar(g, x, y, w, 4, v, { n: 10, gap: 1.5, on: col });
+      x += w + gap;
+    }
+    const cm = ch?.cm || {};
+    text(g, `MSL ${ch?.missiles ?? '—'}  ·  FLR ${cm.flare ?? '—'}`, x, y + 3, { size: 10, weight: 700, color: '#fff', track: 0.14 });
+  }
+
   hitSides() {
     const out = { f: 0, b: 0, l: 0, r: 0 };
     const sh = this.ctx.player.ship;
@@ -553,7 +575,7 @@ export class FlightHud {
         text(g, fmtDist(m.dist), pr.on ? pr.x : pr.ex - Math.cos(pr.ang) * 46, (pr.on ? pr.y + 30 : pr.ey - Math.sin(pr.ang) * 46) + 4, { size: 10.5, weight: 700, color: '#ffd0c8', align: 'center', track: 0.06 });
       }
       // caixa de alerta central
-      const y = H * 0.24;
+      const y = H * 0.15;
       const msg = near ? 'MÍSSIL — CONTRAMEDIDAS!' : 'MÍSSIL TRAVADO';
       const blink = (this.t * (near ? 6 : 3)) % 1 < 0.65;
       g.fillStyle = `rgba(60,6,4,${0.55})`; g.fillRect(W / 2 - 170, y - 22, 340, 50);

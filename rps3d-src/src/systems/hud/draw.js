@@ -123,7 +123,7 @@ export function segArc(g, x, y, r, a0, a1, f, { n = 24, gap = 0.012, w = 4, on =
     const isOn = i < lit;
     g.strokeStyle = isOn ? (typeof on === 'function' ? on(i / n) : on) : off;
     if (isOn && glowOn) glow(g, g.strokeStyle, glowOn); else noGlow(g);
-    g.beginPath(); g.arc(x, y, r, Math.min(s, e), Math.max(s, e), a1 < a0); g.stroke();
+    g.beginPath(); g.arc(x, y, r, Math.min(s, e), Math.max(s, e), false); g.stroke();
   }
   noGlow(g);
 }
@@ -236,3 +236,54 @@ export const ICONS = {
   creature: P('M5 14c0-4 3-7 7-7s7 3 7 7-3 4-7 4-7 0-7-4z M9 11h.5 M14.5 11h.5 M8 18l-1 3 M16 18l1 3'),
   ruin: P('M3 21h18 M5 21V10l7-6 7 6v11 M9 21v-6h6v6'),
 };
+
+/**
+ * Projeção holográfica (canvas) de um ícone: base de projetor com anéis,
+ * cone de luz, o glifo grande com brilho e linhas de varredura. Para os
+ * painéis de detalhe (catálogo, inventário, oficina).
+ */
+export function holo(kind = 'info', color = '#a6ecff', w = 420, h = 260, seed = 1) {
+  const cv = document.createElement('canvas');
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  cv.width = w * dpr; cv.height = h * dpr; cv.style.width = `${w}px`; cv.style.height = `${h}px`; cv.style.maxWidth = '100%'; cv.style.display = 'block';
+  const g = cv.getContext('2d');
+  g.scale(dpr, dpr);
+  const cx = w / 2, by = h * 0.86;
+  // cone de luz
+  const cone = g.createLinearGradient(0, by, 0, h * 0.08);
+  cone.addColorStop(0, hexA(color, 0.28)); cone.addColorStop(1, hexA(color, 0));
+  g.fillStyle = cone;
+  g.beginPath(); g.moveTo(cx - 34, by); g.lineTo(cx - w * 0.3, h * 0.08); g.lineTo(cx + w * 0.3, h * 0.08); g.lineTo(cx + 34, by); g.closePath(); g.fill();
+  // anéis da base
+  for (let i = 0; i < 4; i++) {
+    g.strokeStyle = hexA(color, 0.55 - i * 0.11); g.lineWidth = i ? 1 : 2;
+    g.beginPath(); g.ellipse(cx, by, 46 + i * 26, 9 + i * 5, 0, 0, TAU); g.stroke();
+  }
+  const rg = g.createRadialGradient(cx, by, 0, cx, by, 60);
+  rg.addColorStop(0, hexA(color, 0.6)); rg.addColorStop(1, hexA(color, 0));
+  g.fillStyle = rg; g.beginPath(); g.ellipse(cx, by, 60, 12, 0, 0, TAU); g.fill();
+  // glifo
+  const d = (ICONS[kind] || ICONS.info).match(/d="([^"]+)"/)?.[1];
+  if (d && typeof Path2D !== 'undefined') {
+    const S = h * 0.028;
+    g.save();
+    g.translate(cx - 12 * S, h * 0.44 - 12 * S);
+    g.scale(S, S);
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    const path = new Path2D(d);
+    g.strokeStyle = hexA(color, 0.25); g.lineWidth = 3.2 / S * 2; g.stroke(path);
+    glow(g, color, 18);
+    g.strokeStyle = color; g.lineWidth = 1.6 / S * 1.4; g.stroke(path);
+    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 0.5 / S * 1.4; g.stroke(path);
+    g.restore();
+  }
+  noGlow(g);
+  // varredura e partículas
+  g.globalCompositeOperation = 'destination-out';
+  for (let y = 0; y < h; y += 3) { g.fillStyle = 'rgba(0,0,0,0.28)'; g.fillRect(0, y, w, 1); }
+  g.globalCompositeOperation = 'source-over';
+  let s = seed * 9301 + 49297;
+  const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+  for (let i = 0; i < 40; i++) { g.fillStyle = hexA(color, 0.2 + rnd() * 0.5); g.fillRect(cx + (rnd() - 0.5) * w * 0.5, h * 0.12 + rnd() * h * 0.7, 1.5, 1.5); }
+  return cv;
+}

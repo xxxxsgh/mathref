@@ -34,15 +34,18 @@ export function portrait(speaker = '', faction = 'none') {
 
   // varredura + ruído de sinal
   const img = g.getImageData(0, 0, W, H), d = img.data;
+  // duotom holográfico: luminância → escuro · cor da facção · branco
+  const dk = fc.map((v) => v * 0.06 + 3);
   for (let y = 0; y < H; y++) {
-    const scan = y % 3 === 0 ? 0.72 : 1;
-    const tear = r() < 0.012 ? (r() - 0.5) * 10 : 0;
+    const scan = y % 3 === 0 ? 0.7 : 1;
+    const tear = r() < 0.012 ? (r() - 0.5) * 18 : 0;
     for (let x = 0; x < W; x++) {
       const i = (y * W + x) * 4;
-      const n = (r() - 0.5) * 22;
-      d[i] = Math.max(0, Math.min(255, d[i] * scan + n + tear));
-      d[i + 1] = Math.max(0, Math.min(255, d[i + 1] * scan + n));
-      d[i + 2] = Math.max(0, Math.min(255, d[i + 2] * scan + n * 1.2));
+      let L = (d[i] * 0.3 + d[i + 1] * 0.55 + d[i + 2] * 0.15) / 255;
+      L = Math.min(1, Math.pow(L, 0.85) * 1.15) * scan + (r() - 0.5) * 0.07 + tear / 255;
+      L = Math.max(0, Math.min(1, L));
+      const a = Math.min(1, L * 1.6), b = Math.max(0, L * 1.6 - 1) / 0.6;
+      for (let c = 0; c < 3; c++) d[i + c] = Math.min(255, dk[c] + (fc[c] - dk[c]) * a + (255 - fc[c]) * b * 0.8);
     }
   }
   g.putImageData(img, 0, 0);
@@ -104,7 +107,7 @@ function drawBust(g, W, H, fc, r, faction) {
   g.strokeStyle = 'rgba(40,14,12,0.6)'; g.lineWidth = 2;
   g.beginPath(); g.moveTo(cx - hw * 0.28, ey + hh * 0.62); g.quadraticCurveTo(cx, ey + hh * (0.66 + (r() - 0.5) * 0.08), cx + hw * 0.28, ey + hh * 0.62); g.stroke();
   // cabelo / capacete / capuz
-  const kind = faction === 'hegemonia' ? 'helmet' : faction === 'corsarios' ? (r() < 0.6 ? 'hood' : 'mask') : faction === 'guilda' ? 'headset' : r() < 0.5 ? 'hair' : 'bandana';
+  const kind = faction === 'hegemonia' ? 'helmet' : faction === 'corsarios' ? (r() < 0.6 ? 'hood' : 'mask') : faction === 'guilda' ? 'headset' : 'hair';
   if (kind === 'helmet') {
     const hg = g.createLinearGradient(cx - hw * 1.3, 0, cx + hw * 1.3, 0);
     hg.addColorStop(0, '#5d5a52'); hg.addColorStop(lightL ? 0.3 : 0.7, '#f4f1e6'); hg.addColorStop(1, '#4a4842');

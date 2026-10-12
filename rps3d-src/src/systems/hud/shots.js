@@ -62,9 +62,9 @@ export function registerShots(ctx, H, api) {
   ctx.shots.register('hud-flight-combat', async (ctx) => {
     prep(ctx, 'kessa');
     const ver = body(ctx, 'Verídia');
-    const fr = orbitFrame(ctx, ver, { alt: P(ctx, 'alt', 0.3), phase: P(ctx, 'phase', 58), hdg: P(ctx, 'hdg', 70) });
+    const fr = orbitFrame(ctx, ver, { alt: P(ctx, 'alt', 2.2), phase: P(ctx, 'phase', 58), hdg: P(ctx, 'hdg', 70) });
     // nariz ligeiramente para baixo: o planeta ocupa a parte de baixo do vidro
-    const pitch = P(ctx, 'pitch', -16) * D2R;
+    const pitch = P(ctx, 'pitch', -61) * D2R;
     const fwd = fr.F.clone().multiplyScalar(Math.cos(pitch)).addScaledVector(fr.U, Math.sin(pitch)).normalize();
     const up = fr.U.clone().addScaledVector(fwd, -fr.U.dot(fwd)).normalize();
     const q = look(fwd, up).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), P(ctx, 'roll', 8) * D2R));
@@ -76,7 +76,7 @@ export function registerShots(ctx, H, api) {
         cb.setHostile('player', 'corsarios', true);
         const at = (f, r, u) => fr.pos.clone().addScaledVector(fwd, f).addScaledVector(R, r).addScaledVector(Uq, u);
         const fly = (d) => look(d, Uq);
-        const e1 = cb.spawn('corsarios', 'fighter', at(P(ctx, 'tf', 340), P(ctx, 'tr', 70), P(ctx, 'tu', 26)), { quat: fly(R.clone().multiplyScalar(-1).addScaledVector(fwd, 0.3).normalize()), vel: R.clone().multiplyScalar(-150).addScaledVector(fwd, 120), ai: false, callsign: 'GARRA-3', force: true });
+        const e1 = cb.spawn('corsarios', 'fighter', at(P(ctx, 'tf', 210), P(ctx, 'tr', 46), P(ctx, 'tu', 12)), { quat: fly(R.clone().multiplyScalar(-1).addScaledVector(fwd, 0.3).normalize()), vel: R.clone().multiplyScalar(-150).addScaledVector(fwd, 120), ai: false, callsign: 'GARRA-3', force: true });
         const e2 = cb.spawn('corsarios', 'interceptor', at(900, -260, 80), { quat: fly(fwd.clone().negate()), vel: fwd.clone().multiplyScalar(-140), ai: false, force: true });
         const e3 = cb.spawn('corsarios', 'fighter', at(1500, 380, -60), { quat: fly(R), vel: R.clone().multiplyScalar(120), ai: false, force: true });
         const fz = cb.spawn('guilda', 'freighter', at(2600, 520, -180), { quat: fly(R.clone().negate()), vel: R.clone().multiplyScalar(-40), ai: false, name: 'Cargueiro Tessaly', force: true });

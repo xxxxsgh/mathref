@@ -60,8 +60,9 @@ export const CSS = `
 @keyframes hudNoteT{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 
 /* ── rádio / legendas ── */
-#hud .radio{position:absolute;left:50%;bottom:calc(13.5vh + var(--safe-b));transform:translate(-50%,8px);display:flex;align-items:stretch;gap:0;width:min(760px,80vw);opacity:0;transition:opacity .35s,transform .45s}
+#hud .radio{position:absolute;left:50%;bottom:calc(9vh + var(--safe-b));transform:translate(-50%,8px);display:flex;align-items:stretch;gap:0;width:min(620px,48vw);opacity:0;transition:opacity .35s,transform .45s}
 #hud .radio.on{opacity:1;transform:translate(-50%,0)}
+@media (max-width:900px){#hud .radio{width:84vw}}
 #hud .radio .pf{position:relative;flex:none;width:76px;height:92px;background:rgba(4,10,18,.7);clip-path:polygon(0 0,100% 0,100% 82%,82% 100%,0 100%);overflow:hidden}
 #hud .radio .pf canvas{width:100%;height:100%;display:block}
 #hud .radio .pf:after{content:"";position:absolute;inset:0;border:1px solid var(--fc);opacity:.55;clip-path:inherit}
@@ -258,6 +259,11 @@ export const CSS = `
 #hud .ttop{position:absolute;top:calc(14px + var(--safe-t));right:calc(18px + var(--safe-r));display:flex;gap:12px;pointer-events:auto}
 #hud .ttop .tb{position:relative;margin:0;width:46px;height:46px;border-radius:12px}
 #hud .ttop .tb svg{width:20px;height:20px}
+
+/* modo toque: rádio no alto, notificações abaixo dos atalhos */
+#hud.touchmode .radio{bottom:auto;top:calc(92px + var(--safe-t))}
+#hud.touchmode .notes{top:calc(78px + var(--safe-t))}
+#hud.touchmode .prompt{top:calc(50% + 90px)}
 
 /* tela de dano / vinheta */
 #hud .vig{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s}

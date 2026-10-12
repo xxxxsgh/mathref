@@ -234,7 +234,6 @@ export default {
     bus.on('quantum:interdicted', () => H.comms.alert('INTERDIÇÃO', 'Puxado da viagem quântica', 3));
     bus.on('jump:start', () => H.comms.alert('SALTO INICIADO', 'Mantenha o curso', 2.2));
     bus.on('atmo:enter', (e) => H.comms.notify(`ENTRANDO NA ATMOSFERA — ${e?.body?.name?.toUpperCase?.() || ''}`, 'info'));
-    bus.on('dock:granted', (e) => H.comms.notify(`POUSO AUTORIZADO — ${e?.station?.name?.toUpperCase?.() || ''}`, 'info'));
     bus.on('player:death', () => { H.menus.closeAll(); closeMap(); });
     bus.on('mode:change', (e) => { if (e?.to === 'title' || e?.to === 'cinematic') { H.menus.closeAll(); closeMap(); } });
     bus.on('quality:change', () => { H.layer.dprCap = ctx.quality.name === 'mobile' ? 1.5 : 2; });
@@ -274,13 +273,16 @@ export default {
     const W = H.layer.W, Hh = H.layer.H;
     H.P.begin(W, Hh);
     const playing = mode === 'ship' || mode === 'foot' || mode === 'map';
-    const show = H.visible && playing && !H.maps.isOpen;
+    const pref0 = ctx.prefs?.touch || 'auto';
+    const touchMode = pref0 === 'on' || (pref0 === 'auto' && (ctx.input.device === 'touch' || H.forceTouch));
+    H.root.classList.toggle('touchmode', touchMode);
+    const show = H.visible && playing && !H.maps.isOpen && !H.modal;
     H.root.classList.toggle('hidden-hud', !show);
     if (show) {
       try {
         if (mode === 'ship' && ctx.player.ship) {
           H.markers.draw(g, H.P, 'ship', { qt: qtInfo(ctx), dt: real, objDistCb: (d) => H.comms.setObjectiveDistance(fmtD(d)) });
-          H.flight.draw(g, H.P, real, W, Hh, { noPanels: ctx.prefs?.flightPanels === false });
+          H.flight.draw(g, H.P, real, W, Hh, { noPanels: ctx.prefs?.flightPanels === false || touchMode, strip: touchMode });
         } else if (mode === 'foot') {
           H.markers.draw(g, H.P, 'foot', { dt: real, objDistCb: (d) => H.comms.setObjectiveDistance(fmtD(d)) });
           H.foot.draw(g, H.P, real, W, Hh, H.markers);
@@ -289,6 +291,7 @@ export default {
         if (!H.drawErr) { H.drawErr = true; ctx.errors.push('hud draw: ' + (e.stack || e)); }
       }
     }
+    if (mode === 'ship' && !ctx.shot) shipPrompts(ctx);
     H.comms.frame(real);
     H.maps.frame(real);
     H.menus.frame(real);
@@ -308,6 +311,22 @@ export default {
     H.root?.remove();
   },
 };
+
+/** Prompts contextuais da nave (pousar, atracar, levantar). */
+function shipPrompts(ctx) {
+  const sh = ctx.player.ship;
+  if (!sh || sh.autopilot) { H.comms.prompt(null, { id: 'ship' }); return; }
+  let txt = null, sub = '';
+  if (sh.landed || sh.docked) { txt = 'Levantar da cadeira'; sub = sh.docked ? 'Hangar pressurizado' : (sh.body?.name || ''); }
+  else {
+    const sys = ctx.universe.system;
+    let best = null, bd = 12000;
+    for (const st of sys?.stations || []) { if (st.hidden) continue; const d = st.pos.distanceTo(sh.pos); if (d < bd) { bd = d; best = st; } }
+    if (best) { txt = 'Solicitar pouso'; sub = `${best.name} · ${(bd / 1000).toFixed(1)} km`; }
+    else if (sh.body && sh.altitude < 1500 && sh.body.landable !== false) { txt = 'Pouso assistido'; sub = `${sh.body.name} · ${Math.round(sh.altitude)} m`; }
+  }
+  if (txt) H.comms.prompt(txt, { id: 'ship', action: 'interact', sub, ttl: 0.3 }); else H.comms.prompt(null, { id: 'ship' });
+}
 
 function qtInfo(ctx) {
   const sh = ctx.player.ship;
