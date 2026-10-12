@@ -128,15 +128,18 @@ export class Director {
       if (k >= 1) this.blend = null;
     }
     this.pose.fov = fov;
+    // câmera presa a algo em movimento: o motion blur de câmera (que supõe o
+    // mundo parado) borraria o próprio alvo — corta o histórico
+    if (s.cut !== false) ctx.services.rendering?.cut?.();
     ctx.player.camWorld.copy(outPos);
     cam.quaternion.copy(outQ);
     if (Math.abs(cam.fov - fov) > 1e-3) { cam.fov = fov; cam.updateProjectionMatrix(); }
     // foco: distância ao alvo do plano (ou ao ponto olhado)
     const focusPt = p.focus || (s.focus === 'look' && p.look) || null;
-    if (focusPt && s.dof !== false) {
+    if (focusPt && s.dof === true) {
       const d = focusPt.distanceTo(outPos);
       this.setDof({ focus: d, range: p.dofRange ?? Math.max(4, d * 0.35), bokeh: p.bokeh ?? s.bokeh ?? 1 });
-    } else if (s.dof === false && this.dofOn) this.setDof(false);
+    } else if (this.dofOn) this.setDof(false);
   }
 
   frame(dt) {

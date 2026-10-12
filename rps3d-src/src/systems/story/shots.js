@@ -13,7 +13,7 @@
 import * as THREE from 'three/webgpu';
 import { haldenFrame, buildAuroraCast, startBombardment, LINES } from './opening.js';
 import { arrivalPose, arrivalShot, spawnFrenteEscort } from './scenes.js';
-import { chase, custom } from './cinema.js';
+import { custom } from './cinema.js';
 import { lookQuat } from './stage.js';
 import { DIALOGS } from './campaign.js';
 
@@ -76,10 +76,10 @@ export function registerShots(ctx, S) {
     S.frame = fr;
     // o caça do Rafael em curva fechada (rolagem forte)
     const q = fr.q.clone()
-      .multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), P('yaw', 24) * D2R))
-      .multiply(new THREE.Quaternion().setFromAxisAngle(V(1, 0, 0), P('pitch', 6) * D2R))
-      .multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), P('roll', -48) * D2R));
-    S.spawnPlayer(fr.C, q, { vel: V(0, 0, -1).applyQuaternion(q).multiplyScalar(160), throttle: 1, enter: false, faction: 'hegemonia' });
+      .multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), P('yaw', 8) * D2R))
+      .multiply(new THREE.Quaternion().setFromAxisAngle(V(1, 0, 0), P('pitch', -4) * D2R))
+      .multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), P('roll', -35) * D2R));
+    S.spawnPlayer(fr.C, q, { vel: V(0, 0, -1).applyQuaternion(q).multiplyScalar(P('spd', 30)), throttle: 1, enter: false, faction: 'hegemonia' });
     ctx.game.setMode('cinematic', { scene: 'betrayal' });
     const cast = buildAuroraCast(S, fr, { full: 'stage' });
     S.cast = cast;
@@ -88,7 +88,7 @@ export function registerShots(ctx, S) {
     // Lança-8 à frente, cruzando a mira; Davi rompendo a formação
     const l8 = cast.actors.lanca8, l6 = cast.actors.davi;
     if (l8) {
-      const p8 = pose.pos.clone().addScaledVector(F, P('l8f', 120)).addScaledVector(R, P('l8r', 14)).addScaledVector(U, P('l8u', 6));
+      const p8 = pose.pos.clone().addScaledVector(F, P('l8f', 110)).addScaledVector(R, P('l8r', 22)).addScaledVector(U, P('l8u', -6));
       const d8 = F.clone().addScaledVector(R, 0.7).normalize();
       l8.motion = (dt, t, a) => { a.pos.addScaledVector(d8, 150 * dt); a.vel.copy(d8).multiplyScalar(150); };
       l8.pos.copy(p8); l8.quat.copy(lookQuat(d8, U.clone().applyAxisAngle(d8, 0.9)));
@@ -110,10 +110,14 @@ export function registerShots(ctx, S) {
     }
     S.ui.letterbox(1, true);
     S.say('davi', LINES.betrayal[0][1], { hold: true });
-    S.dir.play(chase(() => S.playerPose(), {
-      from: V(P('cx', 5.5), P('cy', -1.2), P('cz', 15)), lookFrom: V(P('lx', 0), P('ly', 0.4), P('lz', -70)),
-      fov: [P('fov', 44), P('fov', 44)], roll: [P('croll', 0.1), P('croll', 0.1)], dur: 1e9, hold: true, handheld: 0, upLocal: P('ul', 1) > 0,
-    }));
+    // câmera no referencial da batalha: atrás/à esquerda do Rafael, olhando
+    // para o Lança-8 e para Aurora (com a lança orbital) ao fundo
+    S.dir.play(custom(1e9, () => {
+      const p = S.playerPose();
+      const pos = p.pos.clone().addScaledVector(fr.R, P('cx', -12)).addScaledVector(fr.U, P('cy', 5)).addScaledVector(fr.F, -P('cz', 22));
+      const look = p.pos.clone().addScaledVector(fr.F, P('lz', 80)).addScaledVector(fr.R, P('lx', 22)).addScaledVector(fr.U, -P('ly', 16));
+      return { pos, look, up: fr.U, fov: P('fov', 52), roll: P('croll', 4) * D2R };
+    }, { hold: true }));
     settle();
   });
 
@@ -123,13 +127,13 @@ export function registerShots(ctx, S) {
     const a = arrivalPose(ctx);
     const look = a.look.clone().applyAxisAngle(V(0, 1, 0), P('hy', 0) * D2R);
     const q = lookQuat(look, V(0, 1, 0)).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), P('roll', -8) * D2R));
-    S.spawnPlayer(a.pos, q, { vel: look.clone().multiplyScalar(120), throttle: 0.4, enter: false, faction: 'hegemonia' });
+    S.spawnPlayer(a.pos, q, { vel: look.clone().multiplyScalar(P('spd', 25)), throttle: 0.4, enter: false, faction: 'hegemonia' });
     ctx.game.setMode('cinematic', { scene: 'arrival' });
     spawnFrenteEscort(S);
     S.ui.letterbox(1, true);
     S.ui.location('KESSA', 'FENDA DE ÓRION · ESPAÇO LIVRE', 1e6);
     S.say('iara', DIALOGS.contato.lines[0].text, { hold: true });
-    const sh = arrivalShot(S, 1e9, { side: P('side', 13), up: P('up', 3.2), fwd: P('fwd', -26), push: 0, fov: P('fov', 42), lookUp: P('lu', 0.9), roll: P('croll', 0.04) });
+    const sh = arrivalShot(S, 1e9, { side: P('side', -11), up: P('up', 3.5), fwd: P('fwd', 20), push: 0, fov: P('fov', 50), lookUp: P('lu', 0.5), ahead: P('ahead', 30), roll: P('croll', 0.04) });
     sh.hold = true;
     S.dir.play(sh);
     try { ctx.services.space?.jumpFx?.('stop', {}); } catch { /* */ }

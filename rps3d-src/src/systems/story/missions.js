@@ -29,7 +29,7 @@ const CARGO = ['suprimentos médicos', 'células de deutério', 'peças de reato
 const BRIEFS = {
   recompensa: [
     (o) => `${o.target} atacou cargueiros perto de ${o.where}. Vivo ou morto, a recompensa é a mesma.`,
-    (o) => `Contrato aberto: ${o.target}, procurado por pirataria. Último contato: ${o.where}.`,
+    (o) => `Contrato aberto: ${o.target}, procurado(a) por pirataria. Último contato: ${o.where}.`,
   ],
   escolta: [
     (o) => `Um cargueiro com ${o.cargo} precisa chegar a ${o.dest}. Os corsários estão de olho.`,
@@ -54,6 +54,8 @@ const BRIEFS = {
 };
 const GIVERS = { frente: ['Refúgio Cinza', 'Célula Ashar', 'Rádio Livre'], guilda: ['Guilda dos Mercadores', 'Consórcio Saal', 'Câmara de Comércio'], hegemonia: ['Patrulha Solar'], corsarios: ['Corvo'] };
 
+const types0 = (st) => (st.faction === 'frente' ? ['sabotagem', 'resgate', 'escolta', 'entrega', 'recompensa', 'ruinas'] : st.faction === 'hegemonia' ? ['recompensa', 'entrega', 'escolta'] : ['entrega', 'escolta', 'recompensa', 'resgate', 'ruinas', 'sabotagem']);
+
 export class MissionBoard {
   constructor(story) {
     this.story = story;
@@ -71,11 +73,11 @@ export class MissionBoard {
     if (!st) return [];
     const cyc = this.cycle();
     const r = new Rng(mix(st.seed || hashString(st.id), cyc * 7907 + 13));
-    const n = r.int(4, 6);
+    const n = Math.min(types0(st).length, r.int(4, 6));
     const out = [];
-    const types = st.faction === 'frente' ? ['sabotagem', 'resgate', 'escolta', 'entrega', 'recompensa', 'ruinas'] : st.faction === 'hegemonia' ? ['recompensa', 'entrega', 'escolta'] : ['entrega', 'escolta', 'recompensa', 'resgate', 'ruinas', 'sabotagem'];
+    const types = r.shuffle(types0(st).slice());
     for (let i = 0; i < n; i++) {
-      const type = types[(i + r.int(0, types.length - 1)) % types.length];
+      const type = types[i];
       const o = this.generate(type, st, r.fork(i), `${st.id}#${cyc}#${i}`);
       if (o && !this.taken.has(o.id)) out.push(o);
     }
@@ -173,6 +175,7 @@ export class MissionBoard {
       }
       default: return null;
     }
+    if (o.brief) o.brief = o.brief[0].toUpperCase() + o.brief.slice(1);
     o.text = objectives[0]?.text || '';
     o.objectives = objectives;
     o.expires = (this.cycle() + 1) * CYCLE;

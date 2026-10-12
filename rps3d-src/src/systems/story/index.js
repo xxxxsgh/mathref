@@ -640,8 +640,8 @@ export default {
       S.title.enter();
     }
     navInput(dt, ctx);
-    if (S.title?.active) return;
     S.stage.update(dt);
+    if (S.title?.active) return;
     if (S.run) S.run.update(dt);
     for (const r of S.side.slice()) r.update(dt);
     if (S.state.started) S.state.playTime += dt;

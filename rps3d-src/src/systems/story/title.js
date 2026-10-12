@@ -56,8 +56,8 @@ export class Title {
   /** Plano do título: órbita lenta, nave no terço direito (o logo ocupa a esquerda). */
   shot() {
     const S = this.S;
-    const yaw0 = this.P('tyaw', 148) * D2R, rate = this.P('trate', 1.6) * D2R;
-    const pitch = this.P('tpitch', 9) * D2R, dist = this.P('tdist', 21), fov = this.P('tfov', 34), shift = this.P('tshift', 0.2);
+    const yaw0 = this.P('tyaw', -28) * D2R, rate = this.P('trate', 1.2) * D2R;
+    const pitch = this.P('tpitch', 13) * D2R, dist = this.P('tdist', 30), fov = this.P('tfov', 34), shift = this.P('tshift', 0.16);
     const fr = this.fr;
     return custom(1e9, (u, t) => {
       const h = this.hero(); if (!h) return null;
@@ -72,7 +72,7 @@ export class Title {
       const right = new THREE.Vector3().crossVectors(toShip, U).normalize();
       const look = h.pos.clone().addScaledVector(right, -dist * shift).addScaledVector(U, dist * this.P('tlift', 0.02));
       return { pos, look, up: U, fov, focus: h.pos.clone(), bokeh: 1.2, roll: this.P('troll', 0) * D2R };
-    }, { hold: true, ease: (x) => x, handheld: 0.0012 });
+    }, { hold: true, ease: (x) => x, handheld: 0.0012, dof: this.P('tdof', 0) > 0 });
   }
 
   async enter() {

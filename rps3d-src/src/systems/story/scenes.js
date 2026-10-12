@@ -210,12 +210,12 @@ export function spawnFrenteEscort(S, { pose = null } = {}) {
 }
 
 export function arrivalShot(S, dur = 8, o = {}) {
-  const k = { side: o.side ?? 13, up: o.up ?? 3.2, fwd: o.fwd ?? -26, push: o.push ?? 6, fov: o.fov ?? 42, lookUp: o.lookUp ?? 0.9 };
+  const k = { side: o.side ?? -11, up: o.up ?? 3.5, fwd: o.fwd ?? 20, push: o.push ?? -5, fov: o.fov ?? 50, lookUp: o.lookUp ?? 0.5, ahead: o.ahead ?? 30 };
   return custom(dur, (u) => {
     const p = S.playerPose();
     const F = V(0, 0, -1).applyQuaternion(p.quat), U = V(0, 1, 0).applyQuaternion(p.quat), R = V(1, 0, 0).applyQuaternion(p.quat);
     const pos = p.pos.clone().addScaledVector(F, -k.fwd - k.push * u).addScaledVector(R, k.side).addScaledVector(U, k.up);
-    const look = p.pos.clone().addScaledVector(U, k.lookUp).addScaledVector(R, -1.5 * u);
+    const look = p.pos.clone().addScaledVector(U, k.lookUp).addScaledVector(F, k.ahead).addScaledVector(R, -1.5 * u);
     return { pos, look, up: U, fov: k.fov - 3 * u, focus: p.pos, roll: o.roll ?? 0.04 };
   }, { handheld: 0.002, ease: ease.inOut });
 }
