@@ -83,10 +83,15 @@ function shapeFn(v) {
     craters.push([q * Math.cos(a), z, q * Math.sin(a), 0.18 + r() * 0.35, 0.08 + r() * 0.1]);
   }
   const k1 = 0.9 + r() * 0.8;
+  const sharp = 0.08 + r() * 0.1;
   return (x, y, z) => {
-    let h = 1 + 0.32 * fbm3(x * k1, y * k1, z * k1, s, 3) + 0.1 * fbm3(x * 4.1, y * 4.1, z * 4.1, s + 7, 3);
-    // facetas: degraus suaves
-    h += 0.05 * Math.abs(vnoise(x * 7, y * 7, z * 7, s + 3));
+    let h = 1 + 0.3 * fbm3(x * k1, y * k1, z * k1, s, 3) + 0.08 * fbm3(x * 4.1, y * 4.1, z * 4.1, s + 7, 3);
+    // cristas afiadas (ridged) e facetas em degraus (estratos)
+    const rg = 1 - Math.abs(vnoise(x * 2.6, y * 2.6, z * 2.6, s + 11));
+    h += sharp * rg * rg * rg;
+    const terr = Math.floor(h * 9) / 9;
+    h = h * 0.7 + terr * 0.3;
+    h += 0.04 * Math.abs(vnoise(x * 9, y * 9, z * 9, s + 3));
     for (const c of craters) {
       const d = Math.acos(Math.max(-1, Math.min(1, x * c[0] + y * c[1] + z * c[2])));
       const t = d / c[3];
