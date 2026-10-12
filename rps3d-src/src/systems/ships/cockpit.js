@@ -127,6 +127,22 @@ export class Cockpit {
       cap.translate(0, 0, -0.006); cap.rotateY(Math.PI / 2 - a);
       P.add(cap, Z.SECONDARY);
     }
+    // capô acolchoado em gomos: costuras radiais rebaixadas (curtas, seguindo
+    // o perfil) e fileira de fendas do desembaçador junto ao para-brisa
+    {
+      const yAt = (r) => { for (let i = 2; i < 5; i++) { const [r0, y0] = gsProf[i], [r1, y1] = gsProf[i + 1]; if (r <= r1) return y0 + (y1 - y0) * (r - r0) / (r1 - r0); } return -0.2; };
+      for (let a = -0.6; a <= 0.601; a += 0.12) {
+        for (let r = 0.66; r < 0.84; r += 0.03) {
+          const rm = r + 0.015, y = yAt(rm) + 0.0008;
+          P.add(box(0.008, 0.004, 0.031), Z.DARK, { m: M(Math.sin(a) * rm, y, -Math.cos(a) * rm, 0, -a, 0) });
+        }
+      }
+      for (let a = -0.58; a <= 0.581; a += 0.029) {
+        if (Math.abs(a) < 0.08) continue;   // espaço do combinador do HUD
+        const rm = 0.885, y = yAt(rm) - 0.0012;
+        P.add(box(0.009, 0.004, 0.04), Z.DARK, { m: M(Math.sin(a) * rm, y, -Math.cos(a) * rm, 0, -a, 0).multiply(M(0, 0, 0, -0.31)) });
+      }
+    }
     // friso dourado na borda interna do capô
     P.add(arc([[0.618, -0.162], [0.622, -0.158], [0.628, -0.16], [0.624, -0.166], [0.618, -0.162]].reverse(), 0.64), Z.TRIM, { wear: 0.1 });
     // ── painel de instrumentos (arco quase vertical) ─────────────────────
