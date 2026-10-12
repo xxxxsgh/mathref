@@ -8,5 +8,5 @@ export default {
   camera: { lat: 12.2, lon: 22.6, alt: 1.7, heading: 60, pitch: 2, fov: 70 },
   timeOfDay: 0.4,
   weather: 'clear',
-  params: { biome: 'lush', atmoBiome: 'lush', terrainSeed: 4242, radius: 110000 },
+  params: { biome: 'lush', atmoBiome: 'lush', terrainSeed: 4242, radius: 110000, floraLeaf: 0, cloudCoverage: 0.3 },
 };

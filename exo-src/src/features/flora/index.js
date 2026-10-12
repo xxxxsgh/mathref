@@ -49,7 +49,7 @@ const _m4 = new THREE.Matrix4();
 
 /** Camadas de espalhamento. perM2 = pontos de Poisson por m² (antes da densidade). */
 const LAYER_DEF = {
-  grass: { cellM: 12, perM2: 3.0, range: 55, near: 12 },
+  grass: { cellM: 12, perM2: 3.0, range: 55, near: 10 },
   small: { cellM: 24, perM2: 0.1, range: 80, near: 28 },
   large: { cellM: 80, perM2: 0.016, range: 800 },
 };
@@ -142,7 +142,7 @@ export default {
     this.seaLevel = planet?.seaLevel ?? null;
     // espécies e malhas
     this._disposeMeshes();
-    const species = planet ? speciesFor(biome, P, this.planetSeed) : [];
+    const species = planet ? speciesFor(biome, P, this.planetSeed, { leaf: pp.floraLeaf }) : [];
     this.species = species;
     this.byLayer = { grass: [], small: [], large: [] };
     const t0 = performance.now();
@@ -598,6 +598,13 @@ export default {
             const sc = Math.hypot(m[q * 16 + 4], m[q * 16 + 5], m[q * 16 + 6]);
             const d = Math.hypot(px, py, pz);
             if (d > Lc.range) continue;
+            // câmera "dentro" do tronco/caule (o jogador colidiria): não desenha
+            if (d < 12 && sp.kind !== 'rock') {
+              const up = px * m[q * 16 + 4] + py * m[q * 16 + 5] + pz * m[q * 16 + 6];
+              const h2 = d * d - (up * up) / (sc * sc);
+              const rr = (sp.clear ?? (sp.radius ?? 0.4) * 1.6) * sc + 0.6;
+              if (h2 < rr * rr) continue;
+            }
             _s.center.set(px + m[q * 16 + 4] * sp.height * 0.5, py + m[q * 16 + 5] * sp.height * 0.5, pz + m[q * 16 + 6] * sp.height * 0.5);
             _s.radius = (sp.bound ?? 5) * sc;
             if (!this.frustum.intersectsSphere(_s) && d > 40 + _s.radius) continue;

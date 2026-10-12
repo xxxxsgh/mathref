@@ -93,8 +93,8 @@ export function flowerPatch(rnd, lod, P) {
     const fw = V().crossVectors(tilt, sd).normalize();
     const o = V().copy(tip).addScaledVector(fw, -s);
     B.card(o, fw, sd, s * 2, s * 2, {
-      segs: 1, layer: L.PETAL, colBase: P.petal, colTip: P.petal, kind: KIND.LEAF, emit: P.emit ?? 0.6,
-      fold: -0.25, flutter: 0.15, downDir: tilt.clone().negate(), droop: 0, soft: soft(tilt, 0.3),
+      segs: 2, layer: L.PETAL, colBase: P.petal, colTip: P.petal, kind: KIND.LEAF, emit: P.emit ?? 0.6,
+      fold: -0.35, flutter: 0.15, downDir: tilt.clone().negate(), droop: 0, soft: soft(tilt, 0.3),
     });
     // folhinhas na base
     if (lod === 0) {
@@ -184,6 +184,22 @@ export function tree(rnd, lod, P) {
       leaves.push({ o: origin.clone(), d, s: scale * (0.75 + rnd() * 0.5) * (lod ? 1.2 : 1) });
     }
   };
+  // raminhos (cartas com ~10 folhas cada) ao longo dos galhos terminais: a massa da copa
+  const sprigs = [];
+  const addSprigs = (pts, d, segs, mul) => {
+    const n0 = leafCfg.sprigs ?? 0;
+    if (!n0) return;
+    const n = lod === 0 ? n0 : Math.max(1, Math.round(n0 * 0.4));
+    for (let k = 0; k < n; k++) {
+      const t = 0.15 + 0.85 * ((k + rnd()) / n);
+      const i = Math.min(segs - 1, Math.floor(t * segs));
+      const sp = V().lerpVectors(pts[i], pts[i + 1], t * segs - i);
+      const out = rotAround(perp(d), d, k * GOLD + rnd() * 1.2);
+      // sai do galho para fora e um pouco para cima; a carta fica quase deitada
+      const sd = V().copy(d).multiplyScalar(0.55).addScaledVector(out, 1).addScaledVector(UP, 0.25 + rnd() * 0.3).normalize();
+      sprigs.push({ o: sp, d: sd, s: (leafCfg.sprigSize ?? leafCfg.size * 1.1) * (0.75 + rnd() * 0.5) * (lod ? mul : 1) });
+    }
+  };
   const branch = (start, dir, len, rad, level) => {
     const cfg = P.levels[level];
     const segs = lod === 0 ? 4 : 2;
@@ -217,8 +233,10 @@ export function tree(rnd, lod, P) {
     } else if (lod === 1 && next) {
       // LOD1: sem os galhos finos, as folhas vão direto neste nível
       addLeafFan(p, d, leafCfg.size * 1.15);
+      addSprigs(pts, d, segs, 1.6);
     }
     if (!next) {
+      addSprigs(pts, d, segs, 1);
       // folhas ao longo e na ponta do galho terminal
       if (leafCfg.fan) addLeafFan(p, d, leafCfg.size);
       const per = lod === 0 ? leafCfg.perBranch ?? 0 : Math.ceil((leafCfg.perBranch ?? 0) * 0.4);
@@ -263,7 +281,7 @@ export function tree(rnd, lod, P) {
   // cartas de folha
   crown.y = 0;
   let cy = 0, cn = 0;
-  for (const lf of leaves) {
+  for (const lf of leaves.concat(sprigs)) {
     cy += lf.o.y;
     cn++;
   }
@@ -278,8 +296,27 @@ export function tree(rnd, lod, P) {
     // oclusão aproximada: folhas internas/baixas mais escuras
     const occ = 0.55 + 0.45 * Math.max(0, Math.min(1, (lf.o.y - crown.y) / (H * 0.25) * 0.5 + 0.6));
     B.card(lf.o, lf.d, side, l, w, {
-      segs: lod === 0 ? 3 : 2, layer: leafCfg.layer, colBase: mul3(P.leafBase, occ), colTip: mul3(P.leafTip, occ),
-      droop: l * (leafCfg.droop ?? 0.4), fold: leafCfg.fold ?? 0.2, curl: leafCfg.curl ?? 0, flutter: 0.6, phase: rnd() * 6.28,
+      segs: 2, layer: leafCfg.layer, colBase: mul3(P.leafBase, occ), colTip: mul3(P.leafTip, occ),
+      droop: l * (leafCfg.droop ?? 0.4), fold: leafCfg.fold ?? 0.2, curl: leafCfg.curl ?? 0, flutter: 0.6, phase: rnd() * 6.28, rough: 0.75,
+      soft: soft(sd, P.softness ?? 0.5), emit: P.leafEmit ?? 0,
+    });
+  }
+  // raminhos: carta quase quadrada com a textura de raminho, variação de cor por carta
+  for (const lf of sprigs) {
+    const side = perp(lf.d);
+    const up = V().crossVectors(side, lf.d);
+    if (up.y < 0) side.negate();
+    const l = lf.s, w = l * 0.92;
+    const sd = V().subVectors(lf.o, crown).setY((lf.o.y - crown.y) * 0.6 + H * 0.05).normalize();
+    const occ = 0.5 + 0.5 * Math.max(0, Math.min(1, (lf.o.y - crown.y) / (H * 0.25) * 0.5 + 0.55));
+    const jit = 0.8 + rnd() * 0.4;
+    const hue = (rnd() - 0.5) * 0.25;
+    const tint = [jit * (1 + hue), jit, jit * (1 - hue)];
+    B.card(lf.o, lf.d, side, l, w, {
+      segs: lod === 0 ? 2 : 1, layer: L.CLUSTER,
+      colBase: mul3([P.leafBase[0] * tint[0], P.leafBase[1] * tint[1], P.leafBase[2] * tint[2]], occ),
+      colTip: mul3([P.leafTip[0] * tint[0], P.leafTip[1] * tint[1], P.leafTip[2] * tint[2]], occ),
+      droop: l * 0.3, fold: 0.18, curl: 0.12, flutter: 0.7, phase: rnd() * 6.28, rough: 0.78,
       soft: soft(sd, P.softness ?? 0.5), emit: P.leafEmit ?? 0,
     });
   }
@@ -334,19 +371,20 @@ export function mushroom(rnd, lod, P) {
     for (let i = 0; i < segR; i++) for (let k = 0; k < segA; k++) B.quad(ringIdx[i][k], ringIdx[i][k + 1], ringIdx[i + 1][k + 1], ringIdx[i + 1][k]);
     // lamelas: da borda ao caule, por baixo
     const under = [];
+    const segG = lod === 0 ? 44 : 14;
     for (let i = 0; i <= 2; i++) {
       const r = 1 - (i / 2) * (1 - sr / Rc);
       const ring = [];
-      for (let k = 0; k <= segA; k++) {
-        const a = (k / segA) * Math.PI * 2;
+      for (let k = 0; k <= segG; k++) {
+        const a = (k / segG) * Math.PI * 2;
         const wv = 1 + wav * Math.sin(a * 5 + c) * r;
         const y = profile(1) - ch * 0.12 + ch * 0.25 * (i / 2);
         const p = V(Math.cos(a) * Rc * r * wv, i === 0 ? profile(1) + wav * Rc * 0.3 * Math.sin(a * 7) - ch * 0.06 : y, Math.sin(a) * Rc * r * wv).applyQuaternion(tq).add(top);
-        ring.push(B.vert(p, (k / segA) * 2, i / 2, lerp3(P.gill, mul3(P.gill, 0.4), i / 2), [L.GILL, KIND.FUNGUS, P.gillEmit ?? 1.2, 0.8], [B.sway(p.y) * 0.4, 0, 0, 0]));
+        ring.push(B.vert(p, (k / segG) * 2, i / 2, lerp3(P.gill, mul3(P.gill, 0.4), i / 2), [L.GILL, KIND.FUNGUS, P.gillEmit ?? 1.2, 0.8], [B.sway(p.y) * 0.4, 0, 0, 0]));
       }
       under.push(ring);
     }
-    for (let i = 0; i < 2; i++) for (let k = 0; k < segA; k++) B.quad(under[i][k], under[i][k + 1], under[i + 1][k + 1], under[i + 1][k]);
+    for (let i = 0; i < 2; i++) for (let k = 0; k < segG; k++) B.quad(under[i][k], under[i][k + 1], under[i + 1][k + 1], under[i + 1][k]);
   }
   return B;
 }

@@ -250,26 +250,74 @@ const DRAW = {
     g.fill();
   },
   [L.CLUSTER](g, S, rnd) {
-    for (let i = 0; i < 70; i++) {
-      const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * S * 0.36;
-      const x = S / 2 + Math.cos(a) * r, y = S / 2 + Math.sin(a) * r;
-      const v = 140 + rnd() * 110;
+    // RAMINHO: haste curva com ~9 folhas ovais alternadas e uma terminal.
+    // Uma carta destas vale por 9–10 folhas — é o que deixa a copa densa
+    // (camadas e camadas de folhas) sem pagar triângulos por folha.
+    const cx = S / 2;
+    const stem = (t) => [cx + Math.sin(t * 2.2) * S * 0.035, S * 0.99 - S * 0.9 * t];
+    const leaf = (x, y, ang, len, wid, v) => {
       g.save();
       g.translate(x, y);
-      g.rotate(a + Math.PI / 2 + (rnd() - 0.5));
-      g.fillStyle = `rgb(${v},${v},${v})`;
-      const w = S * (0.04 + rnd() * 0.03), h = w * 2.2;
+      g.rotate(ang);
       g.beginPath();
-      g.ellipse(0, 0, w, h, 0, 0, Math.PI * 2);
+      g.moveTo(0, 0);
+      g.bezierCurveTo(wid * 0.9, -len * 0.12, wid * 1.05, -len * 0.62, 0, -len);
+      g.bezierCurveTo(-wid * 1.05, -len * 0.62, -wid * 0.9, -len * 0.12, 0, 0);
+      const gr = g.createLinearGradient(0, 0, 0, -len);
+      gr.addColorStop(0, `rgb(${v * 0.78},${v * 0.78},${v * 0.78})`);
+      gr.addColorStop(0.6, `rgb(${v},${v},${v})`);
+      gr.addColorStop(1, `rgb(${Math.min(255, v * 1.08)},${Math.min(255, v * 1.08)},${Math.min(255, v * 1.08)})`);
+      g.fillStyle = gr;
       g.fill();
-      g.strokeStyle = 'rgba(255,255,255,0.4)';
-      g.lineWidth = 1;
-      g.beginPath();
-      g.moveTo(0, h);
-      g.lineTo(0, -h);
+      g.save();
+      g.clip();
+      // borda escura + nervuras
+      g.lineWidth = Math.max(1, wid * 0.16);
+      g.strokeStyle = 'rgba(50,50,50,0.35)';
       g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,0.5)';
+      g.lineWidth = Math.max(1, wid * 0.07);
+      g.beginPath();
+      g.moveTo(0, 0);
+      g.lineTo(0, -len * 0.97);
+      g.stroke();
+      g.lineWidth = Math.max(0.7, wid * 0.035);
+      g.strokeStyle = 'rgba(255,255,255,0.32)';
+      for (let k = 1; k < 7; k++) {
+        const yy = -len * (k / 7.5);
+        for (const sd of [-1, 1]) {
+          g.beginPath();
+          g.moveTo(0, yy);
+          g.quadraticCurveTo(sd * wid * 0.45, yy - len * 0.06, sd * wid * 0.85, yy - len * 0.16);
+          g.stroke();
+        }
+      }
       g.restore();
+      g.restore();
+    };
+    const n = 9;
+    // haste
+    g.strokeStyle = '#7a7a7a';
+    g.lineCap = 'round';
+    g.lineWidth = S * 0.016;
+    g.beginPath();
+    for (let i = 0; i <= 20; i++) {
+      const [x, y] = stem((i / 20) * 0.88);
+      if (i === 0) g.moveTo(x, y);
+      else g.lineTo(x, y);
     }
+    g.stroke();
+    // folhas de trás para a frente (base primeiro: as de cima sobrepõem)
+    for (let i = 0; i < n; i++) {
+      const t = 0.1 + (i / n) * 0.74;
+      const [x, y] = stem(t);
+      const sd = i % 2 ? 1 : -1;
+      const len = S * (0.36 - t * 0.12) * (0.88 + rnd() * 0.22);
+      const ang = sd * (0.75 + rnd() * 0.35 - t * 0.25);
+      leaf(x, y, ang, len, len * 0.36, 150 + rnd() * 80);
+    }
+    const [tx, ty] = stem(0.86);
+    leaf(tx, ty, (rnd() - 0.5) * 0.2, S * 0.2, S * 0.072, 200 + rnd() * 40);
   },
   [L.BARK](g, S, rnd) {
     g.fillStyle = '#8a8a8a';
@@ -316,11 +364,23 @@ const DRAW = {
   [L.GILL](g, S, rnd) {
     g.fillStyle = '#9a9a9a';
     g.fillRect(0, 0, S, S);
-    for (let i = 0; i < 128; i++) {
-      const x = (i / 128) * S;
-      g.fillStyle = i % 2 ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.4)';
-      g.fillRect(x, 0, S / 256, S);
+    // lamelas: faixas suaves (gradiente) — sem moiré nos mips
+    const n = 48;
+    for (let i = 0; i < n; i++) {
+      const x = (i / n) * S, w = S / n;
+      const gr = g.createLinearGradient(x, 0, x + w, 0);
+      gr.addColorStop(0, 'rgba(0,0,0,0.35)');
+      gr.addColorStop(0.5, 'rgba(255,255,255,0.4)');
+      gr.addColorStop(1, 'rgba(0,0,0,0.35)');
+      g.fillStyle = gr;
+      g.fillRect(x, 0, w, S);
     }
+    // escurece perto do caule (v alto)
+    const gv = g.createLinearGradient(0, 0, 0, S);
+    gv.addColorStop(0, 'rgba(0,0,0,0)');
+    gv.addColorStop(1, 'rgba(0,0,0,0.35)');
+    g.fillStyle = gv;
+    g.fillRect(0, 0, S, S);
   },
   [L.CRYSTAL](g, S, rnd) {
     const gr = g.createLinearGradient(0, 0, S, 0);

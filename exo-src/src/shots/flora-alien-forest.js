@@ -5,8 +5,8 @@ export default {
   desc: 'A pé num mundo exótico: fungos gigantes com lamelas luminosas, aglomerados de cristal, tentáculos com bulbos e grama magenta densa',
   seed: 1337, galaxy: 0, systemIndex: 0, planetIndex: 0,
   mode: 'walk',
-  camera: { lat: 15.47694, lon: -131.84474, alt: 1.7, heading: 143, pitch: 6, fov: 72 },
+  camera: { lat: 15.16442, lon: -131.81776, alt: 1.7, heading: 315, pitch: 8, fov: 72 },
   timeOfDay: 0.4,
   weather: 'clear',
-  params: { biome: 'exotic', atmoBiome: 'exotic', terrainSeed: 5150, radius: 110000 },
+  params: { biome: 'exotic', atmoBiome: 'lush', terrainSeed: 5150, radius: 110000, cloudCoverage: 0.25 },
 };

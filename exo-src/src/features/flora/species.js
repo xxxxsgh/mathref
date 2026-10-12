@@ -54,8 +54,8 @@ function grassSpecies(P, o = {}) {
   return {
     id: 'grass', layer: 'grass', kind: 'grass', gen: grassClump, weight: 1,
     params: {
-      height: o.height ?? 0.75, width: o.width ?? 0.065, blades: o.blades ?? 11, radius: o.radius ?? 0.3, lean: o.lean ?? 0.4,
-      colBase: tone(base, 0, 1.1, o.baseV ?? 0.75), colTip: tone(base, o.tipHue ?? 0.03, o.tipSat ?? 0.92, o.tipV ?? 2.6), emit: o.emit ?? 0,
+      height: o.height ?? 0.75, width: o.width ?? 0.045, blades: o.blades ?? 14, radius: o.radius ?? 0.3, lean: o.lean ?? 0.4,
+      colBase: tone(base, 0, 1.1, o.baseV ?? 0.95), colTip: tone(base, o.tipHue ?? 0.03, o.tipSat ?? 0.92, o.tipV ?? 2.6), emit: o.emit ?? 0,
     },
     scale: o.scale ?? [0.7, 1.3], stiff: 1, transl: 0.9, slopeMax: 0.55, density: o.density ?? 1,
   };
@@ -71,10 +71,10 @@ function broadTree(P, rnd, o = {}) {
         { n: 9, start: 0.4, end: 0.97, angle: 1.0, len: 0.34, droop: -0.1 },
         { n: 4, start: 0.3, end: 1.0, angle: 0.75, len: 0.48, droop: 0.3 },
       ],
-      leaf: o.leafCfg ?? { layer: L.BROAD, size: 2.7, aspect: 0.52, fan: 8, perBranch: 4, droop: 0.5, fold: 0.25, up: 0.3 },
-      bark: o.bark ?? tone(P.rock2 ?? P.rock, 0, 0.6, 1.2), leafBase: mul(leaf, 0.45), leafTip: tone(leaf, 0.02, 0.9, 1.35), softness: 0.55, crownY: 0.8,
+      leaf: o.leafCfg ?? { layer: L.BROAD, size: 1.35, aspect: 0.5, fan: 4, perBranch: 2, droop: 0.4, fold: 0.25, up: 0.3, sprigs: 6, sprigSize: 2.4 },
+      bark: o.bark ?? tone(P.rock2 ?? P.rock, -0.01, 1.0, 1.35), leafBase: mul(leaf, 0.5), leafTip: tone(leaf, 0.02, 0.95, 1.3), softness: 0.55, crownY: 0.8,
     },
-    scale: o.scale ?? [0.75, 1.35], stiff: 0.22, transl: 1, slopeMax: 0.4, radius: o.trunkR ?? 0.45, lod: o.lod ?? [70, 230], cluster: o.cluster ?? 0.5,
+    scale: o.scale ?? [0.75, 1.35], stiff: 0.22, transl: 1, slopeMax: 0.4, radius: o.trunkR ?? 0.45, lod: o.lod ?? [42, 170], cluster: o.cluster ?? 0.5,
   };
 }
 
@@ -125,18 +125,19 @@ function rosetteSpecies(P, o) {
  * @param {object} P      paleta linear do planeta
  * @param {number} seed   seed do planeta (variação de cores/escala)
  */
-export function speciesFor(biome, P, seed = 1) {
+export function speciesFor(biome, P, seed = 1, o = {}) {
   const rnd = mulberry32(seed ^ 0x51f1);
   const pick = (arr) => arr[Math.floor(rnd() * arr.length) % arr.length];
   const accent = P.accent ?? [0.9, 0.3, 0.6];
   switch (biome) {
     case 'lush': {
       // copa: dourada/laranja (como nas florestas de outono alienígenas), verde intenso ou rosada
-      const leafA = pick([[0.95, 0.5, 0.06], tone(P.grass, 0.04, 1, 2.6), [0.85, 0.22, 0.12], tone(P.grass, -0.02, 1, 2.2)]);
+      const opts = [[0.62, 0.3, 0.025], [0.75, 0.16, 0.05], tone(P.grass, 0.03, 1, 1.9), [0.5, 0.42, 0.03], [0.55, 0.08, 0.18]];
+      const leafA = o.leaf != null ? opts[o.leaf % opts.length] : pick(opts);
       const leafB = tone(leafA, 0.05 + rnd() * 0.05, 1, 0.85);
       return [
-        grassSpecies(P, { height: 0.72, blades: 11 }),
-        flowerSpecies(pick([accent, [1, 0.72, 0.08], [0.95, 0.3, 0.15]]), P, { weight: 1.1 }),
+        grassSpecies(P, { height: 0.72, blades: 12 }),
+        flowerSpecies(pick([[0.95, 0.08, 0.25], [1, 0.6, 0.02], [0.9, 0.12, 0.04]]), P, { weight: 1.1 }),
         flowerSpecies(pick([[0.95, 0.95, 1.0], [0.6, 0.3, 1.0]]), P, { id: 'flower2', weight: 0.35, head: 0.09, height: 0.4 }),
         rosetteSpecies(P, { id: 'fern', tex: L.FERN, col: tone(P.grass, 0.02, 1, 1.6), length: 0.9, aspect: 0.5, leaves: 10, weight: 1.2 }),
         rosetteSpecies(P, { id: 'bush', layer: 'large', tex: L.BROAD, col: tone(leafA, -0.03, 1, 0.9), length: 1.5, aspect: 0.55, leaves: 14, elev: 1.2, weight: 0.9, scale: [0.8, 1.8] }),
@@ -151,7 +152,7 @@ export function speciesFor(biome, P, seed = 1) {
       const glow = pick([accent, [0.2, 0.9, 1.0], [1.0, 0.4, 0.9]]);
       const crys = pick([[0.85, 0.1, 0.95], [0.6, 0.15, 1.0], [0.1, 0.9, 0.85]]);
       return [
-        grassSpecies(P, { height: 0.8, blades: 12, tipHue: -0.02, tipV: 2.8 }),
+        grassSpecies(P, { height: 0.8, blades: 12, tipHue: -0.02, tipV: 1.9, tipSat: 1 }),
         rosetteSpecies(P, { id: 'frill', tex: L.FRILL, col: tone(P.dry ?? P.grass, 0.02, 1, 2.2), length: 1.1, aspect: 0.6, leaves: 9, weight: 1, emit: 0.05 }),
         flowerSpecies(glow, P, { weight: 0.5, emit: 0.9 }),
         {
@@ -160,8 +161,8 @@ export function speciesFor(biome, P, seed = 1) {
         },
         {
           id: 'mushroom', layer: 'large', kind: 'mushroom', gen: mushroom, weight: 1.4, imposter: true, shadow: true, variants: 2,
-          params: { height: 12, stemR: 0.85, capR: 6.5, capH: 0.42, capPow: 1.8, caps: 3, lean: 0.3, stem: tone(capA, 0, 0.35, 1.5), capTop: mul(capA, 0.45), capRim: tone(capA, 0.03, 0.85, 1.7), gill: glow, gillEmit: 1.6, emit: 1.0, wavy: 0.14 },
-          scale: [0.55, 1.45], stiff: 0.06, transl: 0.6, slopeMax: 0.45, radius: 1.0, lod: [80, 260], cluster: 0.55,
+          params: { height: 12, stemR: 0.85, capR: 6.5, capH: 0.42, capPow: 1.8, caps: 3, lean: 0.3, stem: tone(capA, 0.06, 0.75, 1.25), capTop: mul(capA, 0.45), capRim: tone(capA, 0.03, 0.85, 1.7), gill: glow, gillEmit: 1.6, emit: 1.0, wavy: 0.14 },
+          scale: [0.55, 1.45], stiff: 0.06, transl: 0.6, slopeMax: 0.45, radius: 1.0, clear: 5, lod: [55, 220], cluster: 0.55,
         },
         {
           id: 'tendril', layer: 'large', kind: 'plant', gen: tendrils, weight: 0.8, imposter: true, shadow: true,
@@ -189,7 +190,7 @@ export function speciesFor(biome, P, seed = 1) {
         {
           id: 'mushroom', layer: 'large', kind: 'mushroom', gen: mushroom, weight: 0.9, imposter: true, shadow: true, variants: 2,
           params: { height: 7, stemR: 0.4, capR: 3.5, capH: 0.5, caps: 2, lean: 0.3, stem: tone(P.sand, 0, 0.6, 1), capTop: tone(P.grass, 0.08, 1, 1.5), capRim: glow, gill: glow, gillEmit: 1, emit: 0.8, wavy: 0.15 },
-          scale: [0.6, 1.5], stiff: 0.06, transl: 0.6, slopeMax: 0.45, radius: 0.5, lod: [70, 230], cluster: 0.5,
+          scale: [0.6, 1.5], stiff: 0.06, transl: 0.6, slopeMax: 0.45, radius: 0.5, clear: 3, lod: [70, 230], cluster: 0.5,
         },
         broadTree(P, rnd, {
           id: 'twisted', leaf: tone(P.grass, 0.05, 1, 1.6), height: 11, trunkR: 0.35, bark: tone(P.rock2, 0, 0.8, 1.2),
