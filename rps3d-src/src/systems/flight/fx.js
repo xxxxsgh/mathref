@@ -49,8 +49,8 @@ function makeSheathMaterial(U) {
     const tailFade = pow(float(1.0).sub(smoothstep(-0.2, 1.0, zf)), 1.6);
     // de fora: borda luminosa da onda de choque + estrias finas; o miolo fica
     // quase transparente (a nave aparece dentro); de dentro: só a proa à frente
-    const cap = pow(bow, 2.6).mul(ndv.mul(0.5).add(0.5)).mul(0.9).add(pow(bow, 6.0).mul(1.4));
-    const outside = rim.mul(pow(bow.add(0.04), 1.6).mul(2.6)).add(cap).add(streak.mul(pow(rim, 0.7).mul(1.3).add(0.06)).mul(pow(tailFade, 1.3)).mul(1.1));
+    const cap = pow(bow, 3.0).mul(ndv.mul(0.6).add(0.4)).mul(0.42).mul(streak.mul(0.5).add(0.75));
+    const outside = rim.mul(pow(bow.add(0.04), 1.6).mul(2.2)).add(cap).add(streak.mul(pow(rim, 0.8).mul(1.2).add(0.03)).mul(pow(tailFade, 1.3)).mul(smoothstep(-0.6, 0.2, zf)).mul(1.2));
     const inside = pow(bow, 3.0).mul(ndv.mul(0.6).add(0.4)).mul(0.6).add(streak.mul(0.08).mul(bow));
     const shape = select(frontFacing, outside, inside);
     const flick = sin(time.mul(41.0).add(ang.mul(5.0))).mul(0.06).add(0.94);
@@ -86,7 +86,7 @@ export class FlightFx {
   constructor(ctx) {
     this.ctx = ctx;
     this.U = {
-      intensity: uniform(0), tail: uniform(3), gain: uniform(3.0), skinGain: uniform(1.8),
+      intensity: uniform(0), tail: uniform(3), gain: uniform(3.2), skinGain: uniform(1.8),
       flowDir: uniform(new THREE.Vector3(0, 0, -1)),
     };
     const q = ctx.quality?.name;

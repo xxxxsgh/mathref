@@ -17,7 +17,7 @@ export class FlightCamera {
     this.lag = new THREE.Vector3();
     this.headExtra = new THREE.Quaternion();
     this.look = { yaw: 0, pitch: 0 };   // cabeça (cockpit) acompanhando curvas
-    this.fov = 72; this.baseFov = 72; this.chaseFov = 64;
+    this.fov = 72; this.baseFov = 72; this.chaseFov = 64; this.distK = 1;
     this.init = false;
     this.orbit = { yaw: 0, pitch: 0 };
   }
@@ -51,7 +51,7 @@ export class FlightCamera {
     }
     // ─── perseguição ───────────────────────────────────────────────────
     const L = Math.max(10, length);
-    const dist = L * 1.4 + 5, height = L * 0.3 + 1.2;
+    const dist = (L * 1.4 + 5) * this.distK, height = (L * 0.3 + 1.2) * this.distK;
     if (!this.init) { this.chaseQ.copy(shipQ); this.lag.set(0, 0, 0); this.init = true; }
     // rotação com atraso (a nave "gira dentro" do quadro)
     this.chaseQ.slerp(shipQ, 1 - Math.exp(-dt * 4.2)).normalize();

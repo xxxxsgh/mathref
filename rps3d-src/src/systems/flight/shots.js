@@ -53,17 +53,17 @@ export function registerShots(ctx, api, S) {
     const b = bodyByName(ctx, ctx.params.get('body') || 'Verídia');
     const pl = ctx.services.planets;
     const t = ctx.time.world;
-    const elev = P(ctx, 'elev', 42), az = P(ctx, 'az', 70);
+    const elev = P(ctx, 'elev', 28), az = P(ctx, 'az', 70);
     const up = pl?.dirForSun ? pl.dirForSun(b, elev, az, t) : sunLocal(ctx, b);
     const sunL = sunLocal(ctx, b, t);
     const sunT = sunL.clone().addScaledVector(up, -sunL.dot(up)).normalize();
     // rumo: sol à frente-esquerda (contraluz quente na borda da nave, planeta com relevo marcado)
     const side = new THREE.Vector3().crossVectors(up, sunT).normalize();
-    const hdg = P(ctx, 'hdg', 145) * D2R;
+    const hdg = P(ctx, 'hdg', 200) * D2R;
     const fwd = sunT.clone().multiplyScalar(Math.cos(hdg)).addScaledVector(side, Math.sin(hdg)).normalize();
-    const pitch = P(ctx, 'pitch', -34) * D2R;
+    const pitch = P(ctx, 'pitch', -7) * D2R;
     const f2 = fwd.clone().multiplyScalar(Math.cos(pitch)).addScaledVector(up, Math.sin(pitch)).normalize();
-    const alt = P(ctx, 'alt', 26000);
+    const alt = P(ctx, 'alt', 6200);
     const pos = up.clone().multiplyScalar(b.radius + alt);
     let q = look(f2, up);
     q.multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), -P(ctx, 'roll', 22) * D2R));
@@ -110,9 +110,9 @@ export function registerShots(ctx, api, S) {
     // intensidade calculada pelo próprio modelo, já estabilizada
     for (let i = 0; i < 90; i++) m.computeReentry(1 / 30);
     const I = m.reentry;
-    S.controls.head.yaw = P(ctx, 'oy', 34) * D2R; S.controls.head.pitch = P(ctx, 'op', 6) * D2R;
+    S.controls.head.yaw = P(ctx, 'oy', 118) * D2R; S.controls.head.pitch = P(ctx, 'op', -14) * D2R;
     S.cam.orbit.yaw = S.controls.head.yaw; S.cam.orbit.pitch = S.controls.head.pitch;
-    holdLinear(S, () => { m.reentry = I; m.thrustLocal.set(0, 0, -0.3); S.controls.head.yaw = P(ctx, 'oy', 34) * D2R; S.controls.head.pitch = P(ctx, 'op', 6) * D2R; });
+    holdLinear(S, () => { m.reentry = I; m.thrustLocal.set(0, 0, -0.3); S.controls.head.yaw = P(ctx, 'oy', 118) * D2R; S.controls.head.pitch = P(ctx, 'op', -14) * D2R; });
     ctx.camera.fov = 66; ctx.camera.updateProjectionMatrix(); S.cam.fov = 66; S.cam.chaseFov = 60;
     S.frameNow?.();
     pl?.settle?.();
@@ -127,7 +127,7 @@ export function registerShots(ctx, api, S) {
     const t = ctx.time.world;
     const v = pl?.view?.(b);
     const elev = P(ctx, 'elev', 12), sunOff = P(ctx, 'sun', 155) * D2R;
-    const oy = P(ctx, 'oy', 152), op = P(ctx, 'op', 10);
+    const oy = P(ctx, 'oy', 146), op = P(ctx, 'op', 6);
     let best = null, bs = -Infinity;
     // procura: lugar plano e seco cujo fundo (na direção do olhar) tenha relevo alto
     if (pl?.dirForSun && v?.terrain) {
@@ -176,6 +176,7 @@ export function registerShots(ctx, api, S) {
     // planeta que gira ele borra o terreno — na captura corta o histórico)
     S.shotHold = () => { m.prevPos.copy(m.pos); m.prevQuat.copy(m.quat); set(); if (ctx.params.get('mb') !== '1') ctx.services.rendering?.cut?.(); };
     ctx.camera.fov = P(ctx, 'fov', 56); ctx.camera.updateProjectionMatrix(); S.cam.fov = ctx.camera.fov; S.cam.chaseFov = ctx.camera.fov;
+    S.cam.distK = P(ctx, 'dk', 0.62);
     S.ctx.services.rendering?.sun?.setShadowRange?.(80);
     try { pl?.weather?.force?.(ctx.params.get('wx') || 'clear', P(ctx, 'wi', 0)); } catch { /* sem clima */ }
     S.frameNow?.();

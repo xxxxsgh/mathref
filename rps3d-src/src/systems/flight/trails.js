@@ -6,6 +6,7 @@ import * as THREE from 'three/webgpu';
 import { Fn, attribute, vec3, float, smoothstep, pow, abs, mix, uniform, uv } from 'three/tsl';
 
 const N = 72;
+const _white = new THREE.Color(1, 1, 1);
 
 class Ribbon {
   constructor(mat) {
@@ -78,7 +79,7 @@ export class WingTrails {
       const across = abs(uv().x.sub(0.5)).mul(2.0);
       const edge = pow(float(1.0).sub(across), 1.5);
       const fade = smoothstep(1.0, 0.0, f).mul(smoothstep(0.0, 0.04, f).mul(0.7).add(0.3));
-      return edge.mul(fade).mul(s).mul(0.55);
+      return edge.mul(fade).mul(s).mul(0.42);
     })();
     this.mat = mat;
     this.ribbons = [new Ribbon(mat), new Ribbon(mat)];
@@ -102,7 +103,7 @@ export class WingTrails {
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(s.quat);
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(s.quat);
     const life = 1.6;
-    const width = 0.35 + s.speed * 0.0012;
+    const width = 0.22 + s.speed * 0.0008;
     for (let k = 0; k < 2; k++) {
       const r = this.ribbons[k];
       const p = this.tips[k].clone().applyQuaternion(s.quat).add(s.pos);
@@ -114,7 +115,7 @@ export class WingTrails {
       r.update(dt, origin, life, width);
       if (this.strength < 0.01 && r.mesh.visible === false) r.count = 0;
     }
-    if (s.sunColor) this.U.light.value.copy(s.sunColor).multiplyScalar(0.9).addScalar(0.08);
+    if (s.sunColor) this.U.light.value.copy(s.sunColor).lerp(_white, 0.55).multiplyScalar(0.85).addScalar(0.06);
     void right;
   }
   dispose() { this.group.removeFromParent(); for (const r of this.ribbons) r.geo.dispose(); this.mat.dispose(); }

@@ -87,8 +87,8 @@ export const CLASSES = {
 export const K = {
   STEP: 1 / 60,
   RHO0: 1.2,                // densidade do ar no nível do mar (kg/m³) quando density=1
-  REENTRY_V: 340,           // m/s em que o plasma começa a aparecer (ar fino)
-  REENTRY_FULL: 1500,       // m/s com plasma pleno
+  REENTRY_V: 620,           // m/s em que o plasma começa a aparecer (ar fino)
+  REENTRY_FULL: 1700,       // m/s com plasma pleno
   ATMO_SPEED_CAP: 1.0,      // fator: no ar denso o SCM cai (arrasto)
   CRUISE_ALT_RATE: 0.32,    // velocidade de cruzeiro = altitude × isto (s⁻¹)
   CRUISE_MIN: 1600,         // m/s mínimo do cruzeiro
