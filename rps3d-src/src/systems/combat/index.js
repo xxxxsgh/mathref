@@ -1,8 +1,5 @@
 // Sistema `combat` — combate espacial do RPS3D.
 //
-// RASCUNHO NÃO CARREGADO: este arquivo vira `index.js` quando for testado
-// (build + shots). Enquanto se chamar index.draft.js o núcleo não o importa.
-//
 //  • armas da nave (laser, canhão de massa, íons) com aquecimento, projéteis
 //    HDR com núcleo branco e halo da facção, clarões de boca e de impacto
 //  • mísseis teleguiados com trava (IR/radar/torpedo), fumaça iluminada,
