@@ -283,7 +283,9 @@ void main() {
     refl = mix(refl, hit, hitW);
   }
   float F = 0.02 + 0.98 * pow(1.0 - NoV, 5.0);
-  F = mix(F, 0.06, smoothstep(0.1, 0.4, rough) * 0.5);
+  // superfície rugosa (longe) ainda reflete muito em ângulo rasante: só
+  // amacia um pouco o Fresnel médio (micro-facetas inclinadas para a câmera)
+  F = mix(F, max(F * 0.8, 0.05), smoothstep(0.1, 0.4, rough));
 
   // ── sol especular (GGX) ──
   vec3 H = normalize(L + V);
@@ -303,8 +305,8 @@ void main() {
   // renda: células da soma das ondulações (fina perto, some longe)
   float lace = smoothstep(0.05, 0.45, hA * 0.45 + hB * 0.55 + hC * 0.35 + 0.18);
   // costa: linha viva na borda + faixas que correm para a praia, rasgadas
-  float edge = 1.0 - smoothstep(0.02, 0.22 + foamN * 0.08, depthV);
-  float shore = 1.0 - smoothstep(0.0, 1.5, depthV + foamN * 0.4);
+  float edge = 1.0 - smoothstep(0.03, 0.38 + foamN * 0.12, depthV);
+  float shore = 1.0 - smoothstep(0.0, 2.2, depthV + foamN * 0.4);
   float bands = 0.5 + 0.5 * sin(depthV * 6.0 - uTime * 1.4 + foamN * 5.0);
   float fShore = max(edge * (0.7 + 0.3 * lace), shore * smoothstep(0.25, 0.9, bands) * lace);
   // cristas: onde a superfície se comprime (jacobiano baixo)
