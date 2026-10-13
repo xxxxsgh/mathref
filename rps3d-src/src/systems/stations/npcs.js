@@ -5,7 +5,7 @@
 // conversar). Todas as partes de todos os NPCs são InstancedMesh (≈10
 // chamadas de desenho para a multidão inteira).
 import * as THREE from 'three/webgpu';
-import { vec3, float, uniform, max, dot, normalize, normalView, diffuseColor, lights as tslLights } from 'three/tsl';
+import { vec3, vec2, float, uniform, max, dot, normalize, normalView, diffuseColor, positionLocal, length, smoothstep, abs, lights as tslLights } from 'three/tsl';
 import { V3, rng } from './geo.js';
 
 const _m = new THREE.Matrix4(), _m2 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
@@ -67,11 +67,23 @@ export class Crowd {
     this.upV = uniform(new THREE.Vector3(0, 1, 0));
     this.geos = partGeos();
     this.mat = makeMat(pool, this.upV, lite);
+    // rosto: olhos, sobrancelhas e boca sombreados no próprio material da cabeça
+    this.headMat = makeMat(pool, this.upV, lite);
+    {
+      const P = positionLocal;
+      const front = smoothstep(0.05, 0.08, P.z);
+      const eye = (x) => float(1).sub(smoothstep(0.011, 0.016, length(P.xy.sub(vec2(x, 0.138)))));
+      const eyes = eye(-0.034).add(eye(0.034)).mul(front);
+      const brow = smoothstep(0.006, 0.0, abs(P.y.sub(0.158))).mul(smoothstep(0.06, 0.04, abs(P.x))).mul(front);
+      const mouth = smoothstep(0.005, 0.0, abs(P.y.sub(0.082))).mul(smoothstep(0.03, 0.02, abs(P.x))).mul(front);
+      const nose = smoothstep(0.02, 0.0, length(P.xy.sub(vec2(0, 0.11)))).mul(front).mul(0.25);
+      this.headMat.colorNode = vec3(1).mul(float(1).sub(eyes.mul(0.85)).sub(brow.mul(0.45)).sub(mouth.mul(0.5)).sub(nose));
+    }
     this.populate(BUDGET[ctx.quality.name] ?? 14);
     const N = this.people.length;
     this.meshes = {};
     for (const [k, g] of Object.entries(this.geos)) {
-      const im = new THREE.InstancedMesh(g, this.mat, N * (k === 'uArm' || k === 'lArm' || k === 'hand' || k === 'thigh' || k === 'shin' || k === 'foot' ? 2 : 1));
+      const im = new THREE.InstancedMesh(g, k === 'head' ? this.headMat : this.mat, N * (k === 'uArm' || k === 'lArm' || k === 'hand' || k === 'thigh' || k === 'shin' || k === 'foot' ? 2 : 1));
       im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       im.frustumCulled = false; im.castShadow = !lite; im.receiveShadow = false;
       im.name = 'npc:' + k;
@@ -301,6 +313,7 @@ export class Crowd {
   dispose() {
     for (const im of Object.values(this.meshes)) { im.geometry.dispose(); im.dispose?.(); }
     this.mat.dispose();
+    this.headMat.dispose();
   }
 }
 

@@ -52,29 +52,19 @@ export function registerShots(ctx, api, S) {
     setup(ctx, 'kessa', P(ctx, 'fov', 50));
     const view = api.viewOf('kessa:st0');
     view.build();
-    const sys = ctx.universe.system;
-    const planet = sys.body(view.st.body);
-    // câmera do lado oposto ao planeta (Verídia ao fundo, sol de lado/atrás da câmera)
-    const d = planet.pos.clone().sub(view.frame.pos).normalize();
-    const spine = view.dirToWorld(V(0, 1, 0), new THREE.Vector3());
-    const side = new THREE.Vector3().crossVectors(d, spine).normalize();
-    const up = new THREE.Vector3().crossVectors(side, d).normalize();
-    const az = P(ctx, 'az', 28) * Math.PI / 180, el = P(ctx, 'el', 32) * Math.PI / 180, dist = P(ctx, 'dist', 1900);
-    const back = d.clone().negate();
-    const dir = back.clone().multiplyScalar(Math.cos(az) * Math.cos(el)).addScaledVector(side, Math.sin(az) * Math.cos(el)).addScaledVector(up, Math.sin(el)).normalize();
-    const center = view.toWorld(V(0, P(ctx, 'ty', 120), 0), new THREE.Vector3());
-    const pos = center.clone().addScaledVector(dir, dist);
-    const tgt = center.clone().addScaledVector(d, P(ctx, 'lead', 300)).addScaledVector(up, P(ctx, 'tup', -120)).addScaledVector(side, P(ctx, 'tside', 0));
-    const camUp = up.clone().applyAxisAngle(d, P(ctx, 'tilt', 8) * Math.PI / 180);
-    const q = look(tgt.clone().sub(pos).normalize(), camUp);
-    install(ctx, S, (c) => { c.player.camWorld.copy(pos); c.player.pos.copy(pos); c.camera.quaternion.copy(q); });
+    // câmera do lado da boca do hangar 03 (+Z), acima do disco: Verídia iluminada à direita
+    const posL = V(P(ctx, 'cx', -420), P(ctx, 'cy', 560), P(ctx, 'cz', 1250));
+    const tgtL = V(P(ctx, 'tx', 120), P(ctx, 'ty', 40), P(ctx, 'tz', 0));
+    const { pos, q } = stationCam(ctx, S, view, posL, tgtL, V(P(ctx, 'ux', 0.08), 1, 0).normalize());
+    const tgt = view.toWorld(tgtL, new THREE.Vector3());
+    const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
     // cargueiro da Guilda passando perto da câmera (escala)
     try {
       const fr = ctx.services.ships?.create?.('freighter', 'guilda', { id: 'shot-cargueiro', seed: 33, throttle: 0.7 });
       if (fr) {
         const camF = tgt.clone().sub(pos).normalize();
         const right = new THREE.Vector3().crossVectors(camF, camUp).normalize();
-        const fp = pos.clone().addScaledVector(camF, P(ctx, 'fd', 260)).addScaledVector(right, P(ctx, 'fr', -95)).addScaledVector(camUp, P(ctx, 'fu', -40));
+        const fp = pos.clone().addScaledVector(camF, P(ctx, 'fd', 170)).addScaledVector(right, P(ctx, 'fr', -62)).addScaledVector(camUp, P(ctx, 'fu', -30));
         ctx.world.add(fr.group, fp);
         fr.group.quaternion.copy(look(view.frame.pos.clone().sub(fp).normalize().addScaledVector(right, 0.5).normalize(), camUp));
         fr.setLights?.(true); fr.setThrottle?.(0.7);
@@ -178,6 +168,18 @@ export function registerShots(ctx, api, S) {
     ctx.services.rendering?.cut?.();
   });
 
+
+
+  // ── extra: mercado / quadro de missões / oficina ───────────────────────
+  ctx.shots.register('stations-market', async (ctx) => {
+    setup(ctx, 'kessa', P(ctx, 'fov', 64));
+    const view = api.viewOf('kessa:st0');
+    view.build();
+    const it = api.interiorOf('kessa:st0');
+    it.build();
+    deckCam(ctx, S, it, V(P(ctx, 'cx', -48.6), P(ctx, 'cy', 1.65), P(ctx, 'cz', 47)), V(P(ctx, 'tx', -70), P(ctx, 'ty', 2.2), P(ctx, 'tz', 70)));
+    ctx.services.rendering?.cut?.();
+  });
 
   // ── extras: as outras estações da fatia vertical ────────────────────────
   for (const [name, id, sysId, d0, az0, el0, abs] of [['stations-tharsos', 'kessa:st1', 'kessa', 1100, 40, 18, false], ['stations-refugio', 'kessa:rebel', 'kessa', 1300, 20, -30, true], ['stations-bastiao', 'halden:st0', 'halden', 2200, 30, 10, false]]) {

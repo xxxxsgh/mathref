@@ -178,11 +178,10 @@ function buildOutpost(k, s, lite) {
     k.box(L, 1.2, 0.5, 0.6, p.clone().add(V3(0, 9.1, 0)), null, Z.DARK);
     k.light(p.clone().add(V3(0, 8.8, 0)), [14, 11, 7], 0.35, 0);
   }
-  // barreiras
-  for (let i = 0; i < 22; i++) {
-    const a = (i / 22) * TAU;
-    const p = V3(Math.cos(a) * 40, 0, Math.sin(a) * 30); p.y = s.gy(p.x, p.z) - 0.3;
-    k.box(L, 3, 2.4, 0.6, p, [0, -a + Math.PI / 2, 0], i % 4 ? Z.CONCRETE : Z.HAZARD);
+  // barreiras (só sobre a laje: fora dela o relevo fino do planeta não bate com a amostra)
+  for (let i = 0; i < 10; i++) {
+    const x = -30 + i * 6.2;
+    k.box(L, 3, 1.1, 0.6, V3(x, 0.95, 22.6), [0, (i % 2) * 0.08, 0], i % 3 ? Z.CONCRETE : Z.HAZARD);
   }
   lightRing(k, 8.6, 5.2, 12, [1.0, 4, 3], 0.08, 0);
   // tubos pressurizados entre os módulos
