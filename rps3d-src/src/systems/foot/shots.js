@@ -167,12 +167,12 @@ export function registerShots(ctx, api, S) {
     const W = WEAPONS.rifle;
     for (const k of [0.24, 0.55, 0.86]) {
       const to = muzzle.clone().lerp(chest, k).add(new THREE.Vector3().randomDirection().multiplyScalar(0.06 * k));
-      frozenBolt(S, anchor, muzzle.clone().lerp(chest, Math.max(0.02, k - 0.18)), to, W.color, { width: 0.05 + k * 0.03, len: 3.0, intensity: 14 + k * 22 });
+      frozenBolt(S, anchor, muzzle.clone().lerp(chest, Math.max(0.02, k - 0.18)), to, W.color, { width: 0.05 + k * 0.03, len: 3.0, intensity: 8 + k * 6 });
     }
     // resposta do inimigo (vermelho) passando à esquerda
     const eMuzzle = tgt.clone().addScaledVector(d, 1.45).addScaledVector(look, -0.65);
     const miss = eyeL.clone().addScaledVector(side, -1.6).addScaledVector(d, 0.4);
-    frozenBolt(S, anchor, eMuzzle.clone().lerp(miss, 0.4), eMuzzle.clone().lerp(miss, 0.56), [1.0, 0.22, 0.12], { width: 0.09, len: 2.6, intensity: 16 });
+    frozenBolt(S, anchor, eMuzzle.clone().lerp(miss, 0.4), eMuzzle.clone().lerp(miss, 0.56), [1.0, 0.22, 0.12], { width: 0.09, len: 2.6, intensity: 7 });
     S.shotHold = () => {
       S.vm.flash.k = 1;
       S.vm.recoil.z.x = 0.014; S.vm.recoil.rx.x = 0.025;
@@ -326,17 +326,26 @@ export function registerShots(ctx, api, S) {
     C.enemies.slice(0, 3).forEach((e, i) => {
       const from = e.pos.clone().addScaledVector(e.up, 1.45).addScaledVector(e.fwd, 0.7);
       const to = eyeL.clone().addScaledVector(side, (i - 1) * 2.2 + 0.8).addScaledVector(d, -0.4 + i * 0.3);
-      frozenBolt(S, anchor, from.clone().lerp(to, 0.2 + i * 0.18), from.clone().lerp(to, 0.32 + i * 0.18), [1.0, 0.72, 0.28], { len: 2.8, intensity: 32 });
+      frozenBolt(S, anchor, from.clone().lerp(to, 0.2 + i * 0.18), from.clone().lerp(to, 0.32 + i * 0.18), [1.0, 0.62, 0.2], { len: 2.8, intensity: 11 });
     });
     const tgt = C.enemies[0].pos.clone().addScaledVector(d, 1.3);
     const muzzle = eyeL.clone().addScaledVector(look, 0.6).addScaledVector(side, 0.12).addScaledVector(d, -0.12);
-    for (const k of [0.3, 0.62]) frozenBolt(S, anchor, muzzle.clone().lerp(tgt, k - 0.1), muzzle.clone().lerp(tgt, k), WEAPONS.rifle.color, { len: 3.2, intensity: 34 });
+    for (const k of [0.3, 0.62]) frozenBolt(S, anchor, muzzle.clone().lerp(tgt, k - 0.1), muzzle.clone().lerp(tgt, k), WEAPONS.rifle.color, { len: 3.2, intensity: 12 });
+    // marcas de tiros nas barreiras e faíscas no ponto atingido
+    const hits = [];
+    covers.slice(0, 6).forEach((cv, i) => {
+      const p = cv.pos.clone().addScaledVector(cv.normalL, 1.18).addScaledVector(d, 0.35 + (i % 3) * 0.28).addScaledVector(side, (i % 2 ? 0.5 : -0.4));
+      S.decals.add(anchor, p, cv.normalL, WEAPONS.rifle.color, 0.28 + (i % 2) * 0.12);
+      hits.push({ p, n: cv.normalL.clone() });
+    });
+    let hitT = 0;
     // granada explodindo perto de uma barreira
     const gpos = covers[covers.length - 1].pos.clone().addScaledVector(d, 0.3);
     let boomT = 0;
     S.shotHold = () => {
       S.vm.flash.k = 0.7; S.lastFireT = 0;
       if (boomT++ === 5) blast(ctx, anchor, gpos, 4.2, 'plasma');
+      if (hits.length && hitT++ % 3 === 0) { const h = hits[(hitT / 3 | 0) % hits.length]; S.proj.impact(anchor, h.p, h.n, WEAPONS.rifle.color, 'metal', false); }
     };
     S.ctrl.aiming = false;
     try { pl.weather.force('clear', 0.0); } catch { /* */ }
@@ -428,5 +437,58 @@ export function registerShots(ctx, api, S) {
       if (f === 52) { I.setVirtual('up', 1); } if (f === 53) I.setVirtual('up', 0);
       if (f === 30) { S.toolMode = 'hack'; S.interact.register({ id: 'smoke:door', label: 'Porta', getPos: (o) => o.copy(S.eyeWorld).addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(ctx.camera.quaternion), 1), hack: { difficulty: 0.2 } }); }
     };
+  });
+
+  // ── abordagem (desenvolvimento): cargueiro da Hegemonia à deriva ──
+  ctx.shots.register('foot-dev-board', async (ctx) => {
+    prep(ctx, 'kessa');
+    const ships = ctx.services.ships;
+    if (!ships?.create) { ctx.errors.push('foot-dev-board: sem ships'); return; }
+    const sys = ctx.universe.system;
+    const v = sys.bodies.find((b) => b.name === 'Verídia');
+    const pos = v.pos.clone().add(new THREE.Vector3(v.radius * 2.2, v.radius * 0.4, v.radius * 1.6));
+    const cls = ctx.params.get('cls') || 'freighter';
+    const inst = ships.create(cls, 'hegemonia', { id: 'abordagem-teste', seed: 5 });
+    const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.6);
+    inst.group.quaternion.copy(quat);
+    const src = { pos: pos.clone(), quat: quat.clone() };
+    ctx.world.add(inst.group, src.pos);
+    api.board({ ship: 'abordagem-teste', classId: cls, faction: 'hegemonia', pos: src.pos, quat: src.quat, instance: inst, combatant: src });
+    equipNow(S, 'shotgun');
+    const I = ctx.input;
+    let f = 0;
+    S.shotHold = () => {
+      f++;
+      inst.group.quaternion.copy(src.quat);
+      I.setVirtualAxis('moveY', f > 3 && f < 14 ? 1 : 0);
+      if (f === 8) I.setVirtual('primary', 1); if (f === 9) I.setVirtual('primary', 0);
+    };
+  });
+
+  // ── multiferramenta (desenvolvimento): laser de mineração num cristal / hack ──
+  // ?shot=foot-dev-tools&hack=1
+  ctx.shots.register('foot-dev-tools', async (ctx) => {
+    prep(ctx, 'kessa');
+    const b = body(ctx, ctx.params.get('body') || 'Nivália');
+    const pl = ctx.services.planets;
+    const d = search(ctx, b, P(ctx, 'elev', 6), (d, h) => (h < 3 ? -Infinity : -slopeAt(pl, b, d, 6) * 100 + (sunlit(ctx, b, d, h) ? 50 : 0)), 300);
+    const look = sunTangent(ctx, b, d).applyAxisAngle(d, P(ctx, 'yaw', 140) * D2R);
+    const side = new THREE.Vector3().crossVectors(look, d).normalize();
+    placePlayer(ctx, api, S, b, d, look, P(ctx, 'pitch', -0.22));
+    equipNow(S, 'multitool');
+    const depL = pl.placeOnSurface(b, local(b, d, 3.6, 0.3, look, side), -0.2);
+    S.director.addDeposit(b, depL, b.type === 'ice' ? 'cristal' : 'carbono');
+    try { pl.weather.force('blizzard', P(ctx, 'storm', 0.15)); } catch { /* */ }
+    const I = ctx.input;
+    if (P(ctx, 'hack', 0)) {
+      S.toolMode = 'hack';
+      S.hack.start({ difficulty: 0.4, label: 'PORTA DO BUNKER' });
+      S.hack.active.phase = S.hack.active.tPhase + 0.4; S.hack.active.lock = 0.5;
+    } else {
+      S.toolMode = 'mining';
+      I.setVirtual('primary', 1);
+    }
+    S.shotHold = () => { S.mining.heat = Math.min(S.mining.heat, 0.6); };
+    settle();
   });
 }

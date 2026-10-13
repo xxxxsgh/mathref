@@ -224,12 +224,14 @@ export class Projectiles {
           o.s0 = 0.02; o.s1 = 0.008; o.drag = 2; o.g = 1; o.a = 0.9; o.b = 7; o.spin = 0.025;
         }, { vel, ttl: 2 });
         // poeira/fumaça do material atingido
-        if (kind === 'world') {
+        const nowT = ctx.time.now;
+        if (kind === 'world' && (big || nowT - (this.lastSmoke || 0) > 0.06)) {
+          this.lastSmoke = nowT;
           const mat = String(this.lastMat || '');
           const dust = mat.includes('ice') ? [0.75, 0.82, 0.9] : mat.includes('desert') ? [0.6, 0.42, 0.26] : [0.28, 0.27, 0.25];
           P.emit('smoke', w.clone().addScaledVector(n, 0.1), big ? 6 : 3, (k, o) => {
             const d = _a.randomDirection().addScaledVector(n, 1.5).normalize();
-            o.vx = d.x * 1.4; o.vy = d.y * 1.4; o.vz = d.z * 1.4; o.life = 1.2 + Math.random(); o.s0 = 0.15; o.s1 = big ? 1.4 : 0.7; o.drag = 2; o.g = -0.02;
+            o.vx = d.x * 1.4; o.vy = d.y * 1.4; o.vz = d.z * 1.4; o.life = 1.0 + Math.random() * 0.8; o.s0 = 0.1; o.s1 = big ? 1.1 : 0.45; o.drag = 2.2; o.g = -0.02;
             o.a = dust[0]; o.b = dust[1]; o.c = dust[2]; o.w = 0.2;
           }, { vel, ttl: 4 });
         }

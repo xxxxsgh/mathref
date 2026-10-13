@@ -357,7 +357,7 @@ export class Flora {
     const forest = (x, z) => this.forestAt(body, C0.clone().addScaledVector(e1, x).addScaledVector(e2, z));
     const r = rng(hashStr(body.id + Math.round(center.x) + ':' + Math.round(center.z)));
     const lists = { trees: [], spirals: [], ferns: [], lanterns: [], grass: [], rocks: [] };
-    const clear = (this.clearings || []).filter((c2) => c2.body === body).map((c2) => ({ p: c2.local.clone().sub(C0).applyQuaternion(qInv), r: c2.radius, all: !!c2.all }));
+    const clear = (this.clearings || []).filter((c2) => c2.body === body).map((c2) => { const v = c2.local.clone().sub(C0); return { p: { x: v.dot(e1), z: v.dot(e2) }, r: c2.radius, all: !!c2.all }; });
     const place = (kind, x, z, scale, slopeMax = 0.35, minH = 1.2) => {
       if (clear.length) for (const c2 of clear) if ((c2.all || (kind !== 'trees' && kind !== 'spirals')) && Math.hypot(c2.p.x - x, c2.p.z - z) < c2.r) return false;
       const s = sampleAt(x, z);

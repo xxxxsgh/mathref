@@ -214,8 +214,10 @@ export class Director {
     const t = this.ctx.time.world;
     const m = e.rig.muzzle || e.rig.eye;
     e.root.updateMatrixWorld(true);
-    m.getWorldPosition(out).add(this.ctx.world.origin);
-    return A.toLocal(e.anchor, out, out, t);
+    // deslocamento boca − raiz no espaço de render (mesmo frame), girado para o local do âncora
+    const off = m.getWorldPosition(out).sub(e.root.getWorldPosition(_w));
+    A.dirToLocal(e.anchor, off, off, t);
+    return off.add(e.pos);
   }
   enemyFire(e, P, dist) {
     const target = P.clone().addScaledVector(A.up(e.anchor, P, _w), 1.15);
@@ -227,7 +229,7 @@ export class Director {
     dir.add(jit).normalize();
     const look = LOOKS[e.faction] || LOOKS.hegemonia;
     this.foot.projectiles.spawn({
-      anchor: e.anchor, pos: from, dir, speed: e.kind === 'heavy' ? 130 : 160, damage: e.S.dmg, owner: e, color: look.bolt, width: 0.07, len: 2.6, intensity: 30, life: 1.4, kind: 'enemy',
+      anchor: e.anchor, pos: from, dir, speed: e.kind === 'heavy' ? 130 : 160, damage: e.S.dmg, owner: e, color: look.bolt, width: 0.08, len: 2.6, intensity: 10, life: 1.4, kind: 'enemy',
     });
     // clarão na boca
     const w = A.toWorld(e.anchor, from, new THREE.Vector3(), this.ctx.time.world);
@@ -333,18 +335,25 @@ export class Director {
       if (pl?.view?.(body)?.terrain?.hasSea && pl.heightAtLocal(body, d) < 1) continue;
       const local = pl?.placeOnSurface ? pl.placeOnSurface(body, d, -0.2) : d.multiplyScalar(R);
       const kind = kinds[Math.floor(r() * kinds.length)];
-      const dep = buildDeposit(kind, r, { lite: this.ctx.quality.name === 'mobile' });
-      const qL = quatFromFwdUp(anyPerp(d.clone().normalize()), d.clone().normalize(), new THREE.Quaternion());
-      const D = { kind, local, body, radius: 1.2, hp: 3, dead: false, group: dep.group, qL, mat: dep.mat, heat: 0, hardness: 2.2, yieldPer: 4 + Math.floor(r() * 4) };
-      D.worldPos = (out) => body.localToWorld(D.local.clone().addScaledVector(d.clone().normalize(), 0.6), this.ctx.time.world, out);
-      D.entry = this.ctx.world.add(dep.group, new THREE.Vector3(), { getPos: (out) => body.localToWorld(D.local, this.ctx.time.world, out) });
-      this.deposits.push(D);
+      this.addDeposit(body, local, kind, r);
     }
     // limpa depósitos distantes
     for (let i = this.deposits.length - 1; i >= 0; i--) {
       const D = this.deposits[i];
       if (D.body !== body || D.local.distanceTo(playerLocal) > 900) { D.entry?.remove(); this.deposits.splice(i, 1); }
     }
+  }
+
+  /** Cria um depósito minerável num ponto local do corpo. */
+  addDeposit(body, local, kind, r = Math.random) {
+    const d = local.clone().normalize();
+    const dep = buildDeposit(kind, r, { lite: this.ctx.quality.name === 'mobile' });
+    const qL = quatFromFwdUp(anyPerp(d), d, new THREE.Quaternion());
+    const D = { kind, local: local.clone(), body, radius: 1.2, hp: 3, dead: false, group: dep.group, qL, mat: dep.mat, heat: 0, hardness: 2.2, yieldPer: 4 + Math.floor(r() * 4) };
+    D.worldPos = (out) => body.localToWorld(D.local.clone().addScaledVector(d, 0.6), this.ctx.time.world, out);
+    D.entry = this.ctx.world.add(dep.group, new THREE.Vector3(), { getPos: (out) => body.localToWorld(D.local, this.ctx.time.world, out) });
+    this.deposits.push(D);
+    return D;
   }
 
   // ─── passo ────────────────────────────────────────────────────────────

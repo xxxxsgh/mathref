@@ -180,8 +180,8 @@ export class MiningLaser {
   startBeam() {
     if (this.beam) return;
     const self = this;
-    this.beam = this.beams.add({ width: 0.03, color: COLORS.orange, intensity: 40, life: 0, style: 1, get: (a, b) => { a.copy(self.from); b.copy(self.to); return true; } });
-    this.halo = this.beams.add({ width: 0.22, color: [1.0, 0.5, 0.2], intensity: 2.5, life: 0, style: 1, get: (a, b) => { a.copy(self.from); b.copy(self.to); return true; } });
+    this.beam = this.beams.add({ width: 0.025, color: COLORS.orange, intensity: 9, life: 0, style: 1, get: (a, b) => { a.copy(self.from); b.copy(self.to); return true; } });
+    this.halo = this.beams.add({ width: 0.12, color: [1.0, 0.5, 0.2], intensity: 0.8, life: 0, style: 1, get: (a, b) => { a.copy(self.from); b.copy(self.to); return true; } });
   }
   stopBeam() { this.beam?.remove(); this.halo?.remove(); this.beam = this.halo = null; }
 }

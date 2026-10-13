@@ -49,7 +49,7 @@ export class Beams {
       const head = select(st.lessThan(0.5), smoothstep(0.0, 1.0, v).mul(0.85).add(0.15), float(1));
       const spiral = select(st.greaterThan(1.5), sin(v.mul(90).add(time.mul(40)).add(u.mul(3))).mul(0.35).add(0.75), float(1));
       const flick = select(st.greaterThan(0.5).and(st.lessThan(1.5)), sin(time.mul(70).add(v.mul(20))).mul(0.12).add(0.95), float(1));
-      const col = mix(C.xyz, vec3(1.0, 0.98, 0.95), core.mul(0.7));
+      const col = mix(C.xyz, vec3(1.0, 0.98, 0.95), core.mul(0.45));
       const ends = smoothstep(0.0, 0.03, v).mul(smoothstep(1.0, 0.97, v)).max(select(st.lessThan(0.5), float(1), float(0)));
       return vec4(col.mul(B.w).mul(across.add(core.mul(2))).mul(head).mul(spiral).mul(flick).mul(ends), 1);
     })();

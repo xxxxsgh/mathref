@@ -224,7 +224,8 @@ function fire(ctx, w) {
   const an = c.anchor;
   // origem visual: boca da arma (render → mundo → local)
   const muzzleW = vm.muzzleWorld(new THREE.Vector3());
-  const muzzleL = muzzleW ? c.toLocal(muzzleW.add(ctx.world.origin), new THREE.Vector3(), t) : null;
+  // boca da arma relativa ao olho (o espaço de render é centrado na câmera) → mundo agora
+  const muzzleL = muzzleW ? c.toLocal(muzzleW.add(S.eyeWorld), new THREE.Vector3(), t) : null;
   const n = w.pellets || 1;
   for (let i = 0; i < n; i++) {
     const { eyeL, dirL } = aimRay(ctx, spread);
@@ -232,7 +233,7 @@ function fire(ctx, w) {
       S.proj.hitscan({ anchor: an, pos: eyeL, dir: dirL, damage: w.damage, headMul: w.headMul, owner: 'player', color: w.color, width: 0.05, intensity: 70, range: w.range, weapon: w.id, visualFrom: muzzleL });
     } else {
       // o projétil nasce no olho (precisão) mas o rastro parte da boca: corrige a cauda
-      const p = S.proj.spawn({ anchor: an, pos: eyeL.clone().addScaledVector(dirL, 0.4), dir: dirL, speed: w.speed, damage: w.damage, headMul: w.headMul, owner: 'player', color: w.color, width: w.width, len: w.len, life: (w.range || 300) / w.speed, kind: w.kind || 'bolt', weapon: w.id, intensity: w.pellets ? 22 : 30 });
+      const p = S.proj.spawn({ anchor: an, pos: eyeL.clone().addScaledVector(dirL, 0.4), dir: dirL, speed: w.speed, damage: w.damage, headMul: w.headMul, owner: 'player', color: w.color, width: w.width, len: w.len, life: (w.range || 300) / w.speed, kind: w.kind || 'bolt', weapon: w.id, intensity: w.pellets ? 9 : 12 });
       if (muzzleL) p.start.copy(muzzleL);
     }
   }
@@ -275,7 +276,7 @@ function toolStep(dt, ctx) {
   const fW = new THREE.Vector3(0, 0, -1).applyQuaternion(ctx.camera.quaternion);
   if (mode === 'mining') {
     const muzzleW = vm.muzzleWorld(new THREE.Vector3());
-    const mw = muzzleW ? muzzleW.add(ctx.world.origin) : S.eyeWorld.clone();
+    const mw = muzzleW ? muzzleW.add(S.eyeWorld) : S.eyeWorld.clone();
     const res = S.mining.step(dt, firing, S.eyeWorld, fW, mw, S.director.deposits, c.anchor);
     if (res) collect(ctx, res);
     S.vm.setHeat(S.mining.heat);
