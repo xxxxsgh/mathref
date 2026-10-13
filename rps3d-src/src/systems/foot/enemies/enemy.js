@@ -136,6 +136,7 @@ export class Enemy {
 
   damage(amount, info = {}) {
     if (!this.alive) return;
+    if (this.state === 'dormant') this.D.wake(this);
     this.hp -= amount;
     this.aware = 1;
     this.state = 'combat';
@@ -198,6 +199,12 @@ export class Enemy {
       this.lastSeen = P.clone();
     } else this.aware = Math.max(this.state === 'combat' ? 0.5 : 0, this.aware - dt * 0.05);
     const prev = this.state;
+    // sentinela adormecida: desperta com o jogador perto ou com dano
+    if (this.state === 'dormant') {
+      this.open = damp(this.open, 0, 2, dt); this.charge = 0;
+      if (distP < 32 && D.playerAlive) { this.state = 'combat'; this.aware = 1; D.wake(this); }
+      else return;
+    }
     if (this.aware >= 1 || (this.state !== 'combat' && D.alarm)) this.state = 'combat';
     else if (this.aware > 0.3 && this.state === 'idle') this.state = 'alert';
     if (prev !== 'combat' && this.state === 'combat') { D.raiseAlarm(this); D.bark(this, 'spot'); this.fireT = 0.4 + Math.random() * 0.8; }
@@ -390,7 +397,11 @@ export class Enemy {
     this.root.quaternion.copy(aq).multiply(_q);
     this.fwdW = this.fwd;
     if (this.kind === 'sentinel') {
-      poseSentinel(this.rig, { t: this.t, open: this.open, charge: this.charge, dead: this.dead });
+      const dorm = this.state === 'dormant';
+      this.wakeK = damp(this.wakeK ?? (dorm ? 0 : 1), dorm ? 0 : 1, 1.5, dt);
+      poseSentinel(this.rig, { t: this.t * (0.2 + this.wakeK * 0.8), open: this.open, charge: this.charge, dead: this.dead });
+      this.rig.mat.userData.U.glow.value *= 0.15 + this.wakeK * 0.85;
+      this.hover = this.alive ? 0.5 + this.wakeK * 1.7 : this.hover;
       this.rig.body.position.y += this.hover;
       if (this.dead > 0) { this.rig.body.rotation.x = this.dead * 0.8; this.rig.body.rotation.z = this.dead * 0.5 * this.deadDir; }
       // aponta o "olho" para o alvo (inclinação)

@@ -125,8 +125,10 @@ export class Parts {
       (s.group ? sub[s.group] || root : root).add(o);
       sockets[k] = o;
     }
-    root.userData.sockets = sockets;
-    root.userData.parts = sub;
+    delete sub[''];
+    // não enumeráveis: Object3D.clone() copia userData via JSON (soquetes têm referências circulares)
+    Object.defineProperty(root.userData, 'sockets', { value: sockets, enumerable: false, configurable: true });
+    Object.defineProperty(root.userData, 'parts', { value: sub, enumerable: false, configurable: true });
     return root;
   }
 }

@@ -88,8 +88,24 @@ export function registerShots(ctx, api, S) {
     }, 900);
     const sunT = sunTangent(ctx, b, d);
     const look = sunT.clone().applyAxisAngle(d, P(ctx, 'yaw', 35) * D2R);
+    const side = new THREE.Vector3().crossVectors(look, d).normalize();
+    // a nave do Rafael pousada numa clareira à direita
+    const f = ctx.services.flight;
+    const shipD = local(b, d, P(ctx, 'sa', 20), P(ctx, 'ss', 13), look, side);
+    let shipL = null;
+    if (f?.spawnPlayerShip && P(ctx, 'ship', 1)) {
+      try {
+        const sp = pl.findLandingSpot?.(b, shipD, { maxSlope: 0.1, radius: 30, samples: 40 });
+        shipL = sp ? sp.local.clone() : pl.placeOnSurface(b, shipD, 0);
+        const up = shipL.clone().normalize();
+        const sfwd = look.clone().multiplyScalar(-0.5).addScaledVector(side, -0.85); sfwd.addScaledVector(up, -sfwd.dot(up)).normalize();
+        const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(new THREE.Vector3(), sfwd, up));
+        f.spawnPlayerShip(shipL, q, 'fighter', { body: b, landed: true, gear: true, enter: false, faction: 'hegemonia' });
+      } catch (e) { ctx.errors.push('foot shot nave: ' + (e.stack || e)); }
+    }
     placePlayer(ctx, api, S, b, d, look, P(ctx, 'pitch', 0.06));
     equipNow(S, 'rifle');
+    if (shipL) S.flora.clearings = [{ body: b, local: shipL, radius: 13, all: true }];
     S.flora.update(b, S.ctrl.local);
     try { pl.weather.force('rain', 0); } catch { /* */ }
     ctx.camera.fov = 74; ctx.camera.updateProjectionMatrix();
@@ -359,6 +375,15 @@ export function registerShots(ctx, api, S) {
       const a = plan[f];
       if (a) I.setVirtual(a[0], a[1]);
       I.setVirtualAxis('moveY', f > 10 && f < 30 ? 1 : 0);
+      if (f === 46) {
+        // entra no interior da Meridiana a pé
+        try {
+          const st = ctx.services.stations; const it = st?.interiorOf?.('kessa:st0');
+          if (it) { it.activate(); api.spawnAt(it.spawnWorld(new THREE.Vector3()), it.colFrame, null); S.ctrl.anchor.id = 'estacao'; }
+        } catch (e) { ctx.errors.push('smoke estação: ' + (e.stack || e)); }
+      }
+      if (f > 47 && f < 58) I.setVirtualAxis('moveY', 1);
+      if (f === 52) { I.setVirtual('up', 1); } if (f === 53) I.setVirtual('up', 0);
       if (f === 30) { S.toolMode = 'hack'; S.interact.register({ id: 'smoke:door', label: 'Porta', getPos: (o) => o.copy(S.eyeWorld).addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(ctx.camera.quaternion), 1), hack: { difficulty: 0.2 } }); }
     };
   });

@@ -41,7 +41,7 @@ export class Scanner {
         const lw = d.mul(0.0025).add(0.02);
         const grid = max(smoothstep(lw, 0.0, abs(fract(g1.div(4)).sub(0.5)).sub(0.5).abs()), smoothstep(lw, 0.0, abs(fract(g2.div(4)).sub(0.5)).sub(0.5).abs())).mul(trail);
         const ring = smoothstep(0.1, 0.0, abs(fract(d.div(6)).sub(0.5)).sub(0.45)).mul(trail).mul(0.3);
-        const glow = band.mul(1.4).add(contour.mul(0.35)).add(grid.mul(0.4)).add(ring.mul(0.2)).add(trail.mul(0.012)).mul(U.fade);
+        const glow = band.mul(1.4).add(contour.mul(0.35)).add(grid.mul(0.4)).add(ring.mul(0.2)).mul(U.fade);
         out.assign(vec3(color).add(U.color.mul(glow).mul(1.8)).add(vec3(color).mul(band.mul(U.fade).mul(0.4))));
       });
       return out;

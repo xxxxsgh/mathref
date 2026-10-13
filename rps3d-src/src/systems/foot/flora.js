@@ -70,7 +70,17 @@ function branch(parts, a, b, r0, r1, hex, lift = 0.3, segs = 4) {
   return prev;
 }
 /** Massa de folhagem: vários blobs com ruído ao redor de um ponto. */
-function foliage(parts, c, rad, pal, r, seed, flat = 0.55) {
+function foliage(parts, c, rad, pal, r, seed, flat = 0.55, leaves = null) {
+  if (leaves) {
+    // franja de folhas longas caindo da borda da copa (quebra a silhueta)
+    const nf = 7 + Math.floor(r() * 4);
+    for (let k = 0; k < nf; k++) {
+      const a = k / nf * Math.PI * 2 + r() * 0.5;
+      const g = frond(rad * (0.7 + r() * 0.5), 0.22 + r() * 0.1, 1.4 + r() * 1.2, r() < 0.5 ? pal.leaf : pal.leaf3);
+      xf(g, [c.x + Math.cos(a) * rad * 0.55, c.y - rad * 0.1, c.z + Math.sin(a) * rad * 0.55], [0, -a, -0.15 + r() * 0.3]);
+      leaves.push(g);
+    }
+  }
   const n = 4 + Math.floor(r() * 3);
   for (let k = 0; k < n; k++) {
     const rr = rad * (0.45 + r() * 0.45);
@@ -84,7 +94,7 @@ function foliage(parts, c, rad, pal, r, seed, flat = 0.55) {
 /** Árvore guarda-chuva (Verídia): tronco curvo com sapopemas, galhos em leque e copas em nuvens. */
 function umbrellaTree(seed, pal) {
   const r = rng(seed);
-  const parts = [];
+  const parts = [], leaves = [];
   const H = 7 + r() * 5;
   // tronco curvo (segmentos)
   let pos = new THREE.Vector3(0, 0, 0), dir = new THREE.Vector3(0, 1, 0);
@@ -120,7 +130,7 @@ function umbrellaTree(seed, pal) {
     const L = 2.2 + r() * 1.8;
     const tip = top.clone().add(new THREE.Vector3(Math.cos(a) * L, 0.6 + r() * 1.2, Math.sin(a) * L));
     const end = branch(parts, top.clone().addScaledVector(dir, -0.6 - r() * 1.2), tip, 0.16, 0.05, pal.bark, 0.6);
-    foliage(parts, end.clone().add(new THREE.Vector3(0, 0.4, 0)), 1.5 + r() * 0.8, pal, r, seed * 7 + k);
+    foliage(parts, end.clone().add(new THREE.Vector3(0, 0.4, 0)), 1.5 + r() * 0.8, pal, r, seed * 7 + k, 0.55, leaves);
     // vagens luminosas penduradas
     for (let s2 = 0; s2 < 2; s2++) {
       const L2 = 0.6 + r() * 1.4;
@@ -132,7 +142,7 @@ function umbrellaTree(seed, pal) {
     }
   }
   foliage(parts, top.clone().add(new THREE.Vector3(0, 0.9, 0)), 2.0, pal, r, seed * 3, 0.5);
-  return mergeGeometries(parts, false);
+  return { solid: mergeGeometries(parts, false), leaves: mergeGeometries(leaves, false) };
 }
 
 /** Fronde em fita (folha longa caída), dupla face. */
@@ -347,9 +357,9 @@ export class Flora {
     const forest = (x, z) => this.forestAt(body, C0.clone().addScaledVector(e1, x).addScaledVector(e2, z));
     const r = rng(hashStr(body.id + Math.round(center.x) + ':' + Math.round(center.z)));
     const lists = { trees: [], spirals: [], ferns: [], lanterns: [], grass: [], rocks: [] };
-    const clear = (this.clearings || []).filter((c2) => c2.body === body).map((c2) => ({ p: c2.local.clone().sub(C0).applyQuaternion(qInv), r: c2.radius }));
+    const clear = (this.clearings || []).filter((c2) => c2.body === body).map((c2) => ({ p: c2.local.clone().sub(C0).applyQuaternion(qInv), r: c2.radius, all: !!c2.all }));
     const place = (kind, x, z, scale, slopeMax = 0.35, minH = 1.2) => {
-      if (clear.length && kind !== 'trees' && kind !== 'spirals') for (const c2 of clear) if (Math.hypot(c2.p.x - x, c2.p.z - z) < c2.r) return false;
+      if (clear.length) for (const c2 of clear) if ((c2.all || (kind !== 'trees' && kind !== 'spirals')) && Math.hypot(c2.p.x - x, c2.p.z - z) < c2.r) return false;
       const s = sampleAt(x, z);
       if (hasSea && s.h < minH) return false;
       const s2 = sampleAt(x + 1.5, z), s3 = sampleAt(x, z + 1.5);

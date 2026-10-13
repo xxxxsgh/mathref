@@ -19,7 +19,7 @@ const WRIST_OFF = new THREE.Vector3(0, 0.03, 0.058); // contato da empunhadura �
 const POSE = {
   rifle: { hip: [0.168, -0.212, -0.33], rot: [1.2, 5, 0], ads: 0.2, aimFov: 0.78, handL: 'fore', handR: 'trigger' },
   shotgun: { hip: [0.168, -0.215, -0.32], rot: [1.2, 5, 0], ads: 0.2, aimFov: 0.85, handL: 'fore', handR: 'trigger' },
-  sniper: { hip: [0.17, -0.212, -0.34], rot: [1, 4.5, 0], ads: 0.12, aimFov: 0.26, handL: 'cup', handR: 'trigger' },
+  sniper: { hip: [0.17, -0.222, -0.4], rot: [1, 4.5, 0], ads: 0.12, aimFov: 0.26, handL: 'cup', handR: 'trigger' },
   pistol: { hip: [0.13, -0.165, -0.36], rot: [2, 4, 0], ads: 0.28, aimFov: 0.86, handL: 'cup', handR: 'trigger' },
   multitool: { hip: [0.15, -0.17, -0.3], rot: [6, 22, -8], ads: 0.26, aimFov: 0.92, handL: null, handR: 'trigger' },
 };
@@ -133,7 +133,7 @@ export class ViewModel {
     this.sideMat.userData.U.color.value.set(FLASH_COL[id] || '#7fd8ff');
     this.light.color.set(FLASH_COL[id] || '#7fd8ff');
     // peças móveis no lugar
-    for (const p of Object.values(m.userData.parts)) { if (p !== m) { p.position.set(0, 0, 0); p.rotation.set(0, 0, 0); } }
+    for (const p of Object.values(m.userData.parts)) { p.position.set(0, 0, 0); p.rotation.set(0, 0, 0); }
     if (m.userData.parts.shell) m.userData.parts.shell.visible = false;
   }
   /** Troca animada (abaixa, troca, levanta). */
@@ -167,7 +167,7 @@ export class ViewModel {
   throwGrenade(onRelease) { if (!this.throwA) this.throwA = { t: 0, dur: 0.75, released: false, onRelease }; }
   resetParts() {
     const m = this.models[this.current]; if (!m) return;
-    for (const p of Object.values(m.userData.parts)) if (p !== m) { p.position.set(0, 0, 0); p.rotation.set(0, 0, 0); }
+    for (const p of Object.values(m.userData.parts)) { p.position.set(0, 0, 0); p.rotation.set(0, 0, 0); }
     if (m.userData.parts.shell) m.userData.parts.shell.visible = false;
   }
 
@@ -405,9 +405,9 @@ export class ViewModel {
     const lower = Math.sin(k * Math.PI);
     pos.y -= 0.05 * lower; pos.x += 0.02 * lower; rot.z -= 10 * D * lower;
     const wind = smooth01(k / 0.45), fling = smooth01((k - 0.45) / 0.25);
-    const p = new THREE.Vector3(-0.16, -0.12, -0.22)
-      .lerp(new THREE.Vector3(-0.14, -0.02, -0.06), wind)
-      .lerp(new THREE.Vector3(-0.05, 0.02, -0.42), fling);
+    const p = new THREE.Vector3(-0.26, -0.3, -0.42)
+      .lerp(new THREE.Vector3(-0.2, -0.1, -0.32), wind)
+      .lerp(new THREE.Vector3(-0.07, -0.03, -0.62), fling);
     this.throwPos = p;
     this.throwQuat = (this.throwQuat || new THREE.Quaternion()).setFromEuler(_e.set(-0.4 - fling * 0.6, 0.6, -0.3 + fling * 0.5));
     this.grenade.visible = k < 0.62;

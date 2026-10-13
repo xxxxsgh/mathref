@@ -206,7 +206,7 @@ export function buildRifle(M) {
   const plate = stencilMat('HV-9 LANÇA', 'PULSO · 4,2 MJ', '#2a2d32');
   screenQuad(P, plate, 0.07, 0.0175, [-W / 2 - 0.0011, 0.058, -0.17], [0, -Math.PI / 2, 0]);
   const root = P.build('rifle');
-  root.userData.screen = scr;
+  Object.defineProperty(root.userData, 'screen', { value: scr, enumerable: false, configurable: true });
   return root;
 }
 
@@ -263,7 +263,7 @@ export function buildShotgun(M) {
     .socket('shellHand', [0, -0.012, 0.01], gripBasis(0, true), 'shell')
     .socket('eject', [W / 2, 0.05, -0.06]);
   const root = P.build('shotgun');
-  root.userData.screen = scr;
+  Object.defineProperty(root.userData, 'screen', { value: scr, enumerable: false, configurable: true });
   root.userData.parts.shell.visible = false;
   return root;
 }
@@ -298,15 +298,15 @@ export function buildSniper(M) {
   // bipé recolhido
   for (const s of [-1, 1]) P.cylZ(M.steel, 0.0035, 0.0035, 0.22, [s * 0.012, -0.065, -0.6], { seg: 8, rot: [0, s * 2 * D, 0] });
   // luneta
-  P.cylZ(M.steel, 0.02, 0.02, 0.2, [0, 0.118, -0.06], { seg: 24 });
-  P.latheZ(M.steel, [[0.0, 0.15], [0.021, 0.15], [0.029, 0.19], [0.03, 0.24], [0.024, 0.245]], [0, 0.118, 0], { seg: 24 });
-  P.latheZ(M.steel, [[0.024, -0.04], [0.026, -0.045], [0.026, -0.085], [0.02, -0.09], [0.0, -0.09]], [0, 0.118, 0], { seg: 24 });
-  P.add(M.lens, new THREE.CircleGeometry(0.025, 24), [0, 0.118, -0.238], [0, 0, 0]);
-  P.add(M.lens, new THREE.CircleGeometry(0.02, 24), [0, 0.118, 0.085], [0, Math.PI, 0]);
-  P.ringZ(M.cyanSoft, 0.0255, 0.0012, [0, 0.118, -0.236], { seg: 24, tube: 4 });
-  P.cylY(M.gunmetal, 0.008, 0.008, 0.02, [0, 0.145, -0.06], { seg: 14 });
-  P.cylX(M.gunmetal, 0.008, 0.008, 0.02, [0.03, 0.118, -0.06], { seg: 14 });
-  for (const z of [-0.0, -0.12]) P.box(M.gunmetal, 0.026, 0.04, 0.018, [0, 0.092, z], [0, 0, 0], { r: 0.003 });
+  P.cylZ(M.steel, 0.017, 0.017, 0.2, [0, 0.112, -0.12], { seg: 24 });
+  P.latheZ(M.steel, [[0.0, 0.21], [0.018, 0.21], [0.025, 0.25], [0.026, 0.3], [0.021, 0.305]], [0, 0.112, 0], { seg: 24 });
+  P.latheZ(M.steel, [[0.019, 0.02], [0.021, 0.015], [0.021, -0.02], [0.016, -0.025], [0.0, -0.025]], [0, 0.112, 0], { seg: 24 });
+  P.add(M.lens, new THREE.CircleGeometry(0.022, 24), [0, 0.112, -0.298], [0, 0, 0]);
+  P.add(M.lens, new THREE.CircleGeometry(0.016, 24), [0, 0.112, 0.02], [0, Math.PI, 0]);
+  P.ringZ(M.cyanSoft, 0.0225, 0.0012, [0, 0.112, -0.296], { seg: 24, tube: 4 });
+  P.cylY(M.gunmetal, 0.008, 0.008, 0.018, [0, 0.135, -0.12], { seg: 14 });
+  P.cylX(M.gunmetal, 0.008, 0.008, 0.018, [0.026, 0.112, -0.12], { seg: 14 });
+  for (const z of [-0.05, -0.17]) P.box(M.gunmetal, 0.024, 0.036, 0.018, [0, 0.09, z], [0, 0, 0], { r: 0.003 });
   // empunhadura + gatilho + coronha
   P.profile(M.grip, [[-0.04, -0.03], [0.018, -0.03], [0.002, -0.14], [-0.01, -0.147], [-0.055, -0.14], [-0.044, -0.05]], 0.034, [0, 0, 0], { bevel: 0.006, bevelSeg: 3 });
   P.profile(M.steel, [[0.02, -0.032], [0.028, -0.034], [0.024, -0.06], [0.018, -0.066]], 0.006, [0, 0, 0], { bevel: 0.0015 });
@@ -322,11 +322,11 @@ export function buildSniper(M) {
     .socket('gripR', [-0.002, -0.045, 0.012], gripBasis(16 * D))
     .socket('gripL', [-0.006, -0.03, -0.33], gripBasis(-70 * D, true))
     .socket('muzzle', [0, 0.041, -1.05])
-    .socket('sight', [0, 0.118, 0.08])
+    .socket('sight', [0, 0.112, 0.02])
     .socket('magHand', [-0.01, -0.07, -0.1], gripBasis(0, true), 'mag')
     .socket('eject', [0.024, 0.05, -0.04]);
   const root = P.build('sniper');
-  root.userData.screen = scr;
+  Object.defineProperty(root.userData, 'screen', { value: scr, enumerable: false, configurable: true });
   return root;
 }
 
@@ -363,7 +363,7 @@ export function buildPistol(M) {
     .socket('magHand', [-0.004, -0.13, 0.03], gripBasis(0, true), 'mag')
     .socket('eject', [0.016, 0.03, -0.02]);
   const root = P.build('pistol');
-  root.userData.screen = scr;
+  Object.defineProperty(root.userData, 'screen', { value: scr, enumerable: false, configurable: true });
   return root;
 }
 
@@ -412,7 +412,7 @@ export function buildMultitool(M) {
     .socket('muzzle', [0, Y0, -0.125])
     .socket('sight', [0, 0.09, 0.0]);
   const root = P.build('multitool');
-  root.userData.screen = scr;
+  Object.defineProperty(root.userData, 'screen', { value: scr, enumerable: false, configurable: true });
   return root;
 }
 

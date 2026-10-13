@@ -127,6 +127,7 @@ export class Controller {
     this.vel.set(0, 0, 0);
     this.mantle = null;
     this.grounded = false;
+    this.syncWorld(this.ctx.time.world);
   }
 
   // ─── olhar ────────────────────────────────────────────────────────────

@@ -411,19 +411,24 @@ function sitesFor(ctx, body) {
   const r = rng(hashStr('sitios:' + body.id));
   const out = [];
   const sysFaction = ctx.universe.system?.faction;
-  // estruturas do sistema `stations` (postos, ruínas), se houver
+  // estruturas do sistema `stations` (postos, ruínas, naves caídas), se houver
+  const near = [];
   try {
     for (const st of ctx.services.stations?.structuresOn?.(body.id) || []) {
       const dir = (st.dir || st.local).clone().normalize();
-      if (st.kind === 'ruin') out.push({ id: st.id + ':sent', kind: 'ruin', dir, n: 2 + (r() < 0.5 ? 1 : 0) });
-      else if (st.kind === 'outpost' || st.kind === 'bunker' || st.kind === 'checkpoint') out.push({ id: st.id + ':camp', kind: 'camp', faction: st.faction === 'corsarios' ? 'corsarios' : 'hegemonia', dir: dir.clone().add(new THREE.Vector3(r() - 0.5, r() - 0.5, r() - 0.5).multiplyScalar(60 / body.radius)).normalize() });
+      near.push(dir);
+      const off = (m) => dir.clone().add(new THREE.Vector3(r() - 0.5, r() - 0.5, r() - 0.5).normalize().multiplyScalar(m / body.radius)).normalize();
+      if (st.kind === 'ruins' || st.kind === 'ruin') out.push({ id: st.id + ':sent', kind: 'ruin', dir: off(30), n: 2 + (r() < 0.5 ? 1 : 0), dormant: true });
+      else if ((st.kind === 'outpost' || st.kind === 'bunker' || st.kind === 'checkpoint') && st.faction === 'hegemonia') out.push({ id: st.id + ':camp', kind: 'camp', faction: 'hegemonia', dir: off(70) });
+      else if (st.kind === 'wreck') out.push({ id: st.id + ':camp', kind: 'camp', faction: 'corsarios', dir: off(55) });
     }
   } catch { /* */ }
   // locais próprios (determinísticos)
-  const n = 10;
+  const n = near.length ? 6 : 10;
   for (let i = 0; i < n; i++) {
     const dir = new THREE.Vector3(r() * 2 - 1, r() * 2 - 1, r() * 2 - 1).normalize();
-    const kind = body.ruins && i < 3 ? 'ruin' : 'camp';
+    if (near.some((d0) => d0.angleTo(dir) * body.radius < 1500)) continue;
+    const kind = body.ruins && i < 2 && !near.length ? 'ruin' : 'camp';
     const faction = sysFaction === 'hegemonia' ? 'hegemonia' : r() < 0.55 ? 'corsarios' : 'hegemonia';
     out.push({ id: `${body.id}:sitio${i}`, kind, faction, dir, n: 2 + Math.floor(r() * 2) });
   }
@@ -451,7 +456,7 @@ function updateSites(ctx, dt) {
         S.director.spawnCamp({ id: s.id, body: b, dir: s.dir, facing: facing.normalize(), faction: s.faction, squad });
       } else {
         const list = S.director.spawnSentinels(b, s.dir, s.n, s.id);
-        list.forEach((e) => { e.squad = { id: s.id }; });
+        list.forEach((e) => { e.squad = { id: s.id }; if (s.dormant !== false) { e.state = 'dormant'; } });
         S.liveSent.set(s.id, list);
       }
     } else if (live && d > 1400) {

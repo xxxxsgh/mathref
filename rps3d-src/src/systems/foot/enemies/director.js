@@ -277,6 +277,16 @@ export class Director {
     for (const o of this.enemies) if (o.alive && o !== e && o.anchor.body === e.anchor.body && o.pos.distanceTo(e.pos) < 70) { o.aware = Math.max(o.aware, 0.85); if (o.state === 'idle') o.state = 'alert'; }
     this.ctx.bus.emit('music', { mood: 'combat', intensity: 0.8 });
   }
+  /** Sentinela desperta: as vizinhas também, e a primeira vez fala (o mistério). */
+  wake(e) {
+    e.state = 'combat'; e.aware = 1;
+    for (const o of this.enemies) if (o !== e && o.state === 'dormant' && o.pos.distanceTo(e.pos) < 60) { o.state = 'combat'; o.aware = 1; }
+    if (!this.wokeOnce && !this.ctx.shot) {
+      this.wokeOnce = true;
+      this.ctx.bus.emit('radio', { faction: 'vigilantes', speaker: '???', text: '…ESTRUTURA VIOLADA. CONTAGEM DE GUARDIÕES: INSUFICIENTE. INICIANDO PROTOCOLO DE VIGÍLIA.', priority: 2 });
+    }
+    this.ctx.bus.emit('music', { mood: 'tension', intensity: 0.9 });
+  }
   bark(e, kind) {
     if (this.barkT > 0 || this.ctx.shot) return;
     const B = BARKS_OF(e.faction); if (!B?.[kind]) return;
@@ -367,7 +377,12 @@ export class Director {
     for (const C of this.camps) C.group.quaternion.copy(C.body.rotationAt(t, _q)).multiply(C.qL);
     for (const D of this.deposits) { D.group.quaternion.copy(D.body.rotationAt(t, _q)).multiply(D.qL); D.mat.userData.U.flash.value = D.heat * 0.6; }
   }
-  targets() { return [...this.enemies.filter((e) => e.alive), this.playerTarget]; }
+  targets() {
+    const list = [...this.enemies.filter((e) => e.alive), this.playerTarget];
+    // criaturas (sistema `life`): qualquer alvo com hitSegment/damage no mesmo referencial
+    try { const extra = this.ctx.services.life?.targets?.(this.lastAnchor) || []; for (const x of extra) if (x && x.alive !== false && x.hitSegment && x.damage) list.push(x); } catch { /* */ }
+    return list;
+  }
 }
 
 function sameAnchor(a, b) { return a.kind === b.kind && (a.kind === 'body' ? a.body === b.body : a.kind === 'frame' ? a.frame === b.frame : true); }
