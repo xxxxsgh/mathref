@@ -88,14 +88,15 @@ export class Visor {
         const fy = fract(yy);
         const hs = hash12(vec2(col, seg));
         const active = smoothstep(0.55, 0.85, hs.add(rainK.mul(0.5)).sub(0.2)).mul(U.rain.mul(1.2).min(1));
-        const wob = sin(q.y.mul(40.0).add(hc.mul(9.0))).mul(0.06);
+        const wob = sin(q.y.mul(26.0).add(hc.mul(9.0))).mul(0.025);
         const dx = fx.sub(hs.sub(0.5).mul(0.5)).sub(wob);
         const head = smoothstep(0.1, 0.05, length(vec2(dx, fy.sub(0.85).mul(0.5)))).mul(active);
         const trail = smoothstep(0.035, 0.0, abs(dx)).mul(smoothstep(0.85, 0.3, fy)).mul(smoothstep(0.0, 0.3, fy)).mul(active).mul(0.6);
         const beads = smoothstep(0.03, 0.0, length(vec2(dx, fract(fy.mul(6.0)).sub(0.5).mul(0.18)))).mul(trail);
         ofs.addAssign(vec2(dx.mul(-0.06), -0.02).mul(head.add(beads.mul(0.6))));
-        ofs.addAssign(vec2(dx.mul(-0.02), 0).mul(trail));
-        add.addAssign(vec3(head.mul(0.25).add(beads.mul(0.15))));
+        ofs.addAssign(vec2(dx.mul(-0.05), 0.004).mul(trail));
+        add.addAssign(vec3(head.mul(0.06).add(beads.mul(0.03))));
+        mulc.mulAssign(float(1).sub(trail.mul(0.12)).sub(head.mul(0.15)));
       });
 
       // ── neve grudada: flocos de 6 pontas espalhados, parte derretendo em gotas ──
@@ -193,12 +194,16 @@ export class Visor {
       // quanto da imagem refratada substitui a original (só onde há efeito)
       const effK = clamp(length(ofs).mul(200.0).add(b), 0, 1);
       const img = mix(vec3(color), base, scene ? effK : float(0));
-      // borda do casco: cantos superiores escurecidos com aresta curva e brilho
-      const rim = smoothstep(0.78, 1.02, length(c.mul(vec2(0.74, 1.12)).add(vec2(0, 0.08)))).mul(U.frame);
-      const rimHi = smoothstep(0.02, 0.0, abs(length(c.mul(vec2(0.74, 1.12)).add(vec2(0, 0.08))).sub(0.86))).mul(U.frame).mul(0.05);
+      // borda do casco: cantos superiores/inferiores escurecidos com aresta curva,
+      // reflexo fino na aresta do vidro e leve tom do policarbonato perto da borda
+      const er = length(c.mul(vec2(0.72, 1.18)).add(vec2(0, 0.06)));
+      const rim = smoothstep(0.74, 0.98, er).mul(U.frame);
+      const rimHi = smoothstep(0.018, 0.0, abs(er.sub(0.8))).mul(U.frame).mul(smoothstep(0.1, -0.4, c.y)).mul(0.07);
+      const glassTint = smoothstep(0.5, 0.85, er).mul(U.frame).mul(0.06);
       const res = img.mul(mulc).add(add.mul(U.tint)).toVar();
-      res.mulAssign(float(1).sub(rim.mul(0.55)));
-      res.addAssign(vec3(0.6, 0.75, 0.9).mul(rimHi));
+      res.mulAssign(vec3(1).sub(vec3(0.02, 0.0, -0.01).add(0.0).mul(glassTint.mul(10))));
+      res.mulAssign(float(1).sub(rim.mul(0.82)));
+      res.addAssign(vec3(0.55, 0.7, 0.85).mul(rimHi));
       out.assign(mix(vec3(color), res, U.on));
     });
     return out;

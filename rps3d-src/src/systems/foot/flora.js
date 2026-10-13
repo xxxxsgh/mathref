@@ -397,7 +397,7 @@ export class Flora {
       const grassN = Math.round((lite ? 1600 : 9000) * dens * ({ lush: 1, ocean: 0.8, toxic: 0.6, desert: 0.1 }[body.type] ?? 0.5));
       for (let i = 0; i < grassN; i++) {
         const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 38;
-        place('grass', Math.cos(a) * d, Math.sin(a) * d, 0.8 + r() * 1.1, 0.7);
+        place('grass', Math.cos(a) * d, Math.sin(a) * d, (0.6 + r() * 0.8) * (d < 6 ? 0.75 : 1), 0.7);
       }
     }
     const mat = this.mats.main || (this.mats.main = floraMaterial({ lite }));

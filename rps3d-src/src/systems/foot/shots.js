@@ -40,6 +40,22 @@ function slopeAt(pl, b, d, step = 3) {
   return Math.hypot(h1 - h0, h2 - h0) / step;
 }
 
+/** O sol chega ao ponto? (nenhum relevo acima da elevação do sol nos próximos km) */
+function sunlit(ctx, b, d, h) {
+  const pl = ctx.services.planets;
+  const sunW = ctx.universe.system.star.pos.clone().sub(b.pos).normalize();
+  const sunL = b.dirToLocal(sunW, ctx.time.world, new THREE.Vector3());
+  const el = Math.asin(Math.max(-1, Math.min(1, sunL.dot(d))));
+  const t = sunL.clone().addScaledVector(d, -sunL.dot(d)).normalize();
+  let worst = 0;
+  for (const k of [200, 500, 1000, 1800, 3000, 5000]) {
+    const p = d.clone().addScaledVector(t, k / b.radius).normalize();
+    const a = (pl.heightAtLocal(b, p) - h - k * k / (2 * b.radius)) / k;
+    worst = Math.max(worst, a - Math.tan(el - 0.02));
+  }
+  return worst <= 0;
+}
+
 /** Põe o jogador em `d` olhando para `lookL` (tangente local) com arfagem. */
 function placePlayer(ctx, api, S, b, d, lookL, pitch = 0) {
   const pl = ctx.services.planets;
@@ -82,6 +98,7 @@ export function registerShots(ctx, api, S) {
       if (h < 6 || h > 600) return -Infinity;
       const sl = slopeAt(pl, b, d, 4);
       if (sl > 0.12) return -Infinity;
+      if (!sunlit(ctx, b, d, h)) return -Infinity;
       const P0 = d.clone().multiplyScalar(b.radius);
       const f = S.flora.forestAt(b, P0);
       return f * 100 - sl * 200 - Math.abs(h - 60) * 0.05;
@@ -119,12 +136,13 @@ export function registerShots(ctx, api, S) {
     const b = body(ctx, 'Verídia');
     const pl = ctx.services.planets;
     const yawW = P(ctx, 'yaw', 150);
-    const d = search(ctx, b, P(ctx, 'elev', 9), (d, h) => {
+    const d = search(ctx, b, P(ctx, 'elev', 20), (d, h) => {
       if (h < 8 || h > 500) return -Infinity;
       const sl = slopeAt(pl, b, d, 6);
       if (sl > 0.1) return -Infinity;
       const t = sunTangent(ctx, b, d).applyAxisAngle(d, yawW * D2R);
       const far = d.clone().addScaledVector(t, 13 / b.radius).normalize();
+      if (!sunlit(ctx, b, d, h)) return -Infinity;
       const f = S.flora.forestAt(b, d.clone().multiplyScalar(b.radius));
       return (1 - Math.abs(f - 0.55)) * 40 - sl * 300 - slopeAt(pl, b, far, 6) * 200 - Math.abs(pl.heightAtLocal(b, far) - h) * 3;
     }, 700);
@@ -137,7 +155,7 @@ export function registerShots(ctx, api, S) {
     const tgtD = local(b, d, P(ctx, 'dist', 13), -0.8, look, side);
     const tgt = pl.placeOnSurface(b, tgtD, 0);
     // clareira entre o jogador e o alvo (o capim não esconde a cena)
-    S.flora.clearings = [{ body: b, local: tgt.clone(), radius: 4.5 }, { body: b, local: pl.placeOnSurface(b, local(b, d, 6, -0.4, look, side), 0), radius: 3.2 }];
+    S.flora.clearings = [{ body: b, local: tgt.clone(), radius: 4.5 }, ...[2.5, 5.5, 9].map((k) => ({ body: b, local: pl.placeOnSurface(b, local(b, d, k, -0.4, look, side), 0), radius: 1.6 + k * 0.25 }))];
     S.flora.update(b, S.ctrl.local);
     const e = S.director.addEnemy({ kind: 'soldier', faction: 'corsarios', anchor, pos: tgt, fwd: look.clone().negate().applyAxisAngle(d, 0.35), state: 'combat', seed: 7 });
     e.aware = 1; e.ready = 1; e.fireT = 99; e.crouch = 0; e.hold = true;
@@ -149,7 +167,7 @@ export function registerShots(ctx, api, S) {
     const W = WEAPONS.rifle;
     for (const k of [0.24, 0.55, 0.86]) {
       const to = muzzle.clone().lerp(chest, k).add(new THREE.Vector3().randomDirection().multiplyScalar(0.06 * k));
-      frozenBolt(S, anchor, muzzle.clone().lerp(chest, Math.max(0.02, k - 0.18)), to, W.color, { width: 0.08, len: 3.0, intensity: 34 });
+      frozenBolt(S, anchor, muzzle.clone().lerp(chest, Math.max(0.02, k - 0.18)), to, W.color, { width: 0.05 + k * 0.03, len: 3.0, intensity: 14 + k * 22 });
     }
     // resposta do inimigo (vermelho) passando à esquerda
     const eMuzzle = tgt.clone().addScaledVector(d, 1.45).addScaledVector(look, -0.65);
@@ -162,6 +180,30 @@ export function registerShots(ctx, api, S) {
       if ((S._sparkT = (S._sparkT || 0) - 1) <= 0) { S._sparkT = 2; S.proj.impact(anchor, chest.clone().addScaledVector(look, -0.28), look.clone().negate(), W.color, 'metal', true); }
     };
     try { pl.weather.force('rain', 0); } catch { /* */ }
+    settle();
+  });
+
+  // ── Verídia sob tempestade: gotas escorrendo no visor, pistola e lanterna ──
+  ctx.shots.register('foot-veridia-rain', async (ctx) => {
+    prep(ctx, 'kessa');
+    const b = body(ctx, 'Verídia');
+    const pl = ctx.services.planets;
+    const d = search(ctx, b, P(ctx, 'elev', 4), (d, h) => {
+      if (h < 6 || h > 500) return -Infinity;
+      const sl = slopeAt(pl, b, d, 4);
+      if (sl > 0.12) return -Infinity;
+      const f = S.flora.forestAt(b, d.clone().multiplyScalar(b.radius));
+      return f * 80 - sl * 200;
+    }, 600);
+    const look = sunTangent(ctx, b, d).applyAxisAngle(d, P(ctx, 'yaw', 120) * D2R);
+    placePlayer(ctx, api, S, b, d, look, P(ctx, 'pitch', 0.02));
+    equipNow(S, 'pistol');
+    S.light.toggle(true); S.suit.flashlight = true; S.light.k = 1;
+    S.flora.update(b, S.ctrl.local);
+    try { pl.weather.force('rain', P(ctx, 'storm', 0.85)); } catch { /* */ }
+    S.weather = { kind: 'rain', intensity: 0.85 };
+    S.visor.force({ rain: 0.9, wet: 0.8 });
+    S.shotHold = () => { S.visor.force({ rain: 0.9, wet: 0.8 }); };
     settle();
   });
 

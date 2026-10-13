@@ -212,7 +212,7 @@ export class Projectiles {
     if (!P) return;
     try {
       const c = color || COLORS.blue;
-      P.glow(w.clone().addScaledVector(n, 0.05), big ? 1.6 : 0.6, [c[0] * 12, c[1] * 12, c[2] * 12], big ? 0.22 : 0.12, vel);
+      P.glow(w.clone().addScaledVector(n, 0.05), big ? 0.75 : 0.35, [c[0] * 10, c[1] * 10, c[2] * 10], big ? 0.2 : 0.12, vel);
       if (kind !== 'flesh') {
         // faíscas na cor do disparo
         const a = big ? 26 : 10;

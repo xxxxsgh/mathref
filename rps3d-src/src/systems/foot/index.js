@@ -37,6 +37,7 @@ import { Scanner, Flashlight, MiningLaser, HackGame } from './tool.js';
 import { Director } from './enemies/director.js';
 import { Flora } from './flora.js';
 import { Boarding } from './board.js';
+import { Decals } from './decals.js';
 import { registerShots } from './shots.js';
 import { clamp, damp, spring, rng, hashStr } from './util.js';
 
@@ -542,6 +543,8 @@ export default {
     S.flora = new Flora(ctx);
     S.boarding = new Boarding(ctx, { get ctrl() { return S.ctrl; }, get director() { return S.director; }, get interact() { return S.interact; }, api });
     S.proj.targets = () => S.director.targets();
+    S.decals = new Decals(ctx, ctx.quality.name === 'mobile' ? 24 : 64);
+    S.proj.onImpact = (e) => { if (e.kind === 'world') S.decals.add(e.anchor, e.local, e.normalL, e.color, e.big ? 0.6 : 0.3); };
     S.inventory = {};
     S.discovered = new Set();
     S.sites = new Map(); S.liveSent = new Map();
@@ -556,7 +559,7 @@ export default {
     });
     ctx.bus.on('board', (p) => { if (!ctx.services.combat) S.boarding.board(p); });
     ctx.bus.on('weather', (w) => { S.weather = { kind: w.kind, intensity: w.intensity }; });
-    ctx.bus.on('system:change', () => { S.director.clear(); S.flora.clear(); S.proj.clear(); S.sites.clear(); S.liveSent.clear(); });
+    ctx.bus.on('system:change', () => { S.decals.clear(); S.director.clear(); S.flora.clear(); S.proj.clear(); S.sites.clear(); S.liveSent.clear(); });
     ctx.bus.on('player:damage', (e) => { if (e?.source === 'foot' || !S.active) return; if (e.type === 'fall') return; S.suit.damage((e.amount || 0) * (e.amount > 1 ? 0.01 : 1), e.type || 'kinetic'); if (S.suit.dead) onDeath(ctx, e.type); });
     ctx.bus.on('player:enterShip', () => { S.suit.refill(); });
     ctx.bus.on('dock:complete', () => { S.suit.refill(); });
@@ -626,6 +629,7 @@ export default {
 
   frame(dt, ctx) {
     S.beams.frame(dt);
+    S.decals.frame(dt);
     if (ctx.game.mode !== 'foot' || !S.active) {
       if (S.vm.root.parent) S.vm.root.removeFromParent();
       S.director.frame(dt);
