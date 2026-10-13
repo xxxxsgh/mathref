@@ -38,66 +38,77 @@ export function buildSoldier(faction = 'hegemonia', variant = 'soldier', { lite 
   const heavy = variant === 'heavy';
   const bulk = heavy ? 1.18 : 1;
   const rnd = mulberry(seed);
+  // concha curva (setor de cilindro) — placas de armadura que abraçam o membro
+  const shell = (r, len, arc, center = Math.PI, scaleZ = 1) => {
+    const g = new THREE.CylinderGeometry(r, r * 0.94, len, 14, 1, false, center - arc / 2, arc);
+    g.scale(1, 1, scaleZ);
+    return g;
+  };
+  const cap = (r, sx = 1, sy = 1, sz = 1) => { const g = new THREE.SphereGeometry(r, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2); g.scale(sx, sy, sz); return g; };
   // ── quadril / pélvis (origem na altura do quadril)
-  K.box('pelvis', L.under, 0.3 * bulk, 0.16, 0.2, [0, 0, 0], null, 0.05);
-  K.box('pelvis', L.plate, 0.32 * bulk, 0.1, 0.06, [0, -0.02, -0.1], [8 * D, 0, 0], 0.02);
-  K.box('pelvis', L.dark, 0.36 * bulk, 0.05, 0.22, [0, 0.07, 0], null, 0.015);
-  K.box('pelvis', L.trim, 0.05, 0.05, 0.03, [0, 0.07, -0.115], null, 0.01);
-  for (const s of [-1, 1]) K.box('pelvis', L.plate2, 0.06, 0.14, 0.17, [s * 0.18 * bulk, -0.06, 0], [0, 0, s * 8 * D], 0.02);
+  K.capsule('pelvis', L.under, 0.13 * bulk, 0.34, [0, -0.02, 0], [0, 0, Math.PI / 2], 10);
+  K.box('pelvis', L.dark, 0.36 * bulk, 0.06, 0.23, [0, 0.07, 0], null, 0.025);
+  K.box('pelvis', L.trim, 0.06, 0.05, 0.03, [0, 0.07, -0.12], null, 0.01);
+  K.geo('pelvis', L.plate, shell(0.17 * bulk, 0.16, Math.PI * 0.55, Math.PI), [0, -0.06, 0], [0.12, 0, 0]);
+  K.geo('pelvis', L.plate2, shell(0.17 * bulk, 0.14, Math.PI * 0.6, 0), [0, -0.05, 0], [-0.1, 0, 0]);
+  for (const s2 of [-1, 1]) { K.box('pelvis', L.dark, 0.07, 0.11, 0.12, [s2 * 0.2 * bulk, -0.02, 0.03], null, 0.025); K.geo('pelvis', L.plate2, shell(0.12, 0.18, Math.PI * 0.5, s2 * Math.PI / 2), [s2 * 0.1, -0.08, 0], [0, 0, s2 * 0.12]); }
   // ── tronco (origem no topo da pélvis; sobe 0,55)
-  K.box('torso', L.under, 0.3 * bulk, 0.3, 0.2, [0, 0.14, 0], null, 0.06);
-  K.box('torso', L.plate, 0.44 * bulk, 0.3, 0.27, [0, 0.36, -0.01], null, 0.07);
-  K.box('torso', L.plate2, 0.34 * bulk, 0.14, 0.05, [0, 0.27, -0.14], [-10 * D, 0, 0], 0.02);
-  K.box('torso', L.trim, 0.2, 0.025, 0.02, [0, 0.43, -0.15], null, 0.008);
-  K.box('torso', L.dark, 0.16, 0.06, 0.04, [0, 0.12, -0.11], null, 0.01);
-  for (let i = 0; i < 3; i++) K.box('torso', L.plate2, 0.24 * bulk - i * 0.03, 0.04, 0.2, [0, 0.03 + i * 0.05, -0.02], null, 0.015);
+  K.capsule('torso', L.under, 0.15 * bulk, 0.5, [0, 0.24, 0.01], null, 12);
+  K.sphere('torso', L.plate, 0.2, [0, 0.36, -0.02], [1.18 * bulk, 0.9, 0.78], 18);
+  K.box('torso', L.plate2, 0.2 * bulk, 0.08, 0.06, [0, 0.42, -0.15], [-0.25, 0, 0], 0.025);
+  K.box('torso', L.trim, 0.16, 0.02, 0.02, [0, 0.47, -0.145], [-0.25, 0, 0], 0.008);
+  K.box('torso', L.glow, 0.07, 0.012, 0.012, [0, 0.31, -0.175], null);
+  for (let i = 0; i < 3; i++) K.geo('torso', L.plate2, shell(0.155 * bulk - i * 0.005, 0.045, Math.PI * 0.75, Math.PI), [0, 0.06 + i * 0.052, 0.0], null);
   // gola e mochila
-  K.box('torso', L.dark, 0.22, 0.07, 0.2, [0, 0.52, 0.0], null, 0.03);
-  K.box('torso', L.dark, 0.34 * bulk, 0.36, 0.14, [0, 0.36, 0.19], null, 0.04);
-  K.box('torso', L.plate, 0.3 * bulk, 0.1, 0.1, [0, 0.5, 0.2], null, 0.03);
-  for (const s of [-1, 1]) { K.cyl('torso', L.dark, 0.035, 0.035, 0.26, [s * 0.12, 0.33, 0.27], null, 10); K.box('torso', L.glow, 0.01, 0.12, 0.012, [s * 0.12, 0.33, 0.306], null); }
-  K.box('torso', L.glow, 0.08, 0.012, 0.012, [0, 0.42, -0.155], null);
-  // ombreiras (no tronco)
-  for (const s of [-1, 1]) {
-    K.box('torso', L.plate, 0.15 * bulk, 0.07, 0.2 * bulk, [s * (0.27 * bulk), 0.48, 0], [0, 0, s * -18 * D], 0.03);
-    K.box('torso', L.trim, 0.15 * bulk, 0.015, 0.2 * bulk, [s * (0.28 * bulk), 0.445, 0], [0, 0, s * -18 * D], 0.006);
-    if (heavy) K.box('torso', L.plate2, 0.12, 0.1, 0.22, [s * 0.33, 0.42, 0], [0, 0, s * -30 * D], 0.03);
+  K.torus('torso', L.dark, 0.1, 0.035, [0, 0.54, 0.0], [Math.PI / 2, 0, 0], 16);
+  K.box('torso', L.dark, 0.32 * bulk, 0.38, 0.15, [0, 0.33, 0.2], null, 0.05);
+  K.box('torso', L.plate, 0.28 * bulk, 0.12, 0.1, [0, 0.49, 0.22], null, 0.035);
+  for (const s2 of [-1, 1]) { K.cyl('torso', L.dark, 0.035, 0.035, 0.28, [s2 * 0.12, 0.3, 0.28], null, 10); K.box('torso', L.glow, 0.01, 0.13, 0.012, [s2 * 0.12, 0.3, 0.315], null); }
+  // ombreiras (cúpulas no tronco)
+  for (const s2 of [-1, 1]) {
+    K.geo('torso', L.plate, cap(0.11, 1.15 * bulk, 0.7, 1.25 * bulk), [s2 * 0.25 * bulk, 0.47, 0], [0, 0, s2 * -0.35]);
+    K.geo('torso', L.trim, cap(0.113, 1.16 * bulk, 0.22, 1.26 * bulk), [s2 * 0.25 * bulk, 0.455, 0], [0, 0, s2 * -0.35]);
+    if (heavy) K.geo('torso', L.plate2, cap(0.12, 1.2, 0.8, 1.4), [s2 * 0.31, 0.42, 0], [0, 0, s2 * -0.7]);
   }
   if (faction === 'corsarios') {
-    // retalhos, cabos e uma placa improvisada
-    K.box('torso', pal('#6b5a46', 0.6, 0.45, 0, 0.9), 0.18, 0.12, 0.02, [0.06, 0.34, -0.16], [0, 0.2, 0.15], 0.005);
-    K.torus('torso', pal('#2a2420', 0, 0.9, 0, 0.6), 0.18, 0.03, [0, 0.5, 0.02], [Math.PI / 2, 0, 0.3], 12);
+    K.box('torso', pal('#6b5a46', 0.6, 0.45, 0, 0.9), 0.18, 0.12, 0.02, [0.06, 0.34, -0.17], [0, 0.2, 0.15], 0.005);
+    K.torus('torso', pal('#2a2420', 0, 0.9, 0, 0.6), 0.2, 0.035, [0, 0.48, 0.02], [Math.PI / 2 + 0.3, 0, 0.3], 14);
+    K.box('torso', pal('#2a2420', 0, 0.9, 0, 0.6), 0.06, 0.5, 0.02, [-0.08, 0.3, -0.17], [0, 0, 0.6], 0.005);
   }
   // ── cabeça / capacete (origem no pescoço)
   K.cyl('head', L.under, 0.06, 0.07, 0.1, [0, 0.04, 0], null, 10);
-  K.sphere('head', L.plate, 0.135, [0, 0.16, 0.0], [0.95, 1.05, 1.12], 16);
-  K.box('head', L.dark, 0.2, 0.08, 0.1, [0, 0.14, -0.1], null, 0.03);
-  K.box('head', L.visor, 0.17, 0.028, 0.03, [0, 0.165, -0.142], [0, 0, 0], 0.01);
-  K.box('head', L.plate2, 0.22, 0.04, 0.16, [0, 0.07, -0.02], null, 0.02);
-  for (const s of [-1, 1]) { K.cyl('head', L.trim, 0.045, 0.045, 0.03, [s * 0.13, 0.15, 0.0], [0, 0, Math.PI / 2], 12); K.box('head', L.glow, 0.004, 0.02, 0.004, [s * 0.148, 0.15, -0.02], null); }
-  if (L.crest) K.box('head', L.trim, 0.025, 0.04, 0.24, [0, 0.29, 0.01], [-6 * D, 0, 0], 0.01);
-  if (L.hood) { K.sphere('head', L.under, 0.17, [0, 0.16, 0.03], [1.05, 1.05, 1.15], 12); K.box('head', L.under, 0.3, 0.16, 0.2, [0, 0.02, 0.06], null, 0.06); }
-  if (variant === 'officer') K.box('head', L.glow, 0.02, 0.02, 0.18, [0.1, 0.24, 0.0], null);
+  K.sphere('head', L.plate, 0.132, [0, 0.16, 0.005], [0.95, 1.02, 1.12], 18);
+  K.box('head', L.dark, 0.19, 0.075, 0.1, [0, 0.135, -0.095], [0.1, 0, 0], 0.03);
+  K.box('head', L.visor, 0.16, 0.026, 0.03, [0, 0.168, -0.14], [0, 0, 0], 0.01);
+  K.geo('head', L.plate2, shell(0.12, 0.07, Math.PI * 1.2, Math.PI), [0, 0.085, 0.0], [0, 0, 0]);
+  for (const s2 of [-1, 1]) { K.cyl('head', L.trim, 0.042, 0.042, 0.03, [s2 * 0.125, 0.15, 0.0], [0, 0, Math.PI / 2], 14); K.box('head', L.glow, 0.004, 0.02, 0.004, [s2 * 0.143, 0.15, -0.02], null); }
+  if (L.crest) K.box('head', L.trim, 0.022, 0.035, 0.22, [0, 0.288, 0.01], [-0.1, 0, 0], 0.01);
+  if (L.hood) { K.sphere('head', L.under, 0.168, [0, 0.16, 0.03], [1.05, 1.05, 1.15], 14); K.box('head', L.under, 0.3, 0.16, 0.2, [0, 0.02, 0.06], null, 0.06); }
+  if (variant === 'officer') K.box('head', L.glow, 0.02, 0.02, 0.16, [0.1, 0.24, 0.0], null);
   // ── braços (origem no ombro/cotovelo, para −Y)
-  for (const s of ['L', 'R']) {
-    K.capsule('upper' + s, L.under, 0.055 * bulk, 0.3, [0, -0.14, 0], null, 8);
-    K.box('upper' + s, L.plate2, 0.11 * bulk, 0.14, 0.11 * bulk, [0, -0.12, 0], null, 0.03);
-    K.capsule('fore' + s, L.under, 0.048 * bulk, 0.27, [0, -0.13, 0], null, 8);
-    K.box('fore' + s, L.plate, 0.1 * bulk, 0.16, 0.1 * bulk, [0, -0.12, 0], null, 0.03);
-    K.box('fore' + s, L.trim, 0.104 * bulk, 0.02, 0.104 * bulk, [0, -0.04, 0], null, 0.008);
-    K.box('fore' + s, L.dark, 0.08, 0.09, 0.1, [0, -0.3, -0.01], null, 0.025);
-    K.box('fore' + s, L.glow, 0.004, 0.03, 0.004, [s === 'L' ? -0.052 : 0.052, -0.14, 0.02], null);
+  for (const sd of ['L', 'R']) {
+    const out = sd === 'L' ? -1 : 1;
+    K.capsule('upper' + sd, L.under, 0.058 * bulk, 0.31, [0, -0.15, 0], null, 10);
+    K.geo('upper' + sd, L.plate2, shell(0.066 * bulk, 0.15, Math.PI * 0.9, out * Math.PI / 2), [0, -0.13, 0], null);
+    K.capsule('fore' + sd, L.under, 0.05 * bulk, 0.28, [0, -0.14, 0], null, 10);
+    K.geo('fore' + sd, L.plate, shell(0.058 * bulk, 0.17, Math.PI * 1.1, Math.PI), [0, -0.13, 0], null);
+    K.torus('fore' + sd, L.trim, 0.056 * bulk, 0.009, [0, -0.045, 0], [Math.PI / 2, 0, 0], 14);
+    K.box('fore' + sd, L.dark, 0.075, 0.095, 0.1, [0, -0.3, -0.01], null, 0.03);
+    K.box('fore' + sd, L.glow, 0.004, 0.03, 0.004, [out * 0.056, -0.15, 0.02], null);
   }
   // ── pernas (origem no quadril/joelho, para −Y)
-  for (const s of ['L', 'R']) {
-    K.capsule('thigh' + s, L.under, 0.075 * bulk, 0.46, [0, -0.22, 0], null, 8);
-    K.box('thigh' + s, L.plate, 0.13 * bulk, 0.24, 0.07, [0, -0.2, -0.065], null, 0.03);
-    K.box('thigh' + s, L.plate2, 0.06, 0.2, 0.12, [s === 'L' ? -0.075 : 0.075, -0.2, 0], null, 0.02);
-    K.capsule('shin' + s, L.under, 0.062 * bulk, 0.44, [0, -0.21, 0], null, 8);
-    K.box('shin' + s, L.plate, 0.11 * bulk, 0.3, 0.08, [0, -0.2, -0.055], null, 0.03);
-    K.box('shin' + s, L.trim, 0.12, 0.08, 0.05, [0, -0.005, -0.075], [-10 * D, 0, 0], 0.02);
-    K.box('shin' + s, L.dark, 0.13, 0.1, 0.27, [0, -0.43, -0.04], null, 0.03);
-    K.box('shin' + s, L.plate2, 0.135, 0.04, 0.12, [0, -0.39, -0.1], null, 0.015);
+  for (const sd of ['L', 'R']) {
+    const out = sd === 'L' ? -1 : 1;
+    K.capsule('thigh' + sd, L.under, 0.082 * bulk, 0.47, [0, -0.22, 0], null, 10);
+    K.geo('thigh' + sd, L.plate, shell(0.09 * bulk, 0.26, Math.PI * 1.0, Math.PI), [0, -0.21, 0], null);
+    K.geo('thigh' + sd, L.plate2, shell(0.093 * bulk, 0.2, Math.PI * 0.5, out * Math.PI / 2), [0, -0.22, 0], null);
+    K.capsule('shin' + sd, L.under, 0.066 * bulk, 0.44, [0, -0.21, 0], null, 10);
+    K.sphere('shin' + sd, L.trim, 0.068, [0, -0.005, -0.055], [1, 1.1, 0.7], 12);
+    K.geo('shin' + sd, L.plate, shell(0.074 * bulk, 0.3, Math.PI * 1.1, Math.PI), [0, -0.21, 0], null);
+    // bota
+    K.box('shin' + sd, L.dark, 0.13, 0.11, 0.28, [0, -0.43, -0.045], null, 0.04);
+    K.box('shin' + sd, L.plate2, 0.135, 0.045, 0.13, [0, -0.39, -0.11], [0.15, 0, 0], 0.018);
+    K.box('shin' + sd, L.under, 0.14, 0.03, 0.29, [0, -0.485, -0.045], null, 0.01);
   }
   // ── arma (origem na empunhadura; cano para −Z)
   K.box('gun', L.gun, 0.06, 0.09, 0.42, [0, 0.03, -0.12], null, 0.02);
@@ -185,8 +196,8 @@ export function poseSoldier(rig, s) {
   rig.neck.rotation.set(s.aimPitch * 0.3 + crouch * 0.2, s.aimYaw * 0.4, 0);
   // arma: pronta (mira) ou baixa (correndo)
   const ready = s.ready ?? 1;
-  rig.gun.position.set(0.13 - ready * 0.05, 0.36 + ready * 0.11, -0.3 - ready * 0.04);
-  rig.gun.rotation.set(-0.5 * (1 - ready) - s.aimPitch * 0.0 + (s.recoil || 0), 0.35 * (1 - ready), 0.3 * (1 - ready));
+  rig.gun.position.set(0.12 + ready * 0.05, 0.34 + ready * 0.11, -0.28 - ready * 0.03);
+  rig.gun.rotation.set(-0.5 * (1 - ready) + (s.recoil || 0), 0.35 * (1 - ready) - 0.07 * ready, 0.3 * (1 - ready));
   rig.gun.updateMatrix();
   // mãos nas empunhaduras da arma (no espaço do tronco)
   const hR = rig.grips.R.clone().applyMatrix4(rig.gun.matrix);

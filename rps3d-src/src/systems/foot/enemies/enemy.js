@@ -173,6 +173,12 @@ export class Enemy {
       return;
     }
     this.up = A.up(this.anchor, this.pos, this.up);
+    if (this.hold) {
+      // pose congelada (cenas/fotos): só molas e respiração
+      for (const h of [this.hitX, this.hitZ]) { h.v += (-h.x * 90 - h.v * 12) * dt; h.x += h.v * dt; }
+      this.speed = this.holdSpeed || 0; this.phase += dt * this.speed * 2.0;
+      return;
+    }
     const P = D.playerPos;           // local (pés do jogador)
     const toP = _v.copy(P).sub(this.pos);
     const distP = toP.length();

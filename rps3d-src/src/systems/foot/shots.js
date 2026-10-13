@@ -3,7 +3,7 @@
 // jogador a pé com a arma certa, monta a cena (inimigos, disparos em voo,
 // clima, visor) e mantém o instante (tiros "congelados" no ar) até a captura.
 import * as THREE from 'three/webgpu';
-import { A } from './projectiles.js';
+import { A, blast } from './projectiles.js';
 import { WEAPONS } from './arsenal.js';
 
 const D2R = Math.PI / 180;
@@ -102,47 +102,48 @@ export function registerShots(ctx, api, S) {
     prep(ctx, 'kessa');
     const b = body(ctx, 'Verídia');
     const pl = ctx.services.planets;
-    const d = search(ctx, b, P(ctx, 'elev', 6), (d, h) => {
+    const yawW = P(ctx, 'yaw', 150);
+    const d = search(ctx, b, P(ctx, 'elev', 9), (d, h) => {
       if (h < 8 || h > 500) return -Infinity;
       const sl = slopeAt(pl, b, d, 6);
       if (sl > 0.1) return -Infinity;
+      const t = sunTangent(ctx, b, d).applyAxisAngle(d, yawW * D2R);
+      const far = d.clone().addScaledVector(t, 13 / b.radius).normalize();
       const f = S.flora.forestAt(b, d.clone().multiplyScalar(b.radius));
-      return (1 - Math.abs(f - 0.45)) * 50 - sl * 300;
+      return (1 - Math.abs(f - 0.55)) * 40 - sl * 300 - slopeAt(pl, b, far, 6) * 200 - Math.abs(pl.heightAtLocal(b, far) - h) * 3;
     }, 700);
-    const sunT = sunTangent(ctx, b, d);
-    const look = sunT.clone().applyAxisAngle(d, P(ctx, 'yaw', -70) * D2R);
+    const look = sunTangent(ctx, b, d).applyAxisAngle(d, yawW * D2R);
     const side = new THREE.Vector3().crossVectors(look, d).normalize();
-    placePlayer(ctx, api, S, b, d, look, 0.02);
+    placePlayer(ctx, api, S, b, d, look, P(ctx, 'pitch', 0.0));
     equipNow(S, 'rifle');
-    S.flora.update(b, S.ctrl.local);
-    // alvo: corsário a 22 m
     const anchor = { kind: 'body', body: b };
     S.ctrl.anchor = anchor;
-    const tgtD = local(b, d, 22, -1.5, look, side);
+    const tgtD = local(b, d, P(ctx, 'dist', 13), -0.8, look, side);
     const tgt = pl.placeOnSurface(b, tgtD, 0);
-    const e = S.director.addEnemy({ kind: 'soldier', faction: 'corsarios', anchor, pos: tgt, fwd: look.clone().negate(), state: 'combat', seed: 7 });
-    e.aware = 1; e.ready = 1; e.fireT = 99; e.crouch = 0;
-    e.hitX.v = -3; e.hitZ.v = 2;
+    // clareira entre o jogador e o alvo (o capim não esconde a cena)
+    S.flora.clearings = [{ body: b, local: tgt.clone(), radius: 4.5 }, { body: b, local: pl.placeOnSurface(b, local(b, d, 6, -0.4, look, side), 0), radius: 3.2 }];
+    S.flora.update(b, S.ctrl.local);
+    const e = S.director.addEnemy({ kind: 'soldier', faction: 'corsarios', anchor, pos: tgt, fwd: look.clone().negate().applyAxisAngle(d, 0.35), state: 'combat', seed: 7 });
+    e.aware = 1; e.ready = 1; e.fireT = 99; e.crouch = 0; e.hold = true;
+    e.hitX.x = -0.22; e.hitZ.x = 0.16; e.aimPitch = 0.04;
     // rastros congelados do jogador rumo ao alvo
     const eyeL = S.ctrl.local.clone().addScaledVector(d, 1.62);
-    const muzzle = eyeL.clone().addScaledVector(look, 0.6).addScaledVector(side, 0.12).addScaledVector(d, -0.12);
-    const chest = tgt.clone().addScaledVector(d, 1.25);
+    const muzzle = eyeL.clone().addScaledVector(look, 0.32).addScaledVector(side, 0.05).addScaledVector(d, -0.06);
+    const chest = tgt.clone().addScaledVector(d, 1.3);
     const W = WEAPONS.rifle;
-    for (const k of [0.18, 0.46, 0.8]) {
-      const to = muzzle.clone().lerp(chest, k).add(new THREE.Vector3().randomDirection().multiplyScalar(0.12 * k));
-      frozenBolt(S, anchor, muzzle.clone().lerp(chest, Math.max(0, k - 0.12)), to, W.color, { width: 0.07, len: 3.2, intensity: 34 });
+    for (const k of [0.24, 0.55, 0.86]) {
+      const to = muzzle.clone().lerp(chest, k).add(new THREE.Vector3().randomDirection().multiplyScalar(0.06 * k));
+      frozenBolt(S, anchor, muzzle.clone().lerp(chest, Math.max(0.02, k - 0.18)), to, W.color, { width: 0.08, len: 3.0, intensity: 34 });
     }
-    // resposta do inimigo (vermelho) passando ao lado
-    const eMuzzle = tgt.clone().addScaledVector(d, 1.45).addScaledVector(look, -0.7);
-    const miss = eyeL.clone().addScaledVector(side, 1.4).addScaledVector(d, 0.3);
-    frozenBolt(S, anchor, eMuzzle.clone().lerp(miss, 0.35), eMuzzle.clone().lerp(miss, 0.55), [1.0, 0.22, 0.12], { len: 2.6, intensity: 30 });
-    S.shotHold = (c) => {
-      S.vm.flash.k = 0.95;
-      S.vm.recoil.z.x = 0.012; S.vm.recoil.rx.x = 0.02;
+    // resposta do inimigo (vermelho) passando à esquerda
+    const eMuzzle = tgt.clone().addScaledVector(d, 1.45).addScaledVector(look, -0.65);
+    const miss = eyeL.clone().addScaledVector(side, -1.6).addScaledVector(d, 0.4);
+    frozenBolt(S, anchor, eMuzzle.clone().lerp(miss, 0.4), eMuzzle.clone().lerp(miss, 0.56), [1.0, 0.22, 0.12], { width: 0.09, len: 2.6, intensity: 16 });
+    S.shotHold = () => {
+      S.vm.flash.k = 1;
+      S.vm.recoil.z.x = 0.014; S.vm.recoil.rx.x = 0.025;
       S.lastFireT = 0;
-      // faíscas no peito do alvo (mantém algumas vivas)
-      if ((S._sparkT = (S._sparkT || 0) - 1) <= 0) { S._sparkT = 3; S.proj.impact(anchor, chest.clone().addScaledVector(look, -0.25), look.clone().negate(), W.color, 'flesh', false); }
-      void c;
+      if ((S._sparkT = (S._sparkT || 0) - 1) <= 0) { S._sparkT = 2; S.proj.impact(anchor, chest.clone().addScaledVector(look, -0.28), look.clone().negate(), W.color, 'metal', true); }
     };
     try { pl.weather.force('rain', 0); } catch { /* */ }
     settle();
@@ -169,7 +170,7 @@ export function registerShots(ctx, api, S) {
     S.light.toggle(true); S.suit.flashlight = true; S.light.k = 1;
     try { pl.weather.force('blizzard', P(ctx, 'storm', 0.6)); } catch { /* */ }
     S.weather = { kind: 'blizzard', intensity: 0.6 };
-    S.visor.force({ snow: 0.85, frost: 0.7, fog: 0.55, wet: 0.2 });
+    S.visor.force({ snow: 0.85, frost: 0.7, fog: 0.55, wet: 0.06 });
     S.director.ensureDeposits(b, S.ctrl.local);
     S.shotHold = () => { S.visor.force({ snow: 0.85, frost: 0.72, fog: 0.5 }); };
     settle();
@@ -220,30 +221,47 @@ export function registerShots(ctx, api, S) {
     prep(ctx, 'kessa');
     const b = body(ctx, 'Ashar');
     const pl = ctx.services.planets;
-    const d = search(ctx, b, P(ctx, 'elev', 14), (d, h) => {
+    // terreno aberto: plano onde fica o acampamento e sem paredões no quadro
+    const yawF = P(ctx, 'yaw', 155);
+    const d = search(ctx, b, P(ctx, 'elev', 16), (d, h) => {
       const sl = slopeAt(pl, b, d, 10);
       if (sl > 0.08) return -Infinity;
-      const t = sunTangent(ctx, b, d);
-      const far = d.clone().addScaledVector(t.applyAxisAngle(d, 100 * D2R), 30 / b.radius).normalize();
-      return -sl * 300 - Math.abs(slopeAt(pl, b, far, 10)) * 200;
-    }, 400);
-    const look = sunTangent(ctx, b, d).applyAxisAngle(d, P(ctx, 'yaw', 100) * D2R);
+      const t = sunTangent(ctx, b, d).applyAxisAngle(d, yawF * D2R);
+      let s = -sl * 300, ang = -1;
+      for (const k of [15, 25, 35]) s -= slopeAt(pl, b, d.clone().addScaledVector(t, k / b.radius).normalize(), 8) * 150;
+      for (const a of [-40, -20, 0, 20, 40]) {
+        const tt = t.clone().applyAxisAngle(d, a * D2R);
+        for (const k of [60, 150, 300, 600]) { const p = d.clone().addScaledVector(tt, k / b.radius).normalize(); ang = Math.max(ang, (pl.heightAtLocal(b, p) - h) / k); }
+      }
+      return s - Math.max(0, ang - 0.06) * 800;
+    }, 500);
+    const look = sunTangent(ctx, b, d).applyAxisAngle(d, yawF * D2R);
     const side = new THREE.Vector3().crossVectors(look, d).normalize();
     placePlayer(ctx, api, S, b, d, look, P(ctx, 'pitch', 0.015));
     equipNow(S, P(ctx, 'w', 0) ? 'shotgun' : 'rifle');
     const anchor = { kind: 'body', body: b };
     // acampamento a ~26 m, virado para o jogador
-    const campD = local(b, d, 26, 2, look, side);
+    const campD = local(b, d, P(ctx, 'dist', 17), 1.5, look, side);
     const C = S.director.spawnCamp({ id: 'shot:camp', body: b, dir: campD, facing: look.clone().negate(), faction: 'hegemonia', squad: [{ kind: 'soldier' }, { kind: 'soldier' }, { kind: 'officer' }, { kind: 'heavy' }] });
     // posiciona a tripulação nas coberturas, espiando e atirando
     const covers = C.covers.slice().sort((a, b2) => a.pos.distanceTo(S.ctrl.local) - b2.pos.distanceTo(S.ctrl.local));
+    const roles = ['peek', 'run', 'peek', 'open'];
     C.enemies.forEach((e, i) => {
-      const cv = covers[i * 2 % covers.length];
+      const role = roles[i % roles.length];
+      const cv = covers[(i * 2 + 1) % covers.length];
       if (cv) { e.pos.copy(cv.pos); e.cover = cv; cv.taken = e; e.inCover = true; }
-      e.snap();
-      e.state = 'combat'; e.aware = 1; e.ready = 1; e.peek = i % 2 === 0; e.crouch = e.peek ? 0.1 : 0.9; e.peekT = 99; e.fireT = 99;
-      e.fwd.copy(S.ctrl.local).sub(e.pos); e.fwd.addScaledVector(e.up, -e.fwd.dot(e.up)).normalize();
+      e.state = 'combat'; e.aware = 1; e.ready = 1; e.peekT = 99; e.fireT = 99;
       e.lastSeen = S.ctrl.local.clone();
+      if (role === 'peek') { e.peek = true; e.crouch = 0.0; e.pos.addScaledVector(side, i ? 0.9 : -0.9); }
+      if (role === 'run') {
+        e.cover = null; e.inCover = false;
+        e.pos.addScaledVector(side, 2.6).addScaledVector(look, -1.2);
+        e.holdSpeed = 4.4; e.phase = 1.2; e.ready = 0.4;
+      }
+      if (role === 'open') { e.cover = null; e.inCover = false; e.pos.addScaledVector(look, -1.8).addScaledVector(side, -3); e.crouch = 0; }
+      e.snap(); e.hold = true;
+      e.fwd.copy(S.ctrl.local).sub(e.pos); e.fwd.addScaledVector(e.up, -e.fwd.dot(e.up)).normalize();
+      if (role === 'run') e.fwd.copy(side);
     });
     // disparos inimigos congelados (dourados) cruzando a cena + os do jogador (azuis)
     const eyeL = S.ctrl.local.clone().addScaledVector(d, 1.62);
@@ -256,14 +274,14 @@ export function registerShots(ctx, api, S) {
     const muzzle = eyeL.clone().addScaledVector(look, 0.6).addScaledVector(side, 0.12).addScaledVector(d, -0.12);
     for (const k of [0.3, 0.62]) frozenBolt(S, anchor, muzzle.clone().lerp(tgt, k - 0.1), muzzle.clone().lerp(tgt, k), WEAPONS.rifle.color, { len: 3.2, intensity: 34 });
     // granada explodindo perto de uma barreira
-    const gpos = A.toWorld(anchor, covers[covers.length - 1].pos.clone().addScaledVector(d, 0.6), new THREE.Vector3(), ctx.time.world);
+    const gpos = covers[covers.length - 1].pos.clone().addScaledVector(d, 0.3);
     let boomT = 0;
     S.shotHold = () => {
       S.vm.flash.k = 0.7; S.lastFireT = 0;
-      if (boomT++ === 2) { try { ctx.services.rendering?.explosion?.(gpos, 4.2, 'ground', { vel: A.velAt(anchor, covers[covers.length - 1].pos, new THREE.Vector3(), ctx.time.world), normal: b.dirToWorld(d, ctx.time.world, new THREE.Vector3()) }); } catch { /* */ } }
+      if (boomT++ === 5) blast(ctx, anchor, gpos, 4.2, 'plasma');
     };
     S.ctrl.aiming = false;
-    try { pl.weather.force('sandstorm', 0.0); } catch { /* */ }
+    try { pl.weather.force('clear', 0.0); } catch { /* */ }
     tick(0);
     settle();
   });
@@ -288,6 +306,60 @@ export function registerShots(ctx, api, S) {
       if (rk >= 0) { S.vm.reload = S.vm.reload || { t: 0, dur: 2, shells: 3, kind: id }; S.vm.reload.t = rk * S.vm.reload.dur - 1 / 30; }
       if (insp >= 0) { S.vm.inspect = S.vm.inspect || { t: 0, dur: 3.2 }; S.vm.inspect.t = insp * 3.2 - 1 / 30; }
       if (P(ctx, 'fire', 0)) S.vm.flash.k = 1;
+    };
+  });
+
+  // ── bancada: inimigos no espaço (sol lateral) ─ ?shot=foot-dev-enemy
+  ctx.shots.register('foot-dev-enemy', async (ctx) => {
+    prep(ctx, 'kessa');
+    const sys = ctx.universe.system;
+    const v = sys.bodies.find((b) => b.name === 'Verídia');
+    const p = v.pos.clone().add(new THREE.Vector3(v.radius * 3, v.radius * 0.5, v.radius * 2));
+    const sunDir = sys.star.pos.clone().sub(p).normalize();
+    const fwd = sunDir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), P(ctx, 'yaw', 150) * D2R); fwd.y = 0; fwd.normalize();
+    api.spawnAt(p, null, fwd);
+    S.ctrl.place(p, fwd, { kind: 'world' });
+    S.ctrl.pitch = -0.08;
+    equipNow(S, 'pistol');
+    S.vm.visible = !!P(ctx, 'vm', 0);
+    const an = { kind: 'world' };
+    const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
+    const list = [['hegemonia', 'soldier', -1.6], ['hegemonia', 'heavy', 0], ['corsarios', 'soldier', 1.6], ['vigilantes', 'sentinel', 3.6]];
+    for (const [f, k, x] of list) {
+      const pos = p.clone().addScaledVector(fwd, P(ctx, 'dist', 5)).addScaledVector(right, x).add(new THREE.Vector3(0, -1.6, 0));
+      const e = S.director.addEnemy({ kind: k, faction: f, anchor: an, pos, fwd: fwd.clone().negate().applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.4), state: 'combat', seed: 3 });
+      e.ready = 1; e.aware = 1; e.fireT = 99; e.lastSeen = S.ctrl.local.clone(); e.up.set(0, 1, 0);
+      e.crouch = P(ctx, 'crouch', 0); e.hold = true;
+    }
+  });
+
+  // ── teste de fumaça: percorre ações a pé (tiro, recarga, troca, granada,
+  //    scanner, mineração, hack, pulo/jetpack) num acampamento hostil ──
+  ctx.shots.register('foot-dev-smoke', async (ctx) => {
+    prep(ctx, 'kessa');
+    const b = body(ctx, 'Verídia');
+    const pl = ctx.services.planets;
+    const d = search(ctx, b, 30, (d, h) => (h < 5 ? -Infinity : -slopeAt(pl, b, d, 6) * 100), 200);
+    const look = sunTangent(ctx, b, d).applyAxisAngle(d, 90 * D2R);
+    const side = new THREE.Vector3().crossVectors(look, d).normalize();
+    placePlayer(ctx, api, S, b, d, look, 0);
+    equipNow(S, 'rifle');
+    S.director.spawnCamp({ id: 'smoke:camp', body: b, dir: local(b, d, 30, 0, look, side), facing: look.clone().negate(), faction: 'corsarios' });
+    S.director.spawnSentinels(b, local(b, d, 40, 10, look, side), 1, 'smoke:sent');
+    const I = ctx.input;
+    let f = 0;
+    const plan = {
+      1: ['primary', 1], 4: ['primary', 0], 5: ['reload', 1], 6: ['reload', 0], 8: ['power2', 1], 9: ['power2', 0],
+      14: ['primary', 1], 15: ['primary', 0], 16: ['grenade', 1], 17: ['grenade', 0], 19: ['scan', 1], 20: ['scan', 0],
+      21: ['tool', 1], 22: ['tool', 0], 23: ['primary', 1], 26: ['primary', 0], 27: ['tool', 1], 28: ['tool', 0], 29: ['up', 1], 34: ['up', 0],
+      35: ['power3', 1], 36: ['power3', 0], 37: ['secondary', 1], 39: ['primary', 1], 40: ['primary', 0], 41: ['secondary', 0], 42: ['light', 1], 43: ['light', 0],
+    };
+    S.shotHold = () => {
+      f++;
+      const a = plan[f];
+      if (a) I.setVirtual(a[0], a[1]);
+      I.setVirtualAxis('moveY', f > 10 && f < 30 ? 1 : 0);
+      if (f === 30) { S.toolMode = 'hack'; S.interact.register({ id: 'smoke:door', label: 'Porta', getPos: (o) => o.copy(S.eyeWorld).addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(ctx.camera.quaternion), 1), hack: { difficulty: 0.2 } }); }
     };
   });
 }

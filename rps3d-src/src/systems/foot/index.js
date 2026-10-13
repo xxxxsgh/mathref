@@ -29,7 +29,7 @@ import { Controller, K as CK } from './controller.js';
 import { Interact } from './interact.js';
 import { ViewModel } from './viewmodel/viewmodel.js';
 import { Beams, COLORS } from './beams.js';
-import { Projectiles, A } from './projectiles.js';
+import { Projectiles, A, blast } from './projectiles.js';
 import { Arsenal, WEAPONS, SLOTS } from './arsenal.js';
 import { Suit } from './suit.js';
 import { Visor } from './visor.js';
@@ -143,18 +143,21 @@ function weaponStep(dt, ctx) {
   // troca: números, roda, ferramenta
   const keys = ['power1', 'power2', 'power3', 'power4', 'power5'];
   keys.forEach((k, i) => { if (I.pressed(k)) equip(SLOTS[i]); });
+  // gamepad: Y/triângulo (alvo) troca de arma; direcional: granada / scanner / lanterna / ferramenta
+  if (I.pressed('target')) { const i = SLOTS.indexOf(ar.current); equip(SLOTS[(i + 1) % SLOTS.length]); }
+  const padG = I.pressed('countermeasure'), padScan = I.pressed('quantum'), padLight = I.pressed('decouple'), padTool = I.pressed('gear');
   const wheel = ctx.input.wheel;
   if (wheel && !c.aiming) {
     const w = I.takeWheel();
     if (w) { const i = SLOTS.indexOf(ar.current); equip(SLOTS[(i + (w > 0 ? 1 : SLOTS.length - 1)) % SLOTS.length]); }
   }
-  if (I.pressed('tool')) {
+  if (I.pressed('tool') || padTool) {
     if (ar.current !== 'multitool') equip('multitool');
     else { S.toolMode = TOOL_MODES[(TOOL_MODES.indexOf(S.toolMode) + 1) % TOOL_MODES.length]; ctx.bus.emit('notify', { text: `MULTIFERRAMENTA: ${{ scanner: 'ANÁLISE', mining: 'LASER DE MINERAÇÃO', hack: 'INTRUSÃO' }[S.toolMode]}`, kind: 'info' }); }
   }
-  if (I.pressed('light')) { S.suit.flashlight = S.light.toggle(); }
-  if (I.pressed('scan')) doScan(ctx);
-  if (I.pressed('grenade') && ar.grenades > 0 && !vm.throwA && !vm.reload) {
+  if (I.pressed('light') || padLight) { S.suit.flashlight = S.light.toggle(); }
+  if (I.pressed('scan') || padScan) doScan(ctx);
+  if ((I.pressed('grenade') || padG) && ar.grenades > 0 && !vm.throwA && !vm.reload) {
     ar.grenades--;
     vm.throwGrenade(() => throwGrenade(ctx));
   }
@@ -298,8 +301,7 @@ function collect(ctx, res) {
   ctx.bus.emit('foot:mine', { resource: d.kind, amount: res.amount });
   if (d.hp <= 0) {
     d.dead = true;
-    const w = d.worldPos(new THREE.Vector3());
-    try { ctx.services.rendering?.explosion?.(w, 1.6, 'small', { vel: A.velAt({ kind: 'body', body: d.body }, d.local, new THREE.Vector3(), ctx.time.world) }); } catch { /* */ }
+    blast(ctx, { kind: 'body', body: d.body }, d.local.clone().addScaledVector(d.local.clone().normalize(), 0.6), 1.6, 'rock');
     d.entry?.remove();
   }
 }
@@ -587,7 +589,15 @@ export default {
     S.hack.step(dt, ctx.input);
     S.lastFireT += dt;
     const fW = _v.set(0, 0, -1).applyQuaternion(ctx.camera.quaternion);
-    S.interact.update(dt, S.eyeWorld, fW, !S.suit.dead);
+    const used = S.interact.update(dt, S.eyeWorld, fW, !S.suit.dead);
+    // ponte de reserva: terminais/NPCs do interior da estação (se ainda não registrados aqui)
+    if (!used && !S.interact.current && ctx.input.pressed('interact') && c.anchor.id === 'estacao') {
+      try {
+        const st = ctx.services.stations, near = st?.nearest?.(c.worldPos);
+        const it = near ? st.interiorOf?.(near.station?.id ?? near.station) : null;
+        if (it?.near && typeof it.use === 'function') it.use(it.near);
+      } catch { /* */ }
+    }
     // abrigo: interior de nave/estação
     S.inside = c.anchor.kind === 'frame';
     const body = c.anchor.kind === 'body' ? c.anchor.body : null;
@@ -676,6 +686,12 @@ export default {
     const night = clamp(-(S.suit.dayElev ?? 0.3) * 5 + 0.3, 0, 1);
     S.light.frame(dt, 0.25 + (S.weatherNow?.intensity || 0) * 0.8 + night * 0.2);
     S.scanner.frame(dt, up);
+    if (S.scanner.t >= 0) {
+      const e1L = new THREE.Vector3(0, 1, 0).cross(c.upL); if (e1L.lengthSq() < 1e-6) e1L.set(1, 0, 0); e1L.normalize();
+      const e2L = new THREE.Vector3().crossVectors(c.upL, e1L);
+      const eyeL = c.toLocal(S.eyeWorld, new THREE.Vector3(), t);
+      S.scanner.setGrid(c.dirToWorld(e1L, new THREE.Vector3()), c.dirToWorld(e2L, new THREE.Vector3()), eyeL.dot(e1L), eyeL.dot(e2L));
+    }
     S.hack.frame(dt);
     scanFrame(ctx);
     S.director.frame(dt);

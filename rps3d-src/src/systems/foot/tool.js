@@ -14,7 +14,7 @@ import { clamp as clampN } from './util.js';
 export class Scanner {
   constructor(ctx) {
     this.ctx = ctx;
-    this.U = { r: uniform(0), on: uniform(0), width: uniform(6), color: uniform(new THREE.Color(0.25, 1.0, 0.75)), up: uniform(new THREE.Vector3(0, 1, 0)), fade: uniform(1) };
+    this.U = { r: uniform(0), on: uniform(0), width: uniform(6), color: uniform(new THREE.Color(0.25, 1.0, 0.75)), up: uniform(new THREE.Vector3(0, 1, 0)), fade: uniform(1), e1: uniform(new THREE.Vector3(1, 0, 0)), e2: uniform(new THREE.Vector3(0, 0, 1)), off: uniform(new THREE.Vector2()) };
     this.t = -1; this.dur = 2.4; this.max = 140;
     this.cooldown = 0;
     this.installed = false;
@@ -33,13 +33,16 @@ export class Scanner {
         const valid = smoothstep(4000, 1500, d);
         const band = smoothstep(U.width, 0, abs(d.sub(U.r))).mul(valid);
         const trail = smoothstep(U.r, U.r.sub(U.width.mul(6)), d).mul(smoothstep(U.r.sub(U.width.mul(14)), U.r.sub(U.width.mul(6)), d)).mul(valid);
-        // curvas de nível (altura relativa ao jogador) só dentro da onda
+        // curvas de nível (altura relativa ao jogador) e grade presa ao chão, só na esteira da onda
         const wp = PU.camRot.mul(vec4(v, 0)).xyz;
         const hgt = wp.dot(U.up);
-        const contour = smoothstep(0.08, 0.0, abs(fract(hgt.div(1.5)).sub(0.5)).sub(0.42)).mul(trail);
-        const ring = smoothstep(0.1, 0.0, abs(fract(d.div(6)).sub(0.5)).sub(0.45)).mul(trail).mul(0.5);
-        const glow = band.mul(1.2).add(contour.mul(0.5)).add(ring.mul(0.3)).add(trail.mul(0.05)).mul(U.fade);
-        out.assign(vec3(color).add(U.color.mul(glow).mul(2.5)).add(vec3(color).mul(band.mul(U.fade).mul(0.6))));
+        const contour = smoothstep(0.06, 0.0, abs(fract(hgt.div(1.5)).sub(0.5)).sub(0.44)).mul(trail);
+        const g1 = wp.dot(U.e1).add(U.off.x), g2 = wp.dot(U.e2).add(U.off.y);
+        const lw = d.mul(0.0025).add(0.02);
+        const grid = max(smoothstep(lw, 0.0, abs(fract(g1.div(4)).sub(0.5)).sub(0.5).abs()), smoothstep(lw, 0.0, abs(fract(g2.div(4)).sub(0.5)).sub(0.5).abs())).mul(trail);
+        const ring = smoothstep(0.1, 0.0, abs(fract(d.div(6)).sub(0.5)).sub(0.45)).mul(trail).mul(0.3);
+        const glow = band.mul(1.4).add(contour.mul(0.35)).add(grid.mul(0.4)).add(ring.mul(0.2)).add(trail.mul(0.012)).mul(U.fade);
+        out.assign(vec3(color).add(U.color.mul(glow).mul(1.8)).add(vec3(color).mul(band.mul(U.fade).mul(0.4))));
       });
       return out;
     }, { stage: 'hdr', order: 40 });
@@ -51,6 +54,8 @@ export class Scanner {
     this.install();
     return true;
   }
+  /** Base tangente da grade (mundo) e deslocamento (local do chão, m). */
+  setGrid(e1W, e2W, ox, oy) { this.U.e1.value.copy(e1W); this.U.e2.value.copy(e2W); this.U.off.value.set(ox % 4, oy % 4); }
   frame(dt, upW) {
     this.cooldown = Math.max(0, this.cooldown - dt);
     const U = this.U;

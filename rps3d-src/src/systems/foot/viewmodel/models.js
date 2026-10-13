@@ -371,34 +371,45 @@ export function buildPistol(M) {
 // MULTIFERRAMENTA — scanner, laser de mineração, lanterna, hack
 export function buildMultitool(M) {
   const P = new Parts();
-  // corpo
-  P.profile(M.teal, [[-0.06, -0.01], [0.09, -0.012], [0.12, 0.01], [0.12, 0.045], [0.06, 0.06], [-0.03, 0.06], [-0.07, 0.04]], 0.05, [0, 0, 0], { bevel: 0.008, bevelSeg: 3 });
-  P.profile(M.ceramic, [[-0.05, 0.04], [0.06, 0.042], [0.1, 0.034], [0.1, 0.05], [0.06, 0.068], [-0.03, 0.068], [-0.058, 0.055]], 0.042, [0, 0, 0], { bevel: 0.006, bevelSeg: 3 });
-  // cápsula lateral luminosa
-  P.cylZ(M.lens, 0.011, 0.011, 0.09, [0.03, 0.02, -0.03], { seg: 16 });
-  P.cylZ(M.cyan, 0.0075, 0.0075, 0.084, [0.03, 0.02, -0.03], { seg: 12 });
-  P.ringZ(M.gunmetal, 0.0125, 0.003, [0.03, 0.02, 0.015], { seg: 16 });
-  P.ringZ(M.gunmetal, 0.0125, 0.003, [0.03, 0.02, -0.075], { seg: 16 });
-  // emissor: prato com três pontas
-  P.latheZ(M.gunmetal, [[0.0, 0.11], [0.03, 0.11], [0.034, 0.12], [0.03, 0.135], [0.02, 0.14], [0.0, 0.142]], [0, 0.022, 0], { seg: 28 });
-  P.sphere(M.white, 0.009, [0, 0.022, -0.145], { seg: 14 });
-  P.ringZ(M.cyan, 0.022, 0.0016, [0, 0.022, -0.137], { seg: 24, tube: 4 });
+  const Y0 = 0.024;
+  // corpo torneado (seção oval) — da traseira à boca
+  P.latheZ(M.teal, [[0.0, -0.085], [0.018, -0.085], [0.026, -0.072], [0.031, -0.04], [0.033, 0.0], [0.032, 0.05], [0.034, 0.08], [0.036, 0.095]], [0, Y0, 0], { seg: 28, rot: [0, 0, 0] });
+  // carenagem superior de cerâmica com nervura
+  P.box(M.ceramic, 0.046, 0.022, 0.13, [0, Y0 + 0.024, -0.005], [0, 0, 0], { r: 0.01, seg: 3 });
+  P.box(M.accent, 0.048, 0.006, 0.03, [0, Y0 + 0.03, 0.04], [0, 0, 0], { r: 0.002 });
+  P.box(M.gunmetal, 0.012, 0.008, 0.1, [0, Y0 + 0.038, -0.01], [0, 0, 0], { r: 0.003 });
+  // aletas traseiras
+  for (let i = 0; i < 5; i++) P.box(M.steel, 0.07 - i * 0.006, 0.05 - i * 0.004, 0.004, [0, Y0, 0.05 + i * 0.008], [0, 0, 0], { r: 0.002 });
+  // anel frontal (alojamento do emissor) e bobina luminosa
+  P.ringZ(M.gunmetal, 0.04, 0.009, [0, Y0, -0.1], { seg: 32, tube: 10 });
+  P.ringZ(M.ceramic, 0.042, 0.005, [0, Y0, -0.088], { seg: 32, tube: 8 });
+  P.ringZ(M.cyan, 0.031, 0.0022, [0, Y0, -0.104], { seg: 32, tube: 6 });
+  P.latheZ(M.steel, [[0.0, 0.07], [0.03, 0.07], [0.028, 0.1], [0.012, 0.115], [0.0, 0.118]], [0, Y0, 0], { seg: 24 });
+  P.sphere(M.white, 0.008, [0, Y0, -0.12], { seg: 14 });
+  // três pontas curvas à frente
   for (let k = 0; k < 3; k++) {
     const a = k * 2 * Math.PI / 3 + Math.PI / 2;
-    P.box(M.ceramic, 0.008, 0.016, 0.06, [Math.cos(a) * 0.036, 0.022 + Math.sin(a) * 0.036, -0.15], [Math.sin(a) * 0.25, -Math.cos(a) * 0.25, a - Math.PI / 2], { r: 0.0025 });
-    P.box(M.cyanSoft, 0.003, 0.003, 0.03, [Math.cos(a) * 0.04, 0.022 + Math.sin(a) * 0.04, -0.17], [Math.sin(a) * 0.25, -Math.cos(a) * 0.25, 0]);
+    const cx = Math.cos(a), cy = Math.sin(a);
+    P.box(M.ceramic, 0.009, 0.014, 0.055, [cx * 0.043, Y0 + cy * 0.043, -0.125], [-cy * 0.22, cx * 0.22, a - Math.PI / 2], { r: 0.003 });
+    P.box(M.cyanSoft, 0.003, 0.003, 0.03, [cx * 0.047, Y0 + cy * 0.047, -0.14], [-cy * 0.22, cx * 0.22, 0]);
   }
-  // empunhadura
-  P.profile(M.grip, [[-0.045, -0.008], [0.01, -0.01], [-0.004, -0.115], [-0.016, -0.122], [-0.06, -0.112], [-0.052, -0.03]], 0.036, [0, 0, 0], { bevel: 0.007, bevelSeg: 3 });
-  P.profile(M.steel, [[0.012, -0.012], [0.022, -0.014], [0.018, -0.04], [0.01, -0.045]], 0.008, [0, 0, 0], { bevel: 0.0015 });
-  // tela superior (modo / leitura do scanner)
+  // cápsula lateral (lado esquerdo, voltada ao jogador)
+  P.cylZ(M.glass, 0.012, 0.012, 0.085, [-0.04, Y0 - 0.004, -0.02], { seg: 18 });
+  P.cylZ(M.cyan, 0.0068, 0.0068, 0.08, [-0.04, Y0 - 0.004, -0.02], { seg: 12 });
+  for (const z of [0.024, -0.064]) P.ringZ(M.gunmetal, 0.0135, 0.0035, [-0.04, Y0 - 0.004, z], { seg: 18 });
+  P.box(M.gunmetal, 0.012, 0.008, 0.07, [-0.03, Y0 - 0.004, -0.02], [0, 0, 0], { r: 0.002 });
+  // empunhadura + gatilho
+  P.profile(M.grip, [[-0.045, -0.002], [0.01, -0.004], [-0.004, -0.112], [-0.016, -0.119], [-0.06, -0.11], [-0.052, -0.024]], 0.034, [0, 0, 0], { bevel: 0.007, bevelSeg: 3 });
+  P.profile(M.steel, [[0.012, -0.006], [0.022, -0.008], [0.018, -0.036], [0.01, -0.041]], 0.008, [0, 0, 0], { bevel: 0.0015 });
+  P.box(M.teal, 0.04, 0.014, 0.05, [0, -0.006, 0.02], [0, 0, 0], { r: 0.006 });
+  // tela superior traseira
   const scr = new ToolScreen();
-  P.box(M.steel, 0.036, 0.004, 0.064, [0, 0.07, 0.0], [-0.22, 0, 0], { r: 0.0015 });
-  screenQuad(P, screenMat(scr.tex, 2.2), 0.032, 0.058, [0, 0.0725, 0.0], [-Math.PI / 2 - 0.22, 0, 0]);
+  P.box(M.steel, 0.036, 0.004, 0.056, [0, Y0 + 0.037, 0.03], [-0.25, 0, 0], { r: 0.0015 });
+  screenQuad(P, screenMat(scr.tex, 2.2), 0.032, 0.05, [0, Y0 + 0.0395, 0.03], [-Math.PI / 2 - 0.25, 0, 0]);
   P
     .socket('gripR', [-0.004, -0.04, 0.018], gripBasis(18 * D))
     .socket('gripL', [-0.03, 0.0, -0.05], gripBasis(-90 * D, true))
-    .socket('muzzle', [0, 0.022, -0.15])
+    .socket('muzzle', [0, Y0, -0.125])
     .socket('sight', [0, 0.09, 0.0]);
   const root = P.build('multitool');
   root.userData.screen = scr;

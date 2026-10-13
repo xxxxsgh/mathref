@@ -6,7 +6,7 @@
 // Sem o `rendering`, o visor simplesmente não aparece (o jogo segue).
 import * as THREE from 'three/webgpu';
 import {
-  Fn, uniform, vec2, vec3, float, floor, fract, sin, cos, mix, smoothstep, length, dot, max, min, abs, clamp, pow, exp, If, normalize,
+  Fn, uniform, vec2, vec3, float, floor, fract, sin, cos, mix, smoothstep, length, dot, max, min, abs, clamp, pow, exp, If, normalize, atan,
 } from 'three/tsl';
 import { hash12, hash22, vnoise2, fbm2, voronoi2 } from './tsl.js';
 
@@ -98,36 +98,47 @@ export class Visor {
         add.addAssign(vec3(head.mul(0.25).add(beads.mul(0.15))));
       });
 
-      // ── neve grudada (flocos derretendo) ──────────────────────────────
+      // ── neve grudada: flocos de 6 pontas espalhados, parte derretendo em gotas ──
       If(U.snow.greaterThan(0.01), () => {
-        const v = voronoi2(q.mul(16.0).add(vec2(2.1, 7.7)));
-        const id = v.z;
-        const k = smoothstep(float(1).sub(U.snow.mul(0.45)), 1.0, id);
-        const r = hash12(vec2(id.mul(91.0), 1.0)).mul(0.18).add(0.12);
-        const flake = smoothstep(r, r.mul(0.4), v.y).mul(k);
-        // cristal: braços em 6 direções (borda irregular)
-        const crys = smoothstep(0.08, 0.0, v.x).mul(k).mul(0.4);
-        const melt = fract(t.mul(0.05).add(id.mul(5.0)));
-        const wetEdge = smoothstep(0.7, 1.0, melt);
-        const white = flake.mul(float(1).sub(wetEdge.mul(0.7)));
-        blur.addAssign(white.mul(0.6));
-        mulc.mulAssign(float(1).sub(white.mul(0.25)));
-        add.addAssign(vec3(0.85, 0.9, 1.0).mul(white.mul(0.55).add(crys.mul(0.2))));
-        ofs.addAssign(vec2(v.y.sub(0.2).mul(0.01)).mul(wetEdge.mul(k)));
+        for (const [S, seed] of [[9.0, 2.1], [17.0, 7.7]]) {
+          const p = q.mul(S).add(vec2(seed, seed * 1.3));
+          const cell = floor(p);
+          const h = hash22(cell);
+          const on = smoothstep(1.0 - 0.001, 1.0, h.x.add(U.snow.mul(S < 10 ? 0.35 : 0.5)));
+          const f = fract(p).sub(0.5).sub(h.sub(0.5).mul(0.5));
+          const r = length(f);
+          const ang = atan2v(f);
+          const size = hash12(cell.add(5.5)).mul(0.12).add(0.08);
+          const arms = abs(cos(ang.mul(3.0).add(h.y.mul(6.0))));
+          const star = smoothstep(size.mul(arms.mul(0.65).add(0.35)), size.mul(arms.mul(0.65).add(0.35)).mul(0.6), r);
+          const core = smoothstep(size.mul(0.35), 0.0, r);
+          const melt = fract(t.mul(0.04).add(h.y.mul(9.0)));
+          const wetK = smoothstep(0.55, 0.9, melt);
+          const flake = max(star.mul(0.7), core).mul(on);
+          const white = flake.mul(float(1).sub(wetK));
+          const drop = smoothstep(size.mul(0.9), size.mul(0.5), r).mul(on).mul(wetK);
+          add.addAssign(vec3(0.92, 0.95, 1.0).mul(white.mul(0.5)));
+          mulc.mulAssign(float(1).sub(white.mul(0.2)));
+          blur.addAssign(white.mul(0.5));
+          ofs.addAssign(f.div(size).mul(drop).mul(-0.01));
+        }
       });
 
-      // ── geada / embaçado do frio (cresce das bordas) ──────────────────
+      // ── geada (só nas bordas, plumas de cristal crescendo para dentro) ──
       const edgeR = length(c.mul(vec2(0.82, 1.0)));
       const nf = fbm2(c.mul(5.0)).toVar();
       If(U.frost.greaterThan(0.01), () => {
-        const front = float(0.98).sub(U.frost.mul(0.55));
-        const fr = smoothstep(front, front.add(0.18), edgeR.add(nf.mul(0.22)));
-        const v2 = voronoi2(c.mul(38.0));
-        const crystal = smoothstep(0.06, 0.0, v2.x).mul(fr);
-        const ferns = smoothstep(0.55, 0.9, vnoise2(c.mul(vec2(60, 14)).add(nf.mul(6.0)))).mul(fr);
-        blur.addAssign(fr.mul(0.9));
-        add.addAssign(vec3(0.6, 0.75, 0.9).mul(fr.mul(0.08).add(crystal.mul(0.25)).add(ferns.mul(0.12))));
-        mulc.mulAssign(float(1).sub(fr.mul(0.12)));
+        const front = float(1.02).sub(U.frost.mul(0.42));
+        const fr = smoothstep(front, front.add(0.16), edgeR.add(nf.mul(0.18)));
+        // plumas: ruído esticado na direção radial
+        const rad = normalize(c.add(1e-4));
+        const tang = vec2(rad.y.negate(), rad.x);
+        const pr = vec2(dot(c, tang).mul(46.0), dot(c, rad).mul(9.0));
+        const feather = smoothstep(0.5, 0.85, vnoise2(pr.add(nf.mul(4.0)))).mul(fr);
+        const sparkle = smoothstep(0.985, 1.0, hash12(floor(c.mul(400.0)))).mul(fr);
+        blur.addAssign(fr.mul(0.85));
+        add.addAssign(vec3(0.62, 0.74, 0.86).mul(fr.mul(0.07).add(feather.mul(0.16)).add(sparkle.mul(0.5))));
+        mulc.mulAssign(float(1).sub(fr.mul(0.1)));
       });
       // condensação da respiração (parte de baixo, pulsando)
       If(U.fog.greaterThan(0.01), () => {
@@ -230,4 +241,5 @@ export class Visor {
 
 // passo suave (0/1) com limiar
 const step01 = (x, e) => smoothstep(e, e.add(0.002), x);
+const atan2v = (f) => atan(f.y, f.x);
 void sin; void cos; void pow; void exp; void min; void dot;

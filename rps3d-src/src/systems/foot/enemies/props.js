@@ -17,17 +17,19 @@ function shieldMaterial(color = '#ffc860') {
   const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
   const U = { k: uniform(1), color: uniform(new THREE.Color(color)) };
   m.colorNode = Fn(() => {
-    const p = uv().mul(vec3(14, 6, 0).xy);
-    // grade hexagonal aproximada
+    const p = uv().mul(vec3(22, 7, 0).xy);
     const q = vec3(p.x.mul(1.1547), p.y.add(p.x.mul(0.5774)), 0);
     const f = fract(q.xy);
     const e = min(min(f.x, f.y), min(float(1).sub(f.x), float(1).sub(f.y)));
-    const hex = smoothstep(0.06, 0.0, e);
-    const v = uv().y;
-    const fade = smoothstep(0.0, 0.1, v).mul(smoothstep(1.0, 0.55, v)).mul(smoothstep(0.0, 0.05, uv().x)).mul(smoothstep(1.0, 0.95, uv().x));
-    const scan = smoothstep(0.96, 1.0, sin(v.mul(30).sub(time.mul(3.0))).mul(0.5).add(0.5));
-    const fl = sin(time.mul(23.0).add(positionLocal.x.mul(3.0))).mul(0.05).add(0.95);
-    return vec4(U.color.mul(hex.mul(0.9).add(0.08).add(scan.mul(0.4)).mul(fade).mul(U.k).mul(fl).mul(1.6)), 1);
+    const hex = smoothstep(0.05, 0.0, e);
+    const v = uv().y, u = uv().x;
+    const edgeX = smoothstep(0.08, 0.0, u).add(smoothstep(0.92, 1.0, u));
+    const top = smoothstep(0.9, 1.0, v);
+    const body = smoothstep(0.0, 0.15, v).mul(smoothstep(1.0, 0.75, v));
+    const scan = smoothstep(0.97, 1.0, sin(v.mul(18).sub(time.mul(2.5))).mul(0.5).add(0.5));
+    const fl = sin(time.mul(23.0).add(positionLocal.x.mul(3.0))).mul(0.06).add(0.94);
+    const k = body.mul(hex.mul(0.22).add(0.05)).add(edgeX.mul(0.8)).add(top.mul(0.4)).add(scan.mul(body).mul(0.25));
+    return vec4(U.color.mul(k.mul(U.k).mul(fl).mul(1.4)), 1);
   })();
   m.userData.U = U;
   void abs; void max;
@@ -65,19 +67,33 @@ export function buildCamp(faction, rng, heightAt, { lite = false } = {}) {
       K.box('camp', P.stripe, 0.5, 0.12, 0.065, at(-0.6, 0.75, 0.02), [0, ang, 0.1], 0.005);
       addCol(...at(0, 0.6, 0), 1.45, 0.62, 0.18, ang);
     } else {
-      // painel inclinado da Hegemonia com pés, faixa dourada e emissor
-      K.box('camp', P.plate, 2.4, 1.1, 0.16, at(0, 0.62, 0), [-12 * D, ang, 0], 0.05);
-      K.box('camp', P.dark, 2.2, 0.9, 0.1, at(0, 0.6, -0.1), [-12 * D, ang, 0], 0.03);
-      K.box('camp', P.trim, 2.42, 0.06, 0.17, at(0, 1.15, 0.12), [-12 * D, ang, 0], 0.02);
-      K.box('camp', P.stripe, 0.7, 0.24, 0.165, at(-0.6, 0.6, 0.0), [-12 * D, ang, 0], 0.01);
-      K.box('camp', P.glow, 1.8, 0.03, 0.04, at(0, 1.2, 0.13), [-12 * D, ang, 0], 0.005);
-      for (const u of [-1.0, 1.0]) {
-        K.box('camp', P.steel, 0.1, 0.12, 0.8, at(u, 0.06, -0.2), [0, ang, 0], 0.02);
-        K.box('camp', P.steel, 0.08, 0.7, 0.08, at(u, 0.4, -0.45), [20 * D, ang, 0], 0.02);
+      // muralha de campo da Hegemonia: perfil chanfrado com seteira, base
+      // escura, aba dourada no topo, pilares-emissores nas pontas e membrana
+      const prof = [[0.25, 0.0], [-0.25, 0.0], [-0.3, 0.42], [-0.18, 1.05], [-0.02, 1.2], [0.12, 1.2], [0.2, 1.0], [0.3, 0.4]];
+      // perfil em (x = frente, y = cima) extrudado na largura (ao longo de `rt`)
+      const wall = (u0, u1, pal2, inset = 0) => {
+        const w = u1 - u0;
+        const pts = prof.map(([x, y]) => [x - inset, y]);
+        K.profile('camp', pal2, pts, w, at((u0 + u1) / 2, 0, 0), [0, ang, 0], 0.03);
+      };
+      wall(-1.25, -0.35, P.plate); wall(0.35, 1.25, P.plate);
+      wall(-0.35, 0.35, P.plate2 || P.plate);
+      // seteira (fenda de tiro) escura no meio
+      K.box('camp', P.dark, 0.5, 0.12, 0.62, at(0, 0.98, 0.0), [0, ang, 0], 0.02);
+      // base escura e faixas
+      K.box('camp', P.dark, 2.56, 0.36, 0.66, at(0, 0.18, 0.0), [0, ang, 0], 0.04);
+      K.box('camp', P.trim, 2.52, 0.05, 0.2, at(0, 1.2, 0.03), [0, ang, 0], 0.02);
+      K.box('camp', P.stripe, 0.62, 0.3, 0.05, at(-0.78, 0.66, -0.28), [-0.2, ang, 0], 0.01);
+      K.box('camp', P.glow, 0.5, 0.025, 0.03, at(-0.78, 0.86, -0.3), [-0.2, ang, 0], 0.004);
+      // pilares-emissores
+      for (const u of [-1.32, 1.32]) {
+        K.box('camp', P.steel, 0.18, 1.7, 0.24, at(u, 0.85, 0.0), [0, ang, 0], 0.04);
+        K.box('camp', P.trim, 0.2, 0.08, 0.26, at(u, 1.72, 0.0), [0, ang, 0], 0.02);
+        K.box('camp', P.glow, 0.04, 0.9, 0.05, at(u, 1.15, -0.13), [0, ang, 0], 0.01);
       }
-      addCol(...at(0, 0.62, 0), 1.25, 0.62, 0.16, ang);
-      // membrana de escudo acima da barreira
-      shields.push({ pos: new THREE.Vector3(...at(0, 1.62, 0.2)), ang, w: 2.3, h: 0.95 });
+      addCol(...at(0, 0.62, 0), 1.35, 0.62, 0.3, ang);
+      // membrana de escudo acima da barreira (entre os pilares)
+      shields.push({ pos: new THREE.Vector3(...at(0, 1.62, 0.0)), ang, w: 2.6, h: 0.85 });
     }
     covers.push({ pos: new THREE.Vector3(...at(0, 0, -0.85)), normal: fwd.clone(), height: 1.1, taken: null });
     covers.push({ pos: new THREE.Vector3(...at(-0.8, 0, -0.85)), normal: fwd.clone(), height: 1.1, taken: null });

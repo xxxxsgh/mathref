@@ -44,6 +44,64 @@ export const A = {
   },
 };
 
+/**
+ * Explosão em terra no referencial do âncora (a âncora das partículas anda
+ * com o chão; as partículas NÃO herdam a velocidade do planeta). kind:
+ * 'plasma' (granada de pulso), 'energy' (sentinela), 'rock' (mineração).
+ */
+export function blast(ctx, an, local, size = 4, kind = 'plasma') {
+  const t = ctx.time.world;
+  const R = ctx.services.rendering, P = R?.particles;
+  const w = A.toWorld(an, local, new THREE.Vector3(), t);
+  const vel = A.velAt(an, local, new THREE.Vector3(), t);
+  const up = A.dirToWorld(an, A.up(an, local, new THREE.Vector3()), new THREE.Vector3(), t);
+  ctx.bus.emit('shake', { amount: Math.min(0.6, size * 0.08), duration: 0.5 });
+  ctx.bus.emit('foot:blast', { pos: w, size, kind });
+  if (!P) { ctx.bus.emit('explosion', { pos: w, size, kind: 'ground' }); return; }
+  const col = kind === 'energy' ? [3, 6, 12] : kind === 'rock' ? [6, 3.5, 1.4] : [9, 4.6, 1.6];
+  const d = new THREE.Vector3();
+  try {
+    P.glow(w.clone().addScaledVector(up, size * 0.2), size * 2.2, [col[0] * 3, col[1] * 3, col[2] * 3], 0.18, vel);
+    P.glow(w.clone().addScaledVector(up, size * 0.3), size * 1.2, col, 0.6, vel);
+    // bola de fogo → fumaça
+    P.emit('smoke', w, kind === 'rock' ? 6 : 14, (k, o) => {
+      d.randomDirection().addScaledVector(up, 0.9).normalize();
+      const sp = size * (0.4 + Math.random() * 0.9);
+      o.x = d.x * size * 0.15; o.y = d.y * size * 0.15; o.z = d.z * size * 0.15;
+      o.vx = d.x * sp; o.vy = d.y * sp; o.vz = d.z * sp;
+      o.life = 2.5 + Math.random() * 3; o.s0 = size * (0.25 + Math.random() * 0.2); o.s1 = size * (0.9 + Math.random() * 0.8);
+      o.drag = 1.6; o.g = -0.05;
+      const grey = kind === 'rock' ? 0.22 : 0.08 + Math.random() * 0.05;
+      o.a = grey; o.b = grey * 0.95; o.c = grey * 0.9;
+      o.w = kind === 'rock' ? 0.2 : k < 7 ? 1.4 : 0.6; o.spin = (Math.random() - 0.5) * 0.6; o.delay = Math.random() * 0.12;
+    }, { vel, ttl: 10 });
+    // faíscas e brasas
+    P.emit('spark', w, Math.round(18 + size * 6), (k, o) => {
+      d.randomDirection(); if (d.dot(up) < 0) d.reflect(up);
+      const sp = (6 + Math.random() * 16) * Math.min(1.6, size / 4);
+      o.vx = d.x * sp; o.vy = d.y * sp; o.vz = d.z * sp;
+      o.life = 0.4 + Math.random() * 1.1; o.s0 = 0.035; o.s1 = 0.012; o.drag = 1.2; o.g = 1;
+      o.a = kind === 'energy' ? 1 : 0.85; o.b = kind === 'energy' ? 9 : 6; o.spin = 0.03; o.delay = Math.random() * 0.05;
+    }, { vel, ttl: 4 });
+    P.emit('glow', w, 10, (k, o) => {
+      d.randomDirection().addScaledVector(up, 0.6).normalize();
+      const sp = 2 + Math.random() * 5;
+      o.vx = d.x * sp; o.vy = d.y * sp; o.vz = d.z * sp; o.life = 0.8 + Math.random() * 1.2; o.s0 = 0.12; o.s1 = 0.04; o.drag = 0.8; o.g = 0.6;
+      o.a = col[0] * 0.4; o.b = col[1] * 0.4; o.c = col[2] * 0.4; o.w = 1.2;
+    }, { vel, ttl: 4 });
+    // poeira do chão (anel)
+    P.emit('smoke', w, 10, (k, o) => {
+      d.randomDirection(); d.addScaledVector(up, -d.dot(up)).normalize();
+      const sp = size * (1.2 + Math.random());
+      o.vx = d.x * sp + up.x; o.vy = d.y * sp + up.y; o.vz = d.z * sp + up.z;
+      o.life = 3 + Math.random() * 3; o.s0 = size * 0.3; o.s1 = size * 1.4; o.drag = 1.4; o.g = -0.02;
+      const dc = String(an.body?.type || '').startsWith('desert') ? [0.5, 0.36, 0.22] : an.body?.type === 'ice' ? [0.7, 0.75, 0.82] : [0.3, 0.28, 0.25];
+      o.a = dc[0]; o.b = dc[1]; o.c = dc[2]; o.w = 0;
+    }, { vel, ttl: 10 });
+  } catch { /* */ }
+  R.flash?.(kind === 'energy' ? '#a8d8ff' : '#ffc890', Math.min(0.25, size * 0.03));
+}
+
 export class Projectiles {
   constructor(ctx, beams) {
     this.ctx = ctx; this.beams = beams;
@@ -257,7 +315,8 @@ export class Projectiles {
     const w = A.toWorld(g.anchor, g.pos, new THREE.Vector3(), t);
     const vel = A.velAt(g.anchor, g.pos, new THREE.Vector3(), t);
     const up = A.dirToWorld(g.anchor, A.up(g.anchor, g.pos, new THREE.Vector3()), new THREE.Vector3(), t);
-    try { ctx.services.rendering?.explosion?.(w, 4.5, 'ground', { vel, normal: up }); } catch { ctx.bus.emit('explosion', { pos: w, size: 4.5, kind: 'ground' }); }
+    blast(ctx, g.anchor, g.pos, 4.5, 'plasma');
+    void vel; void up;
     for (const tg of this.targets()) {
       if (!tg.alive) continue;
       const d = tg.center ? tg.center(_a).distanceTo(g.pos) : Infinity;

@@ -234,8 +234,12 @@ function grassTuft(seed, pal) {
 
 function rock(seed, pal) {
   const r = rng(seed);
-  const g = lumpy(smoothGeo(new THREE.DodecahedronGeometry(1, 2)), 0.2, 2.5, seed);
-  xf(g, [0, 0.2, 0], [r(), r(), r()], [1 + r() * 0.6, 0.55 + r() * 0.3, 1 + r() * 0.4]);
+  // rocha facetada: dodecaedro com ruído forte e cortes planos (normais por face)
+  const g = lumpy(new THREE.DodecahedronGeometry(1, 1), 0.32, 1.7, seed);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const y = p.getY(i); if (y > 0.55) p.setY(i, 0.55 + (y - 0.55) * 0.3); if (y < -0.2) p.setY(i, -0.2); }
+  g.computeVertexNormals();
+  xf(g, [0, 0.2, 0], [r() * 0.4, r() * 6, r() * 0.4], [1 + r() * 0.6, 0.6 + r() * 0.4, 1 + r() * 0.4]);
   return colored(g, pal.rock, 0, 0.9);
 }
 
@@ -343,7 +347,9 @@ export class Flora {
     const forest = (x, z) => this.forestAt(body, C0.clone().addScaledVector(e1, x).addScaledVector(e2, z));
     const r = rng(hashStr(body.id + Math.round(center.x) + ':' + Math.round(center.z)));
     const lists = { trees: [], spirals: [], ferns: [], lanterns: [], grass: [], rocks: [] };
+    const clear = (this.clearings || []).filter((c2) => c2.body === body).map((c2) => ({ p: c2.local.clone().sub(C0).applyQuaternion(qInv), r: c2.radius }));
     const place = (kind, x, z, scale, slopeMax = 0.35, minH = 1.2) => {
+      if (clear.length && kind !== 'trees' && kind !== 'spirals') for (const c2 of clear) if (Math.hypot(c2.p.x - x, c2.p.z - z) < c2.r) return false;
       const s = sampleAt(x, z);
       if (hasSea && s.h < minH) return false;
       const s2 = sampleAt(x + 1.5, z), s3 = sampleAt(x, z + 1.5);
@@ -372,12 +378,13 @@ export class Flora {
       const x = Math.cos(a) * d, z = Math.sin(a) * d;
       const f = forest(x, z);
       const k = r();
+      if (d < 3) continue;
       if (k < 0.45) { if (r() < 0.3 + f * 0.7) place('ferns', x, z, 0.7 + r() * 0.8, 0.6); }
       else if (k < 0.55) { if (r() < f) place('lanterns', x, z, 0.8 + r() * 0.6, 0.6); }
       else place('rocks', x, z, 0.25 + r() * 0.9 * (r() < 0.1 ? 3 : 1), 0.9, -50);
     }
     if (body.type !== 'ice') {
-      const grassN = Math.round((lite ? 1600 : 9000) * dens);
+      const grassN = Math.round((lite ? 1600 : 9000) * dens * ({ lush: 1, ocean: 0.8, toxic: 0.6, desert: 0.1 }[body.type] ?? 0.5));
       for (let i = 0; i < grassN; i++) {
         const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 38;
         place('grass', Math.cos(a) * d, Math.sin(a) * d, 0.8 + r() * 1.1, 0.7);

@@ -21,7 +21,7 @@ const POSE = {
   shotgun: { hip: [0.168, -0.215, -0.32], rot: [1.2, 5, 0], ads: 0.2, aimFov: 0.85, handL: 'fore', handR: 'trigger' },
   sniper: { hip: [0.17, -0.212, -0.34], rot: [1, 4.5, 0], ads: 0.12, aimFov: 0.26, handL: 'cup', handR: 'trigger' },
   pistol: { hip: [0.13, -0.165, -0.36], rot: [2, 4, 0], ads: 0.28, aimFov: 0.86, handL: 'cup', handR: 'trigger' },
-  multitool: { hip: [0.15, -0.185, -0.32], rot: [4, 5, 0], ads: 0.26, aimFov: 0.92, handL: null, handR: 'trigger' },
+  multitool: { hip: [0.15, -0.17, -0.3], rot: [6, 22, -8], ads: 0.26, aimFov: 0.92, handL: null, handR: 'trigger' },
 };
 
 /** Material do clarão da boca (estrela com 4–6 pontas, HDR aditivo). */
@@ -81,11 +81,11 @@ export class ViewModel {
     this.flashMat = flashMaterial('#7fd8ff');
     this.sideMat = sideFlashMaterial('#7fd8ff');
     const fg = new THREE.Group();
-    const q1 = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.16), this.flashMat);
+    const q1 = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.3), this.flashMat);
     fg.add(q1);
     for (let k = 0; k < 3; k++) {
-      const s = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.2), this.sideMat);
-      s.geometry.translate(0, 0.1, 0); s.rotation.set(-Math.PI / 2, 0, k * Math.PI / 1.5, 'YXZ');
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.34), this.sideMat);
+      s.geometry.translate(0, 0.17, 0); s.rotation.set(-Math.PI / 2, 0, k * Math.PI / 1.5, 'YXZ');
       const w2 = new THREE.Group(); w2.rotation.z = k * Math.PI * 2 / 3; w2.add(s); s.rotation.set(-Math.PI / 2, 0, 0); fg.add(w2);
     }
     fg.visible = false; fg.renderOrder = 20;

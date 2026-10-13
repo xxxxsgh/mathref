@@ -6,7 +6,7 @@ import * as THREE from 'three/webgpu';
 import { Enemy } from './enemy.js';
 import { buildCamp, buildDeposit } from './props.js';
 import { LOOKS } from './humanoid.js';
-import { A } from '../projectiles.js';
+import { A, blast } from '../projectiles.js';
 import { COLORS } from '../beams.js';
 import { quatFromFwdUp, anyPerp, rng, hashStr } from '../util.js';
 
@@ -292,8 +292,7 @@ export class Director {
     if (info?.owner === 'player') {
       this.foot.onKill?.(e);
       if (e.kind === 'sentinel') {
-        const w = A.toWorld(e.anchor, e.center(new THREE.Vector3()), new THREE.Vector3(), this.ctx.time.world);
-        try { this.ctx.services.rendering?.explosion?.(w, 2.5, 'plasma', { vel: A.velAt(e.anchor, e.pos, new THREE.Vector3(), this.ctx.time.world) }); } catch { /* */ }
+        blast(this.ctx, e.anchor, e.center(new THREE.Vector3()), 2.6, 'energy');
       }
     }
     if (!others.length) {

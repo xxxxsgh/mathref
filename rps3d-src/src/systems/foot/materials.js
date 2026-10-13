@@ -29,11 +29,11 @@ export function paintMat(opts = {}) {
   const P = positionLocal.mul(scale);
   const n1 = fbm(P.mul(0.6).add(seed * 7.1));
   const n2 = vnoise(P.mul(7.0).add(seed));
-  const n3 = vnoise(P.mul(23.0));
+  const n3 = vnoise(P.mul(6.0));
   const curv = curvature();
   // lascas: aresta + ruído; manchas finas em superfícies planas
   const chip = smoothstep(0.62, 0.7, curv.mul(0.9).add(n1.mul(0.55)).add(n2.mul(0.2)).mul(U.wear.mul(0.9).add(0.3)));
-  const scratch = smoothstep(0.86, 0.95, vnoise(P.mul(vec3(40, 1.2, 40)).add(seed * 3.3))).mul(U.wear).mul(0.6);
+  const scratch = smoothstep(0.9, 0.97, vnoise(P.mul(vec3(14, 0.8, 14)).add(seed * 3.3))).mul(U.wear).mul(0.5);
   const bare = max(chip, scratch);
   const grm = smoothstep(0.35, 0.9, n1).mul(U.grime).mul(float(1).sub(curv));
   const base = U.color.mul(float(1).add(n1.sub(0.5).mul(tone * 2))).mul(float(1).sub(grm.mul(0.35)));
@@ -43,7 +43,7 @@ export function paintMat(opts = {}) {
   if (!lite) {
     m.clearcoatNode = float(clearcoat).mul(float(1).sub(bare)).mul(float(1).sub(grm));
     m.clearcoatRoughnessNode = float(0.25);
-    m.normalNode = bumpNormal(n3.mul(0.00012).add(bare.mul(-0.00025)), 1);
+    m.normalNode = bumpNormal(n3.mul(0.00004).add(bare.mul(-0.00012)), 1);
   }
   m.emissiveNode = vec3(1.0, 0.32, 0.08).mul(U.heat.mul(U.heat).mul(4));
   m.userData.U = U;
