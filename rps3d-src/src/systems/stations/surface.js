@@ -144,7 +144,7 @@ function buildOutpost(k, s, lite) {
     k.pop();
   };
   hab(V3(-14, 0.4, -10), 16, 0);
-  hab(V3(-14, 0.4, 2), 16, 0, Z.ACCENT);
+  hab(V3(-14, 0.4, 2), 16, 0, Z.PAINT);
   hab(V3(6, 0.4, -14), 12, Math.PI / 2);
   // ligação (túnel)
   k.box(L, 3.2, 3, 6, V3(-14, 2.4, -4), null, Z.DARK);
@@ -164,7 +164,7 @@ function buildOutpost(k, s, lite) {
   for (let i = 0; i < 16; i++) { const a = (i / 16) * TAU; k.light(V3(14 + Math.cos(a) * 11.2, 0.8, 12 + Math.sin(a) * 11.2), [1.0, 6, 3], 0.12, -0.6, i / 16); }
   // tanques e contêineres
   for (let i = 0; i < 3; i++) { k.cyl(L, 1.8, 1.8, 6, V3(-27, 3.4, -16 + i * 4.2), null, Z.METAL, 20); k.sphere(L, 1.8, V3(-27, 6.4, -16 + i * 4.2), Z.METAL, 16, 8); k.box(L, 2, 0.6, 2, V3(-27, 0.6, -16 + i * 4.2), null, Z.DARK); }
-  for (let i = 0; i < 5; i++) k.box(L, 6, 2.6, 2.5, V3(-2 + (i % 3) * 0.4, 1.7 + Math.floor(i / 3) * 2.6, 16 + (i % 3) * 2.7), [0, r() * 0.1, 0], i % 2 ? Z.ACCENT : Z.RUST);
+  for (let i = 0; i < 5; i++) k.box(L, 6, 2.6, 2.5, V3(-2 + (i % 3) * 0.4, 1.7 + Math.floor(i / 3) * 2.6, 16 + (i % 3) * 2.7), [0, r() * 0.1, 0], i % 3 === 0 ? Z.ACCENT : i % 3 === 1 ? Z.RUST : Z.METAL);
   // campo solar
   for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) {
     const p = V3(-38 - j * 7, 0, -10 + i * 8); p.y = s.gy(p.x, p.z) + 1.6;
@@ -181,8 +181,8 @@ function buildOutpost(k, s, lite) {
   // barreiras
   for (let i = 0; i < 22; i++) {
     const a = (i / 22) * TAU;
-    const p = V3(Math.cos(a) * 40, 0, Math.sin(a) * 30); p.y = s.gy(p.x, p.z) + 0.45;
-    k.box(L, 3, 1.2, 0.6, p, [0, -a + Math.PI / 2, 0], i % 4 ? Z.CONCRETE : Z.HAZARD);
+    const p = V3(Math.cos(a) * 40, 0, Math.sin(a) * 30); p.y = s.gy(p.x, p.z) - 0.3;
+    k.box(L, 3, 2.4, 0.6, p, [0, -a + Math.PI / 2, 0], i % 4 ? Z.CONCRETE : Z.HAZARD);
   }
   lightRing(k, 8.6, 5.2, 12, [1.0, 4, 3], 0.08, 0);
   // tubos pressurizados entre os módulos
@@ -311,13 +311,24 @@ export class Surface {
     let info = {};
     let style = s.faction === 'hegemonia' ? 'hegemonia' : s.faction === 'frente' ? 'frente' : 'industrial';
     // altura do relevo (m) no plano local da estrutura — para assentar peças afastadas no chão
-    const pl = ctx.services.planets, b0 = s.body, R0 = s.local.length();
+    const pl = ctx.services.planets, b0 = s.body;
+    let R0 = s.local.length();
     s.gy = (x, z) => {
       const loc = s.local.clone().add(V3(x, 0, z).applyQuaternion(s.quatL));
       let h = 0; try { h = pl?.heightAtLocal?.(b0, loc) ?? 0; } catch { h = 0; }
       const v = pl?.view?.(b0); if (v?.terrain?.hasSea) h = Math.max(h, 0);
       return Math.max(-8, Math.min(8, b0.radius + h - R0 - (x * x + z * z) / (2 * R0)));
     };
+    // assenta a fundação no ponto mais baixo do terreno sob ela (a areia cobre o lado alto)
+    if (!s.settled) {
+      s.settled = true;
+      const ext = s.kind === 'ruins' ? 40 : s.kind === 'outpost' ? 30 : s.kind === 'bunker' ? 14 : 0;
+      if (ext) {
+        let mn = Infinity;
+        for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) mn = Math.min(mn, s.gy(i * ext / 2, j * ext / 2));
+        if (mn < -0.2 && mn > -8) { s.local.addScaledVector(s.up, mn + 0.15); R0 = s.local.length(); }
+      }
+    }
     if (s.kind === 'ruins') { info = buildRuins(k, s, lite); style = 'guilda'; }
     else if (s.kind === 'outpost') info = buildOutpost(k, s, lite);
     else if (s.kind === 'bunker') info = buildBunker(k, s, lite);
@@ -404,6 +415,23 @@ export class Surface {
         } catch { /* */ }
       }
     });
+    // membrana de energia dentro do anel + fragmentos flutuando em volta
+    const mem = new THREE.Mesh(new THREE.CircleGeometry(19.5, 64), makeHoloMaterial([0.3, 0.8, 1.7], { lines: 3, alpha: 0.9, scroll: 0.15, rim: false }));
+    mem.position.copy(info.portal); g.add(mem);
+    const fragMat = this.material('guilda', lite);
+    const fr = rng(s.seed + 11);
+    pz.frags = [];
+    for (let i = 0; i < 9; i++) {
+      const geo = new THREE.BoxGeometry(3 + fr() * 4, 2 + fr() * 3, 2 + fr() * 3);
+      const n = geo.attributes.position.count, ai = new Float32Array(n * 3);
+      for (let j = 0; j < n; j++) { ai[j * 3] = Z.ALIEN; ai[j * 3 + 1] = fr(); }
+      geo.setAttribute('aInfo', new THREE.BufferAttribute(ai, 3));
+      const o = new THREE.Mesh(geo, fragMat);
+      const a = fr() * Math.PI * 2, rr = 24 + fr() * 6;
+      o.userData.base = info.portal.clone().add(V3(Math.cos(a) * rr, Math.sin(a) * rr * 0.9, (fr() - 0.5) * 6));
+      o.userData.ph = fr() * 6; o.rotation.set(fr() * 3, fr() * 3, fr() * 3);
+      o.castShadow = true; g.add(o); pz.frags.push(o);
+    }
     // porta antiga (laje que desce quando resolvido)
     const dm = this.material('guilda', lite);
     const door = new THREE.Mesh(new THREE.BoxGeometry(17, 18, 2.2), dm);
@@ -527,6 +555,7 @@ export class Surface {
       const pz = s.puzzle;
       if (pz) {
         pz.prisms.forEach((c, i) => { c.position.y = s.info.top + 2.6 + Math.sin(ctx.time.now * 1.3 + i) * 0.15; });
+        for (const f of pz.frags || []) { const u = f.userData; f.position.copy(u.base); f.position.y += Math.sin(ctx.time.now * 0.6 + u.ph) * 0.8; f.rotation.y += dt * 0.1; }
         if (pz.solved && pz.doorT < 1) {
           pz.doorT = Math.min(1, pz.doorT + dt / 6);
           pz.door.position.y = s.info.door.y + 9 - pz.doorT * 18.5;

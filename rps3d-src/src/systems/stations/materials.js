@@ -105,7 +105,7 @@ export function makeHullMaterial(styleName = 'guilda', { lite = false, scale = 3
   // ── rocha (asteroides escavados) e ferrugem
   const rk1 = fbm(P.mul(0.035).add(seed.mul(3.0)));
   const rk2 = fbm(P.mul(0.31).add(11.0));
-  const rockCol = mix(vec3(0.09, 0.085, 0.08), vec3(0.2, 0.18, 0.16), rk1).mul(rk2.mul(0.5).add(0.7));
+  const rockCol = mix(vec3(0.05, 0.047, 0.045), vec3(0.13, 0.115, 0.1), rk1).mul(rk2.mul(0.5).add(0.7));
   const rustCol = mix(vec3(0.16, 0.07, 0.03), vec3(0.3, 0.15, 0.07), rk2).mul(pid.mul(0.3).add(0.8));
 
   // ── pintura
@@ -150,19 +150,19 @@ export function makeHullMaterial(styleName = 'guilda', { lite = false, scale = 3
   albedo = albedo.mul(float(1).sub(seam.mul(0.38).mul(zP.add(zA).add(zD).add(zM).add(zRu)))).mul(float(1).sub(macroLine.mul(0.35).mul(zP.add(zA).add(zD))));
   m.colorNode = albedo;
 
-  const metal = zAl.mul(0.25).add(zD.mul(0.6)).add(zM.mul(0.92)).add(zS.mul(0.35)).add(zR.mul(0.7)).add(zP.add(zA).mul(chip.mul(0.9).add(0.08))).add(zW.mul(inWin.oneMinus().mul(0.6)));
+  const metal = zAl.mul(0.1).add(zD.mul(0.6)).add(zM.mul(0.92)).add(zS.mul(0.35)).add(zR.mul(0.7)).add(zP.add(zA).mul(chip.mul(0.9).add(0.08))).add(zW.mul(inWin.oneMinus().mul(0.6)));
   m.metalnessNode = clamp(metal, 0, 1);
   const rough = zP.add(zA).mul(float(0.42).add(grime.mul(0.3)).sub(pid.mul(0.08)))
     .add(zD.mul(0.55)).add(zM.mul(float(0.22).add(g1.mul(0.25))))
     .add(zW.mul(mix(float(0.35), float(0.05), inWin))).add(zS.mul(mix(float(0.12), float(0.3), sgrid)))
-    .add(zR.mul(0.45)).add(zG.mul(0.3)).add(zH.mul(0.5)).add(zGl.mul(0.04)).add(zRk.mul(0.92)).add(zRu.mul(0.75)).add(zCo.mul(0.88)).add(zAl.mul(float(0.16).add(al1.mul(0.2)))).add(zAg.mul(0.2));
+    .add(zR.mul(0.45)).add(zG.mul(0.3)).add(zH.mul(0.5)).add(zGl.mul(0.04)).add(zRk.mul(0.92)).add(zRu.mul(0.75)).add(zCo.mul(0.88)).add(zAl.mul(float(0.4).add(al1.mul(0.25)))).add(zAg.mul(0.2));
   m.roughnessNode = clamp(rough, 0.03, 1);
 
   // emissivo: janelas acesas, faixas luminosas, leve calor nos radiadores
   const winE = wcol.mul(inWin).mul(on).mul(sill).mul(2.4);
   const glowE = U.glow.mul(vnoise(vec3(P.mul(0.3))).mul(0.3).add(0.85));
   const vig = vec3(0.35, 0.75, 1.6).mul(U.alienGlow);
-  m.emissiveNode = vig.mul(glyph).mul(pulse.mul(0.7).add(0.3)).mul(zAl).add(vig.mul(1.6).mul(zAg)).add(winE.mul(zW)).add(glowE.mul(zG)).add(vec3(0.5, 0.12, 0.03).mul(smoothstep(0.85, 1.0, fin)).mul(0.08).mul(zR));
+  m.emissiveNode = vec3(0.015, 0.04, 0.02).mul(zGl).add(vig.mul(glyph).mul(pulse.mul(0.7).add(0.3)).mul(zAl)).add(vig.mul(1.6).mul(zAg)).add(winE.mul(zW)).add(glowE.mul(zG)).add(vec3(0.5, 0.12, 0.03).mul(smoothstep(0.85, 1.0, fin)).mul(0.08).mul(zR));
 
   if (!lite) {
     // juntas afundadas + chapas levemente desalinhadas + rebites

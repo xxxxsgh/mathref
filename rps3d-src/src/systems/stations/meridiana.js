@@ -156,16 +156,16 @@ function habitatRing(k, lite) {
   k.ring(L, R + W * 0.1, W * 0.45, 8, -H / 2 - 4, seg, { outer: Z.DARK, inner: Z.DARK, top: null, bottom: Z.METAL });
   k.ring(L, R - W * 0.32, 3, 3, -H / 2 - 9, seg, { outer: Z.ACCENT, inner: Z.ACCENT, top: null, bottom: Z.ACCENT });
   // jardins: abóbadas de vidro no teto do anel (estufas iluminadas)
-  for (let i = 0; i < seg; i += 2) {
+  for (let i = 0; i < seg; i += 4) {
     const a0 = (i / seg) * Math.PI * 2;
     const am = a0 + Math.PI / seg;
     const n = V3(Math.sin(am), 0, Math.cos(am));
     const t = V3(Math.cos(am), 0, -Math.sin(am));
     const len = (2 * Math.PI * R / seg) * 1.6;
-    const g = new THREE.CylinderGeometry(W * 0.26, W * 0.26, len, 16, 1, false, 0, Math.PI);
+    const g = new THREE.CylinderGeometry(W * 0.17, W * 0.17, len, 16, 1, false, 0, Math.PI);
     g.rotateZ(Math.PI / 2);
     k.add(L, g, mat(n.clone().multiplyScalar(R).setY(H / 2), new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(t, V3(0, 1, 0), V3().crossVectors(t, V3(0, 1, 0))))), Z.GLASS);
-    if (i % 4 === 0) k.light(n.clone().multiplyScalar(R).setY(H / 2 + W * 0.12), [0.8, 2.6, 0.9], 1.6, 0);
+    k.light(n.clone().multiplyScalar(R).setY(H / 2 + W * 0.08), [0.8, 2.6, 0.9], 1.2, 0);
   }
   // cavernas estruturais, módulos e luzes
   const nRib = lite ? 24 : 48;

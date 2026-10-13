@@ -13,6 +13,7 @@
 // Cada uma exporta { layout(st) → {radius, bays}, build(st, opts) → {kit, ring?, animate?} }.
 import * as THREE from 'three/webgpu';
 import { Kit, V3, mat, rng } from './geo.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ZONE as Z } from './materials.js';
 import { greebleRect, tankRing, dish, mast, radiator, solarWing, nozzle, lightRing, dockMouth, portholes } from './modules.js';
 import { bayCavity } from './meridiana.js';
@@ -136,7 +137,9 @@ export const buildRebel = {
   build(st, { lite }) {
     const k = new Kit(st.seed || 777);
     const R = 300;
-    const g = new THREE.IcosahedronGeometry(R, lite ? 5 : 6);
+    let g = new THREE.IcosahedronGeometry(R, lite ? 24 : 44);
+    g.deleteAttribute('normal'); g.deleteAttribute('uv');
+    g = mergeVertices(g);
     const p = g.attributes.position;
     const r = rng(st.seed || 77);
     const ph = [r() * 10, r() * 10, r() * 10];
@@ -149,14 +152,19 @@ export const buildRebel = {
     for (let i = 0; i < p.count; i++) {
       const v = V3(p.getX(i), p.getY(i), p.getZ(i));
       const n = v.clone().normalize();
-      let rr = R * (1 + 0.22 * noise(v.x, v.y, v.z) + 0.08 * Math.sin(n.x * 3 + n.y * 2));
+      const ridge = 1 - Math.abs(Math.sin(n.x * 9.1 + ph[0]) * Math.sin(n.y * 7.3 + ph[1]) * Math.sin(n.z * 8.2 + ph[2]));
+      let rr = R * (1 + 0.22 * noise(v.x, v.y, v.z) + 0.08 * Math.sin(n.x * 3 + n.y * 2) + 0.035 * ridge * ridge + 0.012 * noise(v.x * 6, v.y * 6, v.z * 6));
       rr *= 1 + 0.25 * Math.max(0, n.x) * 0.6 - 0.12 * Math.max(0, -n.y); // alongado
       v.copy(n).multiplyScalar(rr);
       if (v.z > zcut && Math.abs(v.x) < 160 && Math.abs(v.y) < 120) v.z = zcut + Math.max(0, (Math.max(Math.abs(v.x) - 110, Math.abs(v.y) - 80)) * 0.6);
       p.setXYZ(i, v.x, v.y, v.z);
     }
+    // normais suaves ANTES de desindexar (senão a rocha fica facetada)
+    g.computeVertexNormals();
     // remove os triângulos da boca do hangar
     const ng = g.toNonIndexed();
+    const nn = ng.attributes.normal;
+    const keepN = [];
     const pp = ng.attributes.position;
     const keep = [];
     for (let t = 0; t < pp.count; t += 3) {
@@ -165,11 +173,11 @@ export const buildRebel = {
         const x = pp.getX(t + j), y = pp.getY(t + j), z = pp.getZ(t + j);
         if (!(z > zcut - 6 && Math.abs(x) < 31 && y > -26 && y < 2)) inMouth = false;
       }
-      if (!inMouth) for (let j = 0; j < 3; j++) keep.push(pp.getX(t + j), pp.getY(t + j), pp.getZ(t + j));
+      if (!inMouth) for (let j = 0; j < 3; j++) { keep.push(pp.getX(t + j), pp.getY(t + j), pp.getZ(t + j)); keepN.push(nn.getX(t + j), nn.getY(t + j), nn.getZ(t + j)); }
     }
     const rock = new THREE.BufferGeometry();
     rock.setAttribute('position', new THREE.Float32BufferAttribute(keep, 3));
-    rock.computeVertexNormals();
+    rock.setAttribute('normal', new THREE.Float32BufferAttribute(keepN, 3));
     // UV em metros (projeção esférica)
     const uv = new Float32Array((keep.length / 3) * 2);
     for (let i = 0; i < keep.length / 3; i++) { const x = keep[i * 3], y = keep[i * 3 + 1], z = keep[i * 3 + 2]; uv[i * 2] = Math.atan2(x, z) * R; uv[i * 2 + 1] = y; }
