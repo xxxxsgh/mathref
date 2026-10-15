@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com cinco sites estáticos publicados pelo GitHub Pages.
+Repositório com seis sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -9,6 +9,7 @@ Repositório com cinco sites estáticos publicados pelo GitHub Pages.
 | [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
 | [`/arena/`](https://xxxxsgh.github.io/mathref/arena/) | **NULLPOINT** — FPS tático de arena com skins e inspeção de faca |
 | [`/ironline/`](https://xxxxsgh.github.io/mathref/ironline/) | **IRONLINE** — FPS militar com arquitetura de features plugáveis |
+| [`/umbra/`](https://xxxxsgh.github.io/mathref/umbra/) | **Rafa Paoli: Núcleo de Umbra** — mineração e sobrevivência top-down (arquivo único, sem build) |
 
 ## Publicação
 
