@@ -81,11 +81,11 @@ h2{margin:0 0 4px;letter-spacing:4px;color:#ffd25a;text-shadow:3px 3px 0 #3a2a08
 
 <div id="ov-title" class="ov clear">
   <div class="logo">RAFA PAOLI<span>NÚCLEO DE UMBRA</span></div>
-  <div class="sub">FASE 2 · SOBREVIVÊNCIA E BASE</div>
+  <div class="sub">FASE 2 + ARMAS E CRIATURAS</div>
   <div id="t-info" class="sub"></div>
   <button class="px" id="b-cont">Continuar</button>
   <button class="px" id="b-new">Novo jogo</button>
-  <div class="help">Toque: arraste à esquerda para andar · toque no mundo para usar o item · botão ✋ para interagir · bolsa para inventário e fabricação.<br>PC: WASD anda · clique esquerdo usa o item · clique direito cava · 1-8 barra · E interage · I/Tab bolsa · M mapa · Esc pausa</div>
+  <div class="help">Toque: arraste à esquerda para andar · toque no mundo para usar o item · botão ✋ para interagir · bolsa para inventário e fabricação.<br>PC: WASD anda · clique esquerdo usa o item · clique direito cava · 1-8 barra · Shift esquiva · E interage · I/Tab bolsa · M mapa · Esc pausa</div>
 </div>
 
 <div id="ov-pause" class="ov hidden">
@@ -95,7 +95,7 @@ h2{margin:0 0 4px;letter-spacing:4px;color:#ffd25a;text-shadow:3px 3px 0 #3a2a08
   <button class="px" id="p-sound">Som: ligado</button>
   <button class="px" id="p-title">Salvar e ir ao menu</button>
   <div id="p-stats" class="help"></div>
-  <div class="help"><b>Começo:</b> corte árvores (madeira) e capim (fibra), cave pedra e abra a bolsa para fazer a Bancada. Dela saem fornalha, baú, cama, enxada… A fome cai com o tempo: coma bagas, plante e cozinhe na Panela. À noite fica escuro: faça tochas. Dentro das montanhas, as cavernas são sempre escuras.</div>
+  <div class="help"><b>Começo:</b> corte árvores (madeira) e capim (fibra), cave pedra e abra a bolsa para fazer a Bancada. Dela saem fornalha, baú, cama, enxada… A fome cai com o tempo: coma bagas, plante e cozinhe na Panela. À noite fica escuro: faça tochas. Dentro das montanhas, as cavernas são sempre escuras.<br><b>Combate:</b> criaturas nascem no escuro (noite e cavernas) e evitam a luz. A pistola gasta células (Bancada: sucata + cobre). Esquiva (Shift ou »): invencível por um instante. Destrua ninhos para parar de vir criatura. Olheiros gritam e chamam reforços; larvas saem das paredes quando você cava; marcas vermelhas no chão avisam onde vai cair o golpe.</div>
 </div>
 
 <div id="ov-inv" class="ov top hidden">
@@ -142,7 +142,7 @@ const CFG = {
   REACH: 2.9, SPEED: 4.6,
   LIGHT_RMAX: 10, AMBIENT: [4, 3, 8], EXPLORE_LIGHT: 60,
   CACHE_MAX: 20, GEN_PER_FRAME: 2,
-  SAVE_KEY: 'umbra_nucleo_save', OPT_KEY: 'umbra_nucleo_opts', SAVE_VERSION: 2, AUTOSAVE_S: 45,
+  SAVE_KEY: 'umbra_nucleo_save', OPT_KEY: 'umbra_nucleo_opts', SAVE_VERSION: 3, AUTOSAVE_S: 45,
   INV_SIZE: 32, HOTBAR: 8, CHEST_SIZE: 20, STACK: 99,
   DAY_S: 720,          // 1 dia de Umbra = 12 min reais
   HUNGER_S: 1100,      // fome cheia → vazia em ~1,5 dia
@@ -238,7 +238,7 @@ FLOORS[F_QUEIMADO] = { key: 'fqueim', nome: 'Chão queimado', c: '#2c2420', pat:
 
 const O_TOCHA = 1, O_COGUMELO = 2, O_CRISTALP = 3, O_LANTERNA = 4, O_POSTE = 5, O_ARBUSTO = 6, O_ARBUSTO_V = 7, O_CAPIM = 8,
   O_JUNCO = 9, O_PLANTA = 10, O_BANCADA = 11, O_FORNALHA = 12, O_BIGORNA = 13, O_PANELA = 14, O_ENGENHARIA = 15,
-  O_BAU = 16, O_CAMA = 17, O_PORTA = 18, O_CERCA = 19, O_VASO = 20;
+  O_BAU = 16, O_CAMA = 17, O_PORTA = 18, O_CERCA = 19, O_VASO = 20, O_NINHO_R = 21, O_NINHO_U = 22, O_NINHO_E = 23;
 const OBJS = [];
 OBJS[O_TOCHA]      = { nome: 'Tocha', item: 'tocha', hp: 1, emit: [255, 165, 75, 9], mm: [255, 190, 90] };
 OBJS[O_COGUMELO]   = { nome: 'Cogumelo luminoso', item: 'cogumelo', hp: 1, emit: [70, 240, 150, 4], mm: [90, 240, 160], nat: true };
@@ -260,6 +260,9 @@ OBJS[O_CAMA]       = { nome: 'Cama', item: 'cama', hp: 3, solid: true, bed: true
 OBJS[O_PORTA]      = { nome: 'Porta', item: 'porta', hp: 3, opaque: true, door: true, mm: [140, 95, 55] };
 OBJS[O_CERCA]      = { nome: 'Cerca', item: 'cerca', hp: 2, solid: true, mm: [150, 110, 70] };
 OBJS[O_VASO]       = { nome: 'Vaso de flores', item: 'vaso', hp: 1, solid: true, mm: [200, 110, 150] };
+OBJS[O_NINHO_R]    = { nome: 'Ninho de rastejantes', solid: true, nest: 'rastejante', nhp: 60, mm: [150, 70, 160] };
+OBJS[O_NINHO_U]    = { nome: 'Toca de uivantes', solid: true, nest: 'uivante', nhp: 70, mm: [150, 100, 70] };
+OBJS[O_NINHO_E]    = { nome: 'Casulo de esporos', solid: true, nest: 'esporo', nhp: 50, emit: [60, 200, 120, 3], mm: [90, 200, 140] };
 
 // Cores derivadas (contornos, minimapa)
 for (const d of WALLS) if (d) {
@@ -318,6 +321,17 @@ function defineItems() {
   I('raiz_pedra', { nome: 'Raiz-pedra', desc: 'Tubérculo duro. Na Panela dá Mineração rápida.', eat: true, food: 16, ing: true, eff: 'mineracao', col: '#b0a090', icon: rootIcon });
   I('pimenta_brasa', { nome: 'Pimenta-brasa', desc: 'Arde muito. Na Panela dá Resistência.', eat: true, food: 5, ing: true, eff: 'resistencia', col: '#ff5a2a', icon: pepperIcon });
   I('cogumelo_cinza', { nome: 'Cogumelo-cinza', desc: 'Cresce no escuro. Sustenta muito.', eat: true, food: 22, ing: true, eff: null, col: '#a8a8b8', icon: greyIcon });
+  // armas e combate
+  const melee = (dmg, cd, range, kb) => ({ type: 'melee', dmg, cd, range, kb });
+  I('clava', { nome: 'Clava de madeira', desc: 'Arma corpo a corpo simples. Dano 7.', stack: 1, weapon: melee(7, 0.42, 1.35, 5), icon: clubIcon });
+  I('lamina_cobre', { nome: 'Lâmina de cobre', desc: 'Corpo a corpo. Dano 12.', stack: 1, weapon: melee(12, 0.36, 1.5, 6), icon: () => bladeIcon('#e8884a') });
+  I('lamina_estanho', { nome: 'Lâmina de estanho', desc: 'Corpo a corpo. Dano 17.', stack: 1, weapon: melee(17, 0.34, 1.55, 6), icon: () => bladeIcon('#cfdbe3') });
+  I('lamina_ferro', { nome: 'Lâmina de ferro', desc: 'Corpo a corpo. Dano 24.', stack: 1, weapon: melee(24, 0.32, 1.6, 7), icon: () => bladeIcon('#a8b0bc') });
+  I('pistola_energia', { nome: 'Pistola de energia improvisada', desc: 'Montada com peças da nave. Dano 6 · gasta 1 célula por tiro.', stack: 1, weapon: { type: 'gun', dmg: 6, cd: 0.33, speed: 15, range: 9, ammo: 'celula' }, icon: () => gunIcon('#5fe3ff', false) });
+  I('rifle_energia', { nome: 'Rifle de energia', desc: 'Dano 13, tiro rápido · gasta 1 célula por tiro.', stack: 1, weapon: { type: 'gun', dmg: 13, cd: 0.2, speed: 18, range: 11, ammo: 'celula' }, icon: () => gunIcon('#9affb8', true) });
+  I('celula', { nome: 'Célula de energia', desc: 'Munição das armas de energia (1 por tiro).', icon: cellIcon });
+  I('quitina', { nome: 'Quitina', desc: 'Casca dura das criaturas. Para forjar lâminas.', icon: chitinIcon });
+  I('carne', { nome: 'Carne alienígena', desc: 'Crua mata a fome. Boa base na Panela.', eat: true, food: 10, ing: true, eff: null, col: '#c85a5a', icon: meatIcon });
   I('semente_raiz', { nome: 'Semente de raiz-pedra', desc: 'Plante em terra arada. 4 dias. Precisa de luz (céu ou tocha).', seed: 'raiz', icon: () => seedIcon('#b0a090') });
   I('semente_baga', { nome: 'Semente de baga-luz', desc: 'Plante em terra arada. 5 dias. Precisa de luz (céu ou tocha).', seed: 'baga', icon: () => seedIcon('#ff6ad5') });
   I('semente_pimenta', { nome: 'Semente de pimenta-brasa', desc: 'Plante em terra arada. 6 dias. Só cresce perto de tocha ou lanterna.', seed: 'pimenta', icon: () => seedIcon('#ff5a2a') });
@@ -340,6 +354,8 @@ function getIt(id) {
 const RECIPES = [
   { st: 'mao', out: 'bancada', n: 1, ing: { madeira: 8 } },
   { st: 'mao', out: 'tocha', n: 4, ing: { madeira: 1, fibra: 1 } },
+  { st: 'mao', out: 'clava', n: 1, ing: { madeira: 5, fibra: 2 } },
+  { st: 'bancada', out: 'celula', n: 10, ing: { sucata: 1, cobre: 1 } },
   { st: 'bancada', out: 'fornalha', n: 1, ing: { pedra: 12, madeira: 4 } },
   { st: 'bancada', out: 'bau', n: 1, ing: { madeira: 10 } },
   { st: 'bancada', out: 'enxada', n: 1, ing: { madeira: 4, pedra: 2 } },
@@ -361,6 +377,10 @@ const RECIPES = [
   { st: 'bigorna', out: 'lanterna', n: 1, ing: { barra_cobre: 1, tocha: 1 } },
   { st: 'bigorna', out: 'picareta_estanho', n: 1, ing: { barra_estanho: 6, madeira: 3 } },
   { st: 'bigorna', out: 'engenharia', n: 1, ing: { barra_estanho: 4, barra_cobre: 4, sucata: 6 } },
+  { st: 'bigorna', out: 'lamina_cobre', n: 1, ing: { barra_cobre: 4, quitina: 2 } },
+  { st: 'bigorna', out: 'lamina_estanho', n: 1, ing: { barra_estanho: 4, quitina: 3 } },
+  { st: 'engenharia', out: 'lamina_ferro', n: 1, ing: { barra_ferro: 4, quitina: 4 } },
+  { st: 'engenharia', out: 'rifle_energia', n: 1, ing: { barra_ferro: 2, barra_estanho: 3, sucata: 8 } },
   { st: 'engenharia', out: 'picareta_ferro', n: 1, ing: { barra_ferro: 6, barra_estanho: 2, madeira: 3 } },
   { st: 'engenharia', out: 'poste_cristal', n: 1, ing: { cristal: 2, barra_ferro: 1 } },
 ];
@@ -609,6 +629,7 @@ function buildSprites() {
   }
   SPR.glow.warm = radialGlow('255,170,80'); SPR.glow.green = radialGlow('90,255,170'); SPR.glow.purple = radialGlow('170,110,255'); SPR.glow.blue = radialGlow('120,170,255');
   SPR.core = genCoreSprite();
+  buildEnemySprites();
   SPR.cloud = (() => { const c = mk(128, 80), g = c.getContext('2d'); for (const [x, y, r] of [[40, 40, 30], [70, 34, 34], [96, 46, 24], [58, 52, 26]]) { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(0,0,0,0.9)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 80); } return c; })();
 }
 const ICON_CACHE = new Map(), URL_CACHE = new Map();
@@ -737,6 +758,11 @@ function genTile(x, y) {
         if (n2 > 0.62) f = F_LAVA; else if (h < 0.03) w = ore > 0.7 ? W_MAGMATITA : W_BASALTO;
         break;
     }
+  }
+  // ninhos: em cavernas (rastejantes) e na superfície (uivantes, esporos)
+  if (!w && !o && FLOORS[f] && !FLOORS[f].solid && dc > 30) {
+    const hn = hash3(x, y, seed + 333);
+    if (r && b <= 3 && hn < 0.003) o = O_NINHO_R; else if (!r && b === 1 && hn < 0.0015) o = O_NINHO_U; else if (!r && b === 2 && hn < 0.0007) o = O_NINHO_E;
   }
   tW[i] = w; tF[i] = f; tO[i] = o; tRoof[i] = r;
 }
@@ -1090,6 +1116,14 @@ const AU = {
   eat() { for (let k = 0; k < 3; k++) this.burst(0.06, 0.18, 'bandpass', 700 + k * 120, 4, 0, false); this.tone(300, 0.1, 'sine', 0.05, 420, 0.2); },
   till() { this.burst(0.12, 0.3, 'lowpass', 600, 1, 200); },
   water() { this.burst(0.25, 0.15, 'bandpass', 2400, 1.5, 900); this.tone(900, 0.08, 'sine', 0.04, 1300); },
+  zap() { this.tone(1300, 0.09, 'square', 0.05, 280); this.burst(0.05, 0.12, 'highpass', 3000, 1); },
+  swing() { this.burst(0.12, 0.14, 'bandpass', 1800, 1.2, 600); },
+  hitE() { this.burst(0.06, 0.25, 'lowpass', 900, 1); this.tone(160, 0.06, 'square', 0.06, 90); },
+  dieE() { this.burst(0.3, 0.3, 'lowpass', 700, 1, 120, true); this.tone(300, 0.25, 'sawtooth', 0.05, 60); },
+  screech() { for (let k = 0; k < 3; k++) this.tone(1600 + k * 300, 0.14, 'sawtooth', 0.05, 2600, k * 0.09, true); },
+  growl() { this.tone(90, 0.3, 'sawtooth', 0.07, 60); this.burst(0.25, 0.12, 'lowpass', 400, 2); },
+  spit() { this.burst(0.15, 0.2, 'bandpass', 1200, 3, 400); },
+  roll() { this.burst(0.15, 0.14, 'lowpass', 500, 1); },
   hurt() { this.tone(220, 0.15, 'sawtooth', 0.12, 90); this.burst(0.08, 0.2, 'lowpass', 800, 1); },
   sleep() { [523, 392, 330, 262].forEach((f, k) => this.tone(f, 0.5, 'sine', 0.08, 0, k * 0.25, true)); },
   morning() { [262, 330, 392, 523].forEach((f, k) => this.tone(f, 0.35, 'triangle', 0.07, 0, k * 0.15)); },
@@ -1103,7 +1137,7 @@ const AU = {
 /* ==========================================================================
    JOGADOR
    ========================================================================== */
-const player = { x: CX + 0.5, y: CY + 3.5, dir: 0, fx: 0, fy: 1, walkT: 0, moving: false, cd: 0, swing: 0, stepT: 0 };
+const player = { x: CX + 0.5, y: CY + 3.5, dir: 0, fx: 0, fy: 1, walkT: 0, moving: false, cd: 0, swing: 0, stepT: 0, vx: 0, vy: 0, kx: 0, ky: 0, iframe: 0, roll: 0, rollCd: 0, rdx: 0, rdy: 1 };
 const cam = { x: 0, y: 0 };
 let shakeAmt = 0;
 const BOX_RX = 0.3, BOX_RY = 0.22;
@@ -1183,7 +1217,9 @@ function respawn() {
   }
   player.x = x; player.y = y; cam.x = x; cam.y = y;
   stats.hp = 60; stats.hunger = Math.max(stats.hunger, 40); buffs = [];
-  dialog = { lines: ['Você desmaiou' + (dead.src === 'fome' ? ' de fome.' : dead.src === 'calor' ? ' com o calor.' : '.'), 'Acordou ' + where + '. Seus itens estão com você.'], t: 6 };
+  dialog = { lines: ['Você desmaiou' + (dead.src === 'fome' ? ' de fome.' : dead.src === 'calor' ? ' com o calor.' : dead.src === 'inimigo' ? ' com os ataques.' : '.'), 'Acordou ' + where + '. Seus itens estão com você.'], t: 6 };
+  enemies = enemies.filter(e => Math.hypot(e.x - x, e.y - y) > 24); bullets = []; marks = [];
+  player.kx = player.ky = 0; player.iframe = 2;
   dead = null; dynKey = '';
 }
 
@@ -1202,13 +1238,14 @@ function addTo(arr, id, n) {
   for (let k = 0; k < arr.length && n > 0; k++) if (!arr[k]) { const mv = Math.min(st, n); arr[k] = newStack(id, mv); n -= mv; }
   return n;
 }
+function feedAdd(id, got) {
+  const f = feed.find(e => e.id === id && e.t > 0.6);
+  if (f) { f.n += got; f.t = 2.6; } else { feed.push({ id, n: got, t: 2.6 }); if (feed.length > 5) feed.shift(); }
+}
 function addItem(id, n, quiet) {
   const left = addTo(inv, id, n), got = n - left;
-  if (got > 0 && !quiet) {
-    const f = feed.find(e => e.id === id && e.t > 0.6);
-    if (f) { f.n += got; f.t = 2.6; } else { feed.push({ id, n: got, t: 2.6 }); if (feed.length > 5) feed.shift(); }
-  }
-  if (left > 0) hint(`Bolsa cheia: ${left} ${getIt(id).nome.toLowerCase()} perdido(s).`);
+  if (got > 0 && !quiet) feedAdd(id, got);
+  if (left > 0) { spawnDrop(id, left, player.x, player.y); hint('Bolsa cheia: o que não coube ficou no chão.'); }
   return left;
 }
 function countItem(id) { let n = 0; for (const s of inv) if (s && s.id === id) n += s.n; return n; }
@@ -1313,6 +1350,7 @@ function heldKind(forcePick) {
   if (forcePick) return 'pick';
   const d = heldDef(); if (!d) return 'hand';
   if (d.tool) return d.tool;
+  if (d.weapon) return d.weapon.type;
   if (d.eat) return 'eat'; if (d.seed) return 'seed'; if (d.wall) return 'wall'; if (d.floor) return 'floor'; if (d.obj) return 'obj';
   return 'none';
 }
@@ -1363,7 +1401,8 @@ function doUse(t, forcePick) {
         if (d.h > tier) { AU.deny(); spawnHit(t.x, t.y, d, true); hint(d.h >= 99 ? `${d.nome}: impossível de quebrar.` : `${d.nome} é duro demais (dureza ${d.h}). Precisa de picareta nível ${d.h}.`); player.cd = 0.4; return; }
         const m = dmgMap.get(i) || { d: 0, t: 0 }; m.d += Math.max(1, 1 + tier - d.h); m.t = clock; dmgMap.set(i, m);
         AU.hit(d); spawnHit(t.x, t.y, d, false); shakeAmt = Math.max(shakeAmt, 0.6); stats.hunger = Math.max(0, stats.hunger - 0.04);
-        if (m.d >= d.hp) { dmgMap.delete(i); breakWall(i, t.x, t.y, d); }
+        noise(t.x + 0.5, t.y + 0.5, 9);   // a picareta faz barulho
+        if (m.d >= d.hp) { dmgMap.delete(i); breakWall(i, t.x, t.y, d); noise(t.x + 0.5, t.y + 0.5, 11); }
         return;
       }
       if (tO[i]) { hitObj(i, t.x, t.y); return; }
@@ -1419,6 +1458,7 @@ function doUse(t, forcePick) {
 }
 function hitObj(i, tx, ty) {
   const o = tO[i], d = OBJS[o];
+  if (d.nest) { damageNest(i, 3 + bestPickTier() * 2); player.cd = 0.3; return; }
   if (o === O_PLANTA) { const cr = crops.get(i); if (cr && cr.st >= CROPS[cr.c].days) harvestCrop(i); else hint(cropStatus(i) + ' (arranque com a enxada)'); player.cd = 0.3; return; }
   if (o === O_ARBUSTO) { harvestBush(i); player.cd = 0.25; return; }
   if (d.chest) { const c = chests.get(i); if (c && c.some(Boolean)) { hint('Esvazie o baú antes de recolhê-lo.'); AU.deny(); player.cd = 0.4; return; } }
@@ -1472,6 +1512,669 @@ function updateAmbient(dt, vx0, vy0, vx1, vy1) {
 }
 
 /* ==========================================================================
+   INIMIGOS — tipos, onde aparecem e sprites
+   base = anel onde a criatura é nativa; nos anéis mais fundos ela fica mais forte
+   ========================================================================== */
+const EN = {
+  rastejante:  { nome: 'Rastejante', base: 1, hp: 14, spd: 2.7, dmg: 8, r: 0.32, beh: 'chaser', blood: '#7a5a9a', loot: [['carne', 1, 0.5], ['quitina', 1, 0.45]] },
+  larva:       { nome: 'Larva-de-rocha', base: 1, hp: 10, spd: 3.2, dmg: 6, r: 0.28, beh: 'burrower', blood: '#c8b890', loot: [['quitina', 1, 0.6]] },
+  uivante:     { nome: 'Uivante', base: 1, hp: 18, spd: 3.6, dmg: 9, r: 0.34, beh: 'pack', blood: '#5a7aaa', loot: [['carne', 1, 0.8], ['quitina', 1, 0.2]] },
+  olheiro:     { nome: 'Olheiro', base: 1, hp: 10, spd: 4.0, dmg: 0, r: 0.3, beh: 'scout', sight: 1.3, blood: '#ff6a2a', loot: [['quitina', 1, 0.5]] },
+  espreitador: { nome: 'Espreitador', base: 1, hp: 22, spd: 3.0, dmg: 14, r: 0.36, beh: 'ambusher', blood: '#4a2a5a', loot: [['carne', 2, 0.7], ['quitina', 2, 0.5]] },
+  devorador:   { nome: 'Devorador-de-luz', base: 2, hp: 45, spd: 3.0, dmg: 16, r: 0.45, beh: 'lightseeker', fly: true, blood: '#ffd25a', loot: [['quitina', 3, 1], ['cristal_roxo', 1, 0.5]] },
+  cuspidor:    { nome: 'Cuspidor', base: 2, hp: 16, spd: 2.4, dmg: 10, r: 0.32, beh: 'ranged', blood: '#9ad34a', loot: [['quitina', 1, 0.6], ['carne', 1, 0.3]] },
+  besouro:     { nome: 'Besouro-aríete', base: 2, hp: 40, spd: 2.2, dmg: 18, r: 0.42, beh: 'charger', blood: '#8a6a3a', loot: [['quitina', 3, 1]] },
+  esporo:      { nome: 'Esporo voador', base: 2, hp: 4, spd: 4.2, dmg: 3, r: 0.2, beh: 'swarm', fly: true, blood: '#9affb8', loot: [['esporo_cinza', 1, 0.08]] },
+  sapo:        { nome: 'Sapo-do-brejo', base: 3, hp: 20, spd: 2.0, dmg: 12, r: 0.36, beh: 'leaper', blood: '#7a9a4a', loot: [['carne', 1, 0.7], ['quitina', 1, 0.3]] },
+};
+// O que nasce em cada anel: superfície (à noite / sombra) e cavernas (sempre escuras)
+const SPAWN = {
+  1: { sup: [['uivante', 4], ['rastejante', 3], ['olheiro', 2]], cav: [['rastejante', 4], ['larva', 3], ['espreitador', 2], ['olheiro', 1]] },
+  2: { sup: [['esporo', 3], ['devorador', 2], ['cuspidor', 2], ['uivante', 2]], cav: [['besouro', 3], ['cuspidor', 3], ['rastejante', 2], ['espreitador', 2], ['larva', 2]] },
+  3: { sup: [['sapo', 4], ['cuspidor', 2], ['esporo', 2]], cav: [['sapo', 2], ['besouro', 3], ['cuspidor', 2], ['larva', 2]] },
+  4: { sup: [['devorador', 2], ['besouro', 2], ['cuspidor', 2]], cav: [['espreitador', 3], ['besouro', 3], ['larva', 2], ['cuspidor', 2]] },
+};
+function genEnemy(type, f) {
+  const a = f ? 1 : 0;
+  switch (type) {
+    case 'rastejante': return spr(12, 9, P => { for (let k = 0; k < 4; k++) { const up = (f + k) % 2; P('#241c2c', 2 + k * 2, 6 + up, 1, 3 - up); } P('#1b1522', 1, 1, 10, 6); P('#4a3a5a', 2, 2, 8, 4); P('#6a5a7a', 2, 2, 8, 1); P('#3a2c48', 4, 2, 1, 4); P('#3a2c48', 7, 2, 1, 4); P('#ff4a4a', 9, 3); P('#ff4a4a', 10, 4); });
+    case 'larva': return spr(12, 8, P => { for (let k = 0; k < 4; k++) { const o = (k + f) % 2; P('#1b1522', 1 + k * 2, 2 + o, 3, 5); P('#c8b890', 2 + k * 2, 3 + o, 2, 3); P('#8a7a5a', 2 + k * 2, 5 + o, 2, 1); } P('#1b1522', 9, 1, 3, 6); P('#3a1a1a', 10, 2, 2, 4); P('#f0e8d8', 11, 2); P('#f0e8d8', 11, 5); });
+    case 'uivante': return spr(14, 11, P => { P('#1b1522', 2, 2, 10, 6); P('#3a4a6a', 3, 3, 8, 4); P('#2a3650', 3, 6, 8, 1); for (const x of [4, 6, 8]) P('#7ad0ff', x, 2, 1, 2); P('#1b1522', 10, 1, 4, 5); P('#4a5a7a', 11, 2, 3, 3); P('#ffd25a', 12, 2); P('#1b1522', 13, 4); P('#2a3650', 3 + a, 8, 1, 3); P('#2a3650', 5 - a, 8, 1, 3); P('#2a3650', 8 + a, 8, 1, 3); P('#2a3650', 10 - a, 8, 1, 3); P('#3a4a6a', 0, 3 + a, 3, 1); });
+    case 'olheiro': return spr(10, 12, P => { P('#1b1522', 1, 0, 8, 8); P('#e8e0d0', 2, 1, 6, 6); P('#ff6a2a', 4 + a, 3, 3, 3); P('#1b1522', 5 + a, 4); P('#ffffff', 3, 2); P('#4a3a3a', 2 - a, 8, 1, 4); P('#4a3a3a', 5, 8, 1, 4); P('#4a3a3a', 7 + a, 8, 1, 4); });
+    case 'espreitador': return spr(14, 12, P => { P('#0e0a14', 3, 1, 8, 9); P('#1e1826', 4, 2, 6, 7); P('#2a2232', 4, 2, 6, 1); P('#ff2a4a', 5, 3); P('#ff2a4a', 8, 3); P('#1e1826', 1, 4 + a, 3, 1); P('#1e1826', 0, 5 + a, 1, 5); P('#1e1826', 10, 4 + a, 3, 1); P('#1e1826', 13, 5 + a, 1, 5); P('#1e1826', 5, 10, 1, 2); P('#1e1826', 8, 10, 1, 2); });
+    case 'devorador': return spr(22, 16, P => {
+      const up = f ? -2 : 0;
+      for (let y = 0; y < 7; y++) { const w = 7 - Math.abs(y - 3), yy = 3 + y + (y < 3 ? up : 0); P('#5a4a6a', 9 - w, yy, w + 1, 1); P('#5a4a6a', 12, yy, w + 1, 1); }
+      P('#8a7aa0', 3, 4 + up, 6, 2); P('#8a7aa0', 13, 4 + up, 6, 2); P('#ffd25a', 5, 5 + up, 2, 1); P('#ffd25a', 15, 5 + up, 2, 1);
+      P('#1b1522', 9, 2, 4, 12); P('#6a5034', 10, 3, 2, 10); P('#8a6a44', 10, 3, 2, 2); P('#ff9a3a', 10, 3, 2, 1); P('#4a3a2a', 8, 0, 1, 3); P('#4a3a2a', 13, 0, 1, 3);
+    });
+    case 'cuspidor': return spr(12, 12, P => { P('#1b1522', 1, 2 - a, 10, 8 + a); P('#5a8a3a', 2, 3 - a, 8, 6 + a); P('#9ad34a', 3, 4 - a, 2, 2); P('#9ad34a', 7, 5, 2, 1); P('#2a4a1a', 9, 6, 3, 2); P('#c8ff8a', 11, 6); P('#3a5a2a', 2, 10, 1, 2); P('#3a5a2a', 5, 10, 1, 2); P('#3a5a2a', 8, 10, 1, 2); });
+    case 'besouro': return spr(16, 12, P => { for (const x of [3, 6, 9]) { P('#2a1a10', x + a, 9, 1, 3); P('#2a1a10', x + 1 - a, 0, 1, 3); } P('#1b1522', 1, 2, 13, 8); P('#3a2a1a', 2, 3, 11, 6); P('#6a4a2a', 3, 3, 8, 2); P('#8a6a3a', 4, 3, 3, 1); P('#1b1522', 12, 3, 4, 5); P('#c8b890', 13, 4, 3, 2); P('#f0e8d8', 15, 4); P('#2a1a10', 7, 3, 1, 6); });
+    case 'esporo': return spr(6, 6, P => { P('#3aa070', 1, 1, 4, 4); P('#9affb8', 2, 1, 2, 4); P('#9affb8', 1, 2, 4, 2); P('#e8fff0', 2 + a, 2); });
+    case 'sapo': return spr(12, 10, P => { P('#1b1522', 1, 2 + a, 10, 7 - a); P('#4a6a3a', 2, 3 + a, 8, 5 - a); P('#a8b870', 3, 6, 6, 2); P('#1b1522', 2, a, 3, 3); P('#1b1522', 7, a, 3, 3); P('#ffd25a', 3, 1 + a); P('#ffd25a', 8, 1 + a); P('#3a5a2a', 0, 7, 3, 2); P('#3a5a2a', 9, 7, 3, 2); });
+  }
+}
+function whiteOf(c) { const w = mk(c.width, c.height), g = w.getContext('2d'); g.drawImage(c, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = '#ffffff'; g.fillRect(0, 0, w.width, w.height); return w; }
+function buildEnemySprites() {
+  SPR.en = {};
+  for (const t in EN) SPR.en[t] = [0, 1].map(f => { const c = genEnemy(t, f); return { c, w: whiteOf(c) }; });
+  SPR.obj[O_NINHO_R] = spr(16, 14, P => { P('#1b1522', 1, 3, 14, 11); P('#3a2a48', 2, 4, 12, 9); P('#5a4070', 3, 4, 10, 2); P('#0a0610', 4, 7, 3, 3); P('#0a0610', 9, 6, 3, 3); P('#0a0610', 7, 10, 2, 2); P('#c8b0d8', 5, 8); P('#c8b0d8', 10, 7); });
+  SPR.obj[O_NINHO_U] = spr(16, 12, P => { P('#1b1522', 0, 3, 16, 9); P('#4a3424', 1, 4, 14, 7); P('#6a4a30', 2, 4, 12, 2); P('#07050b', 5, 6, 6, 5); P('#e8e0d0', 1, 10, 3, 1); P('#e8e0d0', 12, 9, 3, 1); P('#e8e0d0', 13, 8); });
+  SPR.obj[O_NINHO_E] = spr(14, 14, P => { P('#1b1522', 2, 1, 10, 13); P('#2a5a44', 3, 2, 8, 11); P('#3aa070', 4, 3, 6, 2); for (const [x, y] of [[5, 6], [8, 5], [6, 9], [9, 10]]) P('#9affb8', x, y); P('#1a3a2a', 3, 12, 8, 1); });
+}
+function clubIcon() { return spr(12, 12, P => { for (let k = 0; k < 8; k++) P('#8a5a34', 1 + k, 9 - k, 2, 2); P('#1b1522', 8, 0, 4, 4); P('#6a4422', 8, 1, 3, 3); P('#a06a3a', 9, 1, 2, 1); P('#5a3a1c', 1, 10, 2, 2); }); }
+function bladeIcon(col) { return spr(12, 12, P => { for (let k = 0; k < 8; k++) { P('#1b1522', 3 + k, 7 - k, 2, 2); P(col, 3 + k, 7 - k); P(shade(col, 1.35), 4 + k, 7 - k); } P('#5a3a1c', 0, 10, 3, 2); P('#5a3a1c', 1, 9, 1, 3); P('#c8a040', 2, 8, 3, 1); P('#c8a040', 3, 7, 1, 3); }); }
+function gunIcon(col, big) { return spr(16, 10, P => { const L = big ? 14 : 11; P('#1b1522', 1, 2, L + 1, 5); P('#8a8f98', 2, 3, L - 1, 3); P('#b0b6c0', 2, 3, L - 1, 1); P(col, L, 4, 2, 1); P('#e8762c', 4, 4, 3, 1); P('#1b1522', 3, 6, 4, 4); P('#5a5f68', 4, 6, 2, 3); if (big) P(col, 8, 3, 3, 1); }); }
+function cellIcon() { return spr(10, 12, P => { P('#1b1522', 2, 1, 6, 11); P('#3a4654', 3, 2, 4, 9); P('#5fe3ff', 4, 4, 2, 5); P('#e0ffff', 4, 4, 1, 2); P('#c0c6d0', 3, 1, 4, 1); }); }
+function chitinIcon() { return spr(12, 10, P => { P('#1b1522', 1, 1, 10, 9); P('#5a4070', 2, 2, 8, 7); P('#8a6aa8', 3, 2, 6, 2); P('#3a2a48', 2, 6, 8, 1); }); }
+function meatIcon() { return spr(12, 10, P => { P('#1b1522', 1, 1, 10, 8); P('#c85a5a', 2, 2, 8, 6); P('#ff8a8a', 3, 2, 4, 2); P('#f0e8d8', 8, 6, 3, 2); }); }
+
+/* ==========================================================================
+   IA — percepção (luz, visão, som), movimento com A*, grupos e comportamentos
+   Estados: patrulha · alerta · caca · ataque · fuga · reagrupar (+ específicos)
+   ========================================================================== */
+let enemies = [], groups = new Map(), gidN = 1, pathBudget = 0, spawnT = 3, nestT = 1, skySum = 0;
+const nestHp = new Map(), nestCd = new Map(), nestGroup = new Map();
+const PV = { lit: false, range: 5, held: false };      // como o jogador é percebido neste quadro
+function lightSum(i) { let L = LR[i] + LG[i] + LB[i]; if (!tRoof[i]) L += skySum; return L; }
+function updatePV() {
+  skySum = sky.col[0] + sky.col[1] + sky.col[2];
+  const i = Math.floor(player.y) * WW + Math.floor(player.x), d = heldDef();
+  PV.held = !!(d && d.obj && OBJS[d.obj].emit);
+  PV.lit = PV.held || lightSum(i) > 170;
+  PV.range = PV.lit ? 11 : 5.5;              // no escuro você é visto de bem mais perto
+}
+function los(x0, y0, x1, y1) {
+  const dx = x1 - x0, dy = y1 - y0, n = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) * 2);
+  for (let k = 1; k < n; k++) { const x = Math.floor(x0 + dx * k / n), y = Math.floor(y0 + dy * k / n); if (x < 0 || y < 0 || x >= WW || y >= WH || opaqueAt(y * WW + x)) return false; }
+  return true;
+}
+const dPlayer = e => Math.hypot(player.x - e.x, player.y - e.y);
+function canSee(e) { return dPlayer(e) <= PV.range * (e.d.sight || 1) && los(e.x, e.y, player.x, player.y); }
+// Luz que assusta criaturas da escuridão: tile bem iluminado ou o jogador segurando uma luz por perto
+function scaryAt(x, y) {
+  const tx = Math.floor(x), ty = Math.floor(y); if (tx < 0 || ty < 0 || tx >= WW || ty >= WH) return false;
+  return lightSum(ty * WW + tx) >= 230 || (PV.held && Math.hypot(x - player.x, y - player.y) < 4.5);
+}
+function eBlocked(e, x, y) {
+  if (x < 0 || y < 0 || x >= WW || y >= WH) return true;
+  const i = y * WW + x;
+  if (e.d.fly) return tW[i] !== 0 || tO[i] === O_PORTA;
+  if (tW[i]) return true;
+  const o = tO[i]; if (o && (OBJS[o].solid || o === O_PORTA)) return true;
+  const f = FLOORS[tF[i]]; return !f || !!f.solid;
+}
+function eHits(e, px, py) {
+  const r = e.d.r, x0 = Math.floor(px - r), x1 = Math.floor(px + r), y0 = Math.floor(py - r * 0.7), y1 = Math.floor(py + r * 0.7);
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (eBlocked(e, x, y)) return true;
+  return false;
+}
+function eMove(e, dx, dy) {
+  e.bump = false;
+  const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 0.2)), sx = dx / steps, sy = dy / steps;
+  for (let s = 0; s < steps; s++) {
+    if (sx) { if (!eHits(e, e.x + sx, e.y)) e.x += sx; else e.bump = true; }
+    if (sy) { if (!eHits(e, e.x, e.y + sy)) e.y += sy; else e.bump = true; }
+  }
+  if (Math.abs(dx) > 0.001) e.face = dx > 0 ? 1 : -1;
+}
+// A* em grade (4 direções) com limite de nós; se não alcança, vai até o nó mais próximo do alvo
+const AS_G = new Float32Array(N), AS_FROM = new Int32Array(N), AS_ST = new Int32Array(N); let asStamp = 0;
+function findPath(e, tx, ty) {
+  const sx = Math.floor(e.x), sy = Math.floor(e.y), gx = Math.floor(tx), gy = Math.floor(ty), si = sy * WW + sx, gi = gy * WW + gx;
+  asStamp++; const heap = [];
+  const push = (f, i) => { heap.push([f, i]); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; } };
+  const pop = () => { const top = heap[0], lastE = heap.pop(); if (heap.length) { heap[0] = lastE; let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };
+  const h = i => { const x = i % WW, y = (i - x) / WW; return Math.abs(x - gx) + Math.abs(y - gy); };
+  AS_ST[si] = asStamp; AS_G[si] = 0; AS_FROM[si] = -1; push(h(si), si);
+  let best = si, bh = h(si), n = 0;
+  while (heap.length && n < 600) {
+    const [, i] = pop(); n++;
+    if (i === gi) { best = i; break; }
+    const hi = h(i); if (hi < bh) { bh = hi; best = i; }
+    const x = i % WW, y = (i - x) / WW;
+    for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+      if (nx < 0 || ny < 0 || nx >= WW || ny >= WH) continue;
+      const j = ny * WW + nx; if (j !== gi && eBlocked(e, nx, ny)) continue;
+      const g2 = AS_G[i] + 1; if (AS_ST[j] === asStamp && AS_G[j] <= g2) continue;
+      AS_ST[j] = asStamp; AS_G[j] = g2; AS_FROM[j] = i; push(g2 + h(j), j);
+    }
+  }
+  const path = []; let c = best; while (c !== -1 && c !== si) { path.push([c % WW, (c / WW) | 0]); c = AS_FROM[c]; }
+  return path.reverse();
+}
+// Vai até o alvo: reto se enxerga, senão segue um caminho A* recalculado de tempos em tempos
+function seek(e, tx, ty, spd, dt) {
+  let dx = tx - e.x, dy = ty - e.y; const d = Math.hypot(dx, dy); if (d < 0.08) return;
+  let mx = dx / d, my = dy / d;
+  if (!e.d.fly && !los(e.x, e.y, tx, ty)) {
+    e.pathT = (e.pathT || 0) - dt;
+    if ((!e.path || e.pathT <= 0) && pathBudget > 0) { pathBudget--; e.path = findPath(e, tx, ty); e.pathT = 0.6 + Math.random() * 0.3; }
+    if (e.path && e.path.length) {
+      const [px, py] = e.path[0], ddx = px + 0.5 - e.x, ddy = py + 0.5 - e.y, dd = Math.hypot(ddx, ddy);
+      if (dd < 0.25) e.path.shift(); else { mx = ddx / dd; my = ddy / dd; }
+    }
+  } else e.path = null;
+  eMove(e, mx * spd * dt, my * spd * dt);
+}
+function flee(e, fx, fy, spd, dt) {
+  let dx = e.x - fx, dy = e.y - fy; const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
+  if (e.fleeRot) { const c = Math.cos(e.fleeRot), s = Math.sin(e.fleeRot); [dx, dy] = [dx * c - dy * s, dx * s + dy * c]; }
+  eMove(e, dx * spd * dt, dy * spd * dt);
+  if (e.bump) e.fleeRot = (e.fleeRot || 0) + (Math.random() < 0.5 ? 1.2 : -1.2); else if (Math.random() < dt) e.fleeRot = 0;
+}
+const HUNTERS = { chaser: 1, pack: 1, ranged: 1, leaper: 1, charger: 1 };
+function wander(e, dt) {
+  // caçadores noturnos vão "farejando" na direção do jogador, mesmo sem vê-lo
+  if (e.ambient && isNight() && HUNTERS[e.d.beh]) { const d = dPlayer(e); if (d < 26 && d > 3) { e.home.x += (player.x - e.home.x) / d * 0.7 * dt; e.home.y += (player.y - e.home.y) / d * 0.7 * dt; } }
+  e.wt = (e.wt || 0) - dt;
+  if (e.wt <= 0) { e.wt = 1.5 + Math.random() * 2.5; const a = Math.random() * Math.PI * 2; e.wx = e.home.x + Math.cos(a) * 4; e.wy = e.home.y + Math.sin(a) * 4; }
+  if (Math.hypot(e.wx - e.x, e.wy - e.y) > 0.3) seek(e, e.wx, e.wy, e.d.spd * 0.4, dt);
+}
+function chase(e, dt, d, mul) {
+  if (canSee(e)) { e.lost = 0; e.lx = player.x; e.ly = player.y; if (d > e.d.r + 0.45) seek(e, player.x, player.y, e.d.spd * mul, dt); }
+  else {
+    e.lost = (e.lost || 0) + dt;
+    seek(e, e.lx === undefined ? player.x : e.lx, e.ly === undefined ? player.y : e.ly, e.d.spd * mul, dt);
+    if (e.lost > 4.5) { e.st = 'patrulha'; e.home = { x: e.x, y: e.y }; }
+  }
+}
+function alertMove(e, dt) { seek(e, e.ax, e.ay, e.d.spd * 0.7, dt); if (canSee(e)) aggro(e); else if (e.t <= 0) e.st = 'patrulha'; }
+function bite(e) {
+  if (e.cd <= 0 && dPlayer(e) < e.d.r + 0.42) { playerHit(e.d.dmg * e.dm, e.x, e.y); e.cd = 0.9; return true; }
+  return false;
+}
+function aggro(e) {
+  e.lx = player.x; e.ly = player.y; e.lost = 0;
+  if (e.d.beh === 'lightseeker') { e.tgt = 'player'; e.scanT = 4; return; }
+  if (e.st === 'toca') return;
+  if (e.group) { const g = groups.get(e.group); if (g) { if (g.st !== 'fuga') g.st = 'caca'; for (const m of g.members) if (m.st === 'patrulha' || m.st === 'alerta') { m.st = 'caca'; m.lx = player.x; m.ly = player.y; } } }
+  if (e.st === 'patrulha' || e.st === 'alerta') { e.st = 'caca'; e.t = Math.max(e.t, 4); }
+}
+// Barulho (picareta, tiros, golpes): quem ouve vai investigar; larvas saem da rocha
+function noise(x, y, r) {
+  for (const e of enemies) {
+    if (e.dead) continue; const d = Math.hypot(e.x - x, e.y - y); if (d > r) continue;
+    if (e.st === 'toca') { if (e.t <= 0 && d < 7) { e.st = 'emergir'; e.t = 0.6; } continue; }
+    if (e.st === 'patrulha') { e.st = 'alerta'; e.ax = x; e.ay = y; e.t = 5; }
+  }
+}
+function callReinforcements(e) {
+  AU.screech(); e.callCd = 10; marks.push({ k: 'ring', x: e.x, y: e.y, t: 0.8, max: 0.8 });
+  let n = 0;
+  for (const o of enemies) {
+    if (o === e || o.dead || Math.hypot(o.x - e.x, o.y - e.y) > 16) continue;
+    o.lx = player.x; o.ly = player.y;
+    if (o.st === 'toca') { o.st = 'emergir'; o.t = 0.6; } else aggro(o);
+    n++;
+  }
+  hint(n ? `Um Olheiro gritou: ${n} criatura(s) vêm atrás de você!` : 'Um Olheiro gritou!');
+}
+function freeAround(x, y, prefer) {
+  let best = null, bd = 1e9;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    const nx = x + dx, ny = y + dy; if (solidAt(nx, ny) || tO[ny * WW + nx] === O_PORTA) continue;
+    const d = prefer ? Math.hypot(nx + 0.5 - prefer.x, ny + 0.5 - prefer.y) : Math.random();
+    if (d < bd) { bd = d; best = [nx, ny]; }
+  }
+  return best;
+}
+function rockAround(x, y, away) {
+  let best = null, bd = -1;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= WW || ny >= WH) continue;
+    const w = tW[ny * WW + nx]; if (!w || WALLS[w].tree || WALLS[w].h >= 99) continue;
+    const d = away ? Math.hypot(nx - away.x, ny - away.y) : Math.random(); if (d > bd) { bd = d; best = [nx, ny]; }
+  }
+  return best;
+}
+
+const BEH = {
+  // Rastejante: caça no escuro, foge de tocha e de lugar iluminado
+  chaser(e, dt, d) {
+    if (e.st !== 'fuga' && (scaryAt(e.x, e.y) || (PV.held && d < 4.5))) { e.st = 'fuga'; e.t = 1.6; }
+    switch (e.st) {
+      case 'patrulha': wander(e, dt); if (canSee(e)) aggro(e); break;
+      case 'alerta': alertMove(e, dt); break;
+      case 'caca': chase(e, dt, d, 1); bite(e); break;
+      case 'fuga': flee(e, player.x, player.y, e.d.spd * 1.25, dt); if (e.t <= 0) e.st = canSee(e) && !scaryAt(e.x, e.y) ? 'caca' : 'patrulha'; break;
+      default: e.st = 'caca';
+    }
+  },
+  // Larva: mora dentro da rocha, sai quando você chega perto ou faz barulho, morde e volta
+  burrower(e, dt, d) {
+    switch (e.st) {
+      case 'toca': if (e.t <= 0 && d < 3.4) { e.st = 'emergir'; e.t = 0.6; } break;
+      case 'emergir':
+        if (Math.random() < 0.4) addPart({ x: e.x * T + (Math.random() - 0.5) * 10, y: e.y * T, z: 6, vx: (Math.random() - 0.5) * 40, vy: 0, vz: 30, life: 0.4, max: 0.4, c: '#8a7a5a', s: 1 });
+        if (e.t <= 0) {
+          const s = freeAround(Math.floor(e.x), Math.floor(e.y), player);
+          if (s) { e.x = s[0] + 0.5; e.y = s[1] + 0.5; e.st = 'caca'; e.t = 6; AU.growl(); spawnDust(s[0], s[1], '#8a7a5a', 6); aggro(e); }
+          else { e.st = 'toca'; e.t = 2; }
+        }
+        break;
+      case 'caca': chase(e, dt, d, 1); bite(e); if (e.t <= 0 || e.hp < e.max * 0.4) e.st = 'cavar'; break;
+      case 'cavar': { const w = rockAround(Math.floor(e.x), Math.floor(e.y), player); if (w) { e.x = w[0] + 0.5; e.y = w[1] + 0.5; e.st = 'toca'; e.t = 4; e.path = null; spawnDust(w[0], w[1], '#8a7a5a', 5); } else { e.st = 'caca'; e.t = 3; } break; }
+      default: e.st = 'caca'; e.t = 5;
+    }
+  },
+  // Uivante: matilha que cerca o jogador em círculo e ataca um de cada vez
+  pack(e, dt, d) {
+    const g = groups.get(e.group);
+    if (g && g.st === 'fuga') { e.st = 'fuga'; flee(e, player.x, player.y, e.d.spd, dt); return; }
+    if (e.st !== 'reagrupar' && e.st !== 'ataque' && e.hp < e.max * 0.3) { e.st = 'reagrupar'; e.t = 2.5; }
+    switch (e.st) {
+      case 'patrulha': if (g) e.home = { x: g.cx, y: g.cy }; wander(e, dt); if (canSee(e)) aggro(e); break;
+      case 'alerta': alertMove(e, dt); break;
+      case 'caca': {
+        const n = g ? g.n : 1, idx = g ? g.members.indexOf(e) : 0, ang = (g ? g.base : 0) + idx * Math.PI * 2 / n;
+        const see = canSee(e);
+        if (see) { e.lost = 0; e.lx = player.x; e.ly = player.y; } else { e.lost = (e.lost || 0) + dt; if (e.lost > 6) { e.st = 'patrulha'; break; } }
+        const cx = see ? player.x : e.lx, cy = see ? player.y : e.ly;
+        seek(e, cx + Math.cos(ang) * 3.2, cy + Math.sin(ang) * 3.2, e.d.spd, dt);
+        const myTurn = g ? (g.tokenT <= 0 && g.next === idx) : e.cd <= 0;
+        if (myTurn && see && d < 5) {
+          e.st = 'ataque'; e.t = 0.55; const l = d || 1; e.adx = (player.x - e.x) / l; e.ady = (player.y - e.y) / l; AU.growl();
+          if (g) { g.tokenT = 1.4; g.next = (g.next + 1) % n; } else e.cd = 1.5;
+        }
+        break;
+      }
+      case 'ataque': eMove(e, e.adx * e.d.spd * 2.4 * dt, e.ady * e.d.spd * 2.4 * dt); if (bite(e) || e.t <= 0 || e.bump) { e.st = 'recuar'; e.t = 0.6; } break;
+      case 'recuar': flee(e, player.x, player.y, e.d.spd, dt); if (e.t <= 0) e.st = 'caca'; break;
+      case 'reagrupar': {
+        const cx = g ? g.cx : e.home.x, cy = g ? g.cy : e.home.y;
+        if (d < 5) flee(e, player.x, player.y, e.d.spd * 1.1, dt); else seek(e, cx, cy, e.d.spd, dt);
+        if (e.t <= 0) e.st = 'caca'; break;
+      }
+      default: e.st = 'caca';
+    }
+  },
+  // Olheiro: não morde; ao ver você, grita e chama todo mundo por perto, depois foge
+  scout(e, dt, d) {
+    e.callCd = (e.callCd || 0) - dt;
+    switch (e.st) {
+      case 'patrulha': wander(e, dt); if (canSee(e) && e.callCd <= 0) { e.st = 'avistou'; e.t = 0.7; } break;
+      case 'alerta': seek(e, e.ax, e.ay, e.d.spd * 0.6, dt); if (canSee(e) && e.callCd <= 0) { e.st = 'avistou'; e.t = 0.7; } else if (e.t <= 0) e.st = 'patrulha'; break;
+      case 'avistou': e.face = player.x > e.x ? 1 : -1; if (e.t <= 0) { callReinforcements(e); e.st = 'fuga'; e.t = 4; } break;
+      case 'fuga': flee(e, player.x, player.y, e.d.spd, dt); if (e.t <= 0) { e.st = 'patrulha'; e.home = { x: e.x, y: e.y }; } break;
+      default: e.st = e.callCd <= 0 ? 'avistou' : 'fuga'; e.t = 0.5;
+    }
+  },
+  // Espreitador: espera parado no escuro e dá o bote quando você passa perto
+  ambusher(e, dt, d) {
+    const lit = scaryAt(e.x, e.y);
+    switch (e.st) {
+      case 'patrulha': if (lit) { e.st = 'fuga'; e.t = 2; break; } if (d < 2.9 && los(e.x, e.y, player.x, player.y)) { e.st = 'bote'; e.t = 0.32; const l = d || 1; e.adx = (player.x - e.x) / l; e.ady = (player.y - e.y) / l; AU.growl(); } break;
+      case 'alerta': if (e.t <= 0 || lit) e.st = lit ? 'fuga' : 'patrulha'; break;
+      case 'bote': eMove(e, e.adx * e.d.spd * 3.5 * dt, e.ady * e.d.spd * 3.5 * dt); bite(e); if (e.t <= 0) { e.st = 'caca'; e.t = 3.5; } break;
+      case 'caca': if (lit) { e.st = 'fuga'; e.t = 2; break; } chase(e, dt, d, 1.1); bite(e); if (e.t <= 0) { e.st = 'fuga'; e.t = 2.2; } break;
+      case 'fuga': flee(e, player.x, player.y, e.d.spd * 1.2, dt); if (e.t <= 0) { e.st = 'patrulha'; e.home = { x: e.x, y: e.y }; } break;
+      default: e.st = 'caca'; e.t = 3;
+    }
+  },
+  // Devorador-de-luz: forte e atraído pela luz — persegue quem está iluminado e apaga tochas
+  lightseeker(e, dt, d) {
+    e.scanT = (e.scanT || 0) - dt;
+    if (!isNight() && !tRoof[Math.floor(e.y) * WW + Math.floor(e.x)]) { e.st = 'fuga'; flee(e, player.x, player.y, e.d.spd, dt); return; }
+    if (e.scanT <= 0) {
+      e.scanT = 1; e.tgt = null;
+      if (PV.lit && d < 16 && los(e.x, e.y, player.x, player.y)) e.tgt = 'player';
+      else {
+        let bd = 14; const ex = Math.floor(e.x), ey = Math.floor(e.y);
+        for (let y = ey - 14; y <= ey + 14; y++) for (let x = ex - 14; x <= ex + 14; x++) { if (x < 0 || y < 0 || x >= WW || y >= WH || tO[y * WW + x] !== O_TOCHA) continue; const dd = Math.hypot(x - ex, y - ey); if (dd < bd) { bd = dd; e.tgt = [x, y]; } }
+      }
+    }
+    if (e.tgt === 'player') { e.st = 'caca'; if (d > e.d.r + 0.45) seek(e, player.x, player.y, e.d.spd, dt); bite(e); }
+    else if (e.tgt) {
+      e.st = 'caca'; const [tx, ty] = e.tgt, ti = ty * WW + tx;
+      if (tO[ti] !== O_TOCHA) e.tgt = null;
+      else { seek(e, tx + 0.5, ty + 0.5, e.d.spd, dt); if (Math.hypot(tx + 0.5 - e.x, ty + 0.5 - e.y) < 0.9) { setTile(ti, 0, tF[ti], 0); hint('Um Devorador-de-luz apagou uma tocha!'); e.tgt = null; e.scanT = 2; } }
+    } else { e.st = 'patrulha'; wander(e, dt); }
+  },
+  // Cuspidor: mantém distância, mira (telegrafado) e cospe ácido
+  ranged(e, dt, d) {
+    switch (e.st) {
+      case 'patrulha': wander(e, dt); if (canSee(e)) aggro(e); break;
+      case 'alerta': alertMove(e, dt); break;
+      case 'caca': {
+        if (!canSee(e)) { chase(e, dt, d, 1); break; }
+        e.lost = 0; e.lx = player.x; e.ly = player.y;
+        if (d < 3.5) flee(e, player.x, player.y, e.d.spd, dt);
+        else if (d > 6.5) seek(e, player.x, player.y, e.d.spd, dt);
+        else { const px = -(player.y - e.y) / d, py = (player.x - e.x) / d; e.strafe = e.strafe || 1; eMove(e, px * e.strafe * e.d.spd * 0.5 * dt, py * e.strafe * e.d.spd * 0.5 * dt); if (e.bump) e.strafe *= -1; e.face = player.x > e.x ? 1 : -1; }
+        if (e.cd <= 0 && d < 8.5) { e.st = 'mirar'; e.t = 0.5; }
+        break;
+      }
+      case 'mirar':
+        e.face = player.x > e.x ? 1 : -1;
+        if (e.t <= 0) {
+          const tx = player.x + player.vx * 0.35, ty = player.y + player.vy * 0.35, dx = tx - e.x, dy = ty - e.y, l = Math.hypot(dx, dy) || 1;
+          bullets.push({ x: e.x + dx / l * 0.4, y: e.y + dy / l * 0.4, vx: dx / l * 7, vy: dy / l * 7, life: 1.6, dmg: e.d.dmg * e.dm, friend: false, col: '#b8ff5a' });
+          AU.spit(); e.cd = 1.9; e.st = 'caca';
+        }
+        break;
+      default: e.st = 'caca';
+    }
+  },
+  // Besouro-aríete: marca uma linha no chão, investe em linha reta e fica tonto se bater na parede
+  charger(e, dt, d) {
+    switch (e.st) {
+      case 'patrulha': wander(e, dt); if (canSee(e)) aggro(e); break;
+      case 'alerta': alertMove(e, dt); break;
+      case 'caca':
+        chase(e, dt, d, 1); bite(e);
+        if (e.cd <= 0 && d < 6.5 && canSee(e)) { e.st = 'preparar'; e.t = 0.75; const l = d || 1; e.adx = (player.x - e.x) / l; e.ady = (player.y - e.y) / l; marks.push({ k: 'line', x: e.x, y: e.y, dx: e.adx, dy: e.ady, len: 7.5, w: 0.9, t: 0.75, max: 0.75 }); }
+        break;
+      case 'preparar': if (e.t <= 0) { e.st = 'investir'; e.t = 1.0; AU.growl(); } break;
+      case 'investir':
+        eMove(e, e.adx * e.d.spd * 4.6 * dt, e.ady * e.d.spd * 4.6 * dt);
+        if (dPlayer(e) < e.d.r + 0.45) { playerHit(e.d.dmg * e.dm, e.x, e.y); e.cd = 2; e.st = 'caca'; }
+        else if (e.bump) { e.st = 'atordoado'; e.t = 1.5; shakeAmt = Math.max(shakeAmt, 1.5); spawnDust(Math.floor(e.x), Math.floor(e.y), '#8a7a6a', 8); AU.brk({ pat: 'stone', h: 1 }); }
+        else if (e.t <= 0) { e.st = 'caca'; e.cd = 1.6; }
+        break;
+      case 'atordoado': if (e.t <= 0) { e.st = 'caca'; e.cd = 1.2; } break;
+      default: e.st = 'caca';
+    }
+  },
+  // Esporos: enxame (coesão + separação) que gruda no jogador
+  swarm(e, dt, d) {
+    const g = groups.get(e.group), cx = g ? g.cx : e.x, cy = g ? g.cy : e.y;
+    let vx = (cx - e.x) * 0.8, vy = (cy - e.y) * 0.8;
+    if (g) for (const o of g.members) { if (o === e) continue; const dx = e.x - o.x, dy = e.y - o.y, dd = Math.hypot(dx, dy); if (dd < 0.6 && dd > 0) { vx += dx / dd * 1.6; vy += dy / dd * 1.6; } }
+    if (d < 9 && canSee(e)) { e.st = 'caca'; vx += (player.x - e.x) / d * 3; vy += (player.y - e.y) / d * 3; }
+    else { e.st = 'patrulha'; e.wa = (e.wa || Math.random() * 6) + dt * (Math.random() - 0.5) * 4; vx += Math.cos(e.wa); vy += Math.sin(e.wa); }
+    const l = Math.hypot(vx, vy) || 1; eMove(e, vx / l * e.d.spd * dt, vy / l * e.d.spd * dt);
+    if (d < e.d.r + 0.4 && e.cd <= 0) { playerHit(e.d.dmg * e.dm, e.x, e.y); e.cd = 0.7; }
+  },
+  // Sapo: agacha, marca onde vai cair e pula em cima de você
+  leaper(e, dt, d) {
+    switch (e.st) {
+      case 'patrulha': wander(e, dt); if (canSee(e)) aggro(e); break;
+      case 'alerta': alertMove(e, dt); break;
+      case 'caca':
+        if (d > 4.5 || !canSee(e)) chase(e, dt, d, 1);
+        else if (e.cd <= 0) {
+          e.st = 'agachar'; e.t = 0.5; e.jx = player.x + player.vx * 0.5; e.jy = player.y + player.vy * 0.5;
+          const l = Math.hypot(e.jx - e.x, e.jy - e.y); if (l > 5) { e.jx = e.x + (e.jx - e.x) / l * 5; e.jy = e.y + (e.jy - e.y) / l * 5; }
+          marks.push({ k: 'circle', x: e.jx, y: e.jy, r: 1.1, t: 1.05, max: 1.05 });
+        }
+        break;
+      case 'agachar': if (e.t <= 0) { e.st = 'pulo'; e.t = 0.55; e.j0x = e.x; e.j0y = e.y; } break;
+      case 'pulo': {
+        const p = Math.min(1, 1 - e.t / 0.55), nx = lerp(e.j0x, e.jx, p), ny = lerp(e.j0y, e.jy, p);
+        if (!eHits(e, nx, ny)) { e.x = nx; e.y = ny; }
+        e.z = Math.sin(p * Math.PI) * 14; e.face = e.jx > e.j0x ? 1 : -1;
+        if (e.t <= 0) { e.z = 0; e.st = 'caca'; e.cd = 1.8; spawnDust(Math.floor(e.x), Math.floor(e.y), '#4a6a3a', 6); if (dPlayer(e) < 1.2) playerHit(e.d.dmg * e.dm, e.x, e.y); }
+        break;
+      }
+      default: e.st = 'caca';
+    }
+  },
+};
+
+function newGroup(init) { const g = { id: gidN++, members: [], st: 'patrulha', base: Math.random() * 6.28, tokenT: 1, next: 0, init, n: 0, cx: 0, cy: 0 }; groups.set(g.id, g); return g; }
+function spawnEnemy(type, x, y, o = {}) {
+  const d = EN[type], ring = clamp(biomeAt(Math.floor(x), Math.floor(y)), 1, 7), lv = Math.max(0, ring - d.base);
+  const e = Object.assign({ type, d, x, y, hp: d.hp * (1 + 0.4 * lv), dm: 1 + 0.25 * lv, st: 'patrulha', t: 0, cd: Math.random(), hurt: 0, kx: 0, ky: 0, face: 1, anim: Math.random() * 10, z: 0, ambient: true, home: { x, y } }, o);
+  e.max = e.hp; enemies.push(e);
+  if (e.group) { const g = groups.get(e.group); if (g) g.members.push(e); }
+  return e;
+}
+function spawnGroup(type, n, x, y, opts = {}) {
+  const g = newGroup(n);
+  for (let k = 0; k < n; k++) { const s = k ? freeAround(x, y) || [x, y] : [x, y]; spawnEnemy(type, s[0] + 0.3 + Math.random() * 0.4, s[1] + 0.3 + Math.random() * 0.4, Object.assign({ group: g.id }, opts)); }
+  return g;
+}
+const pickW = tab => { let s = 0; for (const [, w] of tab) s += w; let r = Math.random() * s; for (const [t, w] of tab) { r -= w; if (r <= 0) return t; } return tab[0][0]; };
+// Nasce criatura só fora da tela e no escuro: luz é proteção de verdade
+function spawnTick() {
+  const pti = Math.floor(player.y) * WW + Math.floor(player.x), under = tRoof[pti] !== 0;
+  const cap = under ? 7 : isNight() ? 8 : 2;
+  let near = 0; for (const e of enemies) if (e.ambient && !e.dead && dPlayer(e) < 34) near++;
+  if (near >= cap) return;
+  for (let tr = 0; tr < 10; tr++) {
+    const a = Math.random() * Math.PI * 2, r = 13 + Math.random() * 9, x = Math.floor(player.x + Math.cos(a) * r), y = Math.floor(player.y + Math.sin(a) * r);
+    if (x < 3 || y < 3 || x >= WW - 3 || y >= WH - 3 || !genDone[chunkOf(y * WW + x)]) continue;
+    const i = y * WW + x;
+    if (solidAt(x, y) || lightSum(i) > 90) continue;
+    if (bed && Math.hypot(x - bed.x, y - bed.y) < 10) continue;
+    const b = clamp(biomeAt(x, y), 1, 7), tab = (SPAWN[b] || SPAWN[4])[tRoof[i] ? 'cav' : 'sup'], type = pickW(tab);
+    if (type === 'uivante') spawnGroup('uivante', 3 + (Math.random() < 0.4 ? 1 : 0), x, y);
+    else if (type === 'esporo') spawnGroup('esporo', 6, x, y);
+    else if (type === 'larva') { const w = rockAround(x, y); if (!w) continue; spawnEnemy('larva', w[0] + 0.5, w[1] + 0.5, { st: 'toca' }); }
+    else if (type === 'devorador' && !isNight() && !tRoof[i]) continue;
+    else spawnEnemy(type, x + 0.5, y + 0.5);
+    return;
+  }
+}
+// Ninhos geram suas criaturas enquanto existirem
+function nestTick() {
+  const px = Math.floor(player.x), py = Math.floor(player.y), R = 16;
+  for (let y = py - R; y <= py + R; y++) for (let x = px - R; x <= px + R; x++) {
+    if (x < 0 || y < 0 || x >= WW || y >= WH) continue;
+    const i = y * WW + x, o = tO[i], nd = o && OBJS[o].nest; if (!nd) continue;
+    if ((nestCd.get(i) || 0) > clock) continue;
+    let alive = 0; for (const e of enemies) if (!e.dead && e.nest === i) alive++;
+    if (alive >= 3) continue;
+    const s = freeAround(x, y); if (!s) continue;
+    const opts = { nest: i, ambient: false };
+    if (nd === 'uivante' || nd === 'esporo') { let g = groups.get(nestGroup.get(i)); if (!g) { g = newGroup(3); nestGroup.set(i, g.id); } opts.group = g.id; }
+    spawnEnemy(nd, s[0] + 0.5, s[1] + 0.5, opts);
+    nestCd.set(i, clock + (Math.hypot(x - px, y - py) < 6 ? 4 : 8));
+  }
+}
+function damageNest(i, dmg) {
+  const o = tO[i], d = OBJS[o]; if (!d || !d.nest) return;
+  const hp = (nestHp.has(i) ? nestHp.get(i) : d.nhp) - dmg; nestHp.set(i, hp);
+  const x = i % WW, y = (i - x) / WW;
+  spawnDust(x, y, '#5a4070', 4); AU.hitE(); dmgNums.push({ x: x + 0.5, y: y, v: Math.round(dmg), t: 0.8 });
+  noise(x + 0.5, y + 0.5, 10);
+  if (hp <= 0) {
+    nestHp.delete(i); setTile(i, 0, tF[i], 0);
+    dropLoot([['quitina', 3, 1], ['carne', 2, 0.6]], x + 0.5, y + 0.5);
+    AU.dieE(); hint(d.nome + ' destruído!'); flags.nests = (flags.nests || 0) + 1;
+    for (const e of enemies) if (e.nest === i) e.nest = null;
+  }
+}
+function updateGroups(dt) {
+  for (const [id, g] of groups) {
+    g.members = g.members.filter(e => !e.dead);
+    if (!g.members.length) { groups.delete(id); continue; }
+    g.n = g.members.length; let sx = 0, sy = 0; for (const m of g.members) { sx += m.x; sy += m.y; } g.cx = sx / g.n; g.cy = sy / g.n;
+    g.base += dt * 0.5; g.tokenT -= dt; if (g.next >= g.n) g.next = 0;
+    if (g.st !== 'fuga' && g.init >= 3 && g.n <= Math.floor(g.init / 2) && g.members[0].type === 'uivante' && g.members.some(m => m.st !== 'patrulha')) { g.st = 'fuga'; hint('A matilha recua!'); }
+  }
+}
+function updateEnemies(dt) {
+  pathBudget = 4;
+  for (const e of enemies) {
+    if (e.dead) continue;
+    const d = dPlayer(e);
+    if (d > 46) { e.dead = true; continue; }       // longe demais: some (o ninho/spawner repõe)
+    if (d > 34) continue;                          // fora da área ativa: congelado
+    // de dia, as criaturas noturnas da superfície somem quando você não está olhando
+    if (e.ambient && !isNight() && d > 14 && !tRoof[Math.floor(e.y) * WW + Math.floor(e.x)]) { e.dead = true; continue; }
+    e.t -= dt; e.cd -= dt; e.hurt -= dt; e.anim += dt;
+    if (e.kx || e.ky) { eMove(e, e.kx * dt, e.ky * dt); const k = Math.pow(0.02, dt); e.kx *= k; e.ky *= k; if (Math.abs(e.kx) + Math.abs(e.ky) < 0.1) e.kx = e.ky = 0; }
+    BEH[e.d.beh](e, dt, d);
+  }
+  // separação entre criaturas (sem atrapalhar quem está no meio de um ataque)
+  const busy = { toca: 1, pulo: 1, ataque: 1, investir: 1, bote: 1 };
+  const push = (E, dx, dy) => { if (!eHits(E, E.x + dx, E.y)) E.x += dx; if (!eHits(E, E.x, E.y + dy)) E.y += dy; };
+  for (let a = 0; a < enemies.length; a++) for (let b = a + 1; b < enemies.length; b++) {
+    const A = enemies[a], B = enemies[b]; if (A.dead || B.dead || busy[A.st] || busy[B.st]) continue;
+    const dx = B.x - A.x, dy = B.y - A.y, dd = Math.hypot(dx, dy), m = A.d.r + B.d.r;
+    if (dd < m && dd > 0.001) { const p = (m - dd) * 0.5 / dd; push(A, -dx * p, -dy * p); push(B, dx * p, dy * p); }
+  }
+  enemies = enemies.filter(e => !e.dead);
+}
+
+/* ==========================================================================
+   COMBATE — armas, projéteis, esquiva, dano e loot no chão
+   ========================================================================== */
+let bullets = [], drops = [], marks = [], dmgNums = [], atkFx = null;
+function screenToWorld(sx, sy) { return { x: (sx * VIEW.dpr - VIEW.ox) / (VIEW.Z * T), y: (sy * VIEW.dpr - VIEW.oy) / (VIEW.Z * T) }; }
+function nearestTarget(maxD) {
+  let best = null, bd = maxD;
+  for (const e of enemies) { if (e.dead || e.st === 'toca') continue; const d = dPlayer(e); if (d < bd && los(player.x, player.y, e.x, e.y)) { bd = d; best = e; } }
+  return best;
+}
+// Mira: onde você tocou/clicou; sem isso, o inimigo visível mais próximo; senão, para frente
+function aimPoint() {
+  if (touchAim.id !== null || touchAim.pending) return screenToWorld(touchAim.sx, touchAim.sy);
+  if (!touchMode && mouse.used && mouse.inside) return screenToWorld(mouse.x, mouse.y);
+  const e = nearestTarget(9); if (e) return { x: e.x, y: e.y };
+  return { x: player.x + player.fx * 3, y: player.y + player.fy * 3 };
+}
+function attack(w) {
+  const p = aimPoint(); let dx = p.x - player.x, dy = p.y - player.y; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+  player.fx = dx; player.fy = dy; player.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 2 : 3) : (dy > 0 ? 0 : 1);
+  if (w.type === 'gun') {
+    if (countItem(w.ammo) <= 0) { hint('Sem células de energia. Faça na Bancada: sucata + cobre.'); AU.deny(); player.cd = 0.5; return; }
+    removeItems({ [w.ammo]: 1 });
+    const sx = player.x + dx * 0.5, sy = player.y + dy * 0.5;
+    bullets.push({ x: sx, y: sy, vx: dx * w.speed, vy: dy * w.speed, life: w.range / w.speed, dmg: w.dmg, friend: true, col: '#7af0ff' });
+    AU.zap(); noise(player.x, player.y, 12); player.cd = w.cd;
+    for (let k = 0; k < 4; k++) addPart({ x: sx * T, y: sy * T, z: 6, vx: dx * 70 + (Math.random() - 0.5) * 50, vy: dy * 70 + (Math.random() - 0.5) * 50, vz: 0, life: 0.15, max: 0.15, c: '#bff8ff', s: 1, glow: true, dust: true });
+    return;
+  }
+  player.swing = 0.22; player.cd = w.cd * mineMult(); atkFx = { a: Math.atan2(dy, dx), t: 0.16, r: w.range };
+  AU.swing(); noise(player.x, player.y, 6);
+  let hit = false;
+  for (const e of enemies) {
+    if (e.dead || e.st === 'toca') continue;
+    const ex = e.x - player.x, ey = e.y - player.y, d = Math.hypot(ex, ey); if (d > w.range + e.d.r) continue;
+    let ad = Math.abs(Math.atan2(ey, ex) - Math.atan2(dy, dx)); if (ad > Math.PI) ad = 2 * Math.PI - ad;
+    if (ad > 1.15 && d > 0.6) continue;
+    hitEnemy(e, w.dmg, dx * w.kb, dy * w.kb); hit = true;
+  }
+  for (const k of [0.9, 1.5]) { const tx = Math.floor(player.x + dx * k), ty = Math.floor(player.y + dy * k); if (tx < 0 || ty < 0 || tx >= WW || ty >= WH) continue; const i = ty * WW + tx; if (tO[i] && OBJS[tO[i]].nest) { damageNest(i, w.dmg); hit = true; break; } }
+  if (hit) shakeAmt = Math.max(shakeAmt, 1);
+}
+function hitEnemy(e, dmg, kx, ky) {
+  const m = e.st === 'atordoado' ? 2 : 1, v = Math.round(dmg * m);
+  e.hp -= v; e.hurt = 0.12; e.kx += kx; e.ky += ky;
+  dmgNums.push({ x: e.x, y: e.y - 0.9, v, t: 0.8, crit: m > 1 });
+  AU.hitE();
+  for (let k = 0; k < 4; k++) addPart({ x: e.x * T, y: e.y * T - 4, z: 6, vx: (Math.random() - 0.5) * 70, vy: (Math.random() - 0.5) * 50, vz: 30 + Math.random() * 40, life: 0.4, max: 0.4, c: e.d.blood, s: 1 });
+  if (e.hp <= 0) { killEnemy(e); return; }
+  if (e.st === 'patrulha' || e.st === 'alerta') aggro(e);
+}
+function killEnemy(e) {
+  e.dead = true; dropLoot(e.d.loot, e.x, e.y); AU.dieE();
+  for (let k = 0; k < 10; k++) addPart({ x: e.x * T, y: e.y * T - 4, z: 4, vx: (Math.random() - 0.5) * 90, vy: (Math.random() - 0.5) * 70, vz: 20 + Math.random() * 60, life: 0.7, max: 0.7, c: Math.random() < 0.5 ? e.d.blood : '#2a2232', s: Math.random() < 0.3 ? 2 : 1 });
+  flags.kills = (flags.kills || 0) + 1;
+  const g = e.group && groups.get(e.group); if (g) g.members = g.members.filter(m => m !== e);
+}
+function playerHit(dmg, fx, fy) {
+  if (player.iframe > 0 || dead) return;
+  damage(dmg, 'inimigo'); player.iframe = 0.7;
+  const dx = player.x - fx, dy = player.y - fy, d = Math.hypot(dx, dy) || 1; player.kx = dx / d * 7; player.ky = dy / d * 7;
+}
+function tryRoll(mx, my) {
+  if (player.rollCd > 0 || player.roll > 0 || dead) return;
+  let dx = mx, dy = my; const l = Math.hypot(dx, dy); if (l < 0.1) { dx = player.fx; dy = player.fy; } else { dx /= l; dy /= l; }
+  player.roll = 0.28; player.rdx = dx; player.rdy = dy; player.rollCd = 0.85; player.iframe = Math.max(player.iframe, 0.34); AU.roll();
+}
+function updateBullets(dt) {
+  for (let k = bullets.length - 1; k >= 0; k--) {
+    const b = bullets[k]; b.life -= dt; let done = b.life <= 0;
+    const steps = Math.max(1, Math.ceil(Math.hypot(b.vx, b.vy) * dt / 0.2));
+    for (let s = 0; s < steps && !done; s++) {
+      b.x += b.vx * dt / steps; b.y += b.vy * dt / steps;
+      const tx = Math.floor(b.x), ty = Math.floor(b.y);
+      if (tx < 0 || ty < 0 || tx >= WW || ty >= WH) { done = true; break; }
+      const i = ty * WW + tx, o = tO[i];
+      if (b.friend && o && OBJS[o].nest) { damageNest(i, b.dmg); done = true; break; }
+      if (opaqueAt(i) || (o && OBJS[o].solid)) { done = true; for (let q = 0; q < 3; q++) addPart({ x: b.x * T, y: b.y * T, z: 5, vx: (Math.random() - 0.5) * 60, vy: (Math.random() - 0.5) * 60, vz: 20, life: 0.2, max: 0.2, c: b.col, s: 1, glow: true }); break; }
+      if (b.friend) {
+        for (const e of enemies) { if (e.dead || e.st === 'toca') continue; if (Math.hypot(e.x - b.x, e.y - b.y) < e.d.r + 0.18) { const l = Math.hypot(b.vx, b.vy) || 1; hitEnemy(e, b.dmg, b.vx / l * 3, b.vy / l * 3); done = true; break; } }
+      } else if (Math.hypot(player.x - b.x, player.y - b.y) < 0.38) { playerHit(b.dmg, b.x - b.vx * 0.1, b.y - b.vy * 0.1); done = true; }
+    }
+    if (done) bullets.splice(k, 1);
+  }
+}
+function spawnDrop(id, n, x, y) { drops.push({ id, n, x, y, z: 6, vz: 40, vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2, t: 0 }); }
+function dropLoot(list, x, y) { for (const [id, n, ch] of list) if (Math.random() < ch) spawnDrop(id, n, x, y); }
+function updateDrops(dt) {
+  for (let k = drops.length - 1; k >= 0; k--) {
+    const d = drops[k]; d.t += dt;
+    d.z += d.vz * dt; d.vz -= 200 * dt; if (d.z < 0) { d.z = 0; d.vz = 0; d.vx *= 0.8; d.vy *= 0.8; }
+    d.x += d.vx * dt; d.y += d.vy * dt; d.vx *= Math.pow(0.1, dt); d.vy *= Math.pow(0.1, dt);
+    const dd = Math.hypot(player.x - d.x, player.y - d.y);
+    if (d.t > 0.4 && dd < 2.4 && !dead && canFit(d.id, 1)) {
+      d.x += (player.x - d.x) / (dd || 1) * Math.min(dd, 9 * dt); d.y += (player.y - d.y) / (dd || 1) * Math.min(dd, 9 * dt);
+      if (dd < 0.45) { const left = addTo(inv, d.id, d.n), got = d.n - left; if (got > 0) { feedAdd(d.id, got); AU.pickup(); } if (left > 0) d.n = left; else { drops.splice(k, 1); continue; } }
+    }
+    if (d.t > 300) drops.splice(k, 1);
+  }
+}
+function updateCombat(dt) {
+  updatePV();
+  spawnT -= dt; if (spawnT <= 0) { spawnT = 1.1; spawnTick(); }
+  nestT -= dt; if (nestT <= 0) { nestT = 1; nestTick(); }
+  updateGroups(dt); updateEnemies(dt); updateBullets(dt); updateDrops(dt);
+  for (let k = marks.length - 1; k >= 0; k--) { marks[k].t -= dt; if (marks[k].t <= 0) marks.splice(k, 1); }
+  for (let k = dmgNums.length - 1; k >= 0; k--) { dmgNums[k].t -= dt; dmgNums[k].y -= dt * 0.8; if (dmgNums[k].t <= 0) dmgNums.splice(k, 1); }
+  if (atkFx) { atkFx.t -= dt; if (atkFx.t <= 0) atkFx = null; }
+}
+// ---- desenho ----
+function drawEnemy(g, e) {
+  const s = SPR.en[e.type][(e.anim * 6 | 0) % 2], img = e.hurt > 0 ? s.w : s.c;
+  const x = Math.round(e.x * T), y = Math.round(e.y * T), z = (e.z || 0) + (e.d.fly ? 6 + Math.sin(e.anim * 5) * 2 : 0);
+  g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(x - (img.width >> 1) + 2, y + 1, img.width - 4, 2);
+  const shake = (e.st === 'preparar' || e.st === 'mirar' || e.st === 'agachar' || e.st === 'atordoado') ? Math.round((Math.random() - 0.5) * 2) : 0;
+  const sy = e.st === 'agachar' ? 2 : 0;
+  if (e.face < 0) { g.save(); g.translate(x, 0); g.scale(-1, 1); g.drawImage(img, -(img.width >> 1) + shake, y - img.height + 2 - z + sy); g.restore(); }
+  else g.drawImage(img, x - (img.width >> 1) + shake, y - img.height + 2 - z + sy);
+}
+function drawDrop(g, d) {
+  const b = Math.sin(d.t * 4) * 1.5, x = Math.round(d.x * T), y = Math.round(d.y * T);
+  g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(x - 3, y + 1, 6, 1);
+  g.drawImage(iconCanvas(d.id), x - 5, Math.round(y - 10 - d.z + b), 10, 10);
+}
+function drawCombatFx(g) {
+  // marcas telegrafadas no chão (o golpe acontece onde está vermelho)
+  for (const m of marks) {
+    const a = 0.25 + 0.25 * Math.sin(clock * 30) * (m.t / m.max);
+    if (m.k === 'line') { g.save(); g.translate(m.x * T, m.y * T); g.rotate(Math.atan2(m.dy, m.dx)); g.fillStyle = `rgba(255,50,50,${a})`; g.fillRect(0, -m.w * T / 2, m.len * T, m.w * T); g.restore(); }
+    else if (m.k === 'circle') { g.fillStyle = `rgba(255,50,50,${a})`; g.beginPath(); g.arc(m.x * T, m.y * T, m.r * T * (1 - 0.3 * m.t / m.max), 0, Math.PI * 2); g.fill(); g.strokeStyle = 'rgba(255,80,80,0.8)'; g.lineWidth = 1; g.beginPath(); g.arc(m.x * T, m.y * T, m.r * T, 0, Math.PI * 2); g.stroke(); }
+    else if (m.k === 'ring') { const p = 1 - m.t / m.max; g.strokeStyle = `rgba(255,220,90,${1 - p})`; g.lineWidth = 1.5; g.beginPath(); g.arc(m.x * T, m.y * T - 6, 4 + p * 60, 0, Math.PI * 2); g.stroke(); }
+  }
+  g.globalCompositeOperation = 'lighter';
+  for (const e of enemies) {
+    if (e.dead || e.st === 'toca') continue;
+    const x = Math.round(e.x * T), y = Math.round(e.y * T);
+    if (e.type === 'espreitador' && (e.st === 'patrulha' || e.st === 'alerta')) { const fx = e.face < 0 ? -1 : 1; g.fillStyle = '#ff2a4a'; g.fillRect(x + fx * (5 - 7), y - 9, 1, 1); g.fillRect(x + fx * (8 - 7), y - 9, 1, 1); }
+    if (e.type === 'esporo') { g.globalAlpha = 0.35; g.imageSmoothingEnabled = true; g.drawImage(SPR.glow.green, x - 6, y - 16, 12, 12); g.imageSmoothingEnabled = false; g.globalAlpha = 1; }
+    if (e.type === 'devorador') { g.globalAlpha = 0.3; g.imageSmoothingEnabled = true; g.drawImage(SPR.glow.warm, x - 12, y - 24, 24, 24); g.imageSmoothingEnabled = false; g.globalAlpha = 1; }
+  }
+  for (const b of bullets) {
+    const x = b.x * T, y = b.y * T - 6;
+    g.globalAlpha = 0.5; g.imageSmoothingEnabled = true; g.drawImage(b.friend ? SPR.glow.blue : SPR.glow.green, x - 6, y - 6, 12, 12); g.imageSmoothingEnabled = false; g.globalAlpha = 1;
+    g.fillStyle = b.col; g.fillRect(Math.round(x) - 1, Math.round(y) - 1, 2, 2); g.fillStyle = '#ffffff'; g.fillRect(Math.round(x), Math.round(y), 1, 1);
+  }
+  if (atkFx) {
+    g.strokeStyle = `rgba(255,255,255,${atkFx.t / 0.16})`; g.lineWidth = 2;
+    g.beginPath(); g.arc(player.x * T, player.y * T - 5, atkFx.r * T * 0.85, atkFx.a - 1.0, atkFx.a + 1.0); g.stroke();
+  }
+  g.globalCompositeOperation = 'source-over';
+}
+// barras de vida, números de dano e "!" (camada do HUD)
+function drawCombatUI(g) {
+  const Z = VIEW.Z, dpr = VIEW.dpr, u = UI.u, sx = wx => (VIEW.ox + wx * T * Z) / dpr, sy = wy => (VIEW.oy + wy * T * Z) / dpr;
+  for (const e of enemies) {
+    if (e.dead || e.st === 'toca') continue;
+    const i = Math.floor(e.y) * WW + Math.floor(e.x); if (tRoof[i] && roofHole < 3) continue;
+    const x = sx(e.x), y = sy(e.y) - (e.d.fly ? 26 : 18) * Z / dpr;
+    if (e.hp < e.max) { const w = 12 * u; g.fillStyle = '#120e1a'; g.fillRect(x - w / 2, y, w, 2 * u); g.fillStyle = '#ff4a5a'; g.fillRect(x - w / 2 + u / 2, y + u / 2, (w - u) * Math.max(0, e.hp / e.max), u); }
+    if (e.st === 'avistou' || (e.st === 'alerta' && e.t > 4)) txt(g, '!', x, y - 6 * u, 6 * u, '#ffd25a', 'center');
+  }
+  for (const n of dmgNums) { g.globalAlpha = Math.min(1, n.t * 2); txt(g, String(n.v), sx(n.x), sy(n.y), (n.crit ? 6 : 4.5) * u, n.crit ? '#ffd25a' : '#ffffff', 'center'); }
+  g.globalAlpha = 1;
+}
+
+/* ==========================================================================
    NÚCLEO / HISTÓRIA
    ========================================================================== */
 let flags = { coreTalk: 0 };
@@ -1507,6 +2210,7 @@ function interact() {
   if (it.kind === 'bau') return openInv('chest', it.i);
   if (it.kind === 'cama') {
     bed = { x: it.x, y: it.y };
+    if (enemies.some(e => !e.dead && e.st !== 'toca' && e.st !== 'patrulha' && dPlayer(e) < 14)) { hint('Não dá para dormir com criaturas caçando você.'); return; }
     if (world.time >= 18 || world.time < 6) confirmBox('Dormir até amanhã? (o jogo será salvo)', () => { closeConfirm(); sleep(); }, closeConfirm);
     else hint('Ponto de retorno definido. Só dá para dormir depois das 18h.');
     return;
@@ -1517,7 +2221,8 @@ function interact() {
 let fadeT = 0;
 function sleep() {
   AU.sleep(); fadeT = 1.6;
-  world.time = 6; newDay();   // o dia vira às 6h, durma antes ou depois da meia-noite
+  world.time = 6; newDay();
+  enemies = enemies.filter(e => !e.ambient); bullets = [];   // o dia vira às 6h, durma antes ou depois da meia-noite
   stats.hp = 100; stats.hunger = Math.max(0, stats.hunger - 15);
   saveGame(false);
 }
@@ -1540,6 +2245,7 @@ function hitUI(x, y) {
   if (inRect(x, y, UI.bag)) return 'bag';
   for (let s = 0; s < CFG.HOTBAR; s++) if (inRect(x, y, UI.slots[s])) return 'slot' + s;
   if (touchMode && interactTarget && Math.hypot(x - UI.act.cx, y - UI.act.cy) < UI.act.r * 1.1) return 'act';
+  if (touchMode && Math.hypot(x - UI.roll.cx, y - UI.roll.cy) < UI.roll.r * 1.15) return 'roll';
   if (touchMode && Math.hypot(x - UI.use.cx, y - UI.use.cy) < UI.use.r * 1.15) return 'use';
   return null;
 }
@@ -1559,6 +2265,7 @@ canvas.addEventListener('pointerdown', e => {
     else if (ui === 'bag') openInv('craft');
     else if (ui === 'act') interact();
     else if (ui === 'use') useBtnHeld = e.pointerId;
+    else if (ui === 'roll') tryRoll(joy.vx, joy.vy);
     else if (ui.startsWith('slot')) selectHot(+ui.slice(4));
     return;
   }
@@ -1602,6 +2309,7 @@ window.addEventListener('keydown', e => {
     const dg = /^Digit([1-8])$/.exec(e.code); if (dg) selectHot(+dg[1] - 1);
     if (e.code === 'KeyE') interact();
     if (e.code === 'KeyK') saveGame(true);
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { let mx = 0, my = 0; if (keys.has('KeyA') || keys.has('ArrowLeft')) mx--; if (keys.has('KeyD') || keys.has('ArrowRight')) mx++; if (keys.has('KeyW') || keys.has('ArrowUp')) my--; if (keys.has('KeyS') || keys.has('ArrowDown')) my++; tryRoll(mx, my); }
   }
   keys.add(e.code);
   if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) touchMode = false;
@@ -1639,6 +2347,7 @@ function layoutUI() {
   const r = 20 * u; let cx = W - s.r - 8 * u - r, cy = hy - 5 * u - r;
   UI.use = { cx, cy, r };
   UI.act = { cx: cx - r * 1.9, cy: cy + r * 0.25, r: 13 * u };
+  UI.roll = { cx: cx - r * 1.15, cy: cy - r * 1.15, r: 11 * u };
 }
 const FONT = 'ui-monospace,Menlo,Consolas,"Courier New",monospace';
 function txt(g, s, x, y, size, col, align = 'left', base = 'top') {
@@ -1660,6 +2369,7 @@ function drawUI(g) {
   const u = UI.u, W = VIEW.cssW, H = VIEW.cssH;
   g.imageSmoothingEnabled = false;
   if (hurtFlash > 0) { g.fillStyle = `rgba(200,20,40,${hurtFlash * 0.6})`; g.fillRect(0, 0, W, H); }
+  drawCombatUI(g);
   // menu + barras de vida e fome
   const m = UI.menu; panel(g, m.x, m.y, m.w, m.h, false);
   g.fillStyle = '#e8e0f0'; for (let k = 0; k < 3; k++) g.fillRect(m.x + 4 * u, m.y + 4 * u + k * 3 * u, m.w - 8 * u, u);
@@ -1688,6 +2398,7 @@ function drawUI(g) {
       if (it.n > 1) txt(g, String(it.n), r.x + r.w - 1.5 * u, r.y + r.h - 1.5 * u, Math.max(9, 4.4 * u), '#ffffff', 'right', 'bottom');
       if (it.c !== undefined) { g.fillStyle = '#0d1a26'; g.fillRect(r.x + 3 * u, r.y + r.h - 3 * u, r.w - 6 * u, u); g.fillStyle = '#5fc8ff'; g.fillRect(r.x + 3 * u, r.y + r.h - 3 * u, (r.w - 6 * u) * it.c / getIt(it.id).cap, u); }
     }
+    if (it && getIt(it.id) && getIt(it.id).weapon && getIt(it.id).weapon.ammo) txt(g, String(countItem(getIt(it.id).weapon.ammo)), r.x + r.w - 1.5 * u, r.y + r.h - 1.5 * u, Math.max(9, 4.2 * u), '#7af0ff', 'right', 'bottom');
     if (!touchMode) txt(g, String(s + 1), r.x + 1.5 * u, r.y + u, 3.2 * u, '#8a80a0');
   }
   const bg = UI.bag; panel(g, bg.x, bg.y, bg.w, bg.h, false);
@@ -1706,7 +2417,11 @@ function drawUI(g) {
     g.fillStyle = 'rgba(20,16,30,0.75)'; g.beginPath(); g.arc(ub.cx, ub.cy, ub.r, 0, Math.PI * 2); g.fill();
     g.lineWidth = u; g.strokeStyle = '#ffd25a'; g.stroke();
     const sel = inv[hb]; if (sel) { const sz = ub.r; g.drawImage(iconCanvas(sel.id), ub.cx - sz / 2, ub.cy - sz / 2 - 2 * u, sz, sz); }
-    txt(g, heldKind() === 'eat' ? 'COMER' : 'USAR', ub.cx, ub.cy + ub.r * 0.58, 3.8 * u, '#ffe8b0', 'center', 'middle');
+    const hk = heldKind();
+    txt(g, hk === 'eat' ? 'COMER' : hk === 'gun' ? 'ATIRAR' : hk === 'melee' ? 'ATACAR' : 'USAR', ub.cx, ub.cy + ub.r * 0.58, 3.8 * u, '#ffe8b0', 'center', 'middle');
+    const rb = UI.roll; g.globalAlpha = player.rollCd > 0 ? 0.35 : 0.75;
+    g.fillStyle = 'rgba(20,16,30,0.8)'; g.beginPath(); g.arc(rb.cx, rb.cy, rb.r, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#7af0ff'; g.lineWidth = u; g.stroke();
+    txt(g, '»', rb.cx, rb.cy - u, 7 * u, '#bff8ff', 'center', 'middle'); txt(g, 'ESQUIVA', rb.cx, rb.cy + rb.r * 0.55, 2.6 * u, '#bff8ff', 'center', 'middle');
     g.globalAlpha = 1;
     if (interactTarget) {
       const a = UI.act; g.fillStyle = 'rgba(40,24,70,0.88)'; g.beginPath(); g.arc(a.cx, a.cy, a.r, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#b48cff'; g.lineWidth = u; g.stroke();
@@ -1861,6 +2576,7 @@ $('inv-close').onclick = closeInv; $('inv-x').onclick = closeInv;
 let curBiome = 0, bannerB = 0, bannerT = 0, bannerSub = '', biomeT = 0;
 let target = null, targetKind = 'pick', targetOK = false, tipText = '';
 function drawPlayer(g) {
+  if (player.iframe > 0 && player.roll <= 0 && (clock * 18 | 0) % 2) return;
   const dk = player.dir === 1 ? 'up' : player.dir === 0 ? 'down' : 'side', flip = player.dir === 3;
   const f = player.moving ? 1 + ((player.walkT * 7 | 0) % 2) : 0, bob = player.moving && f === 1 ? -1 : 0;
   const px = Math.round(player.x * T), py = Math.round(player.y * T), sp = SPR.player[dk][f];
@@ -1926,11 +2642,16 @@ function render() {
   const prow = Math.floor(player.y);
   const coreVis = CX + 3 >= xA && CX - 3 <= xB && CY >= yA - 1 && CY - 3 <= yB;
   if (coreVis && CY < yA) drawCore(g);
+  const erow = new Map();
+  for (const e of enemies) { if (e.dead || e.st === 'toca') continue; const r = Math.floor(e.y); if (r < yA || r > yB) continue; if (!erow.has(r)) erow.set(r, []); erow.get(r).push(e); }
   for (let y = yA; y <= yB; y++) {
     for (let x = xA; x <= xB; x++) { const i = y * WW + x, o = tO[i]; if (o) drawObj(g, o, x, y, i); }
     if (coreVis && y === CY) drawCore(g);
+    const er = erow.get(y); if (er) for (const e of er) if (!e.d.fly) drawEnemy(g, e);
     if (y === prow && !dead) drawPlayer(g);
+    if (er) for (const e of er) if (e.d.fly) drawEnemy(g, e);
   }
+  for (const d of drops) if (d.x > xA - 1 && d.x < xB + 1 && d.y > yA - 1 && d.y < yB + 1) drawDrop(g, d);
   // paredes e árvores à frente do jogador cobrem o jogador (vista 3/4)
   for (let dy = 1; dy <= 2; dy++) for (let x = Math.floor(player.x) - 1; x <= Math.floor(player.x) + 1; x++) {
     const y = prow + dy; if (y >= WH || x < 0 || x >= WW) continue; const w = tW[y * WW + x];
@@ -1967,6 +2688,7 @@ function render() {
     g.globalAlpha = Math.min(1, a * 1.6); g.fillStyle = '#9a7aff'; for (let k = 0; k < 24; k++) { const ang = k / 24 * Math.PI * 2; g.fillRect(Math.round(bx + 40 + Math.cos(ang) * 10.5), Math.round(by + 22 + Math.sin(ang) * 10.5), 1, 1); }
     g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
   }
+  drawCombatFx(g);
   // 5) teto das montanhas (tingido pelo céu) com buraco em volta do jogador quando ele entra
   let anyRoof = false;
   for (let cy = cy0; cy <= cy1 && !anyRoof; cy++) for (let cx = cx0; cx <= cx1; cx++) if (genDone[cy * NC + cx] && roofCnt[cy * NC + cx]) { anyRoof = true; break; }
@@ -2033,6 +2755,12 @@ const MIGRATIONS = {
     return { v: 2, seed: d.seed, t: d.t || 0, world: { day: 1, time: 7 }, p: { x: CX + 0.5, y: CY + 4.5, dir: 0 }, stats: { hp: 100, hunger: 100 }, inv, hb: 0, mods: [], exp: '', ins: '', visited: [], flags: { coreTalk: (d.flags && d.flags.coreTalk) || 0 }, chests: {}, crops: [], wet: [], buffs: [], bed: null, migrated: true };
   },
 };
+// v2 → v3 (armas e inimigos): quem já jogava recebe a pistola da nave e células
+MIGRATIONS[2] = d => {
+  const has = (d.inv || []).some(s => s && s[0] === 'pistola_energia');
+  if (!has) { const inv = (d.inv || []).slice(); while (inv.length < CFG.INV_SIZE) inv.push(0); const put = (id, n) => { const k = inv.findIndex(s => !s); if (k >= 0) inv[k] = [id, n]; }; put('pistola_energia', 1); put('celula', 30); d.inv = inv; }
+  d.v = 3; d.armed = true; return d;
+};
 function migrate(d) {
   if (!d || typeof d.v !== 'number') throw new Error('save sem versão');
   while (d.v < CFG.SAVE_VERSION) { const m = MIGRATIONS[d.v]; if (!m) throw new Error('sem migração para v' + d.v); d = m(d); }
@@ -2073,6 +2801,7 @@ function resetWorld() {
   LR.fill(0); LG.fill(0); LB.fill(0); explored.fill(0); inside.fill(0);
   modsByChunk = new Map(); dmgMap.clear(); parts.length = 0; amb.length = 0; feed.length = 0;
   crops = new Map(); wet = new Set(); emptyBushes = new Set(); chests = new Map(); buffs = []; bed = null; dead = null;
+  enemies = []; groups = new Map(); bullets = []; drops = []; marks = []; dmgNums = []; nestHp.clear(); nestCd.clear(); nestGroup.clear(); spawnT = 3;
   for (const ci of [...chunkCache.keys()]) dropChunkRender(ci % NC, (ci / NC) | 0);
   for (const ci of [...roofCache.keys()]) dropRoofRender(ci % NC, (ci / NC) | 0);
   mmImg = mmCtx.createImageData(WW, WH); mmCtx.clearRect(0, 0, WW, WH); mmDirty = null;
@@ -2099,10 +2828,11 @@ function startGame(data) {
     for (const i of crops.keys()) need.add(chunkOf(i));
     for (const ci of need) ensureChunk(ci % NC, (ci / NC) | 0);
     if (data.migrated) dialog = { lines: ['Umbra mudou: agora você está na superfície do planeta.', 'O mundo foi refeito; seus itens vieram com você.'], t: 8 };
+    else if (data.armed) dialog = { lines: ['Há criaturas em Umbra. Você remontou a pistola da nave.', 'Células de energia: Bancada (sucata + cobre). Shift/» = esquiva.'], t: 8 };
   } else {
     seed = (Math.random() * 2147483647) | 0;
     inv = new Array(CFG.INV_SIZE).fill(null); hb = 0;
-    addTo(inv, 'picareta_improv', 1); addTo(inv, 'tocha', 10); addTo(inv, 'racao', 3);
+    addTo(inv, 'picareta_improv', 1); addTo(inv, 'pistola_energia', 1); addTo(inv, 'tocha', 10); addTo(inv, 'racao', 3); addTo(inv, 'celula', 30);
     world.day = 1; world.time = 7; stats.hp = 100; stats.hunger = 85;
     player.x = CX + 0.5; player.y = CY + 3.5; player.dir = 0;
     visited = new Set([0]); flags = { coreTalk: 0 }; playTime = 0;
@@ -2160,25 +2890,43 @@ function update(dt) {
   if (intro || mapOpen || fadeT > 0.5) { mx = my = 0; len = 0; }
   const pi = Math.floor(player.y) * WW + Math.floor(player.x), fd = FLOORS[tF[pi]];
   const spd = CFG.SPEED * (fd && fd.slow ? fd.slow : 1) * (stats.hunger <= 0 ? 0.75 : 1);
-  if (len > 0.1) {
+  const ox0 = player.x, oy0 = player.y;
+  player.iframe -= dt; player.rollCd -= dt;
+  if (player.kx || player.ky) { movePlayer(player.kx * dt, player.ky * dt); const k = Math.pow(0.004, dt); player.kx *= k; player.ky *= k; if (Math.abs(player.kx) + Math.abs(player.ky) < 0.1) player.kx = player.ky = 0; }
+  if (player.roll > 0) {
+    player.roll -= dt; movePlayer(player.rdx * 11 * dt, player.rdy * 11 * dt); player.moving = true; player.walkT += dt * 2;
+    if (Math.random() < 0.5) addPart({ x: player.x * T, y: player.y * T, z: 1, vx: (Math.random() - 0.5) * 20, vy: (Math.random() - 0.5) * 20, vz: 8, life: 0.4, max: 0.4, c: 'rgba(170,160,180,0.4)', s: 2, dust: true });
+  } else if (len > 0.1) {
     movePlayer(mx * spd * dt, my * spd * dt);
     player.fx = mx / len; player.fy = my / len; player.dir = Math.abs(mx) > Math.abs(my) ? (mx > 0 ? 2 : 3) : (my > 0 ? 0 : 1);
     player.walkT += dt * len; player.moving = true;
     player.stepT -= dt * len; if (player.stepT <= 0) { player.stepT = 0.3; AU.step(tF[pi]); }
   } else { player.moving = false; player.walkT = 0; }
+  player.vx = (player.x - ox0) / dt; player.vy = (player.y - oy0) / dt;
   cam.x += (player.x - cam.x) * Math.min(1, dt * 10); cam.y += (player.y - 0.4 - cam.y) * Math.min(1, dt * 10);
   ensureChunksAround();
+  updateCombat(dt);
   // alvo e uso
   const forcePick = mouse.right && !touchMode;
   targetKind = heldKind(forcePick);
-  target = intro || mapOpen || dialog ? null : computeTarget(targetKind);
+  const armed = targetKind === 'melee' || targetKind === 'gun';
+  target = intro || mapOpen || dialog || armed ? null : computeTarget(targetKind);
   targetOK = !!target && inReach(target.x, target.y) && validFor(targetKind, target.x, target.y, false);
   if (targetOK && targetKind === 'pick' && tW[target.y * WW + target.x] && WALLS[tW[target.y * WW + target.x]].h > (forcePick ? bestPickTier() : (heldDef() || {}).tier || 0)) targetOK = false;
   if (target && !target.manual && !targetOK) target = null;
   tipText = describeTarget(target);
+  if (targetKind === 'gun') tipText = `Células de energia: ${countItem(heldDef().weapon.ammo)}`;
+  // picareta também bate em criatura (fraco): mirando nela, ou se não há bloco na frente
+  let pickAtk = null;
+  if (targetKind === 'pick') {
+    const p = (touchAim.id !== null || touchAim.pending) ? screenToWorld(touchAim.sx, touchAim.sy) : (!touchMode && mouse.used && mouse.inside) ? screenToWorld(mouse.x, mouse.y) : null;
+    const foe = p ? enemies.find(e => !e.dead && e.st !== 'toca' && Math.hypot(e.x - p.x, e.y - p.y) < 0.8) : (!target ? enemies.find(e => !e.dead && e.st !== 'toca' && dPlayer(e) < 1.5) : null);
+    if (foe && dPlayer(foe) < 2.2) { pickAtk = { type: 'melee', dmg: 2 + 2 * (forcePick ? bestPickTier() : heldDef().tier), cd: 0.4, range: 1.5, kb: 4 }; target = null; }
+  }
   player.cd -= dt; player.swing -= dt;
   const wantUse = (touchAim.id !== null) || touchAim.pending || useBtnHeld !== null || keys.has('Space') || keys.has('Enter') || (mouse.left && !touchMode) || forcePick;
-  if (wantUse && player.cd <= 0 && (target || targetKind === 'eat') && !intro && !mapOpen) { doUse(target, forcePick); touchAim.pending = false; }
+  if (wantUse && player.cd <= 0 && !intro && !mapOpen && (armed || pickAtk)) { attack(armed ? heldDef().weapon : pickAtk); touchAim.pending = false; }
+  else if (wantUse && player.cd <= 0 && (target || targetKind === 'eat') && !intro && !mapOpen) { doUse(target, forcePick); touchAim.pending = false; }
   else if (touchAim.pending && touchAim.id === null && !target) touchAim.pending = false;
   interactTarget = intro || dialog ? null : findInteract();
   // efeitos e textos
@@ -2228,7 +2976,7 @@ function openTitle() {
 function openPause() {
   if (state !== 'play') return; state = 'pause';
   let ex = 0; for (let b = 0; b < explored.length; b++) { let v = explored[b]; while (v) { ex += v & 1; v >>= 1; } }
-  $('p-stats').textContent = `Dia ${world.day} · ${clockText()} · Tempo jogado: ${fmtTime(playTime)} · Tiles vistos: ${ex} · Biomas: ${visited.size}/8 · Plantações: ${crops.size} · Seed ${seed}`;
+  $('p-stats').textContent = `Dia ${world.day} · ${clockText()} · Tempo jogado: ${fmtTime(playTime)} · Tiles vistos: ${ex} · Biomas: ${visited.size}/8 · Plantações: ${crops.size} · Criaturas abatidas: ${flags.kills || 0} · Ninhos destruídos: ${flags.nests || 0} · Seed ${seed}`;
   $('p-sound').textContent = 'Som: ' + (AU.on ? 'ligado' : 'desligado');
   showOverlay('ov-pause');
 }
