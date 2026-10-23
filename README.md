@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com cinco sites estáticos publicados pelo GitHub Pages.
+Repositório com seis sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -9,6 +9,7 @@ Repositório com cinco sites estáticos publicados pelo GitHub Pages.
 | [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
 | [`/arena/`](https://xxxxsgh.github.io/mathref/arena/) | **NULLPOINT** — FPS tático de arena com skins e inspeção de faca |
 | [`/ironline/`](https://xxxxsgh.github.io/mathref/ironline/) | **IRONLINE** — FPS militar com arquitetura de features plugáveis |
+| [`/futebol/`](https://xxxxsgh.github.io/mathref/futebol/) | **PIXEL FUTEBOL** — futebol 3D com estética pixel art (arquivo único, sem build) |
 
 ## Publicação
 
@@ -129,3 +130,10 @@ npm run build      # gera ../ironline/
 npm test           # testes unitários do núcleo
 npm run shot -- --all --outdir /tmp/shots   # screenshots determinísticos de todos os presets
 ```
+
+## PIXEL FUTEBOL
+
+Futebol 3D em pixel art num único `futebol/index.html` (Three.js via CDN, sem
+build — publicado direto pela cópia da raiz). Desenvolvido em fases; o plano,
+as decisões técnicas e os riscos estão em
+[`docs/PIXEL-FUTEBOL.md`](./docs/PIXEL-FUTEBOL.md).
