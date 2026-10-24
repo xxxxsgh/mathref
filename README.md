@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com cinco sites estáticos publicados pelo GitHub Pages.
+Repositório com seis sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -9,12 +9,13 @@ Repositório com cinco sites estáticos publicados pelo GitHub Pages.
 | [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
 | [`/arena/`](https://xxxxsgh.github.io/mathref/arena/) | **NULLPOINT** — FPS tático de arena com skins e inspeção de faca |
 | [`/ironline/`](https://xxxxsgh.github.io/mathref/ironline/) | **IRONLINE** — FPS militar com arquitetura de features plugáveis |
+| [`/quadra/`](https://xxxxsgh.github.io/mathref/quadra/) | **QUADRA VIVA** — futsal arcade com física em escala real |
 
 ## Publicação
 
 O deploy é automático: qualquer push em `main` dispara
 [`.github/workflows/pages.yml`](./.github/workflows/pages.yml), que compila os
-jogos a partir de `game-src/`, `drone-src/`, `arena-src/` e `ironline-src/`, monta o site e
+jogos a partir de `game-src/`, `drone-src/`, `arena-src/`, `ironline-src/` e `quadra-src/`, monta o site e
 publica no Pages.
 
 Não há configuração manual: o passo `configure-pages` roda com
@@ -28,7 +29,7 @@ Para republicar sem commit novo: aba *Actions* → *Publicar no GitHub Pages* �
 
 O workflow copia a raiz do repositório **por exclusão** — qualquer arquivo
 novo na raiz é publicado sem precisar editar o workflow. Ficam de fora:
-`game-src/`, `drone-src/`, `arena-src/`, `ironline-src/`, `docs/`, `.github/`, `README.md`, `.gitignore` e
+`game-src/`, `drone-src/`, `arena-src/`, `ironline-src/`, `quadra-src/`, `docs/`, `.github/`, `README.md`, `.gitignore` e
 `node_modules/`.
 
 ### Plano B, sem Actions
@@ -128,4 +129,29 @@ npm run dev        # desenvolvimento
 npm run build      # gera ../ironline/
 npm test           # testes unitários do núcleo
 npm run shot -- --all --outdir /tmp/shots   # screenshots determinísticos de todos os presets
+```
+
+## QUADRA VIVA
+
+Futsal arcade em Three.js com física em escala real (1 unidade = 1 m): bola
+de 0,42 kg que quica pouco e rola "presa" ao chão, passo fixo de 1/120 s com
+interpolação, condução por toques (a bola não gruda no pé), domínio, passe
+por cone, chute com carga e cone de erro, desarme/carrinho com avaliação de
+falta, lei da vantagem, goleiro com tempo de reação e mergulho, fôlego e
+substituições. Joga no teclado, no toque (joystick virtual) ou com controle.
+Tudo procedural — nenhum asset externo.
+
+- Fonte: [`quadra-src/`](./quadra-src)
+- Build: `quadra/` (gerado pelo workflow; commitado como plano B)
+- **Documentação técnica:** [`docs/QUADRA-VIVA.md`](./docs/QUADRA-VIVA.md)
+- **Todos os números de jogo:** [`quadra-src/src/config.js`](./quadra-src/src/config.js)
+
+```bash
+cd quadra-src
+npm install
+npm run dev        # desenvolvimento
+npm run build      # gera ../quadra/
+npm test           # testes da física e das regras (seções A–H do adendo)
+npm run e2e        # ponta a ponta no Chromium (Playwright)
+node tools/sim.mjs 5 3   # 5 partidas IA × IA no Node, sem render
 ```
