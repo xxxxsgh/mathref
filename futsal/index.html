@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Pixel Futsal</title>
+<meta name="description" content="Jogo de futsal 3D em pixel art: partidas 5x5, regras oficiais, carreira de técnico e multiplayer local.">
+<meta name="theme-color" content="#0b1120">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pixel Futsal">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="flash"></div>
+
+<div id="hud" class="hidden">
+  <div id="scorebar">
+    <div class="sb-team sb-home"><canvas class="sb-crest"></canvas><span class="sb-name"></span><span class="sb-score"></span></div>
+    <div class="sb-mid"><span class="sb-clock">00:00</span><span class="sb-half">1º T</span></div>
+    <div class="sb-team sb-away"><span class="sb-score"></span><span class="sb-name"></span><canvas class="sb-crest"></canvas></div>
+    <div class="sb-fouls sb-fouls-home"></div>
+    <div class="sb-fouls sb-fouls-away"></div>
+  </div>
+  <div id="shootout" class="hidden"></div>
+  <div id="playerbox"><span class="pb-num"></span><span class="pb-name"></span><div class="pb-stam"><i></i></div></div>
+  <div id="playerbox2" class="hidden"><span class="pb-num"></span><span class="pb-name"></span><div class="pb-stam"><i></i></div></div>
+  <div id="power" class="hidden"><i></i></div>
+  <div id="foursec" class="hidden"></div>
+  <div id="banner" class="hidden"><div class="bn-main"></div><div class="bn-sub"></div></div>
+  <div id="toast" class="hidden"></div>
+  <div id="replaytag" class="hidden">▶ REPLAY <small>toque para pular</small></div>
+  <div id="fps" class="hidden"></div>
+</div>
+
+<div id="touch">
+  <div class="joy-zone"></div>
+  <div class="joy-base"><div class="joy-knob"></div></div>
+  <div class="tbtns">
+    <button class="tbtn tb-shoot" data-act="shoot">CHUTE</button>
+    <button class="tbtn tb-pass" data-act="pass">PASSE</button>
+    <button class="tbtn tb-dribble" data-act="dribble">DRIBLE</button>
+    <button class="tbtn tb-switch" data-act="switch">TROCA</button>
+  </div>
+  <button class="tpause" aria-label="Pausar">II</button>
+</div>
+
+<div id="screens"></div>
+
+<div id="boot">
+  <div class="boot-logo">PIXEL<br>FUTSAL</div>
+  <div class="boot-msg">Carregando…</div>
+</div>
+<noscript><p style="color:#fff;padding:20px">Ative o JavaScript para jogar.</p></noscript>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

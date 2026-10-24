@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com cinco sites estáticos publicados pelo GitHub Pages.
+Repositório com seis sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -9,13 +9,15 @@ Repositório com cinco sites estáticos publicados pelo GitHub Pages.
 | [`/drone/`](https://xxxxsgh.github.io/mathref/drone/) | **Dronefarer** — simulador arcade de drone FPV |
 | [`/arena/`](https://xxxxsgh.github.io/mathref/arena/) | **NULLPOINT** — FPS tático de arena com skins e inspeção de faca |
 | [`/ironline/`](https://xxxxsgh.github.io/mathref/ironline/) | **IRONLINE** — FPS militar com arquitetura de features plugáveis |
+| [`/futsal/`](https://xxxxsgh.github.io/mathref/futsal/) | **Pixel Futsal** — futsal 3D em pixel art com regras oficiais, carreira e multiplayer local |
 
 ## Publicação
 
 O deploy é automático: qualquer push em `main` dispara
 [`.github/workflows/pages.yml`](./.github/workflows/pages.yml), que compila os
 jogos a partir de `game-src/`, `drone-src/`, `arena-src/` e `ironline-src/`, monta o site e
-publica no Pages.
+publica no Pages. O Pixel Futsal (`futsal/`) não tem etapa de build: é copiado
+como está.
 
 Não há configuração manual: o passo `configure-pages` roda com
 `enablement: true` e liga o Pages no repositório na primeira execução, já
@@ -128,4 +130,24 @@ npm run dev        # desenvolvimento
 npm run build      # gera ../ironline/
 npm test           # testes unitários do núcleo
 npm run shot -- --all --outdir /tmp/shots   # screenshots determinísticos de todos os presets
+```
+
+## Pixel Futsal
+
+Futsal 3D em pixel art (cena em baixa resolução ampliada com NEAREST): 5x5 com
+as regras oficiais (lateral com o pé, tiro de meta com a mão, 4 segundos,
+faltas acumuladas com tiro livre sem barreira, cartões e expulsão temporária,
+pênalti, goleiro-linha, prorrogação e pênaltis), IA com 4 formações e 4
+dificuldades, replays em 3 ângulos, áudio e narração em português
+sintetizados, amistoso, campeonato, copa, carreira de técnico, multiplayer
+local, disputa de pênaltis e editor de times com importação/exportação em
+JSON. HTML5 + ES Modules + Three.js via CDN, sem build, instalável como PWA e
+offline.
+
+- Fonte e site: [`futsal/`](./futsal)
+- **Documentação técnica:** [`docs/PIXELFUTSAL.md`](./docs/PIXELFUTSAL.md)
+
+```bash
+python3 -m http.server 8000   # na raiz; abra http://localhost:8000/futsal/
+node futsal/tools/test.mjs    # 53 testes de física, regras e simulação
 ```
