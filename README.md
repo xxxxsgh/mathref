@@ -166,6 +166,8 @@ por sala. 4 robôs jogáveis (arma inicial, passiva e especial próprios), 4 ní
 de dificuldade (Fácil, Normal, Difícil, Pesadelo) e andares liberados como
 ponto de partida. Controles de teclado/mouse, toque (iPad/iPhone) e gamepad.
 
-- Tudo em um único arquivo, sem build: [`lamina/index.html`](./lamina/index.html)
+- Jogo em um único arquivo, sem build: [`lamina/index.html`](./lamina/index.html)
+- Visual 3D com Three.js r149 (`lamina/three.min.js`, MIT; CDN de reserva). A simulação continua
+  2D no plano e o renderizador 2D segue disponível em Opções → VISUAL e como fallback automático.
 - `lamina/sw.js` é uma cópia do service worker embutido: navegadores não aceitam
   registrar SW a partir de `blob:`, então o jogo tenta o Blob e cai para esse arquivo.
