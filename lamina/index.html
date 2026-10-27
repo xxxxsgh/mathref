@@ -169,7 +169,7 @@ h2{font-size:clamp(20px,4.6vw,34px);margin:4px 0 8px;letter-spacing:.08em;text-s
     <h3>ROBÔS E ESPECIAIS</h3>
     Cada robô começa com uma arma, tem uma passiva e um <b>especial</b>. A barra enche com abates e parries;
     cheia, aperte <b>Q</b> / <b>ESPECIAL</b> / <b>RB</b>.
-    <b>VERDE-01</b>: corte fantasma · <b>BIGORNA</b>: terremoto + blindagem · <b>AGULHA</b>: tempestade de agulhas · <b>ESPELHO</b>: campo refletor.
+    <b>RAFAEL</b>: corte fantasma · <b>FELIPE</b>: terremoto + blindagem · <b>TAKESHI</b>: tempestade de agulhas · <b>MARCELO</b>: campo refletor.
     <h3>DIFICULDADE</h3>
     Fácil, Normal, Difícil e Pesadelo mudam retries, tempo de aviso dos ataques, velocidade das balas, número de inimigos e vida dos chefes.
     Quanto mais difícil, maior o multiplicador de pontos. Andares vencidos ficam liberados como ponto de partida.
@@ -258,13 +258,13 @@ const palOf=f=>PALS[clamp(f,1,PALS.length)-1];
 const BOSS_KIND=['crane','tower','overseer','crane','tower'];
 // --- personagens jogáveis: arma inicial, passiva e especial ---
 const CHARS=[
-  {id:'verde',name:'VERDE-01',role:'EQUILIBRADO',weapon:'katana',col:['#5cf2b5','#3fd59d','#1f8f68'],scarf:'#ff6a3d',rgb:'92,242,181',speed:1,dashCd:1,parry:0,armor:0,
+  {id:'verde',name:'RAFAEL',role:'EQUILIBRADO',weapon:'katana',col:['#5cf2b5','#3fd59d','#1f8f68'],scarf:'#ff6a3d',rgb:'92,242,181',speed:1,dashCd:1,parry:0,armor:0,
    passive:'Sem fraquezas: a lâmina rápida perdoa erros.',sp:{id:'phantom',name:'CORTE FANTASMA',desc:'Atravessa a sala em linha reta pela mira, fatiando tudo no caminho.',cost:4}},
-  {id:'bigorna',name:'BIGORNA',role:'PESADO',weapon:'axe',col:['#ffb347','#e0902a','#8a5410'],scarf:'#4da3ff',rgb:'255,179,71',speed:0.92,dashCd:1.15,parry:0,armor:1,
+  {id:'bigorna',name:'FELIPE',role:'PESADO',weapon:'axe',col:['#ffb347','#e0902a','#8a5410'],scarf:'#4da3ff',rgb:'255,179,71',speed:0.92,dashCd:1.15,parry:0,armor:1,
    passive:'Blindagem: absorve 1 golpe por sala.',sp:{id:'quake',name:'TERREMOTO',desc:'Esmaga o chão: destrói quem está perto e atordoa o resto.',cost:5}},
-  {id:'agulha',name:'AGULHA',role:'ÁGIL',weapon:'spear',col:['#6fd8ff','#3fb0e0','#1a6688'],scarf:'#ffd23f',rgb:'111,216,255',speed:1.12,dashCd:0.8,parry:0,armor:0,
+  {id:'agulha',name:'TAKESHI',role:'ÁGIL',weapon:'spear',col:['#6fd8ff','#3fb0e0','#1a6688'],scarf:'#ffd23f',rgb:'111,216,255',speed:1.12,dashCd:0.8,parry:0,armor:0,
    passive:'+12% de velocidade e dash 20% mais rápido.',sp:{id:'needles',name:'TEMPESTADE',desc:'Dispara um leque de 14 agulhas que perfuram inimigos.',cost:4}},
-  {id:'espelho',name:'ESPELHO',role:'DEFENSIVO',weapon:'long',col:['#d9a2ff','#b47ce8','#6a3a99'],scarf:'#5cf2b5',rgb:'217,162,255',speed:0.97,dashCd:1,parry:0.04,armor:0,
+  {id:'espelho',name:'MARCELO',role:'DEFENSIVO',weapon:'long',col:['#d9a2ff','#b47ce8','#6a3a99'],scarf:'#5cf2b5',rgb:'217,162,255',speed:0.97,dashCd:1,parry:0.04,armor:0,
    passive:'Janela do parry perfeito +40 ms.',sp:{id:'mirror',name:'CAMPO REFLETOR',desc:'Por 3 s, todo projétil e laser que te tocar volta como parry perfeito.',cost:5}}
 ];
 // --- níveis de dificuldade ---
