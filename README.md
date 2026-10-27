@@ -159,10 +159,12 @@ node tools/sim.mjs 5 3   # 5 partidas IA × IA no Node, sem render
 
 ## LÂMINA//FERRUGEM
 
-Ação top-down em Canvas 2D: um robô espadachim contra uma fábrica tomada por
+Ação top-down em Canvas 2D: robôs espadachins contra uma fábrica tomada por
 robôs de segurança. Um golpe mata, um erro também. Parry de balas e lasers,
-armas no chão, 3 andares × 6 salas + chefe, upgrades roguelite e nota S/A/B/C
-por sala. Controles de teclado/mouse, toque (iPad/iPhone) e gamepad.
+armas no chão, 5 andares × 6 salas + chefe, upgrades roguelite e nota S/A/B/C
+por sala. 4 robôs jogáveis (arma inicial, passiva e especial próprios), 4 níveis
+de dificuldade (Fácil, Normal, Difícil, Pesadelo) e andares liberados como
+ponto de partida. Controles de teclado/mouse, toque (iPad/iPhone) e gamepad.
 
 - Tudo em um único arquivo, sem build: [`lamina/index.html`](./lamina/index.html)
 - `lamina/sw.js` é uma cópia do service worker embutido: navegadores não aceitam
