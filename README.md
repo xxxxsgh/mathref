@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com seis sites estáticos publicados pelo GitHub Pages.
+Repositório com sete sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -10,6 +10,7 @@ Repositório com seis sites estáticos publicados pelo GitHub Pages.
 | [`/arena/`](https://xxxxsgh.github.io/mathref/arena/) | **NULLPOINT** — FPS tático de arena com skins e inspeção de faca |
 | [`/ironline/`](https://xxxxsgh.github.io/mathref/ironline/) | **IRONLINE** — FPS militar com arquitetura de features plugáveis |
 | [`/quadra/`](https://xxxxsgh.github.io/mathref/quadra/) | **QUADRA VIVA** — futsal arcade com física em escala real |
+| [`/lamina/`](https://xxxxsgh.github.io/mathref/lamina/) | **LÂMINA//FERRUGEM** — ação top-down de espada e parry, arquivo HTML único |
 
 ## Publicação
 
@@ -155,3 +156,14 @@ npm test           # testes da física e das regras (seções A–H do adendo)
 npm run e2e        # ponta a ponta no Chromium (Playwright)
 node tools/sim.mjs 5 3   # 5 partidas IA × IA no Node, sem render
 ```
+
+## LÂMINA//FERRUGEM
+
+Ação top-down em Canvas 2D: um robô espadachim contra uma fábrica tomada por
+robôs de segurança. Um golpe mata, um erro também. Parry de balas e lasers,
+armas no chão, 3 andares × 6 salas + chefe, upgrades roguelite e nota S/A/B/C
+por sala. Controles de teclado/mouse, toque (iPad/iPhone) e gamepad.
+
+- Tudo em um único arquivo, sem build: [`lamina/index.html`](./lamina/index.html)
+- `lamina/sw.js` é uma cópia do service worker embutido: navegadores não aceitam
+  registrar SW a partir de `blob:`, então o jogo tenta o Blob e cai para esse arquivo.
