@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com seis sites estáticos publicados pelo GitHub Pages.
+Repositório com sete sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -10,6 +10,7 @@ Repositório com seis sites estáticos publicados pelo GitHub Pages.
 | [`/arena/`](https://xxxxsgh.github.io/mathref/arena/) | **NULLPOINT** — FPS tático de arena com skins e inspeção de faca |
 | [`/ironline/`](https://xxxxsgh.github.io/mathref/ironline/) | **IRONLINE** — FPS militar com arquitetura de features plugáveis |
 | [`/quadra/`](https://xxxxsgh.github.io/mathref/quadra/) | **QUADRA VIVA** — futsal arcade com física em escala real |
+| [`/lamina3d/`](https://xxxxsgh.github.io/mathref/lamina3d/) | **LÂMINA//FERRUGEM 3D** — ação com espada e parry em 3D |
 
 ## Publicação
 
@@ -155,3 +156,21 @@ npm test           # testes da física e das regras (seções A–H do adendo)
 npm run e2e        # ponta a ponta no Chromium (Playwright)
 node tools/sim.mjs 5 3   # 5 partidas IA × IA no Node, sem render
 ```
+
+## LÂMINA//FERRUGEM 3D
+
+Versão 3D do LÂMINA//FERRUGEM (robô espadachim contra uma fábrica: um golpe
+mata, um erro também). A simulação é a mesma do jogo 2D — física, IA,
+chefes, parry, especiais, áudio, menus e save — e só a renderização mudou:
+cena em Three.js com câmera inclinada que segue o jogador, paredes, pilares,
+caixotes e grades em 3D, robôs montados com primitivas, ragdolls e carcaças
+3D, sombras em tempo real, brilhos e partículas. O piso continua sendo o
+canvas pré-renderizado da sala (com sangue, óleo e queimados pintados nele),
+usado como textura. HUD, textos e avisos de ataque são desenhados num canvas
+2D por cima, projetados no chão.
+
+- Arquivo único, sem build: [`lamina3d/index.html`](./lamina3d/index.html)
+- Three.js 0.185.1 copiado em `lamina3d/vendor/` (funciona offline como PWA)
+- Qualidade: `ALTA` (sombras 2048), `AUTO` (sombras 1024, baixa a resolução
+  se cair de 60 fps), `LEVE` (sem sombras, resolução 1×)
+
