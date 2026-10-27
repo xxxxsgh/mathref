@@ -40,6 +40,7 @@ body{position:fixed;inset:0}
 #bSpec{width:76px;height:76px;right:calc(134px + env(safe-area-inset-right));bottom:calc(106px + env(safe-area-inset-bottom));font-size:10px;border-color:rgba(255,210,63,.45)}
 #bSpec.ready{background:rgba(255,210,63,.32);border-color:#ffd23f;box-shadow:0 0 18px rgba(255,210,63,.45)}
 .card.sel{border-color:var(--mint);background:#143328}
+#charCards{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .card canvas{display:block;margin:0 auto 6px;width:72px;height:72px}
 .card .sp{font-size:11px;color:#ffd23f;margin-top:7px;font-weight:800;letter-spacing:.08em}
 .card .ps{font-size:11px;color:#9fd0ff;margin-top:4px;line-height:1.4}
@@ -109,8 +110,8 @@ h2{font-size:clamp(20px,4.6vw,34px);margin:4px 0 8px;letter-spacing:.08em;text-s
 </div></div>
 
 <!-- SELEÇÃO: PERSONAGEM, DIFICULDADE, ANDAR -->
-<div class="scr hide" id="scrSetup"><div class="box" style="width:min(820px,100%)">
-  <h2>ESCOLHA O ROBÔ</h2>
+<div class="scr hide" id="scrSetup"><div class="box" style="width:min(900px,100%)">
+  <h2>ESCOLHA O PERSONAGEM</h2>
   <div class="cards" id="charCards"></div>
   <div class="tag" style="margin:16px 0 0">DIFICULDADE</div>
   <div class="seg" id="diffRow"></div>
@@ -166,10 +167,10 @@ h2{font-size:clamp(20px,4.6vw,34px);margin:4px 0 8px;letter-spacing:.08em;text-s
     <b style="color:#ff3d7a">Atirador laser</b> mira por 1 s · <b style="color:#4da3ff">Escudeiro</b> bloqueia de frente (flanqueie, use machado ou bala rebatida) ·
     <b style="color:#b65cff">Kamikaze</b> explode e leva quem estiver perto, inclusive os amigos dele.
     <b style="color:#9be35a">Espingardeiro</b> (andar 3+) abre um leque de balas: rebata o que vier na sua direção.
-    <h3>ROBÔS E ESPECIAIS</h3>
-    Cada robô começa com uma arma, tem uma passiva e um <b>especial</b>. A barra enche com abates e parries;
+    <h3>PERSONAGENS E ESPECIAIS</h3>
+    Cada personagem começa com uma arma, tem uma passiva e um <b>especial</b>. A barra enche com abates e parries;
     cheia, aperte <b>Q</b> / <b>ESPECIAL</b> / <b>RB</b>.
-    <b>RAFAEL</b>: corte fantasma · <b>FELIPE</b>: overclock (tempo lento por 5 s) + blindagem · <b>TAKESHI</b>: tempestade de agulhas · <b>MARCELO</b>: campo refletor.
+    <b>RAFAEL</b>: corte fantasma · <b>FELIPE</b>: overclock (tempo lento por 5 s) + blindagem · <b>TAKESHI</b>: shurikens + chuva de shurikens · <b>MARCELO</b>: parry automático de 98% com espada curta + campo refletor · <b>CLAUDE</b>: raio laser + prisma total.
     <h3>DIFICULDADE</h3>
     Fácil, Normal, Difícil e Pesadelo mudam retries, tempo de aviso dos ataques, velocidade das balas, número de inimigos e vida dos chefes.
     Quanto mais difícil, maior o multiplicador de pontos. Andares vencidos ficam liberados como ponto de partida.
@@ -232,6 +233,9 @@ const WEAPONS={
   spear:{name:'LANÇA',reach:88,arc:50,swing:0.16,cd:0.3,weight:0.94,len:74,col:'#f3e4bf',glow:'255,220,150',thrust:true,power:1.1},
   axe:{name:'MACHADO',reach:57,arc:170,swing:0.27,cd:0.42,weight:0.82,len:44,col:'#ffd2b2',glow:'255,150,90',breaker:true,power:1.6},
   scythe:{name:'FOICE E MARTELO',reach:68,arc:165,swing:0.2,cd:0.26,weight:0.95,len:56,col:'#e6eef5',glow:'255,90,90',power:1.3},
+  shuriken:{name:'SHURIKEN',reach:38,arc:110,swing:0.12,cd:0.24,weight:1.05,len:16,col:'#dfe7f2',glow:'200,230,255',power:0.9,shot:'star'},
+  raygun:{name:'RAIO LASER',reach:34,arc:100,swing:0.12,cd:0.3,weight:1,len:30,col:'#ffd0b0',glow:'255,140,90',power:1,shot:'beam'},
+  short:{name:'ESPADA CURTA',reach:38,arc:105,swing:0.13,cd:0.2,weight:1.02,len:24,col:'#ece4ff',glow:'217,162,255',power:0.9},
   fist:{name:'PUNHOS',reach:31,arc:80,swing:0.12,cd:0.26,weight:1.08,len:0,col:'#fff',glow:'255,255,255',fist:true,power:0.6}
 };
 // metade "martelo" da FOICE E MARTELO: os golpes alternam foice → martelo → foice…
@@ -266,10 +270,13 @@ const CHARS=[
   {id:'bigorna',name:'FELIPE',role:'CEIFADOR',weapon:'scythe',col:['#ffb347','#e0902a','#8a5410'],scarf:'#4da3ff',rgb:'255,179,71',speed:0.95,dashCd:1.1,parry:0,armor:1,
    passive:'Blindagem: absorve 1 golpe por sala. Foice larga e martelo que quebra escudos, alternados.',
    sp:{id:'overclock',name:'OVERCLOCK',desc:'Implante de reflexos: por 5 s o mundo anda a 20% e você em velocidade total, deixando rastros coloridos.',cost:5}},
-  {id:'agulha',name:'TAKESHI',role:'ÁGIL',weapon:'spear',col:['#6fd8ff','#3fb0e0','#1a6688'],scarf:'#ffd23f',rgb:'111,216,255',speed:1.12,dashCd:0.8,parry:0,armor:0,
-   passive:'+12% de velocidade e dash 20% mais rápido.',sp:{id:'needles',name:'TEMPESTADE',desc:'Dispara um leque de 14 agulhas que perfuram inimigos.',cost:4}},
-  {id:'espelho',name:'MARCELO',role:'DEFENSIVO',weapon:'long',col:['#d9a2ff','#b47ce8','#6a3a99'],scarf:'#5cf2b5',rgb:'217,162,255',speed:0.97,dashCd:1,parry:0.04,armor:0,
-   passive:'Janela do parry perfeito +40 ms.',sp:{id:'mirror',name:'CAMPO REFLETOR',desc:'Por 3 s, todo projétil e laser que te tocar volta como parry perfeito.',cost:5}}
+  {id:'agulha',name:'TAKESHI',role:'NINJA',weapon:'shuriken',col:['#6fd8ff','#3fb0e0','#1a6688'],scarf:'#ffd23f',rgb:'111,216,255',speed:1.12,dashCd:0.8,parry:0,armor:0,
+   passive:'Cada golpe arremessa uma shuriken. +12% de velocidade e dash 20% mais rápido.',sp:{id:'needles',name:'CHUVA DE SHURIKENS',desc:'Dispara um leque de 14 shurikens que perfuram inimigos.',cost:4}},
+  {id:'espelho',name:'MARCELO',role:'DEFENSIVO',weapon:'short',auto:0.98,col:['#d9a2ff','#b47ce8','#6a3a99'],scarf:'#5cf2b5',rgb:'217,162,255',speed:0.97,dashCd:1,parry:0.04,armor:0,
+   passive:'Parry automático: 98% das balas, lasers e golpes de espada são rebatidos sozinhos. Em troca, só usa espada curta.',sp:{id:'mirror',name:'CAMPO REFLETOR',desc:'Por 3 s, todo projétil e laser que te tocar volta como parry perfeito.',cost:5}}
+  ,{id:'claude',name:'CLAUDE',role:'HUMANO · ARTILHEIRO',human:true,weapon:'raygun',col:['#e8835f','#c96442','#7a3420'],scarf:'#fff2e0',rgb:'232,131,95',speed:1,dashCd:1,parry:0,armor:0,
+   passive:'Raio laser de arma base: atravessa todos os inimigos, escudos incluídos, e apaga as balas no caminho.',
+   sp:{id:'orbital',name:'PRISMA TOTAL',desc:'Dois raios giram ao seu redor por 1,6 s, destruindo tudo e apagando as balas.',cost:5}}
 ];
 // --- níveis de dificuldade ---
 const DIFFS=[
@@ -723,7 +730,7 @@ const BL=[];for(let i=0;i<CFG.MAXB;i++)BL.push({on:false});let bIdx=0;
 function fireBullet(x,y,ang,spd,owner,src){
   let b=null;for(let k=0;k<CFG.MAXB;k++){const c=BL[(bIdx+k)%CFG.MAXB];if(!c.on){b=c;bIdx=(bIdx+k+1)%CFG.MAXB;break}}if(!b)return null;
   if(owner==='enemy')spd*=DF.bullet;
-  b.on=true;b.needle=false;b.x=x;b.y=y;b.vx=Math.cos(ang)*spd;b.vy=Math.sin(ang)*spd;b.r=4;b.owner=owner;b.src=src;b.life=src==='boss'?5:3.5;
+  b.on=true;b.needle=false;b.star=false;b.x=x;b.y=y;b.vx=Math.cos(ang)*spd;b.vy=Math.sin(ang)*spd;b.r=4;b.owner=owner;b.src=src;b.life=src==='boss'?5:3.5;
   b.dmg=1;b.pierce=0;b.perfect=false;b.homing=false;b.hits=null;return b;
 }
 function addText(x,y,txt,col,size){G.texts.push({x,y,txt,col:col||'#fff',t:0,max:0.9,size:size||13})}
@@ -811,9 +818,14 @@ function bakeRag(g){if(!R||!R.bgCtx)return;R.decals++;const c=R.bgCtx;c.save();c
 /* =====================================================================
    JOGADOR / COMBATE
    ===================================================================== */
+function autoParry(sx,sy){
+  const a=Math.atan2(sy-P.y,sx-P.x),mx=(P.x+sx)/2,my=(P.y+sy)/2;G.parries++;sparks(mx,my,18,a+Math.PI,1.3,150,480,'225,190,255');
+  part('ring',P.x,P.y,0,0,0.25,P.r+16,CH.rgb);SFX.play('clang');G.shake=Math.max(G.shake,5);P.vx-=Math.cos(a)*240;P.vy-=Math.sin(a)*240;P.ifr=Math.max(P.ifr,0.15);return true;
+}
+const autoRoll=()=>CH.auto&&Math.random()<CH.auto;
 function playerClash(sx,sy){
-  if(P.swingT<0||!P.weapon)return false;
-  const a=Math.atan2(sy-P.y,sx-P.x);if(Math.abs(angDiff(P.swingAng,a))>P.w.arc/2+0.5)return false;
+  if(P.swingT<0||!P.weapon)return autoRoll()?autoParry(sx,sy):false;
+  const a=Math.atan2(sy-P.y,sx-P.x);if(Math.abs(angDiff(P.swingAng,a))>P.w.arc/2+0.5)return autoRoll()?autoParry(sx,sy):false;
   const perfect=P.swingT<=perfWin();G.parries++;
   const mx=(P.x+sx)/2,my=(P.y+sy)/2;sparks(mx,my,22,a+Math.PI,1.4,150,520,'255,240,190');
   if(perfect)perfectFx(mx,my);else{SFX.play('clang');G.hitstop=Math.max(G.hitstop,0.05);G.shake=Math.max(G.shake,6)}
@@ -864,11 +876,26 @@ function autoAimTarget(range,cone){
 }
 function startSwing(){
   const w=P.w;P.buffer=0;
-  if(Input.aimSource!=='mouse'){const tg=autoAimTarget(P.tap?240:w.reach*2.2,P.tap?0:0.45);if(tg)P.aim=Math.atan2(tg.y-P.y,tg.x-P.x)}
+  if(Input.aimSource!=='mouse'){const tg=autoAimTarget(P.tap?(w.shot?650:240):(w.shot?650:w.reach*2.2),P.tap?0:(w.shot?0.3:0.45));if(tg)P.aim=Math.atan2(tg.y-P.y,tg.x-P.x)}
   if(P.weapon==='scythe'){P.hammer=!P.hammer;P.w=curW()}
   P.tap=false;P.swingAng=P.aim;P.swingDir*=-1;P.swingT=0;P.swingDur=w.swing;P.cd=w.cd;P.hit.length=0;P.bossHit=false;
   const lunge=w.thrust?230:w.fist?60:110;P.vx+=Math.cos(P.aim)*lunge;P.vy+=Math.sin(P.aim)*lunge;
   SFX.play(P.w.breaker||P.weapon==='long'?'swishH':'swish');G.trail.length=0;
+  if(w.shot)weaponShot(w);
+}
+function weaponShot(w){
+  const a=P.swingAng,dx=Math.cos(a),dy=Math.sin(a);
+  if(w.shot==='star'){const b=fireBullet(P.x+dx*14,P.y+dy*14,a,900,'player',null);if(b){b.star=true;b.pierce=1;b.hits=[];b.r=5;b.life=0.8}SFX.play('throw',0.7)}
+  else{playerBeam(P.x+dx*16,P.y+dy*16,a,9,'255,140,90',2);SFX.play('laser');G.shake=Math.max(G.shake,4);P.vx-=dx*90;P.vy-=dy*90}
+}
+// raio do jogador: atravessa tudo até a parede, inclusive escudos, e apaga balas inimigas
+function playerBeam(x,y,a,width,col,bossDmg){
+  const dx=Math.cos(a),dy=Math.sin(a),len=castRay(x,y,dx,dy,1600,false);
+  for(const e of G.enemies)if(e.alive&&segCircleT(x,y,dx,dy,len,e.x,e.y,e.r+width*0.5)>=0)killEnemy(e,dx,dy,'beam',1.3);
+  for(const b of BL)if(b.on&&b.owner==='enemy'&&segCircle(x,y,x+dx*len,y+dy*len,b.x,b.y,width+b.r))b.on=false;
+  if(bossDmg&&G.boss&&G.boss.alive)for(const t of bossTargets())if(t.proj&&segCircleT(x,y,dx,dy,len,t.x,t.y,t.r)>=0){damageBoss(bossDmg,t.x,t.y);break}
+  G.beams.push({x1:x,y1:y,x2:x+dx*len,y2:y+dy*len,life:0.14,max:0.14,col,w:width});
+  if(Math.random()<0.5)sparks(x+dx*len,y+dy*len,5,a+Math.PI,1,80,280,'255,170,120');
 }
 function processSwing(){
   const w=P.w,p=clamp(P.swingT/P.swingDur,0,1),e=1-(1-p)**3,half=w.arc/2,relNow=-half+w.arc*e;
@@ -882,12 +909,12 @@ function processSwing(){
     if(d2>rr*rr)continue;if(Math.abs(angDiff(P.swingAng,Math.atan2(dy,dx)))<=half+0.4)reflectBullet(b)}
 }
 function reflectBullet(b,auto){
-  const perfect=auto||P.swingT<=perfWin();
+  const perfect=auto===true||!auto&&P.swingT<=perfWin();
   let a=P.aim;const tg=autoAimTarget(900,G.up.homing?0.6:0.2);if(tg)a=Math.atan2(tg.y-b.y,tg.x-b.x);
   const sp=Math.hypot(b.vx,b.vy)*(perfect?1.9:1.35)+80;b.vx=Math.cos(a)*sp;b.vy=Math.sin(a)*sp;
   b.owner='player';b.dmg=perfect?2:1;b.pierce=perfect?1:0;b.perfect=perfect;b.homing=!!G.up.homing;b.life=2.5;b.hits=[];
   sparks(b.x,b.y,10,a,0.8,120,420,perfect?'170,255,225':'255,230,160');
-  if(auto){SFX.play('clang',0.5);return}
+  if(auto){SFX.play('clang',0.5);if(auto==='auto'){G.parries++;part('ring',P.x,P.y,0,0,0.2,P.r+14,CH.rgb)}return}
   G.parries++;if(perfect)perfectFx(b.x,b.y);else{gainSp(0.34);SFX.play('clang');G.hitstop=Math.max(G.hitstop,0.035);G.shake=Math.max(G.shake,4)}
   if(G.up.parryboom)shockwave(b.x,b.y);
 }
@@ -917,8 +944,9 @@ function useSpecial(){
       P.x=ex;P.y=ey;P.vx=dx*200;P.vy=dy*200;resolveCircle(P);P.ifr=Math.max(P.ifr,0.4);G.hitstop=0.08;G.shake=10;G.slowT=0.25;SFX.play('dash');SFX.play('swishH');break}
     case 'overclock':G.sandT=5;SFX.play('warpIn');G.flash=0.25;G.flashCol='120,255,200';part('ring',P.x,P.y,0,0,0.25,80,'120,255,200');break;
     case 'needles':{for(let k=0;k<14;k++){const aa=a+(k-6.5)*0.065,b=fireBullet(P.x+Math.cos(aa)*16,P.y+Math.sin(aa)*16,aa,760,'player',null);
-        if(b){b.pierce=2;b.hits=[];b.r=3.5;b.needle=true;b.life=1.4}}
+        if(b){b.pierce=2;b.hits=[];b.r=5;b.star=true;b.life=1.2}}
       SFX.play('shot');SFX.play('throw');G.shake=6;P.vx-=dx*150;P.vy-=dy*150;break}
+    case 'orbital':G.orbT=1.6;G.orbA=a;G.orbHit=0;SFX.play('charge');break;
     case 'mirror':G.mirrorT=3;SFX.play('perfect');part('ring',P.x,P.y,0,0,0.4,60,CH.rgb);break;
   }
 }
@@ -1017,7 +1045,7 @@ function updateBullets(dt){
       if(solidShotAt(b.x,b.y)){b.on=false;sparks(b.x,b.y,4,Math.atan2(-b.vy,-b.vx),1,60,220);if(Math.random()<0.4)SFX.play('spark',0.4);break}
       if(b.owner==='enemy'){
         if(G.mirrorT>0&&P.alive&&dist2(b.x,b.y,P.x,P.y)<(P.r+28)**2){reflectBullet(b,true);continue}
-        if(P.alive&&dist2(b.x,b.y,P.x,P.y)<(P.r+b.r)**2){if(P.ifr>0)continue;b.on=false;playerDie();break}
+        if(P.alive&&dist2(b.x,b.y,P.x,P.y)<(P.r+b.r)**2){if(P.ifr>0)continue;if(autoRoll()){reflectBullet(b,'auto');continue}b.on=false;playerDie();break}
         for(const e of G.enemies){if(!e.alive||e===b.src||dist2(b.x,b.y,e.x,e.y)>(e.r+b.r)**2)continue;
           if(e.type==='shield'&&frontal(e,b.x-b.vx*0.05,b.y-b.vy*0.05)){b.on=false;sparks(b.x,b.y,5,Math.atan2(-b.vy,-b.vx),1,60,200);SFX.play('spark',0.5);break}
           b.on=false;const d=sp||1;killEnemy(e,b.vx/d,b.vy/d,'bullet',0.9);break}
@@ -1033,6 +1061,7 @@ function fireLaser(x,y,ang,src){
   // o jogador pode rebater
   if(P.alive){const tp=segCircleT(x,y,dx,dy,len,P.x,P.y,P.r+3);
     if(tp>=0){if(G.mirrorT>0||P.swingT>=0&&P.weapon&&Math.abs(angDiff(P.swingAng,Math.atan2(y-P.y,x-P.x)))<=P.w.arc/2+0.55){len=tp;reflectLaser(G.mirrorT>0)}
+      else if(P.ifr<=0&&autoRoll()){len=tp;reflectLaser('auto')}
       else if(P.ifr<=0){playerDie()}}}
   for(const e of G.enemies){if(!e.alive||e===src)continue;const te=segCircleT(x,y,dx,dy,len,e.x,e.y,e.r);if(te<0)continue;
     if(e.type==='shield'&&frontal(e,x,y)){sparks(e.x,e.y,8,ang+Math.PI,1,80,300);continue}killEnemy(e,dx,dy,'laser',1)}
@@ -1040,7 +1069,7 @@ function fireLaser(x,y,ang,src){
   sparks(x+dx*len,y+dy*len,8,ang+Math.PI,1,80,300,'255,120,150');
 }
 function reflectLaser(auto){
-  const perfect=auto||P.swingT<=perfWin();let a=P.aim;const tg=autoAimTarget(1200,0.3);if(tg)a=Math.atan2(tg.y-P.y,tg.x-P.x);
+  const perfect=auto===true||!auto&&P.swingT<=perfWin();let a=P.aim;const tg=autoAimTarget(1200,0.3);if(tg)a=Math.atan2(tg.y-P.y,tg.x-P.x);
   const dx=Math.cos(a),dy=Math.sin(a),x=P.x+dx*P.r,y=P.y+dy*P.r,len=castRay(x,y,dx,dy,1600,false);
   for(const e of G.enemies){if(e.alive&&segCircleT(x,y,dx,dy,len,e.x,e.y,e.r+2)>=0)killEnemy(e,dx,dy,'reflect',1.3)}
   if(G.boss&&G.boss.alive)for(const t of bossTargets())if(t.proj&&segCircleT(x,y,dx,dy,len,t.x,t.y,t.r)>=0){damageBoss(perfect?4:2,t.x,t.y);break}
@@ -1316,9 +1345,15 @@ function clampCam(){const vw=cssW/VS,vh=cssH/VS,m=30;
 function line(c,x1,y1,x2,y2,col,w){c.strokeStyle=col;c.lineWidth=w;c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke()}
 function circ(c,x,y,r,fill,stroke,lw){c.beginPath();c.arc(x,y,r,0,TAU);if(fill){c.fillStyle=fill;c.fill()}if(stroke){c.strokeStyle=stroke;c.lineWidth=lw||3;c.stroke()}}
 function shadow(c,x,y,r){c.fillStyle='rgba(0,0,0,.35)';c.beginPath();c.ellipse(x+3,y+5,r*1.08,r*0.9,0,0,TAU);c.fill()}
+function starPath(c,R,r){c.beginPath();for(let i=0;i<8;i++){const a=i*Math.PI/4,rr=i%2?r:R;i?c.lineTo(Math.cos(a)*rr,Math.sin(a)*rr):c.moveTo(rr,0)}c.closePath()}
 function drawWeaponShape(c,type,x0,part){
   const w=WEAPONS[type];if(!w||w.fist)return;c.lineCap='round';const L=x0+w.len;
-  if(type==='katana'){line(c,x0,0,x0+12,0,OUT,8);line(c,x0,0,x0+12,0,'#3b2f2a',4.5);line(c,x0+12,0,L,0,OUT,7);line(c,x0+12,0,L,0,w.col,3.5);
+  if(type==='shuriken'){c.save();c.translate(x0+10,0);c.rotate(clock*(P.swingT>=0?30:4));starPath(c,9,3.5);c.fillStyle=w.col;c.fill();c.strokeStyle=OUT;c.lineWidth=2.5;c.stroke();
+    c.fillStyle=OUT;c.beginPath();c.arc(0,0,2,0,TAU);c.fill();c.restore();return}
+  if(type==='raygun'){c.fillStyle='#3a3e48';c.strokeStyle=OUT;c.lineWidth=3;c.fillRect(x0+2,-5,22,10);c.strokeRect(x0+2,-5,22,10);
+    c.fillStyle='#c96442';c.fillRect(x0+6,-8,10,3);c.fillRect(x0+22,-3,8,6);c.strokeRect(x0+22,-3,8,6);
+    c.fillStyle=`rgba(255,180,120,${0.7+0.3*Math.sin(clock*12)})`;c.beginPath();c.arc(x0+31,0,3.2,0,TAU);c.fill();return}
+  if(type==='katana'||type==='short'){line(c,x0,0,x0+12,0,OUT,8);line(c,x0,0,x0+12,0,'#3b2f2a',4.5);line(c,x0+12,0,L,0,OUT,7);line(c,x0+12,0,L,0,w.col,3.5);
     c.fillStyle=OUT;c.fillRect(x0+10.5,-6,4,12);c.fillStyle='#c9a54a';c.fillRect(x0+11.5,-5,2,10)}
   else if(type==='long'){line(c,x0,0,x0+12,0,OUT,9);line(c,x0,0,x0+12,0,'#2d3a4a',5);line(c,x0+12,0,L,0,OUT,9);line(c,x0+12,0,L,0,w.col,5);
     line(c,x0+14,0,L-4,0,'rgba(0,0,0,.25)',1.5);c.fillStyle=OUT;c.fillRect(x0+10,-9,5,18);c.fillStyle='#9aa7b8';c.fillRect(x0+11,-8,3,16)}
@@ -1341,7 +1376,7 @@ function drawPlayer(c){
     const sa=sw&&!P.hammer?P.bladeAng:P.aim+1.0,ha=sw&&P.hammer?P.bladeAng:P.aim-1.0;
     c.save();c.translate(x,y);c.rotate(sa);drawWeaponShape(c,'scythe',r-4,'scythe');c.restore();
     c.save();c.translate(x,y);c.rotate(ha);drawWeaponShape(c,'scythe',r-4,'hammer');c.restore()}
-  else if(P.weapon){const ang=P.swingT>=0?P.bladeAng:P.aim+1.15*P.swingDir;c.save();c.translate(x,y);c.rotate(ang);drawWeaponShape(c,P.weapon,r-4);c.restore()}
+  else if(P.weapon){const ang=WEAPONS[P.weapon].shot==='beam'?P.aim+0.18:P.swingT>=0?P.bladeAng:P.aim+1.15*P.swingDir;c.save();c.translate(x,y);c.rotate(ang);drawWeaponShape(c,P.weapon,r-4);c.restore()}
   c.save();c.translate(x,y);if(blink)c.globalAlpha=0.5;drawBody(c,CH,r,P.aim,P.walk);c.restore();
   if(G.mirrorT>0){c.globalCompositeOperation='lighter';c.strokeStyle=`rgba(${CH.rgb},${0.5+0.3*Math.sin(clock*20)})`;c.lineWidth=3;c.beginPath();c.arc(x,y,r+24,0,TAU);c.stroke();
     c.fillStyle=`rgba(${CH.rgb},.08)`;c.fill();c.globalCompositeOperation='source-over'}
@@ -1349,6 +1384,14 @@ function drawPlayer(c){
   if(!P.weapon){c.save();c.translate(x,y);c.rotate(P.aim);circ(c,r+3,P.swingT>=0?0:6,4,CH.col[0],OUT,2);c.restore()}
 }
 function drawBody(c,ch,r,aim,walk){
+  if(ch.human){ // pessoa vista de cima: casaco, mãos, cabeça com cabelo
+    c.save();c.rotate(aim);const st=Math.sin(walk*0.12)*3,skin='#f1c9a5';
+    line(c,-r*0.4,0,-r-8,Math.sin(clock*8)*3,OUT,5);line(c,-r*0.4,0,-r-8,Math.sin(clock*8)*3,ch.scarf,2.5);
+    circ(c,7+st,-r*0.85,3.6,skin,OUT,2);circ(c,7-st,r*0.85,3.6,skin,OUT,2);
+    c.beginPath();c.ellipse(-1,0,r*0.72,r*1.05,0,0,TAU);c.fillStyle=ch.col[0];c.fill();c.strokeStyle=OUT;c.lineWidth=3;c.stroke();
+    c.fillStyle=ch.col[1];c.beginPath();c.ellipse(-1,0,r*0.45,r*0.8,0,Math.PI*0.5,Math.PI*1.5);c.fill();
+    circ(c,2,0,r*0.56,skin,OUT,2.5);c.fillStyle='#3b2a20';c.beginPath();c.arc(2,0,r*0.56,Math.PI*0.45,Math.PI*1.55);c.closePath();c.fill();
+    c.fillStyle='#3b2a20';c.fillRect(4,-r*0.5,3,r*0.25);c.restore();return}
   c.save();c.rotate(aim);const step=Math.sin(walk*0.12)*3,[c0,c1,c2]=ch.col,sw=ch.id==='bigorna'?17:12;
   c.fillStyle=c2;c.strokeStyle=OUT;c.lineWidth=3;
   c.beginPath();c.roundRect(-sw/2+step,-r-4,sw,7,3);c.fill();c.stroke();
@@ -1499,7 +1542,9 @@ function drawBullets(c){
   for(const b of BL){if(!b.on)continue;const col=b.needle?'255,215,100':b.owner==='player'?(b.perfect?'150,255,220':'120,230,255'):'255,255,255';
     c.strokeStyle=`rgba(${col},.45)`;c.lineWidth=b.r*1.6;c.beginPath();c.moveTo(b.x-b.vx*0.035,b.y-b.vy*0.035);c.lineTo(b.x,b.y);c.stroke()}
   c.globalCompositeOperation='source-over';
-  for(const b of BL){if(!b.on)continue;c.fillStyle=b.needle?'#ffe08a':b.owner==='player'?(b.perfect?'#aaffe0':'#9be8ff'):'#ffffff';c.beginPath();c.arc(b.x,b.y,b.r,0,TAU);c.fill();
+  for(const b of BL){if(!b.on||!b.star)continue;c.save();c.translate(b.x,b.y);c.rotate(clock*28+b.x*0.01);starPath(c,b.r+3,b.r*0.6);
+    c.fillStyle='#eef4fa';c.fill();c.strokeStyle=OUT;c.lineWidth=2;c.stroke();c.restore()}
+  for(const b of BL){if(!b.on||b.star)continue;c.fillStyle=b.needle?'#ffe08a':b.owner==='player'?(b.perfect?'#aaffe0':'#9be8ff'):'#ffffff';c.beginPath();c.arc(b.x,b.y,b.r,0,TAU);c.fill();
     c.strokeStyle=b.owner==='player'?'#0a4a3a':'#ff5a5a';c.lineWidth=1.5;c.stroke()}
 }
 function drawBeams(c){c.globalCompositeOperation='lighter';c.lineCap='round';
@@ -1709,7 +1754,7 @@ function saveProgress(){
 }
 function resetRoomState(){
   G.enemies=[];G.pickups=[];G.rags=[];G.booms=[];G.beams=[];G.texts=[];G.trail=[];for(const p of PT)p.life=0;for(const b of BL)b.on=false;
-  G.slowT=0;G.sandT=0;G.echoT=0;G.hitstop=0;G.flash=0;G.shake=0;G.cleared=false;G.doorAnim=0;G.clearInfo=null;G.exiting=false;
+  G.slowT=0;G.orbT=0;G.sandT=0;G.echoT=0;G.hitstop=0;G.flash=0;G.shake=0;G.cleared=false;G.doorAnim=0;G.clearInfo=null;G.exiting=false;
 }
 function startRoom(isRestart){
   const seed=(G.runSeed+G.floor*7919+G.room*104729)>>>0;
@@ -1790,6 +1835,8 @@ function update(dt){
   if(P.alive)updatePlayer(dt);
   updateFlow(dt);
   const wdt=G.sandT>0?dt*0.2:dt;
+  if(G.orbT>0){G.orbT-=dt;G.orbA+=dt*TAU*1.3;G.orbHit-=dt;const tick=G.orbHit<=0;if(tick)G.orbHit=0.2;P.ifr=Math.max(P.ifr,0.08);
+    for(const k of[0,Math.PI])playerBeam(P.x,P.y,G.orbA+k,12,'255,150,100',tick?1:0);if(tick)SFX.play('laser',0.7);G.shake=Math.max(G.shake,3)}
   if(G.sandT>0){const was=G.sandT;G.sandT-=dt;G.echoT-=dt;
     if(G.echoT<=0&&P.alive){G.echoT=0.035;part('echo',P.x,P.y,0,0,0.11,P.r+1,hueRgb(G.time*700))}
     if(G.sandT<=0&&was>0)SFX.play('warpOut')}
