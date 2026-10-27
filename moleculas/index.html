@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Isopor 3D — Hidrocarbonetos</title>
+<meta name="description" content="Modelos 3D de hidrocarbonetos no estilo bola de isopor e palito, com nomes IUPAC e cores CPK.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cline x1='20' y1='32' x2='46' y2='18' stroke='%23c9a56b' stroke-width='5'/%3E%3Ccircle cx='46' cy='18' r='11' fill='%23fff'/%3E%3Ccircle cx='22' cy='34' r='16' fill='%23222'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0e14;
+    --bg-2: #141a26;
+    --glass: rgba(20, 26, 38, .62);
+    --glass-strong: rgba(20, 26, 38, .85);
+    --line: rgba(255, 255, 255, .09);
+    --text: #e9edf5;
+    --muted: #8b95a8;
+    --accent: #7dd3fc;
+    --accent-2: #a78bfa;
+    --alcano: #60a5fa;
+    --alceno: #34d399;
+    --alcino: #f472b6;
+    --ciclo: #fbbf24;
+    --arom: #a78bfa;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(1200px 800px at 70% 40%, #1b2335 0%, var(--bg) 60%) fixed, var(--bg);
+    color: var(--text);
+    font-family: Inter, system-ui, sans-serif;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; outline: none; touch-action: none; }
+
+  /* ── Cabeçalho ───────────────────────────────── */
+  header {
+    position: fixed; top: 16px; left: 16px; right: 16px; z-index: 5;
+    display: flex; align-items: center; gap: 14px; pointer-events: none;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 12px; pointer-events: auto;
+    background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    padding: 10px 16px 10px 12px; border-radius: 999px;
+  }
+  .logo { width: 30px; height: 30px; }
+  .brand h1 { font: 700 17px/1 "Space Grotesk", sans-serif; letter-spacing: -.01em; }
+  .brand span { color: var(--muted); font-weight: 500; }
+  .toolbar { margin-left: auto; display: flex; gap: 8px; pointer-events: auto; }
+  .seg {
+    display: flex; background: var(--glass); border: 1px solid var(--line); border-radius: 999px;
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: 4px;
+  }
+  .seg button, .icon-btn {
+    border: 0; background: transparent; color: var(--muted); cursor: pointer;
+    font: 500 13px Inter, sans-serif; padding: 8px 14px; border-radius: 999px; transition: .2s;
+    white-space: nowrap;
+  }
+  .seg button:hover, .icon-btn:hover { color: var(--text); }
+  .seg button.on { background: rgba(255,255,255,.1); color: var(--text); }
+  .icon-btn {
+    background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px); display: grid; place-items: center; width: 42px; height: 42px; padding: 0;
+  }
+  .icon-btn.on { color: var(--accent); border-color: rgba(125,211,252,.4); }
+  .icon-btn svg { width: 18px; height: 18px; }
+
+  /* ── Lista lateral ───────────────────────────── */
+  aside {
+    position: fixed; top: 84px; left: 16px; bottom: 16px; width: 280px; z-index: 4;
+    background: var(--glass); border: 1px solid var(--line); border-radius: var(--radius);
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .search { padding: 14px; border-bottom: 1px solid var(--line); }
+  .search input {
+    width: 100%; background: rgba(0,0,0,.25); border: 1px solid var(--line); border-radius: 12px;
+    color: var(--text); font: 14px Inter, sans-serif; padding: 10px 12px; outline: none;
+  }
+  .search input:focus { border-color: rgba(125,211,252,.5); }
+  .list { overflow-y: auto; padding: 8px 8px 16px; scrollbar-width: thin; scrollbar-color: #333c50 transparent; }
+  .group-title {
+    font: 600 11px Inter, sans-serif; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--muted); padding: 14px 10px 6px; display: flex; align-items: center; gap: 8px;
+  }
+  .group-title i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .item {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+    border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer;
+    padding: 9px 10px; border-radius: 10px; font: 500 14px Inter, sans-serif; transition: background .15s;
+  }
+  .item small { color: var(--muted); font: 500 12px "Space Grotesk", sans-serif; }
+  .item:hover { background: rgba(255,255,255,.05); }
+  .item.on { background: rgba(125,211,252,.12); box-shadow: inset 0 0 0 1px rgba(125,211,252,.25); }
+
+  /* ── Painel de informações ───────────────────── */
+  .info {
+    position: fixed; right: 16px; bottom: 16px; width: 330px; z-index: 4;
+    background: var(--glass); border: 1px solid var(--line); border-radius: var(--radius);
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); padding: 20px;
+  }
+  .tag {
+    display: inline-flex; align-items: center; gap: 6px; font: 600 11px Inter, sans-serif;
+    text-transform: uppercase; letter-spacing: .1em; padding: 5px 10px; border-radius: 999px;
+    background: rgba(255,255,255,.06);
+  }
+  .info h2 { font: 700 30px/1.1 "Space Grotesk", sans-serif; letter-spacing: -.02em; margin: 12px 0 2px; }
+  .info .common { color: var(--muted); font-size: 14px; }
+  .formula { font: 500 22px "Space Grotesk", sans-serif; margin: 14px 0 4px; }
+  .condensed { font: 13px ui-monospace, Menlo, monospace; color: var(--muted); word-break: break-all; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0 14px; }
+  .stat { background: rgba(0,0,0,.22); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+  .stat b { display: block; font: 700 18px "Space Grotesk", sans-serif; }
+  .stat span { font-size: 11px; color: var(--muted); }
+  .desc { font-size: 13.5px; line-height: 1.55; color: #c3cad8; }
+  .legend { display: flex; gap: 14px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  .legend div { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+  .legend i { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset -3px -3px 5px rgba(0,0,0,.35); }
+  .legend .stick { width: 22px; height: 4px; border-radius: 2px; background: #c9a56b; box-shadow: none; }
+
+  /* ── Dicas / tooltip ─────────────────────────── */
+  .hint {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 3;
+    color: var(--muted); font-size: 12.5px; background: var(--glass); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 999px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    transition: opacity .6s; white-space: nowrap;
+  }
+  #tip {
+    position: fixed; z-index: 10; pointer-events: none; opacity: 0; transition: opacity .12s;
+    background: var(--glass-strong); border: 1px solid var(--line); border-radius: 10px;
+    padding: 7px 10px; font-size: 12.5px; transform: translate(14px, 14px);
+  }
+  #tip b { font-family: "Space Grotesk", sans-serif; }
+  .label3d {
+    font: 700 12px "Space Grotesk", sans-serif; color: #fff; text-shadow: 0 1px 3px #000, 0 0 2px #000;
+    pointer-events: none; user-select: none;
+  }
+  .label3d.h { font-size: 10px; color: #333; text-shadow: 0 0 2px #fff; }
+
+  /* ── Celular ─────────────────────────────────── */
+  @media (max-width: 860px) {
+    header { top: 12px; left: 12px; right: 12px; flex-wrap: wrap; }
+    .brand h1 span { display: none; }
+    .toolbar { gap: 6px; margin-left: 0; width: 100%; }
+    .seg { flex: 1; min-width: 0; }
+    .seg button { flex: 1; padding: 7px 4px; font-size: 11.5px; }
+    .icon-btn { width: 38px; height: 38px; flex: 0 0 auto; }
+    aside {
+      top: auto; left: 0; right: 0; bottom: 0; width: auto; height: auto;
+      border-radius: 18px 18px 0 0; border-bottom: 0;
+    }
+    .search { display: none; }
+    .list { display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); }
+    .group-title { display: none; }
+    .item { flex: 0 0 auto; width: auto; background: rgba(255,255,255,.05); border-radius: 999px; padding: 8px 14px; }
+    .item small { display: none; }
+    .info {
+      left: 12px; right: 12px; width: auto; bottom: calc(66px + env(safe-area-inset-bottom)); padding: 14px 16px;
+    }
+    .info h2 { font-size: 22px; margin-top: 8px; }
+    .formula { font-size: 17px; margin-top: 6px; }
+    .stats, .desc, .legend, .condensed { display: none; }
+    .info.open .stats { display: grid; }
+    .info.open .desc, .info.open .condensed { display: block; }
+    .info.open .legend { display: flex; }
+    .more { display: inline-block !important; }
+    .hint { display: none; }
+  }
+  .more {
+    display: none; margin-top: 8px; background: none; border: 0; color: var(--accent);
+    font: 500 12.5px Inter, sans-serif; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<header>
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+      <line x1="22" y1="34" x2="46" y2="18" stroke="#c9a56b" stroke-width="4" stroke-linecap="round"/>
+      <line x1="22" y1="34" x2="12" y2="54" stroke="#c9a56b" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="46" cy="18" r="10" fill="#f4f4f0"/>
+      <circle cx="12" cy="54" r="8" fill="#f4f4f0"/>
+      <circle cx="22" cy="34" r="14" fill="#2a2a2a"/>
+    </svg>
+    <h1>Isopor 3D <span>· Hidrocarbonetos</span></h1>
+  </div>
+  <div class="toolbar">
+    <div class="seg" id="modes" role="group" aria-label="Estilo do modelo">
+      <button data-mode="ball" class="on">Bola e palito</button>
+      <button data-mode="fill">Preenchido</button>
+      <button data-mode="stick">Palitos</button>
+    </div>
+    <button class="icon-btn on" id="btnRotate" title="Girar automaticamente" aria-label="Girar automaticamente">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+    </button>
+    <button class="icon-btn" id="btnLabels" title="Mostrar símbolos dos átomos" aria-label="Mostrar símbolos dos átomos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5h16v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg>
+    </button>
+    <button class="icon-btn" id="btnShot" title="Salvar imagem PNG" aria-label="Salvar imagem PNG">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+    </button>
+  </div>
+</header>
+
+<aside>
+  <div class="search"><input id="q" type="search" placeholder="Buscar molécula…" autocomplete="off"></div>
+  <nav class="list" id="list"></nav>
+</aside>
+
+<section class="info" id="info">
+  <span class="tag" id="tag"></span>
+  <h2 id="name"></h2>
+  <div class="common" id="common"></div>
+  <div class="formula" id="formula"></div>
+  <div class="condensed" id="condensed"></div>
+  <div class="stats">
+    <div class="stat"><b id="sMass"></b><span>g/mol</span></div>
+    <div class="stat"><b id="sAtoms"></b><span>átomos</span></div>
+    <div class="stat"><b id="sHyb"></b><span>hibridização</span></div>
+  </div>
+  <p class="desc" id="desc"></p>
+  <div class="legend">
+    <div><i style="background:#2b2b2b"></i>Carbono (C)</div>
+    <div><i style="background:#f4f4f0"></i>Hidrogênio (H)</div>
+    <div><i class="stick"></i>Ligação</div>
+  </div>
+  <button class="more" id="more">Ver detalhes</button>
+</section>
+
+<div class="hint" id="hint">Arraste para girar · role para aproximar · passe o mouse sobre um átomo</div>
+<div id="tip"></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+// ═══ Química ═══════════════════════════════════════════════════════════════
+// Comprimentos de ligação em Å. As posições dos carbonos vêm de construtores
+// geométricos; os hidrogênios são colocados automaticamente pela geometria
+// VSEPR de cada carbono (sp³ tetraédrico, sp² trigonal, sp linear).
+const BOND = { 1: 1.54, 2: 1.34, 3: 1.20, 1.5: 1.40, CH: 1.09 };
+const MASS = { C: 12.011, H: 1.008 };
+const V = (x, y, z = 0) => new THREE.Vector3(x, y, z);
+
+// Cadeia em zigue-zague no plano XY. `bonds` = ordens das ligações,
+// `angles` = ângulo (graus) em cada carbono interno.
+function chain(bonds, angles) {
+  const pos = [V(0, 0)];
+  const first = angles.length ? (180 - angles[0]) / 2 : 0;
+  let phi = -first * Math.PI / 180;
+  bonds.forEach((o, i) => {
+    const L = o === 1 ? (bonds[i - 1] > 1 || bonds[i + 1] > 1 ? 1.50 : BOND[1]) : BOND[o];
+    const p = pos[i];
+    pos.push(V(p.x + L * Math.cos(phi), p.y + L * Math.sin(phi)));
+    if (i < angles.length) phi += (i % 2 ? -1 : 1) * (180 - angles[i]) * Math.PI / 180;
+  });
+  return { C: pos, bonds: bonds.map((o, i) => [i, i + 1, o]) };
+}
+
+function ring(n, order = 1, r) {
+  const L = order === 1.5 ? BOND[1.5] : BOND[1];
+  r = r ?? L / (2 * Math.sin(Math.PI / n));
+  const C = [], bonds = [];
+  for (let i = 0; i < n; i++) {
+    const a = i * 2 * Math.PI / n + Math.PI / 2;
+    C.push(V(r * Math.cos(a), r * Math.sin(a)));
+    bonds.push([i, (i + 1) % n, order]);
+  }
+  return { C, bonds };
+}
+
+const TET = [V(1, 1, 1), V(-1, -1, 1), V(-1, 1, -1), V(1, -1, -1)].map(v => v.normalize());
+
+function branched(nArms) {
+  const C = [V(0, 0, 0)], bonds = [];
+  for (let i = 0; i < nArms; i++) { C.push(TET[i].clone().multiplyScalar(BOND[1])); bonds.push([0, i + 1, 1]); }
+  return { C, bonds };
+}
+
+function cyclohexaneChair() {
+  const r = Math.sqrt(BOND[1] ** 2 - 0.5 ** 2) ;
+  const C = [], bonds = [];
+  for (let i = 0; i < 6; i++) {
+    const a = i * Math.PI / 3;
+    C.push(V(r * Math.cos(a), (i % 2 ? 0.25 : -0.25), r * Math.sin(a)));
+    bonds.push([i, (i + 1) % 6, 1]);
+  }
+  return { C, bonds };
+}
+
+function cyclobutane() {
+  // anel levemente dobrado ("borboleta"), como o real
+  const s = BOND[1] / Math.SQRT2;
+  const C = [V(s, 0.12, 0), V(0, -0.12, s), V(-s, 0.12, 0), V(0, -0.12, -s)];
+  return { C, bonds: [[0, 1, 1], [1, 2, 1], [2, 3, 1], [3, 0, 1]] };
+}
+
+function cyclopentane() {
+  const m = ring(5, 1);
+  m.C.forEach(p => { p.set(p.x, 0, p.y); });
+  m.C[0].y = 0.38; // conformação envelope
+  return m;
+}
+
+function substituted(base, attach) {
+  // adiciona metilas para fora do anel: attach = índices dos carbonos do anel
+  const m = { C: base.C.map(p => p.clone()), bonds: base.bonds.map(b => [...b]) };
+  const center = m.C.reduce((a, p) => a.add(p), V(0, 0, 0)).multiplyScalar(1 / m.C.length);
+  attach.forEach(i => {
+    const dir = m.C[i].clone().sub(center).normalize();
+    m.C.push(m.C[i].clone().addScaledVector(dir, 1.51));
+    m.bonds.push([i, m.C.length - 1, 1]);
+  });
+  return m;
+}
+
+function naphthalene() {
+  const r = BOND[1.5], h = r * Math.cos(Math.PI / 6);
+  const pts = [];
+  [-h, h].forEach(cx => {
+    for (let k = 0; k < 6; k++) {
+      const a = (90 + 60 * k) * Math.PI / 180;
+      const p = V(cx + r * Math.cos(a), r * Math.sin(a));
+      if (!pts.some(q => q.distanceTo(p) < 0.1)) pts.push(p);
+    }
+  });
+  const bonds = [];
+  for (let i = 0; i < pts.length; i++)
+    for (let j = i + 1; j < pts.length; j++)
+      if (pts[i].distanceTo(pts[j]) < 1.5) bonds.push([i, j, 1.5]);
+  return { C: pts, bonds };
+}
+
+// Coloca os hidrogênios conforme a hibridização de cada carbono.
+function addHydrogens(sk) {
+  const atoms = sk.C.map(p => ({ el: 'C', p: p.clone(), nb: [] }));
+  const bonds = sk.bonds.map(([a, b, o]) => ({ a, b, o }));
+  bonds.forEach(({ a, b, o }) => { atoms[a].nb.push({ i: b, o }); atoms[b].nb.push({ i: a, o }); });
+
+  const ortho = (v, u) => v.clone().addScaledVector(u, -v.dot(u));
+  const anyPerp = u => { const t = Math.abs(u.y) < 0.9 ? V(0, 1, 0) : V(1, 0, 0); return ortho(t, u).normalize(); };
+  const nC = atoms.length;
+
+  for (let ci = 0; ci < nC; ci++) {
+    const c = atoms[ci];
+    const valence = c.nb.reduce((s, n) => s + n.o, 0);
+    const nH = Math.round(4 - valence);
+    const maxO = Math.max(...c.nb.map(n => n.o), 1);
+    const triple = c.nb.some(n => n.o === 3) || c.nb.filter(n => n.o === 2).length === 2;
+    c.hyb = triple ? 'sp' : maxO > 1 ? 'sp²' : 'sp³';
+    if (nH <= 0) continue;
+
+    const dirs = c.nb.map(n => c.p.clone().sub(atoms[n.i].p).normalize()); // apontam PARA o carbono
+    let hd = [];
+
+    if (c.nb.length === 0) {
+      hd = TET.map(t => t.clone());
+    } else if (c.nb.length === 1) {
+      const u = dirs[0];
+      const nbAtom = atoms[c.nb[0].i];
+      const ref = nbAtom.nb.map(n => atoms[n.i]).find(a => a !== c);
+      let perp = ref ? ortho(nbAtom.p.clone().sub(ref.p), u) : null; // sentido "anti" à referência
+      perp = perp && perp.lengthSq() > 1e-4 ? perp.normalize() : anyPerp(u);
+      if (c.hyb === 'sp') hd = [u.clone()];
+      else if (c.hyb === 'sp²') {
+        const p2 = perp.clone().negate(); // cis/trans no mesmo plano da referência
+        hd = [1, -1].map(s => u.clone().multiplyScalar(0.5).addScaledVector(p2, s * Math.sqrt(3) / 2).normalize());
+      } else {
+        const a = 70.53 * Math.PI / 180;
+        for (let k = 0; k < 3; k++) {
+          const pk = perp.clone().applyAxisAngle(u, k * 2 * Math.PI / 3);
+          hd.push(u.clone().multiplyScalar(Math.cos(a)).addScaledVector(pk, Math.sin(a)).normalize());
+        }
+      }
+    } else if (c.nb.length === 2 && c.hyb === 'sp³') {
+      const b = dirs[0].clone().add(dirs[1]).normalize();
+      const n = dirs[0].clone().cross(dirs[1]).normalize();
+      const a = 54.74 * Math.PI / 180;
+      hd = [1, -1].map(s => b.clone().multiplyScalar(Math.cos(a)).addScaledVector(n, s * Math.sin(a)).normalize());
+    } else {
+      hd = [dirs.reduce((s, d) => s.add(d), V(0, 0, 0)).normalize()];
+    }
+
+    hd.slice(0, nH).forEach(d => {
+      const hi = atoms.length;
+      atoms.push({ el: 'H', p: c.p.clone().addScaledVector(d, BOND.CH), nb: [{ i: ci, o: 1 }], hyb: 's' });
+      c.nb.push({ i: hi, o: 1 });
+      bonds.push({ a: ci, b: hi, o: 1 });
+    });
+  }
+  // centraliza
+  const ctr = atoms.reduce((s, a) => s.add(a.p), V(0, 0, 0)).multiplyScalar(1 / atoms.length);
+  atoms.forEach(a => a.p.sub(ctr));
+  return { atoms, bonds };
+}
+
+// ═══ Catálogo ══════════════════════════════════════════════════════════════
+const GROUPS = {
+  alcano: { label: 'Alcanos', color: 'var(--alcano)', general: 'CₙH₂ₙ₊₂' },
+  alceno: { label: 'Alcenos e dienos', color: 'var(--alceno)', general: 'CₙH₂ₙ' },
+  alcino: { label: 'Alcinos', color: 'var(--alcino)', general: 'CₙH₂ₙ₋₂' },
+  ciclo:  { label: 'Cicloalcanos', color: 'var(--ciclo)', general: 'CₙH₂ₙ' },
+  arom:   { label: 'Aromáticos', color: 'var(--arom)', general: 'anel benzênico' },
+};
+const T = 109.5;
+const MOLS = [
+  { id: 'metano', name: 'Metano', common: 'gás natural, gás do pântano', g: 'alcano', sk: () => ({ C: [V(0, 0)], bonds: [] }),
+    cond: 'CH₄', desc: 'O hidrocarboneto mais simples. Carbono sp³ no centro de um tetraedro perfeito, com ângulos H–C–H de 109,5°.' },
+  { id: 'etano', name: 'Etano', common: '', g: 'alcano', sk: () => chain([1], []),
+    cond: 'CH₃–CH₃', desc: 'Dois carbonos sp³ unidos por ligação simples σ, que gira livremente. Aqui na conformação alternada, a mais estável.' },
+  { id: 'propano', name: 'Propano', common: 'GLP (gás de cozinha)', g: 'alcano', sk: () => chain([1, 1], [T]),
+    cond: 'CH₃–CH₂–CH₃', desc: 'Principal componente do gás de cozinha junto com o butano. Cadeia aberta, saturada e homogênea.' },
+  { id: 'butano', name: 'Butano', common: 'gás de isqueiro', g: 'alcano', sk: () => chain([1, 1, 1], [T, T]),
+    cond: 'CH₃–CH₂–CH₂–CH₃', desc: 'Cadeia normal de quatro carbonos em zigue-zague (conformação anti). Isômero de cadeia do metilpropano.' },
+  { id: 'metilpropano', name: 'Metilpropano', common: 'isobutano', g: 'alcano', sk: () => branched(3),
+    cond: '(CH₃)₃CH', desc: 'Mesma fórmula do butano (C₄H₁₀), mas com cadeia ramificada: um carbono terciário ligado a três metilas.' },
+  { id: 'pentano', name: 'Pentano', common: '', g: 'alcano', sk: () => chain([1, 1, 1, 1], [T, T, T]),
+    cond: 'CH₃–(CH₂)₃–CH₃', desc: 'Primeiro alcano líquido à temperatura ambiente. Usado como solvente e agente expansor do próprio isopor!' },
+  { id: 'dimetilpropano', name: '2,2-Dimetilpropano', common: 'neopentano', g: 'alcano', sk: () => branched(4),
+    cond: 'C(CH₃)₄', desc: 'Carbono quaternário ligado a quatro metilas. Molécula quase esférica, por isso ferve a só 9,5 °C.' },
+  { id: 'hexano', name: 'Hexano', common: '', g: 'alcano', sk: () => chain([1, 1, 1, 1, 1], [T, T, T, T]),
+    cond: 'CH₃–(CH₂)₄–CH₃', desc: 'Solvente apolar muito usado para extrair óleos vegetais. Seis carbonos sp³ em zigue-zague.' },
+
+  { id: 'eteno', name: 'Eteno', common: 'etileno', g: 'alceno', sk: () => chain([2], []),
+    cond: 'CH₂=CH₂', desc: 'Ligação dupla (σ + π) entre carbonos sp². Molécula totalmente plana, ângulos de ~120°. Hormônio que amadurece frutas.' },
+  { id: 'propeno', name: 'Propeno', common: 'propileno', g: 'alceno', sk: () => chain([2, 1], [120]),
+    cond: 'CH₂=CH–CH₃', desc: 'Monômero do polipropileno. Dois carbonos sp² e um sp³ (a metila).' },
+  { id: 'but-2-eno', name: '(E)-But-2-eno', common: 'trans-2-buteno', g: 'alceno', sk: () => chain([1, 2, 1], [120, 120]),
+    cond: 'CH₃–CH=CH–CH₃', desc: 'As metilas ficam em lados opostos da dupla: isomeria geométrica E/Z (trans/cis), pois a dupla não gira.' },
+  { id: 'buta-1,3-dieno', name: 'Buta-1,3-dieno', common: 'butadieno', g: 'alceno', sk: () => chain([2, 1, 2], [120, 120]),
+    cond: 'CH₂=CH–CH=CH₂', desc: 'Dieno conjugado: duplas alternadas com simples. Base da borracha sintética (SBR).' },
+
+  { id: 'etino', name: 'Etino', common: 'acetileno', g: 'alcino', sk: () => chain([3], []),
+    cond: 'HC≡CH', desc: 'Ligação tripla (1 σ + 2 π) entre carbonos sp: molécula linear, ângulos de 180°. Usado em maçaricos de solda.' },
+  { id: 'propino', name: 'Propino', common: 'metilacetileno', g: 'alcino', sk: () => chain([3, 1], [180]),
+    cond: 'HC≡C–CH₃', desc: 'Os três carbonos ficam alinhados: os dois sp da tripla impõem 180°.' },
+  { id: 'but-2-ino', name: 'But-2-ino', common: 'dimetilacetileno', g: 'alcino', sk: () => chain([1, 3, 1], [180, 180]),
+    cond: 'CH₃–C≡C–CH₃', desc: 'Quatro carbonos em linha reta, com a tripla no meio da cadeia.' },
+
+  { id: 'ciclopropano', name: 'Ciclopropano', common: '', g: 'ciclo', sk: () => ring(3, 1),
+    cond: '(CH₂)₃', desc: 'Ângulo interno de 60°, muito abaixo dos 109,5° ideais: grande tensão de anel (Baeyer), o que o torna reativo.' },
+  { id: 'ciclobutano', name: 'Ciclobutano', common: '', g: 'ciclo', sk: cyclobutane,
+    cond: '(CH₂)₄', desc: 'Anel levemente dobrado (“borboleta”) para aliviar a repulsão entre hidrogênios vizinhos.' },
+  { id: 'ciclopentano', name: 'Ciclopentano', common: '', g: 'ciclo', sk: cyclopentane,
+    cond: '(CH₂)₅', desc: 'Conformação “envelope”: quatro carbonos no plano e um fora dele. Quase sem tensão angular.' },
+  { id: 'ciclo-hexano', name: 'Ciclo-hexano', common: '', g: 'ciclo', sk: cyclohexaneChair,
+    cond: '(CH₂)₆', desc: 'Conformação cadeira, sem tensão. Observe os hidrogênios axiais (verticais) e equatoriais (para fora).' },
+
+  { id: 'benzeno', name: 'Benzeno', common: '', g: 'arom', sk: () => ring(6, 1.5),
+    cond: 'C₆H₆', desc: 'Anel plano com seis elétrons π deslocalizados (ressonância). Todas as ligações C–C têm 1,40 Å, entre simples e dupla.' },
+  { id: 'metilbenzeno', name: 'Metilbenzeno', common: 'tolueno', g: 'arom', sk: () => substituted(ring(6, 1.5), [0]),
+    cond: 'C₆H₅–CH₃', desc: 'Benzeno com uma metila. Solvente de tintas e colas.' },
+  { id: '1,4-dimetilbenzeno', name: '1,4-Dimetilbenzeno', common: 'p-xileno', g: 'arom', sk: () => substituted(ring(6, 1.5), [0, 3]),
+    cond: 'CH₃–C₆H₄–CH₃', desc: 'Metilas em posição para (1,4). Matéria-prima do PET das garrafas plásticas.' },
+  { id: 'naftaleno', name: 'Naftaleno', common: 'naftalina', g: 'arom', sk: naphthalene,
+    cond: 'C₁₀H₈', desc: 'Dois anéis benzênicos fundidos, compartilhando uma ligação. Aromático policíclico, plano.' },
+];
+
+const SUB = '₀₁₂₃₄₅₆₇₈₉';
+const sub = n => n === 1 ? '' : String(n).split('').map(d => SUB[d]).join('');
+
+// ═══ Cena ══════════════════════════════════════════════════════════════════
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+
+const labels = new CSS2DRenderer();
+labels.setSize(innerWidth, innerHeight);
+Object.assign(labels.domElement.style, { position: 'absolute', inset: '0', pointerEvents: 'none' });
+stage.appendChild(labels.domElement);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 200);
+camera.position.set(0, 2, 12);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.07;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 1.6;
+controls.minDistance = 3;
+controls.maxDistance = 40;
+controls.enablePan = false;
+
+scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2018, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 2.2);
+key.position.set(6, 10, 7);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.radius = 6;
+Object.assign(key.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: 1, far: 40 });
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x9ec8ff, 0.9);
+rim.position.set(-8, 3, -6);
+scene.add(rim);
+
+const floor = new THREE.Mesh(new THREE.CircleGeometry(30, 64), new THREE.ShadowMaterial({ opacity: 0.32 }));
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// ── Texturas procedurais: grânulos de isopor e veio da madeira ──
+function foamTexture() {
+  const s = 512, cv = document.createElement('canvas');
+  cv.width = cv.height = s;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#808080'; g.fillRect(0, 0, s, s);
+  // pérolas de EPS: círculos claros com borda escura
+  for (let i = 0; i < 1700; i++) {
+    const x = Math.random() * s, y = Math.random() * s, r = 5 + Math.random() * 9;
+    for (const [dx, dy] of [[0, 0], [s, 0], [-s, 0], [0, s], [0, -s]]) {
+      const gr = g.createRadialGradient(x + dx - r * .3, y + dy - r * .3, r * .1, x + dx, y + dy, r);
+      gr.addColorStop(0, '#d8d8d8'); gr.addColorStop(.75, '#9a9a9a'); gr.addColorStop(1, '#5a5a5a');
+      g.fillStyle = gr; g.beginPath(); g.arc(x + dx, y + dy, r, 0, 7); g.fill();
+    }
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(2, 1);
+  return t;
+}
+function woodTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = 64; cv.height = 256;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#cfa96e'; g.fillRect(0, 0, 64, 256);
+  for (let i = 0; i < 40; i++) {
+    g.strokeStyle = `rgba(${120 + Math.random() * 40},${80 + Math.random() * 30},40,${0.12 + Math.random() * 0.2})`;
+    g.lineWidth = 0.5 + Math.random() * 1.6;
+    const x = Math.random() * 64;
+    g.beginPath(); g.moveTo(x, 0);
+    for (let y = 0; y <= 256; y += 16) g.lineTo(x + Math.sin(y * 0.05 + i) * 2, y);
+    g.stroke();
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const foam = foamTexture();
+const wood = woodTexture();
+
+// Cores CPK/Jmol, o padrão adotado pela IUPAC e pelos livros didáticos.
+const ELEM = {
+  C: { color: 0x2b2b2b, ball: 0.42, vdw: 1.70, name: 'Carbono', z: 6 },
+  H: { color: 0xf4f4f0, ball: 0.28, vdw: 1.20, name: 'Hidrogênio', z: 1 },
+};
+const matAtom = el => new THREE.MeshStandardMaterial({
+  color: ELEM[el].color, roughness: 0.92, metalness: 0,
+  bumpMap: foam, bumpScale: 1.4, envMapIntensity: 0.6,
+});
+const MATS = { C: matAtom('C'), H: matAtom('H') };
+const matStick = new THREE.MeshStandardMaterial({ map: wood, roughness: 0.75, metalness: 0 });
+const matStickHi = matStick.clone(); matStickHi.emissive = new THREE.Color(0x553311);
+
+const sphereGeo = new THREE.SphereGeometry(1, 48, 32);
+const stickGeo = new THREE.CylinderGeometry(1, 1, 1, 14, 1);
+
+let mode = 'ball';
+let current = null;     // { group, atoms, meshes, sticks, mol }
+let showLabels = false;
+const anim = [];        // animações de entrada
+
+function build(mol) {
+  const { atoms, bonds } = addHydrogens(mol.sk());
+  const group = new THREE.Group();
+  const meshes = [], sticks = [];
+
+  atoms.forEach((a, i) => {
+    const m = new THREE.Mesh(sphereGeo, MATS[a.el]);
+    m.position.copy(a.p);
+    m.castShadow = m.receiveShadow = true;
+    m.userData = { atom: a, index: i };
+    // cada bola gira um pouco para os grânulos não ficarem idênticos
+    m.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+    group.add(m); meshes.push(m);
+
+    const div = document.createElement('div');
+    div.className = 'label3d' + (a.el === 'H' ? ' h' : '');
+    div.textContent = a.el;
+    const lab = new CSS2DObject(div);
+    lab.visible = showLabels;
+    m.add(lab);
+    m.userData.label = lab;
+  });
+
+  bonds.forEach(({ a, b, o }) => {
+    const pa = atoms[a].p, pb = atoms[b].p;
+    const axis = pb.clone().sub(pa);
+    const len = axis.length();
+    axis.normalize();
+    // plano das ligações múltiplas: perpendicular ao eixo, na direção de um vizinho
+    let side = null;
+    const nb = atoms[a].nb.find(n => n.i !== b) || atoms[b].nb.find(n => n.i !== a);
+    if (nb) side = atoms[nb.i].p.clone().sub(pa);
+    if (!side || side.clone().cross(axis).lengthSq() < 1e-4) side = Math.abs(axis.y) < .9 ? V(0, 1, 0) : V(1, 0, 0);
+    side = side.addScaledVector(axis, -side.dot(axis)).normalize();
+    const side2 = axis.clone().cross(side).normalize();
+
+    const count = o === 1.5 ? 1 : o;
+    let offsets;
+    if (count === 1) offsets = [V(0, 0, 0)];
+    else if (count === 2) offsets = [side.clone().multiplyScalar(.13), side.clone().multiplyScalar(-.13)];
+    else offsets = [0, 1, 2].map(k => side.clone().multiplyScalar(Math.cos(k * 2.094) * .15).addScaledVector(side2, Math.sin(k * 2.094) * .15));
+
+    offsets.forEach(off => {
+      const s = new THREE.Mesh(stickGeo, matStick);
+      s.position.copy(pa).addScaledVector(axis, len / 2).add(off);
+      s.quaternion.setFromUnitVectors(V(0, 1, 0), axis);
+      s.userData = { len, multi: count > 1, a, b };
+      s.castShadow = true;
+      group.add(s); sticks.push(s);
+    });
+    // ligação aromática: um segundo palito tracejado para o interior do anel
+    if (o === 1.5) {
+      const ctr = atoms.filter(x => x.el === 'C').reduce((s, x) => s.add(x.p), V(0, 0, 0));
+      const mid = pa.clone().add(pb).multiplyScalar(.5);
+      const inward = ortho3(ctr.multiplyScalar(1 / atoms.filter(x => x.el === 'C').length).sub(mid), axis).normalize();
+      for (let k = 0; k < 3; k++) {
+        const s = new THREE.Mesh(stickGeo, matStick);
+        const t = (k + 1) / 4;
+        s.position.copy(pa).addScaledVector(axis, len * t).addScaledVector(inward, .22);
+        s.quaternion.setFromUnitVectors(V(0, 1, 0), axis);
+        s.userData = { len: len * 0.16, multi: true, dash: true };
+        s.castShadow = true;
+        group.add(s); sticks.push(s);
+      }
+    }
+  });
+
+  return { group, atoms, bonds, meshes, sticks, mol };
+}
+function ortho3(v, u) { return v.addScaledVector(u, -v.dot(u)); }
+
+function styleTargets(m) {
+  // raio da bola e do palito para o modo atual
+  const r = el => mode === 'fill' ? ELEM[el].vdw * 0.78 : mode === 'stick' ? 0.12 : ELEM[el].ball;
+  const sr = s => mode === 'fill' ? 0 : mode === 'stick' ? (s.userData.dash ? 0 : .12) : (s.userData.multi ? .055 : .075);
+  return { r, sr };
+}
+
+function applyStyle(instant = false) {
+  if (!current) return;
+  const { r, sr } = styleTargets(current);
+  current.meshes.forEach((m, i) => {
+    const target = r(m.userData.atom.el);
+    tween(m.scale, target, target, target, instant ? 0 : 450, instant ? 0 : i * 12);
+  });
+  current.sticks.forEach(s => {
+    const w = sr(s);
+    tween(s.scale, w, s.userData.len, w, instant ? 0 : 450, 0);
+    s.visible = true;
+  });
+  floor.position.y = lowestPoint() - 0.05;
+}
+
+function lowestPoint() {
+  if (!current) return -3;
+  const { r } = styleTargets(current);
+  let min = Infinity;
+  current.meshes.forEach(m => { min = Math.min(min, m.position.y - r(m.userData.atom.el)); });
+  return min - 0.9;
+}
+
+const ease = t => 1 - Math.pow(1 - t, 3);
+const easeBack = t => { const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+function tween(vec, x, y, z, dur, delay, fn = ease) {
+  const from = vec.clone(), to = V(x, y, z);
+  for (let i = anim.length - 1; i >= 0; i--) if (anim[i].vec === vec) anim.splice(i, 1);
+  if (!dur) { vec.copy(to); return; }
+  anim.push({ vec, from, to, t0: performance.now() + delay, dur, fn });
+}
+
+function show(mol) {
+  if (current) {
+    const old = current.group;
+    scene.remove(old);
+    old.traverse(o => { if (o.userData?.label) o.remove(o.userData.label); });
+  }
+  current = build(mol);
+  scene.add(current.group);
+
+  // começa tudo em escala zero e "estoura" para o tamanho final
+  const { r, sr } = styleTargets(current);
+  current.meshes.forEach(m => m.scale.setScalar(0.0001));
+  current.sticks.forEach(s => s.scale.set(0.0001, 0.0001, 0.0001));
+  const order = current.meshes.slice().sort((a, b) => a.position.length() - b.position.length());
+  order.forEach((m, i) => { const t = r(m.userData.atom.el); tween(m.scale, t, t, t, 520, 60 + i * 28, easeBack); });
+  current.sticks.forEach((s, i) => { const w = sr(s); tween(s.scale, w, s.userData.len, w, 420, 40 + i * 14); });
+  floor.position.y = lowestPoint() - 0.05;
+
+  frame(800);
+  key.position.set(6, floor.position.y + 12, 7);
+
+  fillInfo(mol, current.atoms);
+  document.querySelectorAll('.item').forEach(b => b.classList.toggle('on', b.dataset.id === mol.id));
+  history.replaceState(null, '', '#' + mol.id);
+}
+
+// Enquadra a molécula usando o menor dos dois campos de visão — numa tela
+// em pé (celular) o limitante é o horizontal.
+function frame(dur) {
+  const radius = Math.max(...current.atoms.map(a => a.p.length())) + 1.6;
+  const vf = camera.fov * Math.PI / 360;
+  const hf = Math.atan(Math.tan(vf) * camera.aspect);
+  const dist = Math.max(6, radius / Math.sin(Math.min(vf, hf)) * (innerWidth < 860 ? 1.15 : 1.05));
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  tween(controls.target, 0, 0, 0, dur, 0);
+  tween(camera.position, dir.x * dist, Math.max(dir.y * dist, dist * .18), dir.z * dist, dur, 0);
+}
+
+function fillInfo(mol, atoms) {
+  const nC = atoms.filter(a => a.el === 'C').length, nH = atoms.length - nC;
+  const g = GROUPS[mol.g];
+  const tag = document.getElementById('tag');
+  tag.innerHTML = `<i style="width:8px;height:8px;border-radius:50%;background:${g.color}"></i>${g.label} · ${g.general}`;
+  tag.style.color = g.color;
+  document.getElementById('name').textContent = mol.name;
+  document.getElementById('common').textContent = mol.common ? `Nome usual: ${mol.common}` : 'Nomenclatura IUPAC';
+  document.getElementById('formula').textContent = `C${sub(nC)}H${sub(nH)}`;
+  document.getElementById('condensed').textContent = mol.cond;
+  document.getElementById('sMass').textContent = (nC * MASS.C + nH * MASS.H).toFixed(2).replace('.', ',');
+  document.getElementById('sAtoms').textContent = atoms.length;
+  const hybs = [...new Set(atoms.filter(a => a.el === 'C').map(a => a.hyb))];
+  document.getElementById('sHyb').textContent = hybs.join(' · ');
+  document.getElementById('desc').textContent = mol.desc;
+}
+
+// ═══ Interface ═════════════════════════════════════════════════════════════
+const list = document.getElementById('list');
+function renderList(filter = '') {
+  const f = filter.trim().toLowerCase();
+  list.innerHTML = '';
+  Object.entries(GROUPS).forEach(([gk, g]) => {
+    const items = MOLS.filter(m => m.g === gk && (!f || (m.name + ' ' + m.common).toLowerCase().includes(f)));
+    if (!items.length) return;
+    const h = document.createElement('div');
+    h.className = 'group-title';
+    h.innerHTML = `<i style="background:${g.color}"></i>${g.label}`;
+    list.appendChild(h);
+    items.forEach(m => {
+      const { atoms } = addHydrogens(m.sk());
+      const nC = atoms.filter(a => a.el === 'C').length;
+      const b = document.createElement('button');
+      b.className = 'item' + (current?.mol.id === m.id ? ' on' : '');
+      b.dataset.id = m.id;
+      b.innerHTML = `<span>${m.name}</span><small>C${sub(nC)}H${sub(atoms.length - nC)}</small>`;
+      b.onclick = () => show(m);
+      list.appendChild(b);
+    });
+  });
+}
+renderList();
+document.getElementById('q').addEventListener('input', e => renderList(e.target.value));
+
+document.querySelectorAll('#modes button').forEach(b => b.onclick = () => {
+  mode = b.dataset.mode;
+  document.querySelectorAll('#modes button').forEach(x => x.classList.toggle('on', x === b));
+  applyStyle();
+});
+const btnRotate = document.getElementById('btnRotate');
+btnRotate.onclick = () => { controls.autoRotate = !controls.autoRotate; btnRotate.classList.toggle('on', controls.autoRotate); };
+const btnLabels = document.getElementById('btnLabels');
+btnLabels.onclick = () => {
+  showLabels = !showLabels;
+  btnLabels.classList.toggle('on', showLabels);
+  current?.meshes.forEach(m => { m.userData.label.visible = showLabels; });
+};
+document.getElementById('btnShot').onclick = () => {
+  renderer.render(scene, camera);
+  const a = document.createElement('a');
+  a.download = `${current.mol.id}.png`;
+  a.href = renderer.domElement.toDataURL('image/png');
+  a.click();
+};
+const info = document.getElementById('info');
+document.getElementById('more').onclick = e => {
+  info.classList.toggle('open');
+  e.target.textContent = info.classList.contains('open') ? 'Ocultar detalhes' : 'Ver detalhes';
+};
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const i = MOLS.indexOf(current.mol);
+  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') show(MOLS[(i + 1) % MOLS.length]);
+  if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') show(MOLS[(i - 1 + MOLS.length) % MOLS.length]);
+});
+
+// ── Passar o mouse sobre um átomo ──
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+const tip = document.getElementById('tip');
+let hovered = null;
+renderer.domElement.addEventListener('pointermove', e => {
+  if (e.pointerType !== 'mouse') return;
+  mouse.set(e.clientX / innerWidth * 2 - 1, -e.clientY / innerHeight * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const hit = current && ray.intersectObjects(current.meshes, false)[0];
+  const m = hit?.object || null;
+  if (m !== hovered) {
+    hovered?.material !== undefined && (hovered.material = MATS[hovered.userData.atom.el]);
+    hovered = m;
+    if (m) {
+      m.material = MATS[m.userData.atom.el].clone();
+      m.material.emissive = new THREE.Color(0x0e3a52);
+    }
+  }
+  if (m) {
+    const a = m.userData.atom;
+    const nbC = a.nb.filter(n => current.atoms[n.i].el === 'C').length;
+    const nbH = a.nb.length - nbC;
+    const ligs = a.el === 'C' ? `${nbC} C · ${nbH} H · ${a.hyb}` : 'ligado a 1 C';
+    tip.innerHTML = `<b>${ELEM[a.el].name}</b> (Z=${ELEM[a.el].z})<br><span style="color:var(--muted)">${ligs}</span>`;
+    tip.style.left = e.clientX + 'px'; tip.style.top = e.clientY + 'px';
+    tip.style.opacity = 1;
+    renderer.domElement.style.cursor = 'pointer';
+  } else {
+    tip.style.opacity = 0;
+    renderer.domElement.style.cursor = 'grab';
+  }
+});
+renderer.domElement.addEventListener('pointerdown', () => {
+  const h = document.getElementById('hint'); h.style.opacity = 0;
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  labels.setSize(innerWidth, innerHeight);
+  if (current) frame(300);
+});
+
+// ── Loop ──
+const t0 = performance.now();
+renderer.setAnimationLoop(now => {
+  for (let i = anim.length - 1; i >= 0; i--) {
+    const a = anim[i];
+    const t = (now - a.t0) / a.dur;
+    if (t < 0) continue;
+    if (t >= 1) { a.vec.copy(a.to); anim.splice(i, 1); continue; }
+    a.vec.lerpVectors(a.from, a.to, a.fn(t));
+  }
+  if (current) current.group.position.y = Math.sin((now - t0) / 1400) * 0.08; // flutuação suave
+  controls.update();
+  renderer.render(scene, camera);
+  labels.render(scene, camera);
+});
+
+const start = MOLS.find(m => m.id === decodeURIComponent(location.hash.slice(1))) || MOLS.find(m => m.id === 'ciclo-hexano');
+show(start);
+addEventListener('hashchange', () => {
+  const m = MOLS.find(x => x.id === decodeURIComponent(location.hash.slice(1)));
+  if (m && m !== current.mol) show(m);
+});
+</script>
+</body>
+</html>

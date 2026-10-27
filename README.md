@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com seis sites estáticos publicados pelo GitHub Pages.
+Repositório com sete sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -10,6 +10,7 @@ Repositório com seis sites estáticos publicados pelo GitHub Pages.
 | [`/arena/`](https://xxxxsgh.github.io/mathref/arena/) | **NULLPOINT** — FPS tático de arena com skins e inspeção de faca |
 | [`/ironline/`](https://xxxxsgh.github.io/mathref/ironline/) | **IRONLINE** — FPS militar com arquitetura de features plugáveis |
 | [`/quadra/`](https://xxxxsgh.github.io/mathref/quadra/) | **QUADRA VIVA** — futsal arcade com física em escala real |
+| [`/moleculas/`](https://xxxxsgh.github.io/mathref/moleculas/) | **Isopor 3D** — modelos 3D de hidrocarbonetos (bola de isopor e palito, nomes IUPAC, cores CPK) |
 
 ## Publicação
 

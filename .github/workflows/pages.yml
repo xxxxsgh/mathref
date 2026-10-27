@@ -8,6 +8,7 @@
 #   /mathref/arena/ → NULLPOINT  (compilado a partir de arena-src/)
 #   /mathref/ironline/ → IRONLINE (compilado a partir de ironline-src/)
 #   /mathref/quadra/ → QUADRA VIVA (compilado a partir de quadra-src/)
+#   /mathref/moleculas/ → Isopor 3D (moleculas/index.html, self-contained)
 #
 # ═══ POR QUE COMPILAR AQUI E NÃO SÓ PUBLICAR A PASTA game/ ═══
 #
@@ -245,7 +246,7 @@ jobs:
           mkdir -p docs
           # Remove só o que é site publicado. As notas em markdown que moram
           # em docs/ (FASE-0-STACK.md, STARFARER.md) ficam onde estão.
-          rm -rf docs/game docs/drone docs/arena docs/ironline docs/quadra docs/index.html docs/.nojekyll
+          rm -rf docs/game docs/drone docs/arena docs/ironline docs/quadra docs/moleculas docs/index.html docs/.nojekyll
           cp -R _site/. docs/
           git add -A docs
           # O passo de build reescreveu `game/`, `drone/`, `arena/`, `ironline/` e `quadra/` na raiz.
