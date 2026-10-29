@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com seis sites estáticos publicados pelo GitHub Pages.
+Repositório com sete sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -10,6 +10,7 @@ Repositório com seis sites estáticos publicados pelo GitHub Pages.
 | [`/arena/`](https://xxxxsgh.github.io/mathref/arena/) | **NULLPOINT** — FPS tático de arena com skins e inspeção de faca |
 | [`/ironline/`](https://xxxxsgh.github.io/mathref/ironline/) | **IRONLINE** — FPS militar com arquitetura de features plugáveis |
 | [`/quadra/`](https://xxxxsgh.github.io/mathref/quadra/) | **QUADRA VIVA** — futsal arcade com física em escala real |
+| [`/prancheta/`](https://xxxxsgh.github.io/mathref/prancheta/) | **PRANCHETA** — manager do Brasileirão em um único HTML (PWA) |
 
 ## Publicação
 
@@ -155,3 +156,14 @@ npm test           # testes da física e das regras (seções A–H do adendo)
 npm run e2e        # ponta a ponta no Chromium (Playwright)
 node tools/sim.mjs 5 3   # 5 partidas IA × IA no Node, sem render
 ```
+
+## Prancheta
+
+Jogo de gerenciamento de futebol do Brasileirão Série A em **um único arquivo**
+(`prancheta/index.html`, HTML + CSS + JS puro, sem build). Elencos reais via
+[football-data.org](https://www.football-data.org/) (o usuário cola a própria
+chave em Config), cache local e jogo 100% offline depois disso. `prancheta/sw.js`
+é opcional: só permite abrir a página sem internet quando instalada como PWA.
+Por estar na raiz, a pasta é publicada sem mexer no workflow.
+
+Football data provided by the Football-Data.org API.
