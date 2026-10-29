@@ -1,0 +1,3022 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Herói Tricolor">
+<meta name="theme-color" content="#5c0f24">
+<meta name="description" content="Desenhe a jogada e recrie gols históricos do Fluminense. Jogo de fã, sem vínculo oficial.">
+<title>Herói Tricolor</title>
+<link rel="manifest" id="lkManifest">
+<link rel="apple-touch-icon" id="lkApple">
+<link rel="icon" id="lkIcon">
+<style>
+:root{
+  --grena:#7b1530;--grena2:#5c0f24;--grena3:#3a0816;
+  --verde:#00704a;--verde2:#004d33;--verde3:#00261a;
+  --ouro:#ffd34d;--txt:#fff;--painel:rgba(8,12,10,.88);
+  --st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);
+  --sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#07100b;color:var(--txt);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  overscroll-behavior:none;position:fixed;inset:0;-webkit-text-size-adjust:100%}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+.tela{position:fixed;inset:0;display:none;flex-direction:column;z-index:10;
+  padding:calc(var(--st) + 14px) calc(var(--sr) + 16px) calc(var(--sb) + 14px) calc(var(--sl) + 16px)}
+.tela.on{display:flex}
+button{font:inherit;color:inherit;touch-action:manipulation;border:0;cursor:pointer;background:none}
+.btn{min-height:58px;padding:0 24px;border-radius:16px;font-size:18px;font-weight:900;letter-spacing:.05em;
+  text-transform:uppercase;background:linear-gradient(180deg,#a11f42,var(--grena2));
+  box-shadow:0 4px 0 var(--grena3),0 10px 24px rgba(0,0,0,.45);transition:transform .06s}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--grena3)}
+.btn.verde{background:linear-gradient(180deg,#0b935f,var(--verde2));box-shadow:0 4px 0 var(--verde3),0 10px 24px rgba(0,0,0,.45)}
+.btn.verde:active{box-shadow:0 1px 0 var(--verde3)}
+.btn.fant{background:rgba(255,255,255,.1);box-shadow:none;border:2px solid rgba(255,255,255,.3)}
+.btn.ouro{background:linear-gradient(180deg,#ffe07a,#e3a919);color:#3a2300;box-shadow:0 4px 0 #8a6100,0 10px 24px rgba(0,0,0,.45)}
+.btn:disabled{opacity:.4}
+.centro{align-items:center;justify-content:center;text-align:center}
+.rolagem{overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain}
+.faixas{display:flex;height:8px;width:100%;border-radius:4px;overflow:hidden}
+.faixas i{flex:1}.faixas i:nth-child(1){background:var(--grena)}.faixas i:nth-child(2){background:#fff}.faixas i:nth-child(3){background:var(--verde)}
+
+/* ---------- carregando ---------- */
+#carregando{background:radial-gradient(circle at 50% 40%,#1b3a2a,#07100b 70%)}
+#carregando .bolaLoad{width:54px;height:54px;border-radius:50%;background:#fff;margin-bottom:18px;
+  box-shadow:inset -8px -8px 0 rgba(0,0,0,.18);animation:pula .7s ease-in-out infinite alternate}
+@keyframes pula{to{transform:translateY(-26px)}}
+#carregando p{opacity:.8;font-weight:700;letter-spacing:.08em}
+
+/* ---------- menu ---------- */
+#menu{justify-content:space-between;background:linear-gradient(180deg,rgba(7,16,11,.75),rgba(7,16,11,0) 38%,rgba(7,16,11,0) 60%,rgba(7,16,11,.9))}
+.menuTopo{text-align:center;margin-top:4vh}
+.logo{margin:14px 0 6px;font-size:clamp(44px,13vw,86px);line-height:.86;font-weight:900;letter-spacing:-.02em;
+  text-shadow:0 4px 0 var(--grena3),0 12px 30px rgba(0,0,0,.6);font-style:italic}
+.logo span{color:#fff;text-shadow:-3px 0 0 var(--grena),3px 0 0 var(--verde),0 5px 0 var(--verde3),0 12px 30px rgba(0,0,0,.6)}
+.sub{margin:8px 0 0;font-weight:700;opacity:.9;letter-spacing:.06em}
+.menuBotoes{display:flex;flex-direction:column;gap:14px;width:min(420px,100%);margin:0 auto}
+.rodape{text-align:center;font-size:12px;opacity:.6;margin:10px 0 0}
+
+/* ---------- linha do tempo ---------- */
+#linha,#contexto,.modal{background:radial-gradient(circle at 50% 0%,rgba(123,21,48,.55),rgba(7,16,11,.96) 60%)}
+.topo{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.topo h2{flex:1;margin:0;font-size:22px;font-weight:900;letter-spacing:.04em;text-transform:uppercase}
+.btnIcone{width:50px;height:50px;border-radius:14px;background:rgba(255,255,255,.12);font-size:22px;font-weight:900}
+.totEst{font-weight:900;color:var(--ouro)}
+#listaDecadas{flex:1;padding-bottom:20px}
+.decada{position:relative;padding-left:26px;margin:6px 0 18px}
+.decada:before{content:"";position:absolute;left:8px;top:6px;bottom:-18px;width:4px;border-radius:2px;
+  background:linear-gradient(var(--grena),#fff,var(--verde))}
+.decada h3{margin:0 0 10px;font-size:26px;font-weight:900;font-style:italic;position:relative}
+.decada h3:before{content:"";position:absolute;left:-25px;top:8px;width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid var(--grena)}
+.cartaoFase{display:block;width:100%;text-align:left;border-radius:18px;padding:14px 16px;margin-bottom:12px;
+  background:linear-gradient(135deg,rgba(255,255,255,.14),rgba(255,255,255,.05));border:1px solid rgba(255,255,255,.18);position:relative;overflow:hidden}
+.cartaoFase:after{content:"";position:absolute;right:0;top:0;bottom:0;width:6px;background:linear-gradient(var(--grena),#fff,var(--verde))}
+.cartaoFase .num{font-size:12px;font-weight:900;letter-spacing:.12em;opacity:.7}
+.cartaoFase .tit{font-size:20px;font-weight:900;margin:2px 0}
+.cartaoFase .sub2{font-size:13px;opacity:.85}
+.cartaoFase .est{position:absolute;right:16px;top:12px;font-size:18px;color:var(--ouro);letter-spacing:2px}
+.cartaoFase.trancada{opacity:.45}
+.cartaoFase.trancada .est{color:#fff}
+
+/* ---------- contexto ---------- */
+#contexto{justify-content:space-between}
+.cartao{background:var(--painel);border:1px solid rgba(255,255,255,.14);border-radius:22px;padding:18px}
+#ctxCorpo{flex:1;margin-bottom:12px}
+.ctxComp{font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--ouro)}
+.ctxTit{font-size:30px;font-weight:900;font-style:italic;margin:4px 0 2px;line-height:1.05}
+.ctxMeta{font-size:13px;opacity:.8}
+.placarG{display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0;font-weight:900}
+.placarG .t{font-size:20px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,.1)}
+.placarG .t.flu{background:linear-gradient(90deg,var(--grena),var(--verde))}
+.placarG .n{font-size:34px}
+.placarG .min{display:block;font-size:13px;text-align:center;opacity:.85}
+.ctxSec{margin-top:12px}
+.ctxSec b{display:block;font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.65;margin-bottom:4px}
+.ctxSec p{margin:0;line-height:1.4}
+.seq{margin:0;padding:0;list-style:none;counter-reset:s}
+.seq li{counter-increment:s;padding:6px 0 6px 34px;position:relative;line-height:1.3}
+.seq li:before{content:counter(s);position:absolute;left:0;top:4px;width:24px;height:24px;border-radius:50%;
+  background:var(--verde);font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center}
+.estrelasInfo{font-size:13px;line-height:1.6;opacity:.9}
+.estrelasInfo span{color:var(--ouro)}
+.linhaBtns{display:flex;gap:12px}
+.linhaBtns .btn{flex:1;padding:0 10px}
+
+/* ---------- HUD ---------- */
+#hud{pointer-events:none;justify-content:space-between}
+#hud button{pointer-events:auto}
+.hudTopo{display:flex;align-items:flex-start;gap:8px}
+.placar{display:flex;white-space:nowrap;flex-shrink:0;align-items:stretch;border-radius:12px;overflow:hidden;font-weight:900;box-shadow:0 6px 16px rgba(0,0,0,.4)}
+.placar .t{padding:7px 9px;background:rgba(0,0,0,.72);font-size:15px}
+.placar .t.flu{background:linear-gradient(90deg,var(--grena),var(--verde))}
+.placar .n{padding:7px 9px;background:#fff;color:#111;font-size:15px}
+.placar .m{padding:7px 9px;background:rgba(0,0,0,.72);font-size:13px;color:var(--ouro);display:flex;align-items:center}
+.hudInfo{margin-left:auto;white-space:nowrap;text-align:right;background:rgba(0,0,0,.6);border-radius:12px;padding:5px 10px;font-weight:800;font-size:13px}
+.hudInfo .e{color:var(--ouro);font-size:17px;letter-spacing:1px}
+.hudInfo .e i{font-style:normal;color:rgba(255,255,255,.25)}
+#bPausa{width:44px;height:44px;border-radius:12px;background:rgba(0,0,0,.6);font-weight:900;font-size:16px}
+.hudBase{display:flex;flex-direction:column;align-items:center;gap:8px}
+#dica{max-width:min(520px,100%);text-align:center;background:rgba(0,0,0,.66);border-radius:14px;padding:9px 14px;font-weight:700;font-size:14px;line-height:1.3;transition:opacity .3s}
+#dica:empty{opacity:0}
+#comBola{font-size:12px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;opacity:.85;text-shadow:0 2px 4px #000}
+#cronometro{position:absolute;left:50%;top:calc(var(--st) + 64px);transform:translateX(-50%);font-size:44px;font-weight:900;
+  text-shadow:0 3px 0 var(--grena3),0 0 18px rgba(0,0,0,.6);display:none}
+#cronometro.alerta{color:#ff5a5a}
+#tagAuto{position:absolute;left:50%;top:calc(var(--st) + 62px);transform:translateX(-50%);background:var(--ouro);color:#3a2300;
+  font-weight:900;font-size:13px;letter-spacing:.08em;padding:6px 12px;border-radius:999px;display:none;white-space:nowrap}
+
+/* ---------- textos grandes ---------- */
+#banner{position:fixed;left:0;right:0;top:34%;text-align:center;z-index:20;pointer-events:none;font-weight:900;font-style:italic;
+  font-size:clamp(30px,9vw,64px);text-shadow:0 4px 0 var(--grena3),0 0 30px rgba(0,0,0,.7);opacity:0;transform:scale(.8);transition:opacity .2s,transform .25s;padding:0 16px}
+#banner.on{opacity:1;transform:scale(1)}
+#banner small{display:block;font-size:.4em;font-style:normal;margin-top:6px;letter-spacing:.05em}
+#narra{position:fixed;left:0;right:0;top:22%;z-index:21;pointer-events:none;text-align:center;padding:0 14px}
+#narra div{font-weight:900;font-style:italic;font-size:clamp(24px,7.4vw,54px);line-height:1.05;margin:6px 0;
+  background:linear-gradient(90deg,#ff7b98,#fff,#38f0a6);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 3px 0 rgba(0,0,0,.85));animation:entra .35s cubic-bezier(.2,1.6,.4,1) both}
+#narra div.s{font-size:clamp(17px,4.8vw,30px)}
+@keyframes entra{from{opacity:0;transform:translateY(20px) scale(.6)}to{opacity:1;transform:none}}
+#rotulo{position:fixed;z-index:15;pointer-events:none;transform:translate(-50%,-140%);background:rgba(0,0,0,.75);
+  border-radius:10px;padding:6px 10px;font-weight:900;font-size:14px;white-space:nowrap;display:none;border:2px solid #fff}
+#etiquetas{position:fixed;inset:0;pointer-events:none;z-index:5;overflow:hidden}
+.etq{position:absolute;left:0;top:0;transform:translate(-50%,-100%);font-size:11px;font-weight:900;white-space:nowrap;
+  padding:2px 6px;border-radius:6px;background:rgba(123,21,48,.85);display:none}
+.etq.adv{background:rgba(20,20,20,.7);opacity:.85}
+.etq.bola{background:var(--ouro);color:#3a2300;font-size:12px}
+#anelTxt{position:fixed;z-index:15;pointer-events:none;transform:translate(-50%,-50%);font-weight:900;font-size:18px;
+  color:var(--ouro);text-shadow:0 2px 0 #000,0 0 10px #000;display:none;white-space:nowrap}
+#tagReplay{position:fixed;left:calc(var(--sl) + 16px);top:calc(var(--st) + 14px);z-index:22;display:none;pointer-events:none;
+  font-weight:900;letter-spacing:.14em;background:#e0102f;padding:6px 12px;border-radius:8px;font-size:14px}
+#tagReplay:before{content:"● ";animation:pisca 1s steps(2) infinite}
+@keyframes pisca{50%{opacity:0}}
+#pular{position:fixed;right:calc(var(--sr) + 16px);bottom:calc(var(--sb) + 16px);z-index:23;display:none}
+#pular .btn{min-height:46px;font-size:14px}
+
+/* ---------- cutscene ---------- */
+#cutscene{padding:0;pointer-events:auto;z-index:18}
+.cine{position:absolute;left:0;right:0;height:11vh;background:#000;transition:height .4s}
+.cine.t{top:0}.cine.b{bottom:0}
+.legenda{position:absolute;left:16px;right:16px;bottom:calc(11vh + var(--sb) + 12px);text-align:center}
+.legenda b{display:block;color:var(--ouro);font-size:14px;letter-spacing:.1em;text-transform:uppercase}
+.legenda span{display:block;font-size:clamp(20px,5.5vw,34px);font-weight:900;text-shadow:0 3px 8px #000;margin-top:4px}
+.legenda span.grande{font-size:clamp(40px,13vw,90px);font-style:italic;background:linear-gradient(90deg,#ff7b98,#fff,#38f0a6);
+  -webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 0 rgba(0,0,0,.8))}
+.legenda small{display:block;margin-top:10px;opacity:.6;font-size:12px}
+
+/* ---------- modais ---------- */
+.modal{z-index:30;justify-content:center;align-items:center;background:rgba(5,9,7,.78)}
+.modal .cartao{width:min(460px,100%);max-height:100%;display:flex;flex-direction:column;gap:12px}
+.modal h2{margin:0;font-size:28px;font-weight:900;font-style:italic;text-align:center}
+.modal p{margin:0;line-height:1.4;text-align:center}
+.modal .col{display:flex;flex-direction:column;gap:10px}
+.bigEst{font-size:54px;text-align:center;letter-spacing:6px;color:var(--ouro);text-shadow:0 4px 0 #8a6100}
+.bigEst i{font-style:normal;color:rgba(255,255,255,.18);text-shadow:none}
+.bigEst .pop{display:inline-block;animation:entra .4s cubic-bezier(.2,1.6,.4,1) both}
+.critica{list-style:none;margin:0;padding:0;font-size:14px}
+.critica li{padding:5px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+.critica li.ok:before{content:"✔ ";color:#38f0a6;font-weight:900}
+.critica li.no:before{content:"✘ ";color:#ff6b6b;font-weight:900}
+.historia{background:rgba(255,211,77,.1);border:1px solid rgba(255,211,77,.4);border-radius:14px;padding:12px}
+.historia b{color:var(--ouro)}
+.finalTxt{font-style:italic;font-weight:800;text-align:center;font-size:16px;color:#ffe9a8}
+#comoCorpo{text-align:left}
+#comoCorpo p{text-align:left;margin:0 0 9px;font-size:14px}
+#comoCorpo b{color:var(--ouro)}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="carregando" class="tela on centro"><div class="bolaLoad"></div><p id="carregaTxt">CARREGANDO ESTÁDIO…</p></div>
+
+<div id="menu" class="tela">
+  <div class="menuTopo">
+    <div class="faixas"><i></i><i></i><i></i></div>
+    <h1 class="logo">HERÓI<br><span>TRICOLOR</span></h1>
+    <p class="sub">DESENHE A JOGADA. RECRIE A HISTÓRIA.</p>
+  </div>
+  <div class="menuBotoes">
+    <button class="btn" id="bJogar">Jogar</button>
+    <button class="btn fant" id="bComo">Como jogar</button>
+    <p class="rodape">Jogo de torcedor, sem vínculo oficial. Sem escudos, logos ou imagens oficiais.</p>
+  </div>
+</div>
+
+<div id="linha" class="tela">
+  <div class="topo"><button class="btnIcone" id="linhaVoltar">‹</button><h2>Linha do tempo</h2><span class="totEst" id="totEst"></span></div>
+  <div class="faixas"><i></i><i></i><i></i></div>
+  <div id="listaDecadas" class="rolagem"></div>
+</div>
+
+<div id="contexto" class="tela">
+  <div id="ctxCorpo" class="cartao rolagem"></div>
+  <div class="linhaBtns"><button class="btn fant" id="ctxVoltar">Voltar</button><button class="btn verde" id="ctxIr">Começar</button></div>
+</div>
+
+<div id="hud" class="tela">
+  <div class="hudTopo">
+    <div class="placar" id="placar"></div>
+    <div class="hudInfo"><div class="e" id="hudEst"></div><div id="hudToques"></div></div>
+    <button id="bPausa">II</button>
+  </div>
+  <div id="cronometro"></div>
+  <div id="tagAuto">NA HISTÓRIA FOI ASSIM</div>
+  <div class="hudBase"><div id="comBola"></div><div id="dica"></div></div>
+</div>
+
+<div id="banner"></div>
+<div id="narra"></div>
+<div id="rotulo"></div>
+<div id="anelTxt"></div>
+<div id="etiquetas"></div>
+<div id="tagReplay">REPLAY</div>
+<div id="pular"><button class="btn fant" id="bPular">Pular ›</button></div>
+
+<div id="cutscene" class="tela">
+  <div class="cine t"></div><div class="cine b"></div>
+  <div class="legenda"><b id="csNome"></b><span id="csTexto"></span><small>toque para continuar</small></div>
+</div>
+
+<div id="pausa" class="tela modal"><div class="cartao">
+  <h2>Pausa</h2>
+  <div class="col">
+    <button class="btn verde" id="pContinuar">Continuar</button>
+    <button class="btn fant" id="pReiniciar">Reiniciar fase</button>
+    <button class="btn fant" id="pSair">Linha do tempo</button>
+  </div>
+</div></div>
+
+<div id="falha" class="tela modal"><div class="cartao">
+  <h2 id="falhaTit">Bola perdida!</h2>
+  <p id="falhaTxt"></p>
+  <div class="col">
+    <button class="btn verde" id="fDenovo">Tentar de novo</button>
+    <button class="btn fant" id="fSair">Linha do tempo</button>
+  </div>
+</div></div>
+
+<div id="resultado" class="tela modal"><div class="cartao rolagem" id="resCorpo"></div></div>
+
+<div id="como" class="tela modal"><div class="cartao rolagem">
+  <h2>Como jogar</h2>
+  <div id="comoCorpo">
+    <p>O tempo <b>para</b> sempre que a bola está com um jogador do Flu. Comece o traço <b>no jogador com a bola</b> (anel dourado) e desenhe a jogada com o dedo.</p>
+    <p><b>Passe:</b> arraste até um companheiro (bola rasteira).</p>
+    <p><b>Lançamento:</b> arraste longo e rápido até um companheiro (bola alta, por cima da marcação).</p>
+    <p><b>Cruzamento:</b> da ponta para a área. Rápido = bola alta (cabeçada). Devagar = bola baixa (de primeira).</p>
+    <p><b>Drible:</b> swipe curto para o lado com um marcador perto.</p>
+    <p><b>Condução:</b> arraste curto para o espaço vazio.</p>
+    <p><b>Chute:</b> arraste até o gol. O ponto onde o dedo termina no gol é a mira. Curve o traço para dar efeito; mais rápido = mais forte.</p>
+    <p><b>De primeira / voleio / cabeçada:</b> quando aparecer o anel em volta do companheiro, toque no gol (no canto que quiser) no instante em que o anel fechar.</p>
+    <p><b>Estrelas:</b> ★ completar · ★★ seguir a sequência histórica · ★★★ sequência histórica na primeira tentativa, sem perder a bola.</p>
+  </div>
+  <button class="btn verde" id="comoOk">Entendi</button>
+</div></div>
+<script type="module">
+// =====================================================================
+// CONFIG
+// =====================================================================
+// Unidades em metros e segundos. Campo: eixo X = comprimento (o Flu ataca
+// para +X), eixo Z = largura (+Z = lado direito de quem ataca).
+const CFG = {
+  THREE_URL: 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js',
+  CACHE: 'heroi-tricolor-v1',
+  SAVE_KEY: 'heroiTricolor.v1',
+  CAMPO_C: 105, CAMPO_L: 68,
+  GOL_L: 7.32, GOL_A: 2.44, GOL_P: 2.0, POSTE_R: 0.06,
+  BOLA_R: 0.11, G: 9.81,
+  ATRITO: 4.0,            // desaceleração da bola rolando (m/s²)
+  QUIQUE: 0.55,           // restituição no gramado
+  CORRIDA: 7.6,           // velocidade de corrida sem bola
+  CONDUCAO_V: 8.6, CONDUCAO_MAX: 20,
+  ANEL_ALCANCE: 26,       // distância máx. ao gol para aparecer anel de finalização
+  CAMLENTA_JANELA: 0.9, CAMLENTA: 0.32,
+  TOQUE_PERFEITO: 0.07, TOQUE_BOM: 0.15, TOQUE_OK: 0.25, TOQUE_IGNORA: 0.6,
+  MAX_PIXEL_RATIO: 2, SOMBRA: 1024,
+  REPLAY_SEG: 5.5, PASSO: 1 / 120
+};
+const MEIO_C = CFG.CAMPO_C / 2, MEIO_L = CFG.CAMPO_L / 2;
+
+// =====================================================================
+// DADOS_DAS_FASES
+// =====================================================================
+// Posições normalizadas: x = 0..1 no comprimento (1 = linha de fundo do
+// gol que o Flu ataca), y = 0..1 na largura (0 = esquerda, 1 = direita de
+// quem ataca). Campos de jogador:
+//   nome, num, x, y, bola (começa com a bola), gk (goleiro), raio (área de
+//   marcação em m), marca (nome do tricolor que ele marca), recupera (quantas
+//   vezes volta à frente após um drible), frente (começa colado na frente do
+//   portador), desvio (nome de quem recebe o desvio, ou "gol"), volta ({x,y}
+//   para onde corre de volta quando há cronômetro).
+// historia: passos esperados. acao ∈ passe | lancamento | cruzamento | drible |
+//   conducao | chute | primeira | voleio | cabecada | dividida (ou lista).
+//   Campos extras são usados pelo replay "Na história foi assim":
+//   alvo, altura ('alta'|'baixa'), lado (-1|1), ponto {x,y}, mira {z,h}, alvoJogador.
+// regra: substitui a comparação com a história para a 2ª estrela.
+const FASES = [
+  {
+    id: 1, ano: 1995, titulo: "O Gol de Barriga",
+    data: "25/06/1995", competicao: "Campeonato Carioca 1995 · final", estadio: "Maracanã",
+    mandante: "FLU", visitante: "FLA", fluMandante: true, placar: [2, 2], minuto: 41, tempo: "2ºT",
+    contexto: "Fla-Flu decisivo. O Flamengo joga pelo empate e o Fluminense está com 10 jogadores. Não há mais tempo.",
+    objetivo: "Faça o gol do título com o desvio na barriga de Renato Gaúcho.",
+    dica: "Dois swipes curtos para o lado driblam o Charles Guerreiro. Depois, chute cruzado mirando o pé do Jorge Luís.",
+    sequenciaTexto: ["Aílton recebe pela ponta direita", "Dois dribles curtos em Charles Guerreiro", "Chute cruzado, \"sem direção\"", "A bola resvala na perna de Jorge Luís", "…e desvia na barriga de Renato Gaúcho: gol"],
+    aviso: "Flu com 10 jogadores",
+    adversario: { nome: "Flamengo", cor: "#b3121f", cor2: "#151515", calcao: "#f4f4f4", meia: "#b3121f", goleiro: "#e8c21a" },
+    ceu: "tarde", gkReacao: 0.32,
+    flu: [
+      { nome: "Aílton", num: 8, x: 0.80, y: 0.90, bola: true },
+      { nome: "Renato Gaúcho", num: 7, x: 0.955, y: 0.535, desvio: "gol" },
+      { nome: "Meia", num: 10, x: 0.72, y: 0.56 },
+      { nome: "Volante", num: 5, x: 0.58, y: 0.40 },
+      { nome: "Lateral", num: 6, x: 0.62, y: 0.14 },
+      { nome: "Zagueiro", num: 3, x: 0.42, y: 0.50 }
+    ],
+    adv: [
+      { nome: "Charles Guerreiro", num: 2, x: 0.835, y: 0.85, raio: 2.5, recupera: 1, frente: true },
+      { nome: "Jorge Luís", num: 3, x: 0.915, y: 0.62, raio: 1.2, desvio: "Renato Gaúcho" },
+      { nome: "Zagueiro", num: 4, x: 0.935, y: 0.42, raio: 3 },
+      { nome: "Volante", num: 5, x: 0.80, y: 0.56, raio: 3.5 },
+      { nome: "Lateral", num: 6, x: 0.86, y: 0.22, raio: 3 },
+      { nome: "Meia", num: 8, x: 0.70, y: 0.74, raio: 3 },
+      { nome: "Goleiro", num: 1, x: 0.99, y: 0.5, gk: true }
+    ],
+    historia: [
+      { jogador: "Aílton", acao: "drible", lado: -1 },
+      { jogador: "Aílton", acao: "drible", lado: -1 },
+      { jogador: "Aílton", acao: "chute", alvoJogador: "Jorge Luís" }
+    ],
+    golDe: "Renato Gaúcho", desvios: ["Jorge Luís", "Renato Gaúcho"],
+    replay: ["gol", "barriga"],
+    narracao: ["GOOOOOOL DO FLUMINENSE!", "DE BARRIGA! RENATO GAÚCHO!", "3 a 2! O TRICOLOR É CAMPEÃO CARIOCA!"],
+    final: "Curiosidade: na súmula, o gol foi dado ao Aílton."
+  },
+  {
+    id: 2, ano: 1984, titulo: "Recordar é Viver",
+    data: "16/12/1984", competicao: "Campeonato Carioca 1984 · final", estadio: "Maracanã",
+    mandante: "FLU", visitante: "FLA", fluMandante: true, placar: [0, 0], minuto: 30, tempo: "2ºT",
+    contexto: "Fla-Flu valendo o título carioca. Zero a zero no Maracanã lotado e o tempo correndo.",
+    objetivo: "Duílio → Renê → Aldo → cabeçada de Assis no ângulo de Fillol.",
+    dica: "Do Aldo, cruze RÁPIDO para a bola vir alta. Quando o anel aparecer no Assis, toque no ângulo do gol no instante em que ele fechar.",
+    sequenciaTexto: ["Duílio passa para Renê", "Renê gira e toca para Aldo, nas costas do lateral Adalberto", "Aldo cruza", "Assis cabeceia no ângulo esquerdo de Fillol"],
+    adversario: { nome: "Flamengo", cor: "#b3121f", cor2: "#151515", calcao: "#f4f4f4", meia: "#b3121f", goleiro: "#4a4a4a" },
+    ceu: "tarde", gkReacao: 0.30,
+    flu: [
+      { nome: "Duílio", num: 4, x: 0.60, y: 0.52, bola: true },
+      { nome: "Renê", num: 8, x: 0.70, y: 0.42 },
+      { nome: "Aldo", num: 2, x: 0.81, y: 0.08 },
+      { nome: "Assis", num: 10, x: 0.885, y: 0.56 },
+      { nome: "Washington", num: 9, x: 0.90, y: 0.36 },
+      { nome: "Meia", num: 7, x: 0.55, y: 0.76 }
+    ],
+    adv: [
+      { nome: "Adalberto", num: 6, x: 0.76, y: 0.30, raio: 1.2 },
+      { nome: "Zagueiro", num: 3, x: 0.90, y: 0.48, raio: 1.6 },
+      { nome: "Zagueiro", num: 4, x: 0.89, y: 0.62, raio: 2, marca: "Assis" },
+      { nome: "Volante", num: 5, x: 0.64, y: 0.64, raio: 3 },
+      { nome: "Volante", num: 8, x: 0.72, y: 0.60, raio: 2.5 },
+      { nome: "Lateral", num: 2, x: 0.85, y: 0.82, raio: 3 },
+      { nome: "Fillol", num: 1, x: 0.99, y: 0.5, gk: true }
+    ],
+    historia: [
+      { jogador: "Duílio", acao: "passe", alvo: "Renê" },
+      { jogador: "Renê", acao: "passe", alvo: "Aldo" },
+      { jogador: "Aldo", acao: "cruzamento", alvo: "Assis", altura: "alta" },
+      { jogador: "Assis", acao: "cabecada", mira: { z: 3.0, h: 2.1 } }
+    ],
+    golDe: "Assis",
+    replay: ["gol", "lateral"],
+    narracao: ["GOOOOOOL DO FLUMINENSE!", "ASSIS! DE CABEÇA, NO ÂNGULO DE FILLOL!", "O TRICOLOR É CAMPEÃO CARIOCA!"],
+    final: "Assis, o Carrasco do Flamengo."
+  },
+  {
+    id: 3, ano: 1984, titulo: "O Paraguaio do Título",
+    data: "Maio de 1984", competicao: "Campeonato Brasileiro 1984 · final (ida)", estadio: "Maracanã",
+    mandante: "FLU", visitante: "VAS", fluMandante: true, placar: [0, 0], minuto: 23, tempo: "1ºT",
+    contexto: "Primeiro jogo da final do Brasileiro. O paraguaio Romerito é a arma do Tricolor.",
+    objetivo: "Romerito precisa marcar. A jogada é livre.",
+    dica: "Qualquer caminho vale, mas o gol tem que ser do Romerito. Para a 2ª estrela: no máximo 4 toques.",
+    sequenciaTexto: ["Sequência livre", "Gol de Romerito em até 4 toques"],
+    livre: true, mostrarHistoria: false,
+    regra: { golDe: "Romerito", maxToques: 4 },
+    adversario: { nome: "Vasco", cor: "#1c1c1c", cor2: "#f2f2f2", calcao: "#1c1c1c", meia: "#1c1c1c", goleiro: "#2f6d2f", num: "#f2f2f2" },
+    ceu: "noite", gkReacao: 0.30,
+    flu: [
+      { nome: "Delei", num: 8, x: 0.62, y: 0.55, bola: true },
+      { nome: "Romerito", num: 10, x: 0.76, y: 0.44 },
+      { nome: "Assis", num: 7, x: 0.84, y: 0.74 },
+      { nome: "Washington", num: 9, x: 0.88, y: 0.36 },
+      { nome: "Tato", num: 11, x: 0.74, y: 0.16 }
+    ],
+    adv: [
+      { nome: "Zagueiro", num: 3, x: 0.90, y: 0.46, raio: 3 },
+      { nome: "Zagueiro", num: 4, x: 0.90, y: 0.60, raio: 3 },
+      { nome: "Lateral", num: 2, x: 0.84, y: 0.86, raio: 3 },
+      { nome: "Lateral", num: 6, x: 0.84, y: 0.20, raio: 3 },
+      { nome: "Volante", num: 5, x: 0.72, y: 0.54, raio: 2.5 },
+      { nome: "Volante", num: 8, x: 0.80, y: 0.62, raio: 2.5 },
+      { nome: "Goleiro", num: 1, x: 0.99, y: 0.5, gk: true }
+    ],
+    historia: [
+      { jogador: "Delei", acao: "passe", alvo: "Romerito" },
+      { jogador: "Romerito", acao: "conducao", ponto: { x: 0.85, y: 0.47 } },
+      { jogador: "Romerito", acao: "chute", mira: { z: 2.9, h: 0.6 } }
+    ],
+    replay: ["gol", "lateral"],
+    narracao: ["GOOOOOOL DO FLUMINENSE!", "ROMERITO! O PARAGUAIO DO TÍTULO!"],
+    final: "Na volta, 0x0. Fluminense campeão brasileiro de 1984."
+  },
+  {
+    id: 4, ano: 2007, titulo: "O Voleio de Roger",
+    data: "Junho de 2007", competicao: "Copa do Brasil 2007 · final (volta)", estadio: "Estádio Orlando Scarpelli",
+    mandante: "FIG", visitante: "FLU", fluMandante: false, placar: [0, 0], minuto: 3, tempo: "1ºT",
+    contexto: "A ida terminou 1x1 no Maracanã. Em Florianópolis, quem vencer leva a Copa do Brasil.",
+    objetivo: "Adriano Magrão serve Roger, que finaliza de voleio.",
+    dica: "Do Magrão, um lançamento LONGO e RÁPIDO até o Roger: a bola chega na meia altura. Toque no gol quando o anel fechar.",
+    sequenciaTexto: ["Adriano Magrão serve Roger", "Roger finaliza de voleio"],
+    extra: "segure",
+    adversario: { nome: "Figueirense", cor: "#2a2a2a", cor2: "#ffffff", calcao: "#ffffff", meia: "#2a2a2a", goleiro: "#e86a10" },
+    ceu: "noite", gkReacao: 0.28,
+    flu: [
+      { nome: "Adriano Magrão", num: 9, x: 0.62, y: 0.60, bola: true },
+      { nome: "Roger", num: 10, x: 0.86, y: 0.42 },
+      { nome: "Meia", num: 8, x: 0.72, y: 0.28 },
+      { nome: "Lateral", num: 2, x: 0.70, y: 0.86 },
+      { nome: "Atacante", num: 11, x: 0.88, y: 0.64 }
+    ],
+    adv: [
+      { nome: "Zagueiro", num: 3, x: 0.90, y: 0.34, raio: 2 },
+      { nome: "Zagueiro", num: 4, x: 0.91, y: 0.55, raio: 2 },
+      { nome: "Lateral", num: 2, x: 0.82, y: 0.16, raio: 3 },
+      { nome: "Lateral", num: 6, x: 0.82, y: 0.84, raio: 3 },
+      { nome: "Volante", num: 5, x: 0.74, y: 0.50, raio: 2.5 },
+      { nome: "Goleiro", num: 1, x: 0.99, y: 0.5, gk: true }
+    ],
+    historia: [
+      { jogador: "Adriano Magrão", acao: ["lancamento", "cruzamento"], alvo: "Roger" },
+      { jogador: "Roger", acao: "voleio", mira: { z: 2.8, h: 1.2 } }
+    ],
+    golDe: "Roger",
+    replay: ["gol", "lateral"],
+    narracao: ["GOOOOOOL DO FLUMINENSE!", "ROGER, DE VOLEIO!", "O TRICOLOR ESTÁ NA FRENTE!"],
+    final: "1x0 até o fim: Fluminense campeão da Copa do Brasil 2007!"
+  },
+  {
+    id: 5, ano: 2023, titulo: "Cano, o Artilheiro",
+    data: "04/11/2023", competicao: "Libertadores 2023 · final", estadio: "Maracanã",
+    mandante: "FLU", visitante: "BOC", fluMandante: true, placar: [0, 0], minuto: 35, tempo: "1ºT",
+    contexto: "Final única da Libertadores no Maracanã. O Fluminense busca a sua primeira Glória Eterna.",
+    objetivo: "Arias toca para Keno, Keno cruza e Cano finaliza de primeira, de pé direito.",
+    dica: "Do Keno, cruze DEVAGAR (arraste lento) para a bola vir baixa. Toque no gol quando o anel do Cano fechar.",
+    sequenciaTexto: ["Arias toca para Keno pela direita", "Keno cruza", "Cano finaliza de primeira, de pé direito"],
+    adversario: { nome: "Boca Juniors", cor: "#1d3f8f", cor2: "#f4c400", calcao: "#1d3f8f", meia: "#1d3f8f", goleiro: "#30a040", num: "#f4c400" },
+    ceu: "noite", gkReacao: 0.26,
+    flu: [
+      { nome: "Arias", num: 21, x: 0.66, y: 0.62, bola: true },
+      { nome: "Keno", num: 11, x: 0.80, y: 0.92 },
+      { nome: "Cano", num: 14, x: 0.885, y: 0.47 },
+      { nome: "Ganso", num: 10, x: 0.70, y: 0.40 },
+      { nome: "Marcelo", num: 12, x: 0.60, y: 0.18 },
+      { nome: "André", num: 7, x: 0.56, y: 0.55 }
+    ],
+    adv: [
+      { nome: "Lateral", num: 4, x: 0.80, y: 0.79, raio: 2.5 },
+      { nome: "Zagueiro", num: 2, x: 0.905, y: 0.40, raio: 1.6 },
+      { nome: "Zagueiro", num: 6, x: 0.90, y: 0.57, raio: 1.6 },
+      { nome: "Volante", num: 5, x: 0.75, y: 0.58, raio: 2.5 },
+      { nome: "Volante", num: 8, x: 0.74, y: 0.36, raio: 2.5 },
+      { nome: "Lateral", num: 3, x: 0.86, y: 0.16, raio: 3 },
+      { nome: "Goleiro", num: 1, x: 0.99, y: 0.5, gk: true }
+    ],
+    historia: [
+      { jogador: "Arias", acao: "passe", alvo: "Keno" },
+      { jogador: "Keno", acao: "cruzamento", alvo: "Cano", altura: "baixa" },
+      { jogador: "Cano", acao: ["primeira", "voleio"], mira: { z: -2.9, h: 0.5 } }
+    ],
+    golDe: "Cano",
+    replay: ["gol", "lateral"],
+    narracao: ["GOOOOOOL DO FLUMINENSE!", "CANO! DE PRIMEIRA!", "O ARTILHEIRO NÃO PERDOA!"],
+    final: "O Boca ainda empataria no 2º tempo… e a final iria para a prorrogação."
+  },
+  {
+    id: 6, ano: 2023, titulo: "A Profecia",
+    data: "04/11/2023", competicao: "Libertadores 2023 · final (prorrogação)", estadio: "Maracanã",
+    mandante: "FLU", visitante: "BOC", fluMandante: true, placar: [1, 1], minuto: 8, tempo: "1ºT prorr.",
+    contexto: "Prorrogação da final. O Boca empatou no segundo tempo e o Maracanã prende a respiração.",
+    objetivo: "Diogo Barbosa lança, Keno ajeita e John Kennedy chuta forte, de primeira, da meia-lua.",
+    dica: "Lance LONGO e RÁPIDO para o Keno e deixe ele dominar (não toque). Depois, passe rasteiro para o John Kennedy e toque no gol quando o anel fechar.",
+    sequenciaTexto: ["Diogo Barbosa lança para Keno", "Keno ajeita", "John Kennedy chuta forte, de primeira, da meia-lua"],
+    cutsceneInicio: "profecia", cutsceneFinal: "expulsao",
+    adversario: { nome: "Boca Juniors", cor: "#1d3f8f", cor2: "#f4c400", calcao: "#1d3f8f", meia: "#1d3f8f", goleiro: "#30a040", num: "#f4c400" },
+    ceu: "noite", gkReacao: 0.26,
+    flu: [
+      { nome: "Diogo Barbosa", num: 16, x: 0.56, y: 0.12, bola: true },
+      { nome: "Keno", num: 11, x: 0.865, y: 0.30 },
+      { nome: "John Kennedy", num: 9, x: 0.80, y: 0.52 },
+      { nome: "Cano", num: 14, x: 0.91, y: 0.56 },
+      { nome: "Arias", num: 21, x: 0.80, y: 0.82 },
+      { nome: "Martinelli", num: 8, x: 0.62, y: 0.50 }
+    ],
+    adv: [
+      { nome: "Lateral", num: 4, x: 0.66, y: 0.18, raio: 2.5 },
+      { nome: "Zagueiro", num: 2, x: 0.885, y: 0.24, raio: 1.5 },
+      { nome: "Zagueiro", num: 6, x: 0.91, y: 0.45, raio: 2 },
+      { nome: "Zagueiro", num: 3, x: 0.90, y: 0.63, raio: 2 },
+      { nome: "Volante", num: 5, x: 0.76, y: 0.44, raio: 2.2 },
+      { nome: "Goleiro", num: 1, x: 0.99, y: 0.5, gk: true }
+    ],
+    historia: [
+      { jogador: "Diogo Barbosa", acao: "lancamento", alvo: "Keno" },
+      { jogador: "Keno", acao: "passe", alvo: "John Kennedy" },
+      { jogador: "John Kennedy", acao: ["primeira", "voleio"], mira: { z: 2.9, h: 1.9 } }
+    ],
+    golDe: "John Kennedy",
+    replay: ["gol", "lateral"],
+    narracao: ["GOOOOOOL DO FLUMINENSE!", "JOHN KENNEDY! DE PRIMEIRA, DA MEIA-LUA!", "2 a 1 NO MARACANÃ!"],
+    final: "Glória Eterna. Fluminense campeão da Libertadores 2023."
+  },
+  {
+    id: 7, ano: 2025, titulo: "A Sobra",
+    data: "30/06/2025", competicao: "Mundial de Clubes 2025 · oitavas", estadio: "Bank of America Stadium, Charlotte (EUA)",
+    mandante: "INT", visitante: "FLU", fluMandante: false, placar: [0, 0], minuto: 3, tempo: "1ºT",
+    contexto: "Oitavas do Mundial nos Estados Unidos. A Inter de Milão é favorita, mas o Flu começa ligado.",
+    objetivo: "Martinelli ganha a dividida, a sobra fica com Arias, que cruza para Cano finalizar entre os zagueiros.",
+    dica: "Toque na hora certa para o Martinelli ganhar a dividida. Depois, cruze do Arias para o Cano e finalize no tempo do anel.",
+    sequenciaTexto: ["Martinelli disputa uma dividida", "A sobra fica com Arias", "Arias cruza", "Cano finaliza entre os zagueiros"],
+    inicio: { tipo: "dividida", jogador: "Martinelli", rival: "Volante", sobraPara: "Arias" },
+    adversario: { nome: "Inter de Milão", cor: "#14213d", cor2: "#2d6cdf", calcao: "#14213d", meia: "#14213d", goleiro: "#d63a8a" },
+    ceu: "tarde", gkReacao: 0.26,
+    flu: [
+      { nome: "Martinelli", num: 8, x: 0.665, y: 0.52 },
+      { nome: "Arias", num: 21, x: 0.76, y: 0.84 },
+      { nome: "Cano", num: 14, x: 0.895, y: 0.505 },
+      { nome: "Atacante", num: 11, x: 0.86, y: 0.30 },
+      { nome: "Volante", num: 5, x: 0.60, y: 0.40 }
+    ],
+    adv: [
+      { nome: "Volante", num: 23, x: 0.68, y: 0.52, raio: 0 },
+      { nome: "Zagueiro", num: 6, x: 0.905, y: 0.45, raio: 1.5 },
+      { nome: "Zagueiro", num: 15, x: 0.905, y: 0.57, raio: 1.5 },
+      { nome: "Lateral", num: 2, x: 0.82, y: 0.80, raio: 2.5 },
+      { nome: "Zagueiro", num: 95, x: 0.88, y: 0.34, raio: 2 },
+      { nome: "Meia", num: 20, x: 0.74, y: 0.64, raio: 2.5 },
+      { nome: "Goleiro", num: 1, x: 0.99, y: 0.5, gk: true }
+    ],
+    historia: [
+      { jogador: "Martinelli", acao: "dividida" },
+      { jogador: "Arias", acao: "cruzamento", alvo: "Cano", altura: "baixa" },
+      { jogador: "Cano", acao: ["primeira", "voleio", "cabecada"], mira: { z: -2.7, h: 0.6 } }
+    ],
+    golDe: "Cano",
+    replay: ["gol", "lateral"],
+    narracao: ["GOOOOOOL DO FLUMINENSE!", "CANO, ENTRE OS ZAGUEIROS!", "O FLU SAI NA FRENTE DA INTER!"],
+    final: "Gol de Cano logo no começo. O Flu ia fazer história em Charlotte."
+  },
+  {
+    id: 8, ano: 2025, titulo: "Contra-ataque Fatal",
+    data: "30/06/2025", competicao: "Mundial de Clubes 2025 · oitavas", estadio: "Bank of America Stadium, Charlotte (EUA)",
+    mandante: "INT", visitante: "FLU", fluMandante: false, placar: [0, 1], minuto: 48, tempo: "2ºT",
+    contexto: "Acréscimos. A Inter está toda no ataque atrás do empate. Se o Flu recuperar, o campo está aberto.",
+    objetivo: "Recupere, puxe o contra-ataque e faça Hércules entrar na área e chutar cruzado.",
+    dica: "Ganhe a dividida. Depois você tem 8 segundos: os zagueiros voltam correndo enquanto você decide! Conduza (arraste curto) e chute cruzado com o Hércules dentro da área.",
+    sequenciaTexto: ["O Flu recupera a bola", "Contra-ataque em velocidade", "Hércules recebe e entra na área", "Chute cruzado"],
+    livre: true, mostrarHistoria: false,
+    inicio: { tipo: "dividida", jogador: "Volante", rival: "Atacante", sobraPara: "Meia" },
+    cronometro: 8,
+    regra: { golDe: "Hércules", acaoFinal: ["chute", "primeira", "voleio"], naArea: true },
+    adversario: { nome: "Inter de Milão", cor: "#14213d", cor2: "#2d6cdf", calcao: "#14213d", meia: "#14213d", goleiro: "#d63a8a" },
+    ceu: "noite", gkReacao: 0.28,
+    flu: [
+      { nome: "Volante", num: 5, x: 0.33, y: 0.50 },
+      { nome: "Meia", num: 10, x: 0.47, y: 0.56 },
+      { nome: "Hércules", num: 35, x: 0.60, y: 0.37 },
+      { nome: "Cano", num: 14, x: 0.52, y: 0.64 },
+      { nome: "Arias", num: 21, x: 0.45, y: 0.88 }
+    ],
+    adv: [
+      { nome: "Atacante", num: 10, x: 0.345, y: 0.50, raio: 0 },
+      { nome: "Zagueiro", num: 6, x: 0.44, y: 0.44, raio: 3, volta: { x: 0.84, y: 0.44 } },
+      { nome: "Zagueiro", num: 15, x: 0.41, y: 0.60, raio: 3, volta: { x: 0.84, y: 0.58 } },
+      { nome: "Lateral", num: 2, x: 0.36, y: 0.24, raio: 3, volta: { x: 0.80, y: 0.30 } },
+      { nome: "Volante", num: 23, x: 0.30, y: 0.70, raio: 3, volta: { x: 0.78, y: 0.62 } },
+      { nome: "Meia", num: 20, x: 0.26, y: 0.40, raio: 3, volta: { x: 0.62, y: 0.46 } },
+      { nome: "Goleiro", num: 1, x: 0.975, y: 0.5, gk: true }
+    ],
+    historia: [
+      { jogador: "Volante", acao: "dividida" },
+      { jogador: "Meia", acao: "passe", alvo: "Hércules" },
+      { jogador: "Hércules", acao: "conducao", ponto: { x: 0.76, y: 0.38 } },
+      { jogador: "Hércules", acao: "conducao", ponto: { x: 0.87, y: 0.40 } },
+      { jogador: "Hércules", acao: "chute", mira: { z: 2.9, h: 0.4 } }
+    ],
+    replay: ["gol", "lateral"],
+    narracao: ["GOOOOOOL DO FLUMINENSE!", "HÉRCULES, CRUZADO!", "2 a 0! O FLU ESTÁ NAS QUARTAS!"],
+    final: "Fluminense 2x0 Inter de Milão: vaga nas quartas do Mundial de Clubes."
+  }
+];
+
+// =====================================================================
+// PWA (manifest + service worker gerados em tempo de execução)
+// =====================================================================
+const SW_FONTE = `
+const CACHE='${CFG.CACHE}';
+const THREE_URL='${CFG.THREE_URL}';
+self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll([self.registration.scope,THREE_URL]).catch(()=>{})).then(()=>self.skipWaiting()));});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE&&k.startsWith('heroi-tricolor')).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
+self.addEventListener('fetch',e=>{
+  const r=e.request; if(r.method!=='GET') return;
+  if(r.mode==='navigate'){
+    e.respondWith(fetch(r).then(res=>{const cp=res.clone();caches.open(CACHE).then(c=>c.put(r,cp));return res;})
+      .catch(()=>caches.match(r).then(m=>m||caches.match(self.registration.scope))));
+    return;
+  }
+  e.respondWith(caches.match(r).then(m=>m||fetch(r).then(res=>{if(res.ok){const cp=res.clone();caches.open(CACHE).then(c=>c.put(r,cp));}return res;})));
+});`;
+
+function iconePWA(s) {
+  const c = document.createElement('canvas'); c.width = c.height = s;
+  const g = c.getContext('2d');
+  const w = s / 6;
+  const cores = ['#7b1530', '#ffffff', '#00704a', '#ffffff', '#7b1530', '#00704a'];
+  for (let i = 0; i < 6; i++) { g.fillStyle = cores[i]; g.fillRect(i * w, 0, w + 1, s); }
+  g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, 0, s, s);
+  g.beginPath(); g.arc(s / 2, s / 2, s * 0.3, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill();
+  g.lineWidth = s * 0.03; g.strokeStyle = '#111'; g.stroke();
+  g.fillStyle = '#111';
+  g.beginPath();
+  for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * Math.PI * 2 / 5; g.lineTo(s / 2 + Math.cos(a) * s * 0.11, s / 2 + Math.sin(a) * s * 0.11); }
+  g.fill();
+  return c.toDataURL('image/png');
+}
+
+function iniciarPWA() {
+  const base = location.href.split('#')[0].split('?')[0];
+  const escopo = base.substring(0, base.lastIndexOf('/') + 1);
+  try {
+    const manifest = {
+      name: 'Herói Tricolor', short_name: 'Herói Tricolor', start_url: base, scope: escopo,
+      display: 'fullscreen', orientation: 'portrait', background_color: '#07100b', theme_color: '#5c0f24',
+      icons: [
+        { src: iconePWA(192), sizes: '192x192', type: 'image/png' },
+        { src: iconePWA(512), sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+      ]
+    };
+    document.getElementById('lkManifest').href = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' }));
+    document.getElementById('lkApple').href = iconePWA(180);
+    document.getElementById('lkIcon').href = iconePWA(64);
+  } catch (e) { }
+  // A página guarda o próprio HTML e o Three.js no Cache Storage. Isso serve o
+  // service worker e também o carregamento offline do Three.js (ver carregarThree).
+  try {
+    if ('caches' in window) caches.open(CFG.CACHE).then(c => Promise.all([
+      c.match(CFG.THREE_URL).then(r => r || c.add(CFG.THREE_URL)),
+      c.add(escopo).catch(() => { })
+    ])).catch(() => { });
+  } catch (e) { }
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    // Primeiro o SW embutido via Blob. Os navegadores atuais recusam script de
+    // SW com URL blob:, então cai para o sw.js ao lado (mesmo código) se existir.
+    let blobUrl = null;
+    try { blobUrl = URL.createObjectURL(new Blob([SW_FONTE], { type: 'text/javascript' })); } catch (e) { }
+    const reserva = () => navigator.serviceWorker.register('sw.js', { scope: escopo }).catch(() => { });
+    if (blobUrl) navigator.serviceWorker.register(blobUrl, { scope: escopo }).catch(reserva);
+    else reserva();
+  }
+}
+
+async function carregarThree() {
+  try {
+    return await import(CFG.THREE_URL);
+  } catch (e) {
+    // Sem rede e sem SW: busca o módulo guardado no Cache Storage.
+    if ('caches' in window) {
+      const c = await caches.open(CFG.CACHE);
+      const r = await c.match(CFG.THREE_URL);
+      if (r) {
+        const url = URL.createObjectURL(new Blob([await r.text()], { type: 'text/javascript' }));
+        return await import(url);
+      }
+    }
+    throw e;
+  }
+}
+
+iniciarPWA();
+let THREE;
+try { THREE = await carregarThree(); }
+catch (e) {
+  document.getElementById('carregaTxt').textContent = 'SEM CONEXÃO: abra uma vez online para jogar offline.';
+  throw e;
+}
+const V3 = THREE.Vector3;
+
+// ---------- utilidades ----------
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const dist2 = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+const rnd = (a, b) => a + Math.random() * (b - a);
+const campo = (x, y) => new V3((x - 0.5) * CFG.CAMPO_C, 0, (y - 0.5) * CFG.CAMPO_L);
+const GOL = new V3(MEIO_C, 0, 0);
+function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+const NOMES_GENERICOS = new Set(['Zagueiro', 'Lateral', 'Volante', 'Meia', 'Goleiro', 'Atacante']);
+const $ = id => document.getElementById(id);
+
+// =====================================================================
+// SAVE
+// =====================================================================
+const SAVE = {
+  d: { estrelas: {}, extras: {} },
+  carregar() {
+    try {
+      const s = localStorage.getItem(CFG.SAVE_KEY);
+      if (s) { const o = JSON.parse(s); this.d.estrelas = o.estrelas || {}; this.d.extras = o.extras || {}; }
+    } catch (e) { }
+  },
+  gravar() { try { localStorage.setItem(CFG.SAVE_KEY, JSON.stringify(this.d)); } catch (e) { } },
+  estrelas(id) { return this.d.estrelas[id] || 0; },
+  registrar(id, n) { if (n > this.estrelas(id)) { this.d.estrelas[id] = n; this.gravar(); } },
+  liberada(i) { return i === 0 || this.estrelas(FASES[i - 1].id) > 0; },
+  total() { return FASES.reduce((s, f) => s + this.estrelas(f.id), 0); }
+};
+SAVE.carregar();
+
+// =====================================================================
+// AUDIO (Web Audio, tudo sintetizado)
+// =====================================================================
+const Som = {
+  ctx: null, mestre: null, torcidaG: null, ruido: null, nivel: 0.05,
+  init() {
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+    const c = this.ctx;
+    this.mestre = c.createGain(); this.mestre.gain.value = 0.9; this.mestre.connect(c.destination);
+    const n = c.sampleRate * 2, buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+    let b = 0;
+    for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; b = 0.97 * b + 0.03 * w; d[i] = w * 0.6 + b * 3; }
+    this.ruido = buf;
+    // torcida: duas camadas de ruído filtrado, uma grave e uma "vozes"
+    const mk = (f, q, g) => {
+      const s = c.createBufferSource(); s.buffer = buf; s.loop = true; s.playbackRate.value = 0.7 + Math.random() * 0.3;
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+      const gg = c.createGain(); gg.gain.value = g;
+      s.connect(bp); bp.connect(gg); s.start(); return gg;
+    };
+    this.torcidaG = c.createGain(); this.torcidaG.gain.value = 0;
+    mk(380, 0.7, 0.9).connect(this.torcidaG); mk(1100, 1.2, 0.55).connect(this.torcidaG);
+    this.torcidaG.connect(this.mestre);
+    this.torcida(this.nivel, 1);
+  },
+  torcida(v, t = 0.6) { this.nivel = v; if (!this.ctx) return; this.torcidaG.gain.setTargetAtTime(v, this.ctx.currentTime, t); },
+  explosao() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime, g = this.torcidaG.gain;
+    g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(0.75, t + 0.25);
+    g.setTargetAtTime(0.16, t + 3.5, 1.5);
+    this.nivel = 0.16;
+  },
+  uuh() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime, g = this.torcidaG.gain;
+    g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(0.38, t + 0.3); g.setTargetAtTime(this.nivel, t + 0.9, 0.6);
+  },
+  chute(forca = 15) {
+    if (!this.ctx) return;
+    const c = this.ctx, t = c.currentTime, v = clamp(forca / 25, 0.3, 1.2);
+    const o = c.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(170, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    const g = c.createGain(); g.gain.setValueAtTime(0.7 * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+    o.connect(g); g.connect(this.mestre); o.start(t); o.stop(t + 0.2);
+    const s = c.createBufferSource(); s.buffer = this.ruido;
+    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1200;
+    const g2 = c.createGain(); g2.gain.setValueAtTime(0.35 * v, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    s.connect(hp); hp.connect(g2); g2.connect(this.mestre); s.start(t, Math.random()); s.stop(t + 0.1);
+  },
+  apito(tipo = 'curto') {
+    if (!this.ctx) return;
+    const c = this.ctx, t0 = c.currentTime;
+    const partes = tipo === 'final' ? [[0, 0.35], [0.45, 0.35], [0.9, 0.9]] : tipo === 'longo' ? [[0, 0.8]] : [[0, 0.22], [0.3, 0.45]];
+    for (const [ini, dur] of partes) {
+      const t = t0 + ini;
+      const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 2950;
+      const lfo = c.createOscillator(); lfo.frequency.value = 32; const lg = c.createGain(); lg.gain.value = 110;
+      lfo.connect(lg); lg.connect(o.frequency);
+      const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.02);
+      g.gain.setValueAtTime(0.16, t + dur - 0.04); g.gain.linearRampToValueAtTime(0, t + dur);
+      o.connect(g); g.connect(this.mestre); o.start(t); lfo.start(t); o.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
+    }
+  },
+  bip(f = 880, d = 0.06, v = 0.15) {
+    if (!this.ctx) return;
+    const c = this.ctx, t = c.currentTime;
+    const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+    const g = c.createGain(); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + d);
+    o.connect(g); g.connect(this.mestre); o.start(t); o.stop(t + d + 0.02);
+  },
+  trave() { this.bip(520, 0.5, 0.25); this.bip(1310, 0.35, 0.1); }
+};
+
+// =====================================================================
+// CENA_3D
+// =====================================================================
+const canvas = $('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CFG.MAX_PIXEL_RATIO));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+const ANISO = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, 1, 0.2, 700);
+const hemi = new THREE.HemisphereLight(0xe8f2ff, 0x40602c, 1.25);
+scene.add(hemi);
+const sol = new THREE.DirectionalLight(0xffffff, 2.1);
+sol.castShadow = true;
+sol.shadow.mapSize.set(CFG.SOMBRA, CFG.SOMBRA);
+Object.assign(sol.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 140 });
+sol.shadow.bias = -0.0006;
+sol.shadow.normalBias = 0.02;
+scene.add(sol, sol.target);
+
+function texCanvas(c, rep) {
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO;
+  if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; }
+  return t;
+}
+
+// ---------- gramado com faixas de corte e linhas ----------
+const GRAMA_C = 125, GRAMA_L = 90;
+function texturaGramado() {
+  const W = 2048, H = Math.round(W * GRAMA_L / GRAMA_C);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const px = W / GRAMA_C;
+  const X = x => (x + GRAMA_C / 2) * px, Z = z => (z + GRAMA_L / 2) * px;
+  g.fillStyle = '#2f7d32'; g.fillRect(0, 0, W, H);
+  const faixa = CFG.CAMPO_C / 18;
+  for (let i = -12; i < 12; i++) {
+    g.fillStyle = i % 2 ? '#378c39' : '#2c7530';
+    g.fillRect(X(-MEIO_C + i * faixa), 0, faixa * px + 1, H);
+  }
+  // granulação leve
+  for (let i = 0; i < 9000; i++) {
+    g.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.035)';
+    g.fillRect(Math.random() * W, Math.random() * H, 2, 2);
+  }
+  g.strokeStyle = 'rgba(255,255,255,.92)'; g.lineWidth = Math.max(3, 0.12 * px);
+  const ret = (x1, z1, x2, z2) => g.strokeRect(X(x1), Z(z1), (x2 - x1) * px, (z2 - z1) * px);
+  ret(-MEIO_C, -MEIO_L, MEIO_C, MEIO_L);
+  g.beginPath(); g.moveTo(X(0), Z(-MEIO_L)); g.lineTo(X(0), Z(MEIO_L)); g.stroke();
+  g.beginPath(); g.arc(X(0), Z(0), 9.15 * px, 0, Math.PI * 2); g.stroke();
+  const ponto = (x, z, r = 0.22) => { g.beginPath(); g.arc(X(x), Z(z), r * px, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); };
+  ponto(0, 0, 0.25);
+  for (const s of [-1, 1]) {
+    const lx = s * MEIO_C;
+    ret(Math.min(lx, lx - s * 16.5), -20.16, Math.max(lx, lx - s * 16.5), 20.16);
+    ret(Math.min(lx, lx - s * 5.5), -9.16, Math.max(lx, lx - s * 5.5), 9.16);
+    ponto(lx - s * 11, 0);
+    // meia-lua
+    const a = Math.acos(5.5 / 9.15);
+    g.beginPath();
+    if (s > 0) g.arc(X(lx - 11), Z(0), 9.15 * px, Math.PI - a, Math.PI + a);
+    else g.arc(X(lx + 11), Z(0), 9.15 * px, -a, a);
+    g.stroke();
+    for (const t of [-1, 1]) {
+      g.beginPath(); g.arc(X(lx), Z(t * MEIO_L), 1 * px, 0, Math.PI * 2); g.stroke();
+    }
+  }
+  return texCanvas(c);
+}
+const gramado = new THREE.Mesh(new THREE.PlaneGeometry(GRAMA_C, GRAMA_L), new THREE.MeshLambertMaterial({ map: texturaGramado() }));
+gramado.rotation.x = -Math.PI / 2;
+gramado.receiveShadow = true;
+scene.add(gramado);
+// entorno (pista) além do gramado
+const entorno = new THREE.Mesh(new THREE.PlaneGeometry(220, 180), new THREE.MeshLambertMaterial({ color: 0x24502a }));
+entorno.rotation.x = -Math.PI / 2; entorno.position.y = -0.02; scene.add(entorno);
+
+// ---------- traves e redes ----------
+function texRede() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(0, 0); g.lineTo(64, 64); g.moveTo(64, 0); g.lineTo(0, 64); g.stroke();
+  const t = texCanvas(c, true); return t;
+}
+const matPoste = new THREE.MeshLambertMaterial({ color: 0xffffff });
+const texR = texRede();
+const golsMesh = [];
+function criarGol(lado) {
+  const grp = new THREE.Group();
+  const { GOL_L: L, GOL_A: A, GOL_P: P, POSTE_R: r } = CFG;
+  const gPoste = new THREE.CylinderGeometry(r, r, A, 8);
+  for (const s of [-1, 1]) { const m = new THREE.Mesh(gPoste, matPoste); m.position.set(0, A / 2, s * L / 2); grp.add(m); }
+  const trav = new THREE.Mesh(new THREE.CylinderGeometry(r, r, L + 2 * r, 8), matPoste);
+  trav.rotation.x = Math.PI / 2; trav.position.set(0, A, 0); grp.add(trav);
+  const gTras = new THREE.CylinderGeometry(0.03, 0.03, A, 6);
+  for (const s of [-1, 1]) { const m = new THREE.Mesh(gTras, matPoste); m.position.set(P, A / 2, s * L / 2); grp.add(m); }
+  const mk = (w, h, rx, ry) => {
+    const t = texR.clone(); t.needsUpdate = true; t.repeat.set(w / 0.16, h / 0.16);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false }));
+    m.rotation.set(rx, ry, 0); return m;
+  };
+  const fundo = mk(L, A, 0, Math.PI / 2); fundo.position.set(P, A / 2, 0); grp.add(fundo);
+  const topo = mk(P, L, -Math.PI / 2, 0); topo.rotation.z = 0; topo.position.set(P / 2, A, 0); grp.add(topo);
+  for (const s of [-1, 1]) { const ld = mk(P, A, 0, 0); ld.position.set(P / 2, A / 2, s * L / 2); grp.add(ld); }
+  grp.position.set(lado * MEIO_C, 0, 0);
+  if (lado < 0) grp.rotation.y = Math.PI;
+  scene.add(grp);
+  golsMesh.push({ grp, fundo, balanco: 0 });
+}
+criarGol(1); criarGol(-1);
+
+// ---------- placas (mureta), arquibancadas e torcida ----------
+function texPlacas() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 32;
+  const g = c.getContext('2d');
+  const cores = ['#7b1530', '#f2f2f2', '#00704a', '#1a1a1a'];
+  for (let i = 0; i < 8; i++) { g.fillStyle = cores[i % 4]; g.fillRect(i * 64, 0, 64, 32); }
+  g.fillStyle = 'rgba(255,255,255,.35)';
+  for (let i = 0; i < 8; i++) g.fillRect(i * 64 + 8, 12, 48, 8);
+  return texCanvas(c, true);
+}
+const matPlaca = new THREE.MeshLambertMaterial({ map: texPlacas() });
+const matConcreto = new THREE.MeshLambertMaterial({ color: 0x8b9096 });
+const matConcreto2 = new THREE.MeshLambertMaterial({ color: 0x5c6167 });
+function criarEstadio() {
+  const MX = MEIO_C + 6, MZ = MEIO_L + 4.5;
+  const placa = (w, x, z, ry) => {
+    const t = matPlaca.map.clone(); t.needsUpdate = true; t.repeat.set(w / 16, 1);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.9, 0.12), new THREE.MeshLambertMaterial({ map: t }));
+    m.position.set(x, 0.45, z); m.rotation.y = ry; scene.add(m);
+  };
+  placa(2 * MX, 0, -MZ, 0); placa(2 * MX, 0, MZ, 0);
+  placa(2 * MZ, -MX, 0, Math.PI / 2); placa(2 * MZ, MX, 0, Math.PI / 2);
+  // arquibancadas: rampa inclinada nos quatro lados
+  const FILAS = 16, PASSO_H = 0.62, PASSO_P = 0.95, DIST = 4.5;
+  const rampa = (comp, cx, cz, ry) => {
+    const prof = FILAS * PASSO_P, alt = FILAS * PASSO_H;
+    const geo = new THREE.BoxGeometry(comp, 0.4, Math.hypot(prof, alt));
+    const m = new THREE.Mesh(geo, matConcreto);
+    const ang = Math.atan2(alt, prof);
+    const grp = new THREE.Group(); grp.position.set(cx, 0, cz); grp.rotation.y = ry; scene.add(grp);
+    m.rotation.x = -ang; m.position.set(0, alt / 2 + 0.8, DIST + prof / 2); grp.add(m);
+    const muro = new THREE.Mesh(new THREE.BoxGeometry(comp, 1.6, 0.4), matConcreto2); muro.position.set(0, 0.8, DIST); grp.add(muro);
+    const fundo = new THREE.Mesh(new THREE.BoxGeometry(comp, alt + 6, 0.6), matConcreto2); fundo.position.set(0, (alt + 6) / 2, DIST + prof + 0.4); grp.add(fundo);
+    return grp;
+  };
+  const lados = [
+    { comp: 2 * MX + 10, cx: 0, cz: MZ, ry: 0 },
+    { comp: 2 * MX + 10, cx: 0, cz: -MZ, ry: Math.PI },
+    { comp: 2 * MZ + 10, cx: MX, cz: 0, ry: Math.PI / 2 },
+    { comp: 2 * MZ + 10, cx: -MX, cz: 0, ry: -Math.PI / 2 }
+  ];
+  const grupos = lados.map(l => rampa(l.comp, l.cx, l.cz, l.ry));
+  // torcida instanciada
+  const pessoasPorLado = lados.map(l => Math.floor(l.comp / 0.85) * FILAS);
+  const total = pessoasPorLado.reduce((a, b) => a + b, 0);
+  const geo = new THREE.BoxGeometry(0.46, 0.7, 0.34); geo.translate(0, 0.35, 0);
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const uni = { uTempo: { value: 0 }, uFesta: { value: 0 } };
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.uTempo = uni.uTempo; sh.uniforms.uFesta = uni.uFesta;
+    sh.vertexShader = 'uniform float uTempo; uniform float uFesta;\n' + sh.vertexShader.replace('#include <begin_vertex>',
+      `#include <begin_vertex>
+       float idf = float(gl_InstanceID);
+       float fase = fract(sin(idf * 12.9898) * 43758.5453) * 6.2831;
+       float vel = 7.0 + mod(idf, 5.0);
+       transformed.y += max(0.0, sin(uTempo * vel + fase)) * (0.06 + uFesta * 0.45);
+       transformed.x += sin(uTempo * 2.0 + fase) * 0.04 * (1.0 + uFesta);`);
+  };
+  const torcida = new THREE.InstancedMesh(geo, mat, total);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new V3(), s = new V3(1, 1, 1), eixoY = new V3(0, 1, 0);
+  let k = 0;
+  lados.forEach((l, li) => {
+    const n = Math.floor(l.comp / 0.85);
+    for (let f = 0; f < FILAS; f++) for (let i = 0; i < n; i++) {
+      const lx = -l.comp / 2 + (i + 0.5) * 0.85 + (Math.random() - 0.5) * 0.25;
+      const lz = DIST + 0.7 + f * PASSO_P + (Math.random() - 0.5) * 0.15;
+      const ly = 0.8 + 0.25 + f * PASSO_H + 0.25;
+      const ca = Math.cos(l.ry), sa = Math.sin(l.ry);
+      p.set(l.cx + lx * ca + lz * sa, ly, l.cz - lx * sa + lz * ca);
+      q.setFromAxisAngle(eixoY, l.ry);
+      const esc = 0.85 + Math.random() * 0.3; s.set(1, esc, 1);
+      m4.compose(p, q, s); torcida.setMatrixAt(k++, m4);
+    }
+  });
+  scene.add(torcida);
+  // refletores (aparecem nos jogos à noite)
+  const refletores = new THREE.Group();
+  const matTorre = new THREE.MeshLambertMaterial({ color: 0x3a3f45 });
+  const matLuz = new THREE.MeshBasicMaterial({ color: 0xfffbe6 });
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const t = new THREE.Mesh(new THREE.BoxGeometry(1, 34, 1), matTorre);
+    t.position.set(sx * (MX + 18), 17, sz * (MZ + 18)); refletores.add(t);
+    const l = new THREE.Mesh(new THREE.BoxGeometry(6, 3, 0.5), matLuz);
+    l.position.set(sx * (MX + 17), 34.5, sz * (MZ + 17)); l.lookAt(0, 0, 0); refletores.add(l);
+  }
+  scene.add(refletores);
+  return { torcida, uni, grupos, refletores };
+}
+const estadio = criarEstadio();
+
+function pintarTorcida(corAdv) {
+  const c = new THREE.Color(), tri = [new THREE.Color('#7b1530'), new THREE.Color('#00704a'), new THREE.Color('#f4f4f4')];
+  const adv = new THREE.Color(corAdv || '#444444');
+  const pele = new THREE.Color('#c99a74');
+  const n = estadio.torcida.count;
+  for (let i = 0; i < n; i++) {
+    const r = Math.random();
+    if (r < 0.08) c.copy(pele);
+    else if (r < 0.8) c.copy(tri[(Math.random() * 3) | 0]);
+    else c.copy(adv);
+    c.offsetHSL(0, 0, (Math.random() - 0.5) * 0.12);
+    estadio.torcida.setColorAt(i, c);
+  }
+  estadio.torcida.instanceColor.needsUpdate = true;
+}
+
+function texCeu(tipo) {
+  const c = document.createElement('canvas'); c.width = 4; c.height = 256;
+  const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 256);
+  if (tipo === 'noite') { gr.addColorStop(0, '#02040c'); gr.addColorStop(0.55, '#0b1838'); gr.addColorStop(1, '#2a3550'); }
+  else { gr.addColorStop(0, '#3d78c9'); gr.addColorStop(0.55, '#8fc0ec'); gr.addColorStop(1, '#f2d8b0'); }
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 256);
+  return texCanvas(c);
+}
+const CEUS = { tarde: texCeu('tarde'), noite: texCeu('noite') };
+function aplicarCeu(tipo) {
+  scene.background = CEUS[tipo] || CEUS.tarde;
+  const noite = tipo === 'noite';
+  scene.fog = new THREE.Fog(noite ? 0x0b1630 : 0xa9c8e8, 120, 330);
+  hemi.color.set(noite ? 0xc8d6ff : 0xe8f2ff); hemi.groundColor.set(noite ? 0x2a3a26 : 0x40602c);
+  hemi.intensity = noite ? 1.05 : 1.25;
+  sol.color.set(noite ? 0xf4f6ff : 0xfff2dd); sol.intensity = noite ? 1.8 : 2.2;
+  estadio.refletores.visible = noite;
+}
+aplicarCeu('tarde');
+
+// =====================================================================
+// JOGADORES_ANIMACAO
+// =====================================================================
+const GEO = (() => {
+  const t = (g, y) => { g.translate(0, y, 0); return g; };
+  const shoe = new THREE.BoxGeometry(0.12, 0.07, 0.25); shoe.translate(0, -0.035, 0.05);
+  return {
+    tronco: new THREE.BoxGeometry(0.46, 0.58, 0.26),
+    calcao: new THREE.BoxGeometry(0.44, 0.24, 0.27),
+    cabeca: new THREE.IcosahedronGeometry(0.135, 1),
+    cabelo: new THREE.SphereGeometry(0.142, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.45),
+    braco: t(new THREE.BoxGeometry(0.1, 0.56, 0.11), -0.28),
+    coxa: t(new THREE.BoxGeometry(0.16, 0.42, 0.17), -0.21),
+    canela: t(new THREE.BoxGeometry(0.13, 0.42, 0.14), -0.21),
+    chuteira: shoe,
+    cartao: new THREE.PlaneGeometry(0.08, 0.11)
+  };
+})();
+const PELES = ['#f1c7a3', '#e0b089', '#c58f63', '#9a6440', '#6e452a', '#4f3120'];
+const CABELOS = ['#16100c', '#2b1d14', '#3d2a1b', '#0c0c0c', '#6b4a2b'];
+const cacheMat = new Map();
+function matCor(cor, extra) {
+  const k = cor + (extra ? JSON.stringify(extra) : '');
+  if (!cacheMat.has(k)) cacheMat.set(k, new THREE.MeshLambertMaterial(Object.assign({ color: cor }, extra || {})));
+  return cacheMat.get(k);
+}
+// texturas que mudam de fase em fase e precisam ser descartadas
+let descartaveis = [];
+
+function pintarCamisa(kit, numero) {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  if (kit.estilo === 'flu') {
+    // listras verticais grená e verde separadas por filetes brancos
+    const seq = [['#7b1530', 17], ['#ffffff', 5], ['#00704a', 17], ['#ffffff', 5]];
+    let x = -6, i = 0;
+    while (x < 128) { const [cc, w] = seq[i % 4]; g.fillStyle = cc; g.fillRect(x, 0, w, 128); x += w; i++; }
+  } else {
+    g.fillStyle = kit.camisa; g.fillRect(0, 0, 128, 128);
+    if (kit.cor2) { g.fillStyle = kit.cor2; g.fillRect(0, 0, 128, 12); g.fillRect(0, 116, 128, 12); }
+  }
+  if (numero !== undefined && numero !== null && numero !== '') {
+    g.font = '900 70px Arial,Helvetica,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 9; g.strokeStyle = kit.numBorda; g.lineJoin = 'round'; g.strokeText(String(numero), 64, 70);
+    g.fillStyle = kit.num; g.fillText(String(numero), 64, 70);
+  }
+  const t = texCanvas(c); descartaveis.push(t); return t;
+}
+function kitMats(kit) {
+  if (kit._mats) return kit._mats;
+  const tf = pintarCamisa(kit, null);
+  const frente = new THREE.MeshLambertMaterial({ map: tf });
+  descartaveis.push(frente);
+  kit._mats = { frente, calcao: matCor(kit.calcao), meia: matCor(kit.meia), chuteira: matCor('#151515') };
+  return kit._mats;
+}
+
+function criarJogadorMesh(kit, numero, peleCor, cabeloCor) {
+  const M = kitMats(kit);
+  const costas = new THREE.MeshLambertMaterial({ map: pintarCamisa(kit, numero) });
+  descartaveis.push(costas);
+  const pele = matCor(peleCor, { flatShading: true });
+  const cab = matCor(cabeloCor, { flatShading: true });
+  const sombra = m => { m.castShadow = true; return m; };
+  const root = new THREE.Group(); root.rotation.order = 'YXZ';
+  const body = new THREE.Group(); body.position.y = 0.91; root.add(body);
+  const tronco = sombra(new THREE.Mesh(GEO.tronco, [M.frente, M.frente, M.frente, M.frente, M.frente, costas]));
+  tronco.position.y = 0.42; body.add(tronco);
+  const calcao = sombra(new THREE.Mesh(GEO.calcao, M.calcao)); calcao.position.y = 0.04; body.add(calcao);
+  const pescoco = new THREE.Group(); pescoco.position.y = 0.72; body.add(pescoco);
+  const cabeca = sombra(new THREE.Mesh(GEO.cabeca, pele)); cabeca.position.y = 0.14; pescoco.add(cabeca);
+  const cabelo = new THREE.Mesh(GEO.cabelo, cab); cabelo.position.y = 0.16; cabelo.rotation.x = -0.25; pescoco.add(cabelo);
+  const braco = (s) => {
+    const piv = new THREE.Group(); piv.position.set(s * 0.29, 0.66, 0); body.add(piv);
+    const m = sombra(new THREE.Mesh(GEO.braco, pele)); piv.add(m);
+    const manga = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.18, 0.14), M.frente); manga.position.y = -0.07; piv.add(manga);
+    return piv;
+  };
+  const perna = (s) => {
+    const piv = new THREE.Group(); piv.position.set(s * 0.11, -0.06, 0); body.add(piv);
+    piv.add(sombra(new THREE.Mesh(GEO.coxa, pele)));
+    const joelho = new THREE.Group(); joelho.position.y = -0.42; piv.add(joelho);
+    joelho.add(sombra(new THREE.Mesh(GEO.canela, M.meia)));
+    const pe = sombra(new THREE.Mesh(GEO.chuteira, M.chuteira)); pe.position.y = -0.42; joelho.add(pe);
+    return { piv, joelho };
+  };
+  const bE = braco(1), bD = braco(-1), pE = perna(1), pD = perna(-1);
+  return { root, body, pescoco, bE, bD, pE: pE.piv, pD: pD.piv, jE: pE.joelho, jD: pD.joelho, costas };
+}
+
+const ANIMS = ['idle', 'run', 'kick', 'header', 'celebrate', 'dive', 'sit', 'lunge', 'card', 'volley', 'point'];
+const DUR_ANIM = { kick: 0.5, header: 0.65, volley: 0.55, lunge: 0.7 };
+
+class Jogador {
+  constructor(def, time, kit) {
+    this.def = def; this.time = time; this.nome = def.nome; this.num = def.num ?? '';
+    this.gk = !!def.gk;
+    this.pos = def.x !== undefined ? campo(def.x, def.y) : new V3();
+    this.home = this.pos.clone();
+    this.volta = def.volta ? campo(def.volta.x, def.volta.y) : null;
+    this.alvo = null; this.vel = 0; this.heading = time === 'adv' ? -Math.PI / 2 : Math.PI / 2;
+    this.anim = 'idle'; this.animT = 0; this.runPhase = Math.random() * 6; this.runAmp = 0;
+    this.yOff = 0; this.roll = 0; this.seed = Math.random() * 10;
+    this.raio = def.raio ?? 3; this.recupera = def.recupera || 0; this.batido = false;
+    this.mergulho = null; this.reacao = 0; this.reagiu = true; this.travado = 0;
+    const h = hash(def.nome + (def.num || ''));
+    this.m = criarJogadorMesh(kit, this.num, def.pele || PELES[h % PELES.length], CABELOS[(h >>> 4) % CABELOS.length]);
+    scene.add(this.m.root);
+  }
+  frente() { return new V3(Math.sin(this.heading), 0, Math.cos(this.heading)); }
+  pe() { return this.pos.clone().addScaledVector(this.frente(), 0.45).setY(CFG.BOLA_R); }
+  tocar(nome) { this.anim = nome; this.animT = 0; }
+  remover() { scene.remove(this.m.root); }
+}
+
+function virarPara(p, alvo, dt, k = 10) {
+  const dx = alvo.x - p.pos.x, dz = alvo.z - p.pos.z;
+  if (dx * dx + dz * dz < 1e-4) return;
+  const h = Math.atan2(dx, dz);
+  let d = h - p.heading; d = Math.atan2(Math.sin(d), Math.cos(d));
+  p.heading += d * Math.min(1, k * dt);
+}
+function moverPara(p, alvo, vmax, dt) {
+  const dx = alvo.x - p.pos.x, dz = alvo.z - p.pos.z, d = Math.hypot(dx, dz);
+  if (d < 0.05) { p.vel = lerp(p.vel, 0, Math.min(1, dt * 8)); return true; }
+  const v = Math.min(vmax, d / Math.max(dt, 1e-4), lerp(p.vel, vmax, Math.min(1, dt * 3)) + 0.6);
+  const passo = Math.min(d, v * dt);
+  p.pos.x += dx / d * passo; p.pos.z += dz / d * passo;
+  p.vel = passo / Math.max(dt, 1e-4);
+  virarPara(p, alvo, dt, 9);
+  return d - passo < 0.05;
+}
+function avancarAnim(p, dt) {
+  p.animT += dt;
+  const alvoAmp = clamp(p.vel / 6.5, 0, 1);
+  p.runAmp = lerp(p.runAmp, alvoAmp, Math.min(1, dt * 8));
+  p.runPhase += dt * (4 + p.vel * 1.15);
+  const d = DUR_ANIM[p.anim];
+  if (d && p.animT > d) { p.anim = 'idle'; p.animT = 0; }
+}
+
+function pose(p, tReal) {
+  const m = p.m, t = p.animT, a = p.anim;
+  m.root.position.set(p.pos.x, p.yOff, p.pos.z);
+  m.root.rotation.set(0, p.heading, p.roll);
+  m.body.rotation.set(0, 0, 0); m.body.position.y = 0.91;
+  m.pE.rotation.set(0, 0, 0); m.pD.rotation.set(0, 0, 0);
+  m.jE.rotation.set(0, 0, 0); m.jD.rotation.set(0, 0, 0);
+  m.bE.rotation.set(0, 0, 0.1); m.bD.rotation.set(0, 0, -0.1);
+  m.pescoco.rotation.set(0, 0, 0);
+  const run = p.runAmp, ph = p.runPhase;
+  if (run > 0.02 && (a === 'idle' || a === 'run' || a === 'celebrate')) {
+    const s = Math.sin(ph), c = Math.cos(ph);
+    m.pE.rotation.x = -s * 0.9 * run; m.pD.rotation.x = s * 0.9 * run;
+    m.jE.rotation.x = (0.25 + Math.max(0, -c)) * 1.25 * run;
+    m.jD.rotation.x = (0.25 + Math.max(0, c)) * 1.25 * run;
+    m.bE.rotation.x = s * 0.95 * run; m.bD.rotation.x = -s * 0.95 * run;
+    m.body.rotation.x = 0.2 * run;
+    m.body.position.y = 0.91 + Math.abs(c) * 0.07 * run - 0.04 * run;
+  } else if (a === 'idle') {
+    m.body.position.y = 0.91 + Math.sin(tReal * 2.2 + p.seed) * 0.006;
+    m.bE.rotation.z = 0.12 + Math.sin(tReal * 2.2 + p.seed) * 0.02;
+    m.bD.rotation.z = -0.12 - Math.sin(tReal * 2.2 + p.seed) * 0.02;
+  }
+  switch (a) {
+    case 'kick': case 'volley': {
+      const k = t / DUR_ANIM[a];
+      const lado = a === 'volley' ? 1 : 0;
+      let perna, joelho, tr;
+      if (k < 0.4) { const u = k / 0.4; perna = 0.95 * u; joelho = 1.2 * u; tr = -0.12 * u; }
+      else if (k < 0.62) { const u = (k - 0.4) / 0.22; perna = lerp(0.95, -1.35, u); joelho = lerp(1.2, 0.05, u); tr = lerp(-0.12, 0.12, u); }
+      else { const u = Math.min(1, (k - 0.62) / 0.38); perna = lerp(-1.35, -0.1, u); joelho = lerp(0.05, 0.1, u); tr = lerp(0.12, 0, u); }
+      m.pD.rotation.x = perna; m.jD.rotation.x = joelho; m.body.rotation.x = tr;
+      m.pE.rotation.x = 0.15; m.jE.rotation.x = 0.3;
+      m.bE.rotation.z = 0.9; m.bD.rotation.z = -0.6; m.bE.rotation.x = -0.4;
+      if (lado) { m.body.rotation.z = -0.55 * Math.sin(Math.min(1, k * 1.5) * Math.PI); m.pD.rotation.z = -0.6; }
+      break;
+    }
+    case 'header': {
+      const k = Math.min(1, t / DUR_ANIM.header);
+      m.root.position.y += Math.sin(k * Math.PI) * 0.5;
+      m.body.rotation.x = k < 0.5 ? -0.4 * (k / 0.5) : lerp(-0.4, 0.5, (k - 0.5) / 0.5);
+      m.pescoco.rotation.x = k < 0.5 ? -0.3 : 0.35;
+      m.bE.rotation.z = 1.1; m.bD.rotation.z = -1.1;
+      m.jE.rotation.x = 0.7; m.jD.rotation.x = 0.7; m.pE.rotation.x = -0.25; m.pD.rotation.x = -0.25;
+      break;
+    }
+    case 'celebrate': {
+      m.bE.rotation.z = 2.75 + Math.sin(t * 9) * 0.15; m.bD.rotation.z = -2.75 - Math.sin(t * 9) * 0.15;
+      m.bE.rotation.x = 0; m.bD.rotation.x = 0;
+      if (run < 0.2) m.root.position.y += Math.abs(Math.sin(t * 6)) * 0.28;
+      break;
+    }
+    case 'dive': {
+      m.bE.rotation.z = 2.95; m.bD.rotation.z = -2.95;
+      m.pE.rotation.x = 0.2; m.pD.rotation.x = -0.15; m.jE.rotation.x = 0.4;
+      break;
+    }
+    case 'sit': {
+      m.body.position.y = 0.42; m.body.rotation.x = -0.35;
+      m.pE.rotation.x = -1.35; m.pD.rotation.x = -1.2; m.jE.rotation.x = 0.4; m.jD.rotation.x = 0.7;
+      m.bE.rotation.x = 0.7; m.bD.rotation.x = 0.7; m.bE.rotation.z = 0.3; m.bD.rotation.z = -0.3;
+      break;
+    }
+    case 'lunge': {
+      const k = Math.min(1, t / 0.25);
+      m.body.rotation.x = 0.55 * k; m.body.position.y = 0.91 - 0.25 * k;
+      m.pD.rotation.x = -1.1 * k; m.jD.rotation.x = 0.1; m.pE.rotation.x = 0.6 * k; m.jE.rotation.x = 0.9 * k;
+      m.bE.rotation.z = 0.7 * k; m.bD.rotation.z = -0.7 * k;
+      break;
+    }
+    case 'card': { m.bD.rotation.z = -2.95; m.bD.rotation.x = -0.2; break; }
+    case 'point': { m.bD.rotation.x = -1.45; m.bD.rotation.z = -0.15; m.pescoco.rotation.y = 0.1 * Math.sin(t * 2); break; }
+  }
+}
+
+// =====================================================================
+// FISICA
+// =====================================================================
+// Física própria: gravidade, atrito no gramado, quique, efeito (força de
+// Magnus simplificada como aceleração lateral constante), colisão esfera ×
+// cápsula (jogadores, traves) e rede.
+function texBola() {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+  const g = c.getContext('2d'); g.fillStyle = '#fbfbfb'; g.fillRect(0, 0, 128, 64);
+  g.fillStyle = '#1a1a1a';
+  const pts = [[16, 12], [48, 12], [80, 12], [112, 12], [0, 34], [32, 34], [64, 34], [96, 34], [128, 34], [16, 56], [48, 56], [80, 56], [112, 56]];
+  for (const [x, y] of pts) { g.beginPath(); for (let i = 0; i < 5; i++) { const a = i * Math.PI * 2 / 5 - Math.PI / 2; g.lineTo(x + Math.cos(a) * 7, y + Math.sin(a) * 5); } g.fill(); }
+  return texCanvas(c);
+}
+const bolaMesh = new THREE.Mesh(new THREE.SphereGeometry(CFG.BOLA_R, 14, 10), new THREE.MeshLambertMaterial({ map: texBola() }));
+bolaMesh.castShadow = true;
+scene.add(bolaMesh);
+const bola = {
+  p: new V3(0, CFG.BOLA_R, 0), v: new V3(), curva: 0, cd: new V3(),
+  dono: null, rec: null, recPonto: null, chute: false, segura: false,
+  ignora: null, ignoraT: 0, ultimo: null, cadeia: [], noGol: false, ant: new V3()
+};
+
+function integrar(b, dt) {
+  const R = CFG.BOLA_R, p = b.p, v = b.v;
+  const noChao = p.y <= R + 0.004 && v.y <= 0.05;
+  if (noChao) {
+    p.y = R; v.y = 0; b.curva = 0;
+    const s = Math.hypot(v.x, v.z);
+    if (s > 0) { const ns = Math.max(0, s - CFG.ATRITO * dt); v.x *= ns / s; v.z *= ns / s; }
+  } else {
+    v.y -= CFG.G * dt;
+    if (b.curva) { v.x += b.cd.x * b.curva * dt; v.z += b.cd.z * b.curva * dt; }
+  }
+  p.x += v.x * dt; p.y += v.y * dt; p.z += v.z * dt;
+  if (p.y < R) {
+    p.y = R;
+    if (v.y < -1.2) { v.y = -v.y * CFG.QUIQUE; v.x *= 0.84; v.z *= 0.84; b.curva = 0; }
+    else v.y = 0;
+  }
+}
+const copiaBola = () => ({ p: bola.p.clone(), v: bola.v.clone(), curva: bola.curva, cd: bola.cd.clone() });
+function preverAproximacao(alvo, maxT = 5) {
+  const s = copiaBola(), dt = 1 / 120;
+  const melhor = { d: 1e9, t: 0, y: 0, p: new V3() };
+  for (let t = 0; t < maxT; t += dt) {
+    const d = dist2(s.p, alvo);
+    if (d < melhor.d) { melhor.d = d; melhor.t = t; melhor.y = s.p.y; melhor.p.copy(s.p); }
+    else if (d > melhor.d + 2) break;
+    integrar(s, dt);
+  }
+  return melhor;
+}
+function preverLinha(x, sentido = 1, maxT = 3) {
+  const s = copiaBola(), dt = 1 / 120;
+  for (let t = 0; t < maxT; t += dt) {
+    if ((s.p.x - x) * sentido >= 0) return { t, y: s.p.y, z: s.p.z };
+    integrar(s, dt);
+    if (Math.hypot(s.v.x, s.v.z) < 0.5) return null;
+  }
+  return null;
+}
+// passe rasteiro que chega no alvo com vFinal (atrito constante)
+function velRasteiro(de, para, vFinal = 5) {
+  const d = dist2(de, para), u = new V3(para.x - de.x, 0, para.z - de.z).normalize();
+  const v0 = Math.sqrt(vFinal * vFinal + 2 * CFG.ATRITO * d);
+  return { v: u.multiplyScalar(v0), curva: 0, cd: new V3() };
+}
+// bola aérea: chega em `para` no tempo T, na altura h, com curva lateral c (m)
+function velAerea(de, para, T, h, c = 0) {
+  const d = dist2(de, para), u = new V3(para.x - de.x, 0, para.z - de.z).normalize();
+  const n = new V3(-u.z, 0, u.x);
+  const vh = d / T, vy = (h - de.y + 0.5 * CFG.G * T * T) / T;
+  const v = u.clone().multiplyScalar(vh).addScaledVector(n, 4 * c / T); v.y = vy;
+  return { v, curva: c ? -8 * c / (T * T) : 0, cd: n };
+}
+
+const _q = new V3(), _d = new V3(), _ab = new V3();
+function colideSegmento(a, b, raio, e = 0.35, atrito = 0.85) {
+  const p = bola.p;
+  _ab.subVectors(b, a);
+  const t = clamp(_d.subVectors(p, a).dot(_ab) / Math.max(1e-6, _ab.lengthSq()), 0, 1);
+  _q.copy(a).addScaledVector(_ab, t);
+  _d.subVectors(p, _q);
+  const dist = _d.length(), lim = raio + CFG.BOLA_R;
+  if (dist >= lim || dist < 1e-6) return false;
+  const n = _d.multiplyScalar(1 / dist);
+  p.copy(_q).addScaledVector(n, lim + 0.001);
+  const vn = bola.v.dot(n);
+  if (vn < 0) { bola.v.addScaledVector(n, -(1 + e) * vn); bola.v.multiplyScalar(atrito); bola.curva = 0; }
+  return true;
+}
+const _a = new V3(), _b = new V3(), _up = new V3(), _eul = new THREE.Euler(0, 0, 0, 'YXZ');
+function eixoJogador(p) {
+  _eul.set(0, p.heading, p.roll, 'YXZ');
+  _up.set(0, 1, 0).applyEuler(_eul);
+  const base = _b.set(p.pos.x, p.yOff, p.pos.z);
+  _a.copy(base).addScaledVector(_up, p.anim === 'sit' ? 0.05 : 0.15);
+  const comp = p.mergulho ? 2.2 : p.anim === 'sit' ? 0.9 : 1.75;
+  const fim = base.clone().addScaledVector(_up, comp);
+  return [_a.clone(), fim];
+}
+
+const POSTES = [];
+for (const s of [-1, 1]) for (const lado of [-1, 1]) {
+  const x = lado * MEIO_C, z = s * CFG.GOL_L / 2;
+  POSTES.push([new V3(x, 0, z), new V3(x, CFG.GOL_A, z)]);
+}
+POSTES.push([new V3(MEIO_C, CFG.GOL_A, -CFG.GOL_L / 2), new V3(MEIO_C, CFG.GOL_A, CFG.GOL_L / 2)]);
+POSTES.push([new V3(-MEIO_C, CFG.GOL_A, -CFG.GOL_L / 2), new V3(-MEIO_C, CFG.GOL_A, CFG.GOL_L / 2)]);
+
+function redeGol(lado) {
+  // bola dentro do gol: contida pela rede
+  const p = bola.p, v = bola.v, R = CFG.BOLA_R;
+  const fundo = lado * (MEIO_C + CFG.GOL_P - R);
+  if ((p.x - fundo) * lado > 0) { p.x = fundo; v.x = -v.x * 0.12; v.y *= 0.5; v.z *= 0.5; golsMesh[lado > 0 ? 0 : 1].balanco = 1; }
+  const lz = CFG.GOL_L / 2 - R;
+  if (Math.abs(p.z) > lz) { p.z = Math.sign(p.z) * lz; v.z = -v.z * 0.15; v.x *= 0.6; }
+  if (p.y > CFG.GOL_A - R) { p.y = CFG.GOL_A - R; v.y = -Math.abs(v.y) * 0.2; }
+  v.x *= 0.985; v.z *= 0.985;
+}
+
+function naArea(pos) { return pos.x > MEIO_C - 16.5 && Math.abs(pos.z) < 20.16; }
+
+// passo físico da bola durante a jogada (estado JOGO/GOL/FALHA)
+function fisicaBola(dt) {
+  const ativo = J.estado === 'JOGO';
+  bola.ant.copy(bola.p);
+  if (bola.ignoraT > 0) { bola.ignoraT -= dt; if (bola.ignoraT <= 0) bola.ignora = null; }
+  if (bola.passaPorT > 0) { bola.passaPorT -= dt; if (bola.passaPorT <= 0) bola.passaPor = null; }
+  integrar(bola, dt);
+  const p = bola.p, vel = bola.v.length();
+  // traves
+  for (const [a, b] of POSTES) if (colideSegmento(a, b, CFG.POSTE_R, 0.6, 0.9) && vel > 6) Som.trave();
+  if (bola.noGol) { redeGol(1); return; }
+  // linha de fundo do ataque: gol ou fora
+  if (bola.ant.x < MEIO_C && p.x >= MEIO_C) {
+    if (Math.abs(p.z) < CFG.GOL_L / 2 - CFG.BOLA_R * 0.5 && p.y < CFG.GOL_A - CFG.BOLA_R * 0.3) {
+      bola.noGol = true;
+      if (ativo) marcarGol();
+      return;
+    }
+  }
+  if (!ativo || (J.anel && J.anel.tipo === 'dividida')) return;
+  if (Math.abs(p.z) > MEIO_L + CFG.BOLA_R || p.x < -MEIO_C - CFG.BOLA_R || p.x > MEIO_C + CFG.BOLA_R) {
+    falhar(bola.ultimo && bola.ultimo.gk ? 'defesa' : 'fora');
+    return;
+  }
+  // goleiro
+  const gk = J.gk;
+  if (gk && bola.ignora !== gk) {
+    const [a, b] = eixoJogador(gk);
+    if (colideSegmento(a, b, 0.3, 0.3, 0.7)) {
+      bola.ignora = gk; bola.ignoraT = 0.3;
+      bola.ultimo = gk; bola.cadeia.push(gk.nome);
+      if (!gk.mergulho && vel < 21) { segurarGoleiro(gk); return; }
+      // espalma para fora
+      bola.v.x = -Math.abs(bola.v.x) * 0.35 - 2.5; bola.v.y = Math.abs(bola.v.y) * 0.4 + 2;
+      bola.chute = false; Som.uuh(); Som.chute(10);
+      return;
+    }
+  }
+  // desvios e bloqueios em jogadores (só bola de chute / rebatida rápida)
+  if (bola.chute) {
+    for (const o of J.todos) {
+      if (o.gk || o === bola.ignora || o.batido || (J.anel && J.anel.p === o) || (bola.passaPor && bola.passaPor.has(o))) continue;
+      if (o.def.desvio && !J.desvios.has(o.nome) && vel > 7 && p.y < 1.4 && dist2(o.pos, p) < 1.05) { aplicarDesvio(o); return; }
+      const [a, b] = eixoJogador(o);
+      if (colideSegmento(a, b, 0.3, 0.35, 0.8)) {
+        bola.ignora = o; bola.ignoraT = 0.25; bola.ultimo = o; bola.cadeia.push(o.nome);
+        if (o.time === 'adv') J.bloqueado = o;
+        Som.chute(8);
+        if (bola.v.length() < 9) bola.chute = false;
+      }
+    }
+    if (vel < 7.5) bola.chute = false;
+    return;
+  }
+  // receptor
+  if (bola.rec) {
+    const r = bola.rec;
+    const esperaAnel = J.anel && J.anel.p === r && !J.anel.feito;
+    if (!esperaAnel && dist2(r.pos, p) < 0.95 && p.y < 2.0) { darPosse(r); return; }
+    if (vel < 2.5 && dist2(r.pos, p) > 3) { bola.rec = null; bola.segura = false; }
+  }
+  // adversários interceptam bola baixa
+  if (!bola.segura && !J.autoplay) {
+    for (const o of J.adv) {
+      if (o.gk || o.batido || o === bola.ignora) continue;
+      if (J.anel && !J.anel.feito && J.anel.tipo !== 'dividida' && dist2(o.pos, J.anel.p.pos) < 1.8) continue;
+      const alc = p.y < 1.0 ? 0.85 : p.y < 2.1 ? 0.5 : 0;
+      if (alc && dist2(o.pos, p) < alc) { falhar('interceptado', o); return; }
+    }
+  }
+  // bola solta: qualquer tricolor domina
+  if (!bola.rec) {
+    for (const f of J.flu) {
+      if (f.gk || f === bola.ignora) continue;
+      if (dist2(f.pos, p) < 0.8 && p.y < 1.1) { darPosse(f); return; }
+    }
+  }
+}
+
+function aplicarDesvio(o) {
+  J.desvios.add(o.nome);
+  bola.cadeia.push(o.nome); bola.ultimo = o; bola.ignora = o; bola.ignoraT = 0.3;
+  if (o.nome === J.fase.golDe) J.momentoDesvio = J.tJogo;
+  if (o.time === 'adv') J.ultimoDesvioAdv = o;
+  Som.chute(9);
+  let alvo, vel;
+  if (o.def.desvio === 'gol') {
+    const gk = J.gk;
+    alvo = new V3(MEIO_C + 0.4, 0.45, (gk && gk.pos.z > 0 ? -1 : 1) * 2.7);
+    vel = 12;
+    if (gk) { gk.reacao = 0.9; gk.reagiu = false; gk.mergulho = null; gk.roll = 0; gk.yOff = 0; }
+    o.tocar('lunge');
+  } else {
+    const t = J.todos.find(q => q.nome === o.def.desvio);
+    alvo = t ? t.pos.clone().setY(1.0) : GOL.clone().setY(0.5);
+    vel = Math.max(9, bola.v.length() * 0.55);
+  }
+  const d = dist2(bola.p, alvo);
+  const r = velAerea(bola.p, alvo, Math.max(0.15, d / vel), alvo.y, 0);
+  bola.v.copy(r.v); bola.curva = 0;
+}
+
+function segurarGoleiro(gk) {
+  bola.dono = gk; bola.v.set(0, 0, 0); bola.chute = false;
+  gk.tocar('idle');
+  Som.uuh();
+  falhar('defesa', gk);
+}
+
+// =====================================================================
+// IA_DEFENSORES
+// =====================================================================
+function maisPerto(lista, ponto, filtro) {
+  let m = null, md = 1e9;
+  for (const p of lista) { if (filtro && !filtro(p)) continue; const d = dist2(p.pos, ponto); if (d < md) { md = d; m = p; } }
+  return m;
+}
+const livreBola = () => !bola.dono && !bola.rec && !bola.chute;
+
+function atualizarIA(dt, soVolta = false) {
+  const B = bola.p;
+  const prev = B.clone().addScaledVector(bola.v, 0.25);
+  const cacadorAdv = livreBola() ? maisPerto(J.adv, B, o => !o.gk && !o.batido) : null;
+  for (const o of J.adv) {
+    if (o.gk) { if (!soVolta) atualizarGoleiro(o, dt); continue; }
+    if (o.batido) { o.vel = 0; continue; }
+    if (o.travado > 0) {
+      o.travado -= dt;
+      if (o.alvoScript) moverPara(o, o.alvoScript, 4.5, dt);
+      continue;
+    }
+    if (o.alvoScript) {
+      if (moverPara(o, o.alvoScript, 8.5, dt)) o.alvoScript = null;
+      continue;
+    }
+    let alvo = o.voltaAtivo && o.volta ? o.volta : o.home, v = o.voltaAtivo ? 6.3 : 4;
+    const portador = bola.dono && bola.dono.time === 'flu' ? bola.dono : null;
+    if (portador && J.cronoAtivo && dist2(o.pos, portador.pos) < 7) { alvo = portador.pos; v = 5.6; }
+    else if (!soVolta && !J.autoplay && !bola.dono && !bola.segura && !bola.chute && B.y < 2.0 &&
+      (dist2(o.pos, B) < o.raio + 0.8 || o === cacadorAdv)) { alvo = prev; v = 6.4; }
+    else if (!soVolta && portador && J.conduz && !J.conduz.imune && dist2(o.pos, portador.pos) < o.raio + 1.5) { alvo = portador.pos; v = 6; }
+    else if (o.def.marca) {
+      const m = J.flu.find(f => f.nome === o.def.marca);
+      if (m) { const g = GOL.clone().sub(m.pos).setY(0).normalize(); alvo = m.pos.clone().addScaledVector(g, 0.5).addScaledVector(new V3(-g.z, 0, g.x), -Math.sign(m.pos.z || 1) * 0.9); v = 5; }
+    }
+    if (o.raio === 0 && !o.voltaAtivo && !(alvo === prev)) { o.vel = lerp(o.vel, 0, dt * 6); virarPara(o, B, dt, 4); continue; }
+    moverPara(o, alvo, v, dt);
+    if (o.vel < 0.3) virarPara(o, B, dt, 4);
+  }
+}
+
+function atualizarTricolores(dt) {
+  const cacador = livreBola() ? maisPerto(J.flu, bola.p, f => !f.gk) : null;
+  for (const p of J.flu) {
+    if (p === bola.dono || p.gk || (J.conduz && J.conduz.p === p)) continue;
+    let alvo = null, v = CFG.CORRIDA;
+    if (p.alvoScript) alvo = p.alvoScript;
+    else if (bola.rec === p && p.alvo) alvo = p.alvo;
+    else if (p === cacador) alvo = bola.p.clone().addScaledVector(bola.v, 0.3);
+    if (alvo) { if (moverPara(p, alvo, v, dt) && p.alvoScript) p.alvoScript = null; }
+    else { p.vel = lerp(p.vel, 0, Math.min(1, dt * 6)); virarPara(p, bola.p, dt, 3); }
+  }
+}
+
+function anunciarChute(extra = 0) {
+  if (J.cronoAtivo) { J.cronoAtivo = false; $('cronometro').style.display = 'none'; }
+  const gk = J.gk; if (!gk) return;
+  gk.reacao = (J.fase.gkReacao || 0.3) + extra + (J.autoplay ? 0.8 : 0);
+  gk.reagiu = false;
+  Som.torcida(0.14, 0.2);
+}
+function atualizarGoleiro(gk, dt) {
+  if (bola.dono === gk) return;
+  if (gk.mergulho) { animarMergulho(gk, dt); return; }
+  if (bola.chute && !gk.reagiu) {
+    gk.reacao -= dt;
+    if (gk.reacao <= 0) { gk.reagiu = true; decidirMergulho(gk); }
+    return;
+  }
+  const base = new V3(MEIO_C - 0.6, 0, clamp(bola.p.z * 0.12, -2.4, 2.4));
+  moverPara(gk, base, 3.5, dt);
+  virarPara(gk, bola.p, dt, 6);
+}
+function decidirMergulho(gk) {
+  const pr = preverLinha(gk.pos.x, 1);
+  if (!pr || Math.abs(pr.z) > 4.3 || pr.y > 3.0) return;
+  const dz = pr.z - gk.pos.z;
+  if (Math.abs(dz) < 0.55 && pr.y < 1.9) return; // fica e encaixa
+  mergulharPara(gk, pr.z, pr.y, -1);
+}
+// `frente` = sentido do campo para onde o goleiro olha (-1: olha para -X)
+function mergulharPara(gk, z, y, frente) {
+  const dz = z - gk.pos.z, s = Math.sign(dz) || 1;
+  const theta = Math.acos(clamp((y - 0.25) / 2.1, 0.05, 0.95));
+  const desloc = clamp(Math.abs(dz) - 2.2 * Math.sin(theta), 0, 0.85);
+  gk.heading = frente < 0 ? -Math.PI / 2 : Math.PI / 2;
+  // roll com sinal para inclinar o corpo para o lado do mergulho (ver eixoJogador)
+  const sh = Math.sin(gk.heading);
+  gk.mergulho = { t: 0, vz: s * desloc / 0.4, ang: -s * theta * Math.sign(sh) * -1, alt: clamp(y / 4, 0.1, 0.45) };
+  gk.tocar('dive');
+}
+function animarMergulho(gk, dt) {
+  const m = gk.mergulho; m.t += dt;
+  if (m.t < 0.4) gk.pos.z += m.vz * dt;
+  const k = Math.min(1, m.t / 0.28);
+  gk.roll = m.ang * k;
+  gk.yOff = m.t < 0.6 ? Math.sin(Math.min(1, m.t / 0.6) * Math.PI) * m.alt : 0;
+  if (m.t > 0.6) gk.roll = Math.sign(m.ang) * Math.max(Math.abs(m.ang), lerp(Math.abs(m.ang), 1.5, Math.min(1, (m.t - 0.6) * 4)));
+  gk.vel = 0;
+}
+
+// =====================================================================
+// ESTADO DO JOGO (fluxo da jogada)
+// =====================================================================
+const J = {
+  estado: 'MENU', fase: null, faseIdx: 0, flu: [], adv: [], gk: null, todos: [], extras: [],
+  portador: null, log: [], toques: 0, tentativas: 1, est2: true, autoplay: false, autoI: 0, autoEspera: 0,
+  anel: null, pend: [], conduz: null, timeScale: 1, tJogo: 0, placar: [0, 0],
+  cronoAtivo: false, crono: 0, desvios: new Set(), golInfo: null, introT: 0, golT: 0, falhaT: 0,
+  pausado: false, ultimoTricolor: null, origemNaArea: false, momentoDesvio: null, modo: 'fase'
+};
+const REC = { quadros: [], acc: 0 };
+const acharFlu = n => J.flu.find(p => p.nome === n);
+const acharAdv = n => J.adv.find(p => p.nome === n);
+
+const KIT_FLU = { estilo: 'flu', calcao: '#ffffff', meia: '#ffffff', num: '#ffffff', numBorda: '#3a0816' };
+function kitsDaFase(f) {
+  const a = f.adversario;
+  return {
+    adv: { estilo: 'liso', camisa: a.cor, cor2: a.cor2, calcao: a.calcao, meia: a.meia || a.cor, num: a.num || '#ffffff', numBorda: 'rgba(0,0,0,.55)' },
+    gk: { estilo: 'liso', camisa: a.goleiro, cor2: '#1b1b1b', calcao: '#1b1b1b', meia: a.goleiro, num: '#111111', numBorda: 'rgba(255,255,255,.6)' },
+    flu: Object.assign({}, KIT_FLU)
+  };
+}
+
+function limparFase() {
+  for (const p of J.todos) p.remover();
+  for (const p of J.extras) p.remover();
+  J.flu = []; J.adv = []; J.todos = []; J.extras = []; J.gk = null;
+  for (const d of descartaveis) d.dispose();
+  descartaveis = [];
+  $('etiquetas').innerHTML = '';
+  esconderAnel();
+}
+
+function resetBola() {
+  Object.assign(bola, { passaPor: null, passaPorT: 0, dono: null, rec: null, recPonto: null, chute: false, segura: false, ignora: null, ignoraT: 0, ultimo: null, cadeia: [], noGol: false, curva: 0 });
+  bola.v.set(0, 0, 0);
+}
+
+function montarFase(f) {
+  limparFase();
+  J.fase = f;
+  aplicarCeu(f.ceu);
+  pintarTorcida(f.adversario.cor);
+  const k = kitsDaFase(f);
+  J.flu = f.flu.map(d => new Jogador(d, 'flu', k.flu));
+  J.adv = f.adv.map(d => new Jogador(d, 'adv', d.gk ? k.gk : k.adv));
+  J.gk = J.adv.find(p => p.gk) || null;
+  J.todos = [...J.flu, ...J.adv];
+  const dono = J.flu.find(p => p.def.bola);
+  for (const p of J.flu) p.heading = Math.atan2(GOL.x - p.pos.x, GOL.z - p.pos.z);
+  for (const o of J.adv) {
+    o.heading = -Math.PI / 2;
+    if (o.def.frente && dono) {
+      const gd = GOL.clone().sub(dono.pos).setY(0).normalize();
+      o.pos.copy(dono.pos).addScaledVector(gd, 1.8); o.home.copy(o.pos);
+      o.heading = Math.atan2(dono.pos.x - o.pos.x, dono.pos.z - o.pos.z);
+    }
+  }
+  if (J.gk) { J.gk.reagiu = true; J.gk.heading = -Math.PI / 2; }
+  resetBola();
+  if (dono) bola.p.copy(dono.pe());
+  else if (f.inicio && f.inicio.tipo === 'dividida') {
+    const a = acharFlu(f.inicio.jogador), b = acharAdv(f.inicio.rival);
+    bola.p.copy(a.pos).lerp(b.pos, 0.5).setY(CFG.BOLA_R);
+  }
+  Object.assign(J, {
+    portador: null, log: [], toques: 0, est2: true, anel: null, pend: [], conduz: null, timeScale: 1, tJogo: 0,
+    placar: f.placar.slice(), cronoAtivo: false, crono: f.cronometro || 0, desvios: new Set(), golInfo: null,
+    ultimoTricolor: dono || null, origemNaArea: false, momentoDesvio: null, modo: 'fase', autoI: 0, bloqueado: null
+  });
+  REC.quadros = []; REC.acc = 0;
+  criarEtiquetas();
+}
+
+// ---------- registro de ações e estrelas ----------
+function casa(e, h) {
+  if (h.jogador && e.jogador !== h.jogador) return false;
+  const acs = Array.isArray(h.acao) ? h.acao : [h.acao];
+  if (!acs.includes(e.acao)) return false;
+  if (h.alvo && e.alvo !== h.alvo) return false;
+  return true;
+}
+function registrar(jogador, acao, alvo) {
+  J.log.push({ jogador, acao, alvo: alvo || null });
+  checarSequencia();
+}
+function checarSequencia() {
+  const f = J.fase;
+  if (f.regra) { if (f.regra.maxToques && J.toques > f.regra.maxToques) J.est2 = false; return; }
+  const h = f.historia || [];
+  for (let i = 0; i < J.log.length; i++) if (i >= h.length || !casa(J.log[i], h[i])) { J.est2 = false; break; }
+}
+function estrelasPossiveis() { return 1 + (J.est2 ? 1 : 0) + (J.est2 && J.tentativas === 1 ? 1 : 0); }
+function avaliarEstrela2() {
+  const f = J.fase, g = J.golInfo;
+  if (!g) return false;
+  if (f.regra) {
+    const r = f.regra;
+    if (r.golDe && g.autor !== r.golDe) return false;
+    if (r.maxToques && J.toques > r.maxToques) return false;
+    if (r.acaoFinal && !r.acaoFinal.includes(g.acao)) return false;
+    if (r.naArea && !g.naArea) return false;
+    return true;
+  }
+  const h = f.historia;
+  if (J.log.length !== h.length) return false;
+  for (let i = 0; i < h.length; i++) if (!casa(J.log[i], h[i])) return false;
+  if (f.golDe && g.autor !== f.golDe) return false;
+  if (f.desvios) { let k = 0; for (const n of g.cadeia) if (n === f.desvios[k]) k++; if (k < f.desvios.length) return false; }
+  return true;
+}
+
+// ---------- posse, mira e ações ----------
+function darPosse(p) {
+  if (J.estado !== 'JOGO') return;
+  bola.dono = p; bola.rec = null; bola.chute = false; bola.segura = false; bola.v.set(0, 0, 0); bola.curva = 0;
+  esconderAnel(); J.anel = null; J.timeScale = 1;
+  if (p.time !== 'flu') { falhar(p.gk ? 'defesa' : 'perdeu', p); return; }
+  J.portador = p; p.alvo = null; p.vel = 0; J.ultimoTricolor = p;
+  entrarMira();
+}
+function entrarMira() {
+  J.estado = 'MIRA';
+  CAM.modo = 'mira';
+  J.autoEspera = J.cronoAtivo || J.fase.cronometro ? 0.45 : 0.9;
+  const p = J.portador;
+  p.heading = Math.atan2(GOL.x - p.pos.x, GOL.z - p.pos.z);
+  if (J.fase.cronometro && !J.cronoAtivo && J.modo === 'fase') {
+    J.cronoAtivo = true; J.crono = J.fase.cronometro;
+    for (const o of J.adv) if (o.volta) o.voltaAtivo = true;
+    $('cronometro').style.display = 'block';
+  }
+  Som.torcida(0.06, 0.8);
+  $('comBola').textContent = J.autoplay ? '' : `Com a bola: ${p.nome}`;
+  dica(J.autoplay ? '' : (J.log.length === 0 ? J.fase.dica : `Desenhe a próxima jogada a partir de ${p.nome}.`));
+  atualizarHUD();
+}
+
+function executarAcao(a) {
+  const p = J.portador;
+  if (!p) return;
+  J.portador = null; J.estado = 'JOGO'; J.toques++;
+  $('comBola').textContent = ''; dica('');
+  switch (a.tipo) {
+    case 'drible': registrar(p.nome, 'drible'); driblar(p, a.dir, a.op); CAM.modo = 'mira'; break;
+    case 'conducao': registrar(p.nome, 'conducao'); conduzir(p, a.ponto); CAM.modo = 'mira'; break;
+    case 'chute': registrar(p.nome, 'chute'); chutar(p, a); CAM.modo = 'bola'; break;
+    default: registrar(p.nome, a.tipo, a.rec ? a.rec.nome : null); passar(p, a); CAM.modo = 'bola';
+  }
+  atualizarHUD();
+}
+
+function chutarBola(p, fnVel, anim, atraso, depois) {
+  p.tocar(anim || 'kick'); p.vel = 0;
+  if (p.time === 'flu') J.ultimoTricolor = p;
+  J.pend.push({
+    t: atraso, fn: () => {
+      if (J.estado !== 'JOGO') return;
+      bola.dono = null; bola.noGol = false;
+      bola.p.copy(p.pe());
+      const r = fnVel();
+      bola.v.copy(r.v); bola.curva = r.curva; bola.cd.copy(r.cd);
+      bola.ignora = p; bola.ignoraT = 0.3; bola.ultimo = p; bola.cadeia = [];
+      Som.chute(r.v.length());
+      if (depois) depois();
+    }
+  });
+}
+
+function passar(p, a) {
+  const rec = a.rec, para = a.para.clone().setY(0);
+  p.heading = Math.atan2(para.x - p.pos.x, para.z - p.pos.z);
+  if (rec && a.espaco) rec.alvo = para.clone();
+  chutarBola(p, () => {
+    const B = bola.p, d = dist2(B, para);
+    if (a.tipo === 'passe') return velRasteiro(B, para);
+    const T = a.tipo === 'cruzamento' ? 0.75 + d / 26 : 0.65 + d / 24;
+    const h = a.tipo === 'cruzamento' ? (a.altura === 'alta' ? 1.95 : 0.38) : 1.0;
+    return velAerea(B, para, T, h, a.curva || 0);
+  }, 'kick', 0.2, () => {
+    bola.rec = rec || null; bola.recPonto = para;
+    bola.segura = !!a.segura;
+    if (rec) prepararRecepcao(rec, para, a.semAnel);
+  });
+}
+
+function prepararRecepcao(rec, para, semAnel) {
+  const pr = preverAproximacao(para);
+  rec.alvo = pr.p.clone().setY(0);
+  const dGol = dist2(rec.alvo, GOL);
+  if (!semAnel && rec.time === 'flu' && dGol < CFG.ANEL_ALCANCE && rec.alvo.x > 10) {
+    J.anel = { p: rec, t: pr.t, y: pr.y, tipo: pr.y > 1.4 ? 'cabecada' : pr.y > 0.45 ? 'voleio' : 'primeira', toque: null, feito: false, animou: false };
+    if (!J.autoplay) dica('Toque no gol (no canto que quiser) quando o anel fechar!');
+  }
+}
+
+function chutar(p, a) {
+  p.heading = Math.atan2(a.alvo.x - p.pos.x, a.alvo.z - p.pos.z);
+  J.origemNaArea = naArea(p.pos);
+  chutarBola(p, () => {
+    const B = bola.p, alvo = a.alvo.clone();
+    if (!a.auto) { alvo.z += rnd(-0.18, 0.18); alvo.y = Math.max(0.12, alvo.y + rnd(-0.1, 0.1)); }
+    if (a.rasteiro) return { v: new V3(alvo.x - B.x, 0, alvo.z - B.z).normalize().multiplyScalar(a.vh), curva: 0, cd: new V3() };
+    const d = dist2(B, alvo);
+    return velAerea(B, alvo, d / a.vh, alvo.y, a.curva || 0);
+  }, 'kick', 0.22, () => { bola.chute = true; anunciarChute(0); });
+}
+
+function limitarCampo(v) { v.x = clamp(v.x, -MEIO_C + 1, MEIO_C - 0.8); v.z = clamp(v.z, -MEIO_L + 0.8, MEIO_L - 0.8); return v; }
+
+function driblar(p, dir, op) {
+  const gd = GOL.clone().sub(p.pos).setY(0).normalize();
+  const dest = limitarCampo(p.pos.clone().addScaledVector(dir, 2.6).addScaledVector(gd, 1.2));
+  const origem = p.pos.clone();
+  if (op) { op.tocar('lunge'); op.travado = 0.55; op.alvoScript = origem.clone().addScaledVector(gd, 0.4); }
+  J.conduz = {
+    p, alvo: dest, v: 6.8, imune: true, fim: () => {
+      if (op && op.recupera > 0) {
+        op.recupera--;
+        const gd2 = GOL.clone().sub(dest).setY(0).normalize();
+        op.travado = 0; op.anim = 'idle';
+        op.alvoScript = dest.clone().addScaledVector(gd2, 1.8);
+        J.esperaRecuperar = { op, p };
+        return;
+      }
+      if (op) { op.batido = true; op.tocar('sit'); op.alvoScript = null; op.travado = 0; }
+      darPosse(p);
+    }
+  };
+  Som.bip(300, 0.08, 0.1);
+}
+function conduzir(p, ponto) {
+  const d = dist2(p.pos, ponto);
+  const alvo = d > CFG.CONDUCAO_MAX ? p.pos.clone().lerp(ponto, CFG.CONDUCAO_MAX / d) : ponto.clone();
+  J.conduz = { p, alvo: limitarCampo(alvo.setY(0)), v: CFG.CONDUCAO_V, imune: false, fim: () => darPosse(p) };
+}
+function atualizarConducao(dt) {
+  if (J.esperaRecuperar) {
+    const { op, p } = J.esperaRecuperar;
+    if (!op.alvoScript) { J.esperaRecuperar = null; op.heading = Math.atan2(p.pos.x - op.pos.x, p.pos.z - op.pos.z); darPosse(p); }
+    return;
+  }
+  const c = J.conduz; if (!c) return;
+  const ok = moverPara(c.p, c.alvo, c.v, dt);
+  if (!c.imune && !J.autoplay) {
+    for (const o of J.adv) if (!o.gk && !o.batido && dist2(o.pos, c.p.pos) < 0.85) { J.conduz = null; falhar('desarme', o); return; }
+  }
+  if (ok) { J.conduz = null; c.fim(); }
+}
+function colarBola(dt) {
+  const p = bola.dono; if (!p) return;
+  const alvo = p.pe();
+  if (p.gk) alvo.copy(p.pos).add(new V3(0, 1.1, 0)).addScaledVector(p.frente(), 0.35);
+  else if (p.vel > 1) alvo.addScaledVector(p.frente(), 0.25 + Math.sin(p.runPhase * 0.5) * 0.15);
+  bola.p.lerp(alvo, Math.min(1, dt * 25));
+}
+
+// ---------- anel de timing (de primeira / voleio / cabeçada / dividida) ----------
+const NOME_ANEL = { cabecada: 'CABEÇADA!', voleio: 'VOLEIO!', primeira: 'DE PRIMEIRA!', dividida: 'DIVIDIDA!' };
+function atualizarAnel(dt) {
+  const A = J.anel; if (!A || A.feito) return;
+  A.t -= dt;
+  J.timeScale = A.t < (A.tipo === 'dividida' ? 0.8 : CFG.CAMLENTA_JANELA) ? (A.tipo === 'dividida' ? 0.45 : CFG.CAMLENTA) : 1;
+  if (J.autoplay && !A.toque && A.t <= 0.03) {
+    const h = J.fase.historia[J.autoI];
+    const acs = h ? (Array.isArray(h.acao) ? h.acao : [h.acao]) : [];
+    if (A.tipo === 'dividida' || acs.some(x => ['primeira', 'voleio', 'cabecada'].includes(x))) { A.toque = { q: 'perfeito', auto: h }; J.autoI++; }
+  }
+  if (A.toque && !A.animou && A.t < 0.16 && A.tipo !== 'dividida') {
+    A.animou = true; A.p.tocar(A.tipo === 'cabecada' ? 'header' : A.tipo === 'voleio' ? 'volley' : 'kick');
+  }
+  if ((A.toque && A.t <= 0) || A.t <= -0.06) resolverAnel();
+}
+function toqueAnel(sx, sy) {
+  const A = J.anel; if (!A || A.feito || A.toque) return;
+  if (A.t > CFG.TOQUE_IGNORA) return;
+  const e = Math.abs(A.t);
+  const q = e <= CFG.TOQUE_PERFEITO ? 'perfeito' : e <= CFG.TOQUE_BOM ? 'bom' : e <= CFG.TOQUE_OK ? 'ok' : 'cedo';
+  A.toque = { q, sx, sy };
+  banner({ perfeito: 'PERFEITO!', bom: 'BOM!', ok: 'NO LIMITE…', cedo: 'CEDO DEMAIS!' }[q], 700, true);
+  Som.bip(q === 'cedo' ? 220 : 990, 0.08, 0.12);
+  if (q === 'cedo') { A.feito = true; esconderAnel(); falhar('tempo'); return; }
+  if (A.t <= 0) resolverAnel();
+}
+function resolverAnel() {
+  const A = J.anel; if (!A || A.feito) return;
+  A.feito = true; J.timeScale = 1; esconderAnel();
+  if (A.tipo === 'dividida') { resolverDividida(A); return; }
+  const r = A.p;
+  if (A.toque && A.toque.q !== 'cedo' && dist2(r.pos, bola.p) < 2.4) { J.anel = null; finalizar(r, A); return; }
+  J.anel = null;
+  const rival = J.adv.find(o => !o.gk && !o.batido && dist2(o.pos, r.pos) < 1.4);
+  if (rival && !J.autoplay) { falhar(A.y > 1.4 ? 'alto' : 'disputa', rival); return; }
+  if (dist2(r.pos, bola.p) < 2.4) darPosse(r);
+}
+function finalizar(r, A) {
+  const tipo = A.tipo;
+  J.toques++;
+  registrar(r.nome, tipo);
+  if (!A.animou) r.tocar(tipo === 'cabecada' ? 'header' : tipo === 'voleio' ? 'volley' : 'kick');
+  let alvo = null;
+  if (A.toque.auto && A.toque.auto.mira) alvo = new V3(MEIO_C, A.toque.auto.mira.h, A.toque.auto.mira.z);
+  else if (A.toque.sx !== undefined) {
+    const pr = projetar(A.toque.sx, A.toque.sy);
+    if (pr.gol && Math.abs(pr.gol.z) < 6 && pr.gol.y < 4) alvo = new V3(MEIO_C, clamp(pr.gol.y, 0.15, 2.9), clamp(pr.gol.z, -4.2, 4.2));
+  }
+  if (!alvo) alvo = new V3(MEIO_C, tipo === 'cabecada' ? 0.45 : 1.0, (J.gk && J.gk.pos.z > 0 ? -1 : 1) * 2.9);
+  const err = { perfeito: 0.08, bom: 0.55, ok: 1.5 }[A.toque.q] || 0;
+  alvo.z += rnd(-err, err); alvo.y = Math.max(0.12, alvo.y + rnd(-err * 0.6, err * 0.6));
+  J.ultimoAlvo = alvo.clone();
+  const vh = (tipo === 'cabecada' ? 15 : tipo === 'voleio' ? 25 : 24) * (A.toque.q === 'ok' ? 0.8 : 1);
+  bola.dono = null;
+  const d = dist2(bola.p, alvo);
+  const v = velAerea(bola.p, alvo, d / vh, alvo.y, 0);
+  bola.v.copy(v.v); bola.curva = 0;
+  bola.chute = true; bola.rec = null; bola.ultimo = r; bola.ignora = r; bola.ignoraT = 0.3; bola.cadeia = [];
+  J.ultimoTricolor = r; J.origemNaArea = naArea(r.pos);
+  // quem acerta o tempo do anel ganha do marcador colado
+  bola.passaPor = new Set(J.adv.filter(o => !o.gk && dist2(o.pos, r.pos) < 2.2)); bola.passaPorT = 0.4;
+  r.heading = Math.atan2(alvo.x - r.pos.x, alvo.z - r.pos.z);
+  Som.chute(vh); anunciarChute(0.12);
+  CAM.modo = 'bola';
+}
+
+function iniciarDividida() {
+  const ini = J.fase.inicio;
+  const a = acharFlu(ini.jogador), b = acharAdv(ini.rival);
+  J.estado = 'JOGO';
+  const meio = a.pos.clone().lerp(b.pos, 0.5);
+  bola.p.copy(meio).setY(CFG.BOLA_R);
+  a.alvoScript = meio.clone().addScaledVector(a.pos.clone().sub(meio).setY(0).normalize(), 0.45);
+  b.alvoScript = meio.clone().addScaledVector(b.pos.clone().sub(meio).setY(0).normalize(), 0.45);
+  b.travado = 1.3;
+  J.anel = { p: a, rival: b, sobra: acharFlu(ini.sobraPara), t: 1.25, tipo: 'dividida', toque: null, feito: false, y: 0 };
+  CAM.modo = 'dividida';
+  dica(J.autoplay ? '' : 'Toque na tela quando o anel fechar para ganhar a dividida!');
+}
+function resolverDividida(A) {
+  J.anel = null;
+  const a = A.p, b = A.rival;
+  if (!(A.toque && A.toque.q !== 'cedo')) { b.tocar('kick'); falhar('dividida', b); return; }
+  J.toques++;
+  registrar(a.nome, 'dividida');
+  b.batido = true; b.tocar('sit'); b.alvoScript = null; b.travado = 0;
+  a.alvoScript = null;
+  const s = A.sobra;
+  bola.ignora = a; bola.ignoraT = 0.4; bola.segura = true;
+  a.heading = Math.atan2(s.pos.x - a.pos.x, s.pos.z - a.pos.z);
+  chutarBola(a, () => velRasteiro(bola.p, s.pos, 4), 'kick', 0.05, () => {
+    bola.rec = s; bola.recPonto = s.pos.clone(); bola.segura = true; prepararRecepcao(s, s.pos.clone(), true);
+  });
+  CAM.modo = 'bola';
+}
+
+// ---------- gol, falha, replay ----------
+function marcarGol() {
+  J.estado = 'GOL'; J.golT = 0; J.timeScale = 0.3; J.replayIniciado = false;
+  esconderAnel(); dica(''); $('cronometro').style.display = 'none';
+  J.cronoAtivo = false;
+  const ult = bola.ultimo && bola.ultimo.time === 'flu' ? bola.ultimo : J.ultimoTricolor;
+  const ultAcao = J.log.length ? J.log[J.log.length - 1].acao : null;
+  J.golInfo = { t: J.tJogo, autor: ult ? ult.nome : '', acao: ultAcao, naArea: J.origemNaArea, cadeia: bola.cadeia.slice(), contra: bola.ultimo && bola.ultimo.time === 'adv' };
+  J.placar[J.fase.fluMandante ? 0 : 1]++;
+  atualizarHUD();
+  Som.explosao(); Som.apito('curto');
+  estadio.uni.uFesta.value = 1.6;
+  golsMesh[0].balanco = 1;
+  narrar(J.fase.narracao || ['GOOOOL DO FLUMINENSE!']);
+  if (ult) {
+    J.pend.push({
+      t: 0.5, fn: () => {
+        ult.tocar('celebrate');
+        CAM.modo = 'ator'; CAM.ator = ult; CAM.off = new V3(-6.5, 3.2, -Math.sign(ult.pos.z || 1) * 5); CAM.k = 1.6;
+        ult.alvoScript = new V3(MEIO_C - 3, 0, Math.sign(ult.pos.z || 1) * (MEIO_L - 3));
+        for (const f of J.flu) if (f !== ult && !f.gk) f.alvoScript = ult.alvoScript.clone().add(new V3(rnd(-3, 0), 0, rnd(-3, 3)));
+      }
+    });
+  }
+  CAM.modo = 'livre'; CAM.k = 2;
+  CAM.tPos.set(MEIO_C - 12, 4.2, bola.p.z * 0.4); CAM.tLook.set(MEIO_C, 1, bola.p.z * 0.6);
+}
+const MOTIVOS = {
+  interceptado: ['Interceptado!', q => `${q ? q.nome : 'O adversário'} cortou o passe.`],
+  desarme: ['Desarmado!', q => `${q ? q.nome : 'O marcador'} chegou junto.`],
+  defesa: ['Defesa do goleiro!', q => `${q ? q.nome : 'O goleiro'} fechou o gol.`],
+  fora: ['Pra fora!', () => 'A bola saiu.'],
+  dividida: ['Perdeu a dividida!', () => 'Toque quando o anel fechar.'],
+  tempo: ['Cedo demais!', () => 'Espere o anel fechar em volta do jogador.'],
+  cronometro: ['A defesa voltou!', () => 'O contra-ataque precisa ser rápido.'],
+  perdeu: ['Bola perdida!', q => `${q ? q.nome : 'O adversário'} ficou com ela.`],
+  alto: ['O zagueiro ganhou pelo alto!', () => 'Use o anel: toque no momento em que ele fechar.'],
+  disputa: ['Perdeu a disputa!', () => 'Use o anel: toque no momento em que ele fechar.'],
+  gol_sofrido: ['Gol do adversário…', () => 'O 1x0 não resistiu.']
+};
+function falhar(motivo, quem) {
+  if (J.estado !== 'JOGO' && J.estado !== 'MIRA') return;
+  J.estado = 'FALHA'; J.falhaT = 0; J.falhaMostrada = false; J.timeScale = 0.5;
+  J.conduz = null; J.esperaRecuperar = null;
+  esconderAnel(); dica(''); $('comBola').textContent = '';
+  const [tit, txt] = MOTIVOS[motivo] || MOTIVOS.perdeu;
+  J.falhaInfo = { tit, txt: txt(quem) };
+  banner(tit, 1400);
+  Som.uuh();
+  if (quem && quem.time === 'adv' && !quem.gk) quem.tocar('celebrate');
+}
+
+function gravarQuadro(dt) {
+  REC.acc += dt;
+  if (REC.acc < 1 / 30) return;
+  REC.acc -= 1 / 30;
+  REC.quadros.push({
+    t: J.tJogo, b: [bola.p.x, bola.p.y, bola.p.z],
+    j: J.todos.map(p => [p.pos.x, p.pos.z, p.heading, ANIMS.indexOf(p.anim), p.animT, p.runPhase, p.runAmp, p.yOff, p.roll])
+  });
+  if (REC.quadros.length > 30 * 25) REC.quadros.shift();
+}
+function idxQuadro(t) {
+  const q = REC.quadros; let i = 0;
+  while (i < q.length - 1 && q[i].t < t) i++;
+  return i;
+}
+function aplicarQuadro(f) {
+  const q = REC.quadros, i = Math.floor(f), u = f - i;
+  const a = q[clamp(i, 0, q.length - 1)], b = q[clamp(i + 1, 0, q.length - 1)];
+  bola.p.set(lerp(a.b[0], b.b[0], u), lerp(a.b[1], b.b[1], u), lerp(a.b[2], b.b[2], u));
+  J.todos.forEach((p, k) => {
+    const A = a.j[k], B = b.j[k]; if (!A) return;
+    p.pos.set(lerp(A[0], B[0], u), 0, lerp(A[1], B[1], u));
+    let dh = B[2] - A[2]; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+    p.heading = A[2] + dh * u;
+    p.anim = ANIMS[A[3]] || 'idle'; p.animT = lerp(A[4], B[3] === A[3] ? B[4] : A[4], u);
+    p.runPhase = lerp(A[5], B[5], u); p.runAmp = A[6]; p.yOff = lerp(A[7], B[7], u); p.roll = lerp(A[8], B[8], u);
+  });
+}
+function iniciarReplay() {
+  J.replayIniciado = true;
+  const q = REC.quadros;
+  if (q.length < 10) { fimReplay(); return; }
+  const tg = J.golInfo.t;
+  J.replay = {
+    angulos: (J.fase.replay || ['gol', 'lateral']).slice(), ai: 0,
+    i0: idxQuadro(tg - CFG.REPLAY_SEG), i1: idxQuadro(tg + 0.9), f: 0
+  };
+  if (J.autoplay) J.replay.angulos = ['lateral'];
+  J.replay.f = inicioAngulo(J.replay.angulos[0]);
+  J.estado = 'REPLAY';
+  $('tagReplay').style.display = 'block'; $('pular').style.display = 'block';
+  $('narra').innerHTML = '';
+  CAM.k = 7;
+}
+function inicioAngulo(ang) {
+  if (ang === 'barriga' && J.momentoDesvio != null) return idxQuadro(J.momentoDesvio - 1.8);
+  return J.replay.i0;
+}
+function atualizarReplay(dt) {
+  const R = J.replay; const ang = R.angulos[R.ai];
+  let vel = 0.55;
+  if (ang === 'barriga' && J.momentoDesvio != null) {
+    const t = REC.quadros[Math.floor(R.f)].t;
+    vel = Math.abs(t - J.momentoDesvio) < 0.45 ? 0.16 : 0.45;
+  }
+  R.f += dt * 30 * vel;
+  if (R.f >= R.i1) {
+    R.ai++;
+    if (R.ai >= R.angulos.length) { fimReplay(); return; }
+    R.f = inicioAngulo(R.angulos[R.ai]);
+    CAM.pos.copy(cameraReplay(R.angulos[R.ai]).pos);
+  }
+  aplicarQuadro(R.f);
+  const c = cameraReplay(R.angulos[R.ai]);
+  CAM.modo = 'livre'; CAM.tPos.copy(c.pos); CAM.tLook.copy(c.look); CAM.k = 6;
+  $('tagReplay').textContent = ang === 'barriga' ? 'REPLAY · A BARRIGA' : ang === 'gol' ? 'REPLAY · ATRÁS DO GOL' : 'REPLAY · LATERAL';
+}
+function cameraReplay(ang) {
+  const B = bola.p.clone();
+  if (ang === 'gol') return { pos: new V3(MEIO_C + 7.5, 2.1, clamp(B.z * 0.35, -3, 3)), look: B };
+  if (ang === 'barriga') {
+    const r = J.todos.find(p => p.nome === J.fase.golDe) || J.flu[0];
+    return { pos: r.pos.clone().add(new V3(-3.2, 1.35, -2.6)), look: r.pos.clone().add(new V3(0, 1.0, 0)).lerp(B, 0.25) };
+  }
+  const lz = B.z > 0 ? B.z - 17 : B.z + 17;
+  return { pos: new V3(B.x - 5, 5.5, lz), look: B.clone().setY(B.y * 0.5) };
+}
+function fimReplay() {
+  $('tagReplay').style.display = 'none'; $('pular').style.display = 'none';
+  J.estado = 'POS';
+  if (J.autoplay) { J.autoplay = false; $('tagAuto').style.display = 'none'; mostrarResultado(true); return; }
+  if (J.fase.cutsceneFinal === 'expulsao') tocarCutscene(cenasExpulsao(), () => mostrarResultado());
+  else mostrarResultado();
+}
+
+// ---------- passo de simulação ----------
+function passoJogo(dt) {
+  J.tJogo += dt;
+  for (let i = J.pend.length - 1; i >= 0; i--) {
+    const e = J.pend[i]; e.t -= dt;
+    if (e.t <= 0) { J.pend.splice(i, 1); e.fn(); }
+  }
+  if (J.cronoAtivo && J.estado === 'JOGO') {
+    J.crono -= dt;
+    if (J.crono <= 0) { J.crono = 0; falhar('cronometro'); }
+  }
+  atualizarIA(dt);
+  atualizarTricolores(dt);
+  if (J.estado === 'JOGO') atualizarConducao(dt);
+  if (bola.dono) colarBola(dt); else fisicaBola(dt);
+  if (J.estado === 'JOGO') atualizarAnel(dt);
+  for (const p of J.todos) avancarAnim(p, dt);
+  if (J.estado === 'JOGO' || J.estado === 'GOL') gravarQuadro(dt);
+}
+
+function atualizarMira(dt) {
+  if (J.autoplay) passoAuto(dt);
+  if (J.cronoAtivo) {
+    const antes = Math.ceil(J.crono);
+    J.crono -= dt;
+    if (Math.ceil(J.crono) !== antes && J.crono > 0) Som.bip(J.crono < 3 ? 1200 : 800, 0.05, 0.1);
+    atualizarIA(dt, true);
+    const p = J.portador;
+    if (p && !J.autoplay) for (const o of J.adv) if (!o.gk && !o.batido && dist2(o.pos, p.pos) < 0.9) { J.estado = 'JOGO'; falhar('desarme', o); return; }
+    if (J.crono <= 0) { J.crono = 0; J.estado = 'JOGO'; falhar('cronometro'); }
+  }
+}
+
+// replay "Na história foi assim": executa a sequência histórica sozinho
+function passoAuto(dt) {
+  J.autoEspera -= dt;
+  if (J.autoEspera > 0 || !J.portador) return;
+  const h = J.fase.historia[J.autoI];
+  if (!h) return;
+  J.autoI++;
+  const p = J.portador;
+  const acao = Array.isArray(h.acao) ? h.acao[0] : h.acao;
+  let a;
+  if (acao === 'drible') {
+    const op = maisPerto(J.adv, p.pos, o => !o.gk && !o.batido);
+    a = { tipo: 'drible', dir: new V3(0, 0, h.lado || 1), op: op && dist2(op.pos, p.pos) < 4.5 ? op : null };
+  } else if (acao === 'conducao') a = { tipo: 'conducao', ponto: campo(h.ponto.x, h.ponto.y) };
+  else if (acao === 'chute') {
+    if (h.alvoJogador) {
+      const t = J.todos.find(q => q.nome === h.alvoJogador);
+      a = { tipo: 'chute', rasteiro: true, alvo: t.pos.clone().setY(CFG.BOLA_R), vh: 23, auto: true };
+    } else a = { tipo: 'chute', alvo: new V3(MEIO_C, h.mira.h, h.mira.z), vh: 24, curva: 0, auto: true };
+  } else {
+    const rec = acharFlu(h.alvo);
+    a = { tipo: acao, rec, para: rec.pos.clone(), altura: h.altura || 'alta', curva: 0 };
+  }
+  executarAcao(a);
+}
+
+// =====================================================================
+// INPUT_GESTOS
+// =====================================================================
+const raycaster = new THREE.Raycaster();
+const _ndc = new THREE.Vector2();
+const PLANO_CHAO = new THREE.Plane(new V3(0, 1, 0), 0);
+const PLANO_GOL = new THREE.Plane(new V3(-1, 0, 0), MEIO_C);
+function projetar(sx, sy) {
+  _ndc.set(sx / innerWidth * 2 - 1, -(sy / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(_ndc, camera);
+  const r = raycaster.ray, pc = new V3(), pg = new V3();
+  const hc = r.intersectPlane(PLANO_CHAO, pc), hg = r.intersectPlane(PLANO_GOL, pg);
+  const tc = hc ? r.origin.distanceTo(pc) : Infinity, tg = hg ? r.origin.distanceTo(pg) : Infinity;
+  const gol = hg && tg < tc && Math.abs(pg.z) < 12 && pg.y >= 0 && pg.y < 8 ? pg.clone() : null;
+  let chao = hc ? pc.clone() : null;
+  if (chao && chao.x > MEIO_C) chao.x = MEIO_C;
+  return { chao, gol };
+}
+function naTela(v) {
+  const p = v.clone().project(camera);
+  return { x: (p.x + 1) / 2 * innerWidth, y: (1 - p.y) / 2 * innerHeight, atras: p.z > 1 };
+}
+
+const gesto = { ativo: false, id: null, pts: [], acao: null };
+// rastro: fita 3D brilhante sobre o gramado
+const RASTRO_MAX = 180;
+const rastroGeo = new THREE.BufferGeometry();
+rastroGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(RASTRO_MAX * 6), 3));
+rastroGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(RASTRO_MAX * 6), 3));
+{
+  const idx = new Uint16Array((RASTRO_MAX - 1) * 6);
+  for (let i = 0; i < RASTRO_MAX - 1; i++) { const a = i * 2; idx.set([a, a + 1, a + 2, a + 1, a + 3, a + 2], i * 6); }
+  rastroGeo.setIndex(new THREE.BufferAttribute(idx, 1));
+}
+const rastroMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
+const rastro = new THREE.Mesh(rastroGeo, rastroMat);
+rastro.frustumCulled = false; rastro.renderOrder = 10; rastro.visible = false;
+scene.add(rastro);
+const COR_ACAO = { chute: '#ffb020', passe: '#ffffff', lancamento: '#c09bff', cruzamento: '#38f0a6', drible: '#5ad1ff', conducao: '#e6e6e6' };
+function desenharRastro(pts, cor) {
+  const pos = rastroGeo.attributes.position.array, col = rastroGeo.attributes.color.array;
+  const n = Math.min(pts.length, RASTRO_MAX);
+  const c = new THREE.Color(cor), side = new V3(), dir = new V3(), camDir = new V3();
+  camera.getWorldDirection(camDir);
+  for (let i = 0; i < n; i++) {
+    const p = pts[i].g, a = pts[Math.max(0, i - 1)].g, b = pts[Math.min(n - 1, i + 1)].g;
+    dir.subVectors(b, a); if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0);
+    side.crossVectors(dir, _up.set(0, 1, 0));
+    if (side.lengthSq() < 0.09 * dir.lengthSq()) side.crossVectors(dir, camDir);
+    const w = 0.12 + 0.16 * (i / Math.max(1, n - 1));
+    side.normalize().multiplyScalar(w);
+    const y = pts[i].gol ? 0 : 0.05;
+    pos.set([p.x + side.x, p.y + y + side.y, p.z + side.z, p.x - side.x, p.y + y - side.y, p.z - side.z], i * 6);
+    const k = 0.35 + 0.65 * (i / Math.max(1, n - 1));
+    col.set([c.r * k, c.g * k, c.b * k, c.r * k, c.g * k, c.b * k], i * 6);
+  }
+  rastroGeo.attributes.position.needsUpdate = true; rastroGeo.attributes.color.needsUpdate = true;
+  rastroGeo.setDrawRange(0, Math.max(0, n - 1) * 6);
+  rastroMat.opacity = 1; rastro.visible = n > 1;
+}
+// mira no plano do gol
+const miraMesh = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.34, 24), new THREE.MeshBasicMaterial({ color: 0xffb020, transparent: true, depthTest: false, side: THREE.DoubleSide }));
+miraMesh.rotation.y = Math.PI / 2; miraMesh.renderOrder = 11; miraMesh.visible = false; scene.add(miraMesh);
+
+function adversarioPerto(pos, r) { const o = maisPerto(J.adv, pos, q => !q.gk && !q.batido); return o && dist2(o.pos, pos) < r ? o : null; }
+function tricolorPerto(pos, r, excl) { const f = maisPerto(J.flu, pos, q => q !== excl && !q.gk); return f && dist2(f.pos, pos) < r ? f : null; }
+function curvaDoTraco(pts, H, alvo) {
+  const d = dist2(H, alvo); if (d < 4) return 0;
+  const u = new V3(alvo.x - H.x, 0, alvo.z - H.z).normalize(), n = new V3(-u.z, 0, u.x);
+  let c = 0;
+  for (const q of pts) {
+    if (q.gol) continue;
+    const rx = q.g.x - H.x, rz = q.g.z - H.z, t = rx * u.x + rz * u.z;
+    if (t < 0 || t > d) continue;
+    const s = rx * n.x + rz * n.z;
+    if (Math.abs(s) > Math.abs(c)) c = s;
+  }
+  if (Math.abs(c) < 0.7) return 0;
+  return clamp(c, -Math.min(6, 0.22 * d), Math.min(6, 0.22 * d));
+}
+function classificar(pts) {
+  const h = J.portador; if (!h || pts.length < 2) return null;
+  const H = h.pos, ult = pts[pts.length - 1];
+  let lenPx = 0;
+  for (let i = 1; i < pts.length; i++) lenPx += Math.hypot(pts[i].sx - pts[i - 1].sx, pts[i].sy - pts[i - 1].sy);
+  const esc = 390 / Math.min(innerWidth, innerHeight);
+  // "rápido" = arraste curto no tempo (independe do zoom da câmera)
+  const dur = Math.max(30, ult.t - pts[0].t), rapido = dur < 450 || lenPx / dur * esc > 1.3;
+  const forca = clamp(1 - (dur - 140) / 700, 0, 1), vel = forca;
+  if (lenPx * esc < 22) return null;
+  if (ult.gol && Math.abs(ult.gol.z) < 9 && H.x > -15) {
+    const alvo = new V3(MEIO_C, clamp(ult.gol.y, 0.12, 5), ult.gol.z);
+    return { tipo: 'chute', alvo, vh: 18 + forca * 12, curva: curvaDoTraco(pts, H, alvo), vel };
+  }
+  const E = ult.g.clone().setY(0), d = dist2(H, E);
+  const op = adversarioPerto(H, 4.2);
+  if (d < 5.5 && op) return { tipo: 'drible', dir: E.clone().sub(H).setY(0).normalize(), op };
+  const comp = tricolorPerto(E, 5, h);
+  if (!comp) {
+    if (naArea(E) && d > 9) {
+      const dir = E.clone().sub(H).setY(0).normalize();
+      if (dir.x > 0.15) {
+        const zl = H.z + dir.z * (MEIO_C - H.x) / dir.x;
+        if (Math.abs(zl) < 9) return { tipo: 'chute', rasteiro: true, alvo: new V3(MEIO_C, CFG.BOLA_R, zl), vh: 18 + forca * 10, vel };
+      }
+    }
+    if (d <= CFG.CONDUCAO_MAX) return { tipo: 'conducao', ponto: E };
+  }
+  let rec = comp, para, espaco = false;
+  if (rec) para = rec.pos.clone();
+  else {
+    rec = tricolorPerto(E, 11, h);
+    if (!rec) return { tipo: 'passe', rec: null, para: E, semDestino: true, vel };
+    para = E; espaco = true;
+  }
+  const asa = Math.abs(H.z) > 19;
+  const tipo = asa && naArea(para) && d > 10 ? 'cruzamento' : d > 21 && rapido ? 'lancamento' : 'passe';
+  return { tipo, rec, para, espaco, altura: rapido ? 'alta' : 'baixa', curva: tipo === 'passe' ? 0 : curvaDoTraco(pts, H, para), vel };
+}
+function textoAcao(a) {
+  if (!a) return '';
+  switch (a.tipo) {
+    case 'chute': return a.rasteiro ? 'CHUTE RASTEIRO' : a.curva ? 'CHUTE COM EFEITO' : 'CHUTE';
+    case 'drible': return 'DRIBLE';
+    case 'conducao': return 'CONDUÇÃO';
+    case 'cruzamento': return `CRUZAMENTO ${a.altura === 'alta' ? 'ALTO' : 'BAIXO'} → ${a.rec.nome}`;
+    case 'lancamento': return `LANÇAMENTO → ${a.rec.nome}`;
+    default: return a.rec ? `PASSE → ${a.rec.nome}` : 'PASSE SEM DESTINO';
+  }
+}
+
+function pontoGesto(e) {
+  const pr = projetar(e.clientX, e.clientY);
+  const g = pr.gol || pr.chao;
+  if (!g) return null;
+  return { sx: e.clientX, sy: e.clientY, t: performance.now(), g, gol: !!pr.gol, golPt: pr.gol };
+}
+canvas.addEventListener('pointerdown', e => {
+  Som.init();
+  if (J.pausado) return;
+  if (J.estado === 'MIRA' && !J.autoplay && J.portador && !gesto.ativo) {
+    const p = J.portador;
+    const s1 = naTela(p.pos.clone().setY(0.9)), s0 = naTela(p.pos);
+    const tol = Math.max(64, Math.min(innerWidth, innerHeight) * 0.13);
+    const dTela = Math.min(Math.hypot(e.clientX - s1.x, e.clientY - s1.y), Math.hypot(e.clientX - s0.x, e.clientY - s0.y));
+    const pr = projetar(e.clientX, e.clientY);
+    const dChao = pr.chao ? dist2(pr.chao, p.pos) : 99;
+    if (dTela > tol && dChao > 3.5) { dica(`Comece o traço em ${p.nome} (anel dourado).`); return; }
+    gesto.ativo = true; gesto.id = e.pointerId;
+    gesto.pts = [{ sx: e.clientX, sy: e.clientY, t: performance.now(), g: p.pos.clone(), gol: false }];
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) { }
+    return;
+  }
+  if (J.estado === 'JOGO' && J.anel && !J.autoplay) { toqueAnel(e.clientX, e.clientY); return; }
+  if (J.estado === 'DEFESA') { toqueDefesa(e.clientX, e.clientY); return; }
+  if (J.estado === 'REPLAY' && J.replay && J.replay.f > J.replay.i0 + 20) { fimReplay(); return; }
+  if (J.estado === 'GOL' && J.golT > 1.2 && !J.replayIniciado) { iniciarReplay(); }
+});
+canvas.addEventListener('pointermove', e => {
+  if (!gesto.ativo || e.pointerId !== gesto.id) return;
+  const ult = gesto.pts[gesto.pts.length - 1];
+  if (Math.hypot(e.clientX - ult.sx, e.clientY - ult.sy) < 5) return;
+  const q = pontoGesto(e); if (!q) return;
+  if (gesto.pts.length < RASTRO_MAX) gesto.pts.push(q); else gesto.pts[RASTRO_MAX - 1] = q;
+  const a = classificar(gesto.pts);
+  gesto.acao = a;
+  desenharRastro(gesto.pts, COR_ACAO[a ? a.tipo : 'passe']);
+  const r = $('rotulo');
+  if (a) { r.style.display = 'block'; r.textContent = textoAcao(a); r.style.left = e.clientX + 'px'; r.style.top = e.clientY + 'px'; r.style.borderColor = COR_ACAO[a.tipo]; }
+  else r.style.display = 'none';
+  if (a && a.tipo === 'chute' && !a.rasteiro) { miraMesh.visible = true; miraMesh.position.set(MEIO_C - 0.05, a.alvo.y, a.alvo.z); }
+  else miraMesh.visible = false;
+  if (J.portador && a) { const alvo = a.alvo || a.para || a.ponto; if (alvo) J.portador.heading = Math.atan2(alvo.x - J.portador.pos.x, alvo.z - J.portador.pos.z); else if (a.dir) J.portador.heading = Math.atan2(a.dir.x, a.dir.z); }
+});
+function fimGesto(e) {
+  if (!gesto.ativo || e.pointerId !== gesto.id) return;
+  gesto.ativo = false;
+  $('rotulo').style.display = 'none'; miraMesh.visible = false;
+  const a = classificar(gesto.pts);
+  J.rastroFade = 1;
+  if (!a) { dica('Traço curto demais. Arraste a partir do jogador.'); return; }
+  if (J.estado === 'MIRA') executarAcao(a);
+}
+canvas.addEventListener('pointerup', fimGesto);
+canvas.addEventListener('pointercancel', e => { if (gesto.ativo && e.pointerId === gesto.id) { gesto.ativo = false; rastro.visible = false; $('rotulo').style.display = 'none'; miraMesh.visible = false; } });
+// sem zoom por gesto / toque duplo
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('dblclick', e => e.preventDefault());
+document.addEventListener('touchmove', e => { if (!e.target.closest('.rolagem')) e.preventDefault(); }, { passive: false });
+
+// =====================================================================
+// CAMERA
+// =====================================================================
+const CAM = { pos: new V3(70, 40, 70), look: new V3(), tPos: new V3(70, 40, 70), tLook: new V3(), modo: 'orbita', ang: 0.6, k: 2.5, dirB: new V3(1, 0, 0), ator: null };
+const SOL_OFF = new V3(-22, 42, 16);
+function retrato() { return camera.aspect < 1; }
+function cameraClose(p, dist = 2.2, lado = 0.6, alt = 1.75) {
+  const f = p.frente(), s = new V3(-f.z, 0, f.x);
+  CAM.tPos.copy(p.pos).addScaledVector(f, dist).addScaledVector(s, lado).setY(alt);
+  CAM.tLook.copy(p.pos).setY(1.62 + p.yOff);
+}
+// Câmera atrás e acima do portador, olhando para o gol. Afasta e sobe até que
+// os companheiros próximos e o gol caibam na tela (importante no modo retrato).
+const camTeste = new THREE.PerspectiveCamera();
+function enquadrar(h, ret) {
+  const gd = GOL.clone().sub(h.pos).setY(0), dg = gd.length(); gd.normalize();
+  const alvos = [h.pos.clone().setY(1.8), h.pos.clone()];
+  if (dg < 30) alvos.push(GOL.clone().setY(1.2));
+  const centro = h.pos.clone().multiplyScalar(2); let n = 2;
+  for (const f of J.flu) {
+    if (f === h || f.gk || dist2(f.pos, h.pos) > 38 || f.pos.clone().sub(h.pos).dot(gd) < -5) continue;
+    alvos.push(f.pos.clone().setY(1.9)); centro.add(f.pos); n++;
+  }
+  centro.divideScalar(n);
+  const look = h.pos.clone().lerp(centro, 0.6).addScaledVector(gd, Math.min(dg * 0.25, 8));
+  camTeste.fov = camera.fov; camTeste.aspect = camera.aspect; camTeste.near = 0.2; camTeste.far = 700; camTeste.updateProjectionMatrix();
+  const atras = ret ? 10 : 8.2, alto = ret ? 8.5 : 5.6;
+  for (let k = 1; k < 5; k += 0.12) {
+    camTeste.position.copy(look).addScaledVector(gd, -(atras * k + dist2(look, h.pos) * 0.6)).setY(alto * Math.pow(k, 1.15));
+    camTeste.lookAt(look); camTeste.updateMatrixWorld();
+    let cabe = true;
+    for (const a of alvos) { const q = a.clone().project(camTeste); if (q.z > 1 || Math.abs(q.x) > 0.86 || q.y > 0.78 || q.y < -0.78) { cabe = false; break; } }
+    if (cabe) break;
+  }
+  CAM.tPos.copy(camTeste.position); CAM.tLook.copy(look);
+}
+function atualizarCamera(dt) {
+  const ret = retrato();
+  switch (CAM.modo) {
+    case 'orbita':
+      CAM.ang += dt * 0.07;
+      CAM.tPos.set(Math.cos(CAM.ang) * 80, 34, Math.sin(CAM.ang) * 62); CAM.tLook.set(0, 0, 0); CAM.k = 1.5; break;
+    case 'mira': {
+      const h = J.portador || bola.dono; if (!h) break;
+      enquadrar(h, ret);
+      CAM.k = 3.2; break;
+    }
+    case 'dividida': {
+      const A = J.anel; const a = A ? A.p : J.flu[0];
+      const gd = GOL.clone().sub(a.pos).setY(0).normalize();
+      CAM.tPos.copy(bola.p).addScaledVector(gd, -7).add(new V3(0, 4.5, 2.5)).setY(4.5);
+      CAM.tLook.copy(bola.p).setY(0.6); CAM.k = 3; break;
+    }
+    case 'bola': {
+      const vh = new V3(bola.v.x, 0, bola.v.z);
+      if (vh.length() > 2) CAM.dirB.lerp(vh.normalize(), Math.min(1, dt * 2)).normalize();
+      const gd = new V3(MEIO_C + 12, 0, 0).sub(bola.p).setY(0).normalize();
+      const d = CAM.dirB.clone().lerp(gd, 0.5).normalize();
+      const atras = ret ? 11 : 9, alto = ret ? 7 : 5;
+      CAM.tPos.copy(bola.p).addScaledVector(d, -atras).setY(alto + bola.p.y * 0.3);
+      CAM.tLook.copy(bola.p).addScaledVector(d, 5).setY(bola.p.y * 0.5);
+      CAM.k = 3.5; break;
+    }
+    case 'ator': {
+      const p = CAM.ator; if (!p) break;
+      CAM.tPos.copy(p.pos).add(CAM.off); CAM.tLook.copy(p.pos).setY(1.2); CAM.k = 3; break;
+    }
+    case 'defesa': {
+      const B = bola.p;
+      CAM.tPos.set(B.x + (ret ? 22 : 18), ret ? 22 : 15, B.z * 0.5); CAM.tLook.set(Math.max(-MEIO_C + 8, B.x - 12), 0, B.z * 0.7); CAM.k = 2.2; break;
+    }
+  }
+  const f = 1 - Math.exp(-CAM.k * dt);
+  CAM.pos.lerp(CAM.tPos, f); CAM.look.lerp(CAM.tLook, f);
+  camera.position.copy(CAM.pos); camera.lookAt(CAM.look);
+  sol.target.position.copy(CAM.look).setY(0);
+  sol.position.copy(sol.target.position).add(SOL_OFF);
+}
+
+// =====================================================================
+// CUTSCENES
+// =====================================================================
+const CS = { ativo: null };
+function criarAtor(tipo, nome, pos, heading) {
+  const kit = tipo === 'arbitro'
+    ? { estilo: 'liso', camisa: '#111111', cor2: '#f2d200', calcao: '#111111', meia: '#111111', num: '#ffffff', numBorda: '#000' }
+    : { estilo: 'liso', camisa: '#1b1d24', cor2: '#1b1d24', calcao: '#1b1d24', meia: '#1b1d24', num: '#ffffff', numBorda: '#000' };
+  const a = new Jogador({ nome, num: '' }, 'outro', kit);
+  a.pos.copy(pos); a.heading = heading; J.extras.push(a);
+  return a;
+}
+function tocarCutscene(cenas, fim) {
+  J.estado = 'CUTSCENE';
+  CS.ativo = { cenas, i: -1, t: 0, fim };
+  tela('cutscene');
+  CAM.modo = 'livre';
+  proximaCena();
+}
+function proximaCena() {
+  const c = CS.ativo; if (!c) return;
+  c.i++;
+  if (c.i >= c.cenas.length) { $('cutscene').classList.remove('on'); CS.ativo = null; c.fim(); return; }
+  const cena = c.cenas[c.i]; c.t = 0;
+  if (cena.ini) cena.ini();
+  $('csNome').textContent = cena.nome || '';
+  const el = $('csTexto'); el.textContent = cena.texto || ''; el.className = cena.grande ? 'grande' : '';
+}
+function atualizarCutscene(dt) {
+  const c = CS.ativo; if (!c) return;
+  const cena = c.cenas[c.i]; c.t += dt;
+  if (cena.tick) cena.tick(dt, c.t);
+  for (const p of [...J.todos, ...J.extras]) avancarAnim(p, dt);
+  if (cena.dur && c.t > cena.dur) proximaCena();
+}
+$('cutscene').addEventListener('pointerdown', () => { Som.init(); if (CS.ativo && CS.ativo.t > 0.35) proximaCena(); });
+
+function cenasProfecia() {
+  const jk = acharFlu('John Kennedy');
+  const orig = jk.pos.clone(), origH = jk.heading;
+  const tec = criarAtor('tecnico', 'Técnico', new V3(-4, 0, -MEIO_L - 2.2), 0);
+  jk.pos.set(-4, 0, -MEIO_L - 0.6); jk.heading = Math.PI;
+  return [
+    {
+      nome: 'Final da Libertadores · prorrogação', texto: '1 x 1 no Maracanã.', dur: 3.4,
+      ini() { CAM.k = 1.2; CAM.pos.set(-70, 30, -80); Som.torcida(0.12); },
+      tick(dt, t) { CAM.tPos.set(-40 + t * 8, 20, -66); CAM.tLook.set(-4, 0, -30); }
+    },
+    {
+      nome: 'O técnico', texto: '“Você vai fazer o gol do título.”',
+      ini() { tec.tocar('point'); CAM.k = 3; },
+      tick() { cameraClose(tec, 2.0, 0.55); }
+    },
+    {
+      nome: 'John Kennedy', texto: 'O garoto entra com a profecia na cabeça.',
+      ini() { tec.tocar('idle'); },
+      tick() { cameraClose(jk, 2.0, -0.55); }
+    },
+    {
+      nome: '', texto: 'Bola rolando.', dur: 1.2,
+      ini() { jk.pos.copy(orig); jk.heading = origH; tec.remover(); CAM.modo = 'livre'; },
+      tick() { const p = acharFlu('Diogo Barbosa'); CAM.tPos.copy(p.pos).add(new V3(-9, 8, 0)); CAM.tLook.copy(p.pos).add(new V3(12, 0, 0)); }
+    }
+  ];
+}
+function cenasExpulsao() {
+  const jk = acharFlu('John Kennedy');
+  for (const p of J.todos) { p.alvoScript = null; p.vel = 0; if (p.anim === 'celebrate' && p !== jk) p.tocar('idle'); }
+  jk.pos.set(36, 0, -16); jk.heading = Math.PI;
+  const mureta = new V3(44, 0, -MEIO_L - 3.8);
+  const ref = criarAtor('arbitro', 'Árbitro', new V3(30, 0, -24), Math.PI);
+  const cartao = new THREE.Mesh(GEO.cartao, new THREE.MeshBasicMaterial({ color: 0xffd400, side: THREE.DoubleSide }));
+  cartao.position.set(0, -0.62, 0.06); ref.m.bD.add(cartao); cartao.visible = false;
+  return [
+    {
+      nome: 'John Kennedy', texto: 'Ele corre para a mureta, para os braços da torcida…', dur: 3.2,
+      ini() { jk.tocar('celebrate'); Som.explosao(); estadio.uni.uFesta.value = 1.6; CAM.k = 2.5; },
+      tick(dt) { moverPara(jk, mureta, 7.5, dt); CAM.tPos.copy(jk.pos).add(new V3(-7, 3.2, 6)); CAM.tLook.copy(jk.pos).setY(1.2); }
+    },
+    {
+      nome: '', texto: '…e comemora com a arquibancada tricolor!', dur: 3,
+      ini() { jk.pos.copy(mureta); jk.heading = Math.PI; jk.vel = 0; jk.tocar('celebrate'); estadio.uni.uFesta.value = 2; },
+      tick() { CAM.tPos.copy(jk.pos).add(new V3(1.6, 1.9, 3.4)); CAM.tLook.copy(jk.pos).setY(1.7); }
+    },
+    {
+      nome: 'Árbitro', texto: 'Segundo cartão amarelo…', dur: 2.6,
+      ini() { ref.pos.set(42.2, 0, -MEIO_L - 1.2); ref.heading = Math.atan2(jk.pos.x - ref.pos.x, jk.pos.z - ref.pos.z); ref.tocar('card'); cartao.visible = true; Som.apito('curto'); },
+      tick() { const f = ref.frente(); CAM.tPos.copy(ref.pos).addScaledVector(f, 2.6).add(new V3(1.2, 1.6, 0)); CAM.tLook.copy(ref.pos).setY(2.0); }
+    },
+    {
+      nome: 'Árbitro', texto: '…e vermelho. John Kennedy está expulso.', dur: 2.8,
+      ini() { cartao.material.color.set(0xe0102f); Som.uuh(); }
+    },
+    {
+      nome: 'Fluminense campeão da Libertadores 2023', texto: 'Glória Eterna.', grande: true, dur: 5,
+      ini() { CAM.k = 0.8; Som.apito('final'); Som.explosao(); estadio.uni.uFesta.value = 2; },
+      tick(dt, t) { CAM.tPos.set(Math.cos(t * 0.15 + 1) * 70, 34, Math.sin(t * 0.15 + 1) * 56); CAM.tLook.set(0, 0, 0); }
+    }
+  ];
+}
+
+// =====================================================================
+// UI
+// =====================================================================
+const TELAS = ['carregando', 'menu', 'linha', 'contexto', 'hud', 'pausa', 'falha', 'resultado', 'como', 'cutscene'];
+function tela(...ids) { for (const t of TELAS) $(t).classList.toggle('on', ids.includes(t)); }
+let bannerTimer = 0;
+function banner(html, ms = 1200, pequeno) {
+  const b = $('banner'); b.innerHTML = html; b.style.fontSize = pequeno ? 'clamp(24px,7vw,44px)' : '';
+  b.classList.add('on'); clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => b.classList.remove('on'), ms);
+}
+function dica(t) { $('dica').textContent = t || ''; }
+let narraGen = 0;
+function narrar(linhas) {
+  const n = $('narra'), g = ++narraGen; n.innerHTML = '';
+  linhas.forEach((l, i) => setTimeout(() => {
+    if (g !== narraGen) return;
+    const d = document.createElement('div'); d.textContent = l; if (i > 0) d.className = 's'; n.appendChild(d);
+  }, i * 850));
+  setTimeout(() => { if (g === narraGen) n.innerHTML = ''; }, 900 * linhas.length + 2600);
+}
+function atualizarHUD() {
+  const f = J.fase; if (!f) return;
+  const [a, b] = J.placar;
+  const tFlu = '<div class="t flu">FLU</div>', tAdv = `<div class="t">${f.fluMandante ? f.visitante : f.mandante}</div>`;
+  const n = `<div class="n">${a} × ${b}</div>`;
+  $('placar').innerHTML = (f.fluMandante ? tFlu + n + tAdv : tAdv + n + tFlu) + `<div class="m">${f.minuto}' ${f.tempo}</div>`;
+  if (J.modo === 'defesa') { $('hudEst').innerHTML = ''; $('hudToques').textContent = `Interceptações: ${D.interc}`; return; }
+  const e = estrelasPossiveis();
+  $('hudEst').innerHTML = '★'.repeat(e) + '<i>' + '★'.repeat(3 - e) + '</i>';
+  $('hudToques').textContent = `Toques: ${J.toques}` + (f.regra && f.regra.maxToques ? ` / ${f.regra.maxToques}` : '');
+}
+
+// etiquetas com nomes sobre os jogadores
+function criarEtiquetas() {
+  const box = $('etiquetas'); box.innerHTML = '';
+  for (const p of J.todos) {
+    const generico = NOMES_GENERICOS.has(p.nome);
+    if (p.time === 'adv' && (generico || p.gk)) { p.etq = null; continue; }
+    const d = document.createElement('div');
+    d.className = 'etq' + (p.time === 'adv' ? ' adv' : '');
+    d.textContent = p.nome; box.appendChild(d); p.etq = d;
+  }
+}
+function atualizarEtiquetas() {
+  const mostrar = (J.estado === 'MIRA' || J.estado === 'INTRO') && !J.autoplay;
+  for (const p of J.todos) {
+    if (!p.etq) continue;
+    if (!mostrar || p.batido) { p.etq.style.display = 'none'; continue; }
+    const s = naTela(p.pos.clone().setY(2.15));
+    if (s.atras || s.x < -40 || s.x > innerWidth + 40 || s.y < 0 || s.y > innerHeight) { p.etq.style.display = 'none'; continue; }
+    p.etq.style.display = 'block';
+    p.etq.style.transform = `translate(${s.x}px,${s.y}px) translate(-50%,-100%)`;
+    p.etq.classList.toggle('bola', p === J.portador);
+  }
+}
+
+// anéis no gramado
+const matAnel = c => new THREE.MeshBasicMaterial({ color: c, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+const anelFixo = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.74, 40), matAnel(0xffffff));
+const anelMovel = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.0, 40), matAnel(0xffd34d));
+const anelPortador = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.72, 32), matAnel(0xffd34d));
+for (const m of [anelFixo, anelMovel, anelPortador]) { m.rotation.x = -Math.PI / 2; m.visible = false; m.renderOrder = 5; scene.add(m); }
+function esconderAnel() { anelFixo.visible = anelMovel.visible = false; $('anelTxt').style.display = 'none'; }
+function atualizarAnelVisual(tReal) {
+  const A = J.anel;
+  if (A && !A.feito && J.estado === 'JOGO') {
+    const centro = A.tipo === 'dividida' ? bola.p : A.p.pos;
+    const r = 0.68 + 2.6 * clamp(A.t / CFG.CAMLENTA_JANELA, 0, 1);
+    anelFixo.visible = anelMovel.visible = true;
+    anelFixo.position.set(centro.x, 0.04, centro.z); anelMovel.position.set(centro.x, 0.05, centro.z);
+    anelMovel.scale.setScalar(r / 0.95);
+    anelMovel.material.color.set(Math.abs(A.t) < CFG.TOQUE_PERFEITO ? 0x38f0a6 : 0xffd34d);
+    const s = naTela(centro.clone().setY(2.6));
+    const el = $('anelTxt'); el.style.display = s.atras ? 'none' : 'block';
+    el.style.left = s.x + 'px'; el.style.top = s.y + 'px'; el.textContent = NOME_ANEL[A.tipo];
+  } else if (anelFixo.visible) esconderAnel();
+  const p = J.portador;
+  anelPortador.visible = J.estado === 'MIRA' && !!p && !J.autoplay;
+  if (anelPortador.visible) { anelPortador.position.set(p.pos.x, 0.03, p.pos.z); anelPortador.scale.setScalar(1 + Math.sin(tReal * 5) * 0.12); }
+}
+
+// ---------- telas ----------
+function montarLinha() {
+  $('totEst').textContent = `★ ${SAVE.total()}/${FASES.length * 3}`;
+  const grupos = new Map();
+  FASES.forEach((f, i) => { const d = Math.floor(f.ano / 10) * 10; if (!grupos.has(d)) grupos.set(d, []); grupos.get(d).push(i); });
+  const decs = [...grupos.keys()].sort((a, b) => a - b);
+  let html = '';
+  for (const d of decs) {
+    html += `<div class="decada"><h3>Anos ${String(d).slice(2)}</h3>`;
+    const idxs = grupos.get(d).sort((a, b) => FASES[a].ano - FASES[b].ano || a - b);
+    for (const i of idxs) {
+      const f = FASES[i], lib = SAVE.liberada(i), e = SAVE.estrelas(f.id);
+      html += `<button class="cartaoFase${lib ? '' : ' trancada'}" data-i="${i}">
+        <div class="num">FASE ${f.id} · ${f.ano}</div><div class="tit">${f.titulo}</div>
+        <div class="sub2">${f.competicao}</div><div class="sub2">${f.data} · ${f.estadio}</div>
+        <div class="est">${lib ? '★'.repeat(e) + '<span style="opacity:.25">' + '★'.repeat(3 - e) + '</span>' : '🔒'}</div></button>`;
+    }
+    html += '</div>';
+  }
+  $('listaDecadas').innerHTML = html;
+}
+$('listaDecadas').addEventListener('click', e => {
+  const b = e.target.closest('.cartaoFase'); if (!b) return;
+  const i = +b.dataset.i;
+  Som.bip(700, 0.05, 0.1);
+  if (!SAVE.liberada(i)) { banner('Complete a fase anterior', 1000, true); return; }
+  abrirContexto(i);
+});
+function abrirContexto(i) {
+  const f = FASES[i]; J.faseIdx = i;
+  const [a, b] = f.placar;
+  const tFlu = '<span class="t flu">FLU</span>', tAdv = `<span class="t">${f.fluMandante ? f.visitante : f.mandante}</span>`;
+  const n = `<span class="n">${a} × ${b}</span>`;
+  $('ctxCorpo').innerHTML = `
+    <div class="ctxComp">${f.competicao}</div>
+    <div class="ctxTit">${f.titulo}</div>
+    <div class="ctxMeta">${f.data} · ${f.estadio}</div>
+    <div class="placarG">${f.fluMandante ? tFlu + n + tAdv : tAdv + n + tFlu}</div>
+    <span class="placarG"><span class="min">${f.minuto}' do ${f.tempo}${f.aviso ? ' · ' + f.aviso : ''}</span></span>
+    <div class="ctxSec"><b>Contexto</b><p>${f.contexto}</p></div>
+    <div class="ctxSec"><b>Objetivo</b><p>${f.objetivo}</p></div>
+    <div class="ctxSec"><b>${f.livre ? 'Como foi / regra' : 'Sequência histórica'}</b><ol class="seq">${f.sequenciaTexto.map(s => `<li>${s}</li>`).join('')}</ol></div>
+    <div class="ctxSec"><b>Estrelas</b><div class="estrelasInfo"><span>★</span> completar · <span>★★</span> ${f.livre ? 'cumprir a regra' : 'seguir a sequência histórica'} · <span>★★★</span> isso na 1ª tentativa, sem perder a bola</div></div>
+    ${f.cronometro ? `<div class="ctxSec"><b>Cronômetro</b><p>${f.cronometro} segundos depois de recuperar a bola.</p></div>` : ''}`;
+  tela('contexto');
+  // mostra o lance ao fundo
+  montarFase(f);
+  J.estado = 'VITRINE';
+  const p = J.flu.find(q => q.def.bola) || J.flu[0];
+  J.portador = p; CAM.modo = 'mira';
+}
+$('ctxVoltar').onclick = () => { Som.bip(500, 0.05, 0.1); J.estado = 'MENU'; J.portador = null; CAM.modo = 'orbita'; montarLinha(); tela('linha'); };
+$('ctxIr').onclick = () => { Som.init(); Som.bip(900, 0.06, 0.12); iniciarFase(J.faseIdx, {}); };
+
+function iniciarFase(i, opts) {
+  const f = FASES[i];
+  J.faseIdx = i;
+  J.tentativas = opts.retry ? J.tentativas + 1 : opts.auto ? J.tentativas : 1;
+  J.autoplay = !!opts.auto;
+  montarFase(f);
+  J.autoplay = !!opts.auto;
+  $('tagAuto').style.display = J.autoplay ? 'block' : 'none';
+  $('cronometro').style.display = 'none'; $('cronometro').classList.remove('alerta');
+  if (f.cutsceneInicio === 'profecia' && !opts.retry && !opts.auto) { tocarCutscene(cenasProfecia(), comecarJogo); return; }
+  comecarJogo();
+}
+function comecarJogo() {
+  tela('hud'); atualizarHUD(); dica(''); $('comBola').textContent = '';
+  J.estado = 'INTRO'; J.introT = 1.6;
+  const f = J.fase;
+  J.portador = J.flu.find(q => q.def.bola) || (f.inicio ? acharFlu(f.inicio.jogador) : J.flu[0]);
+  CAM.modo = 'mira'; CAM.k = 2;
+  banner(`${f.minuto}' ${f.tempo}<small>${f.titulo}</small>`, 1500);
+  Som.apito('curto'); Som.torcida(0.08);
+}
+function iniciarJogada() {
+  const f = J.fase;
+  J.portador = null;
+  if (f.inicio && f.inicio.tipo === 'dividida') { iniciarDividida(); return; }
+  J.estado = 'JOGO';
+  darPosse(J.flu.find(q => q.def.bola));
+}
+
+function mostrarFalha() {
+  J.falhaMostrada = true;
+  $('falhaTit').textContent = J.falhaInfo.tit;
+  $('falhaTxt').textContent = J.falhaInfo.txt;
+  tela('hud', 'falha');
+}
+$('fDenovo').onclick = () => {
+  Som.bip(900, 0.06, 0.12);
+  if (J.modo === 'defesa') { iniciarDefesa(); return; }
+  if (J.autoplay) { iniciarFase(J.faseIdx, { auto: true }); return; }
+  iniciarFase(J.faseIdx, { retry: true });
+};
+$('fSair').onclick = () => irParaLinha();
+function irParaLinha() {
+  Som.bip(500, 0.05, 0.1);
+  J.autoplay = false; J.modo = 'fase'; J.pausado = false;
+  $('tagAuto').style.display = 'none'; $('cronometro').style.display = 'none';
+  $('tagReplay').style.display = 'none'; $('pular').style.display = 'none';
+  J.estado = 'MENU'; J.portador = null; CAM.modo = 'orbita'; esconderAnel();
+  montarLinha(); tela('linha');
+}
+
+function mostrarResultado(voltouDaHistoria) {
+  const f = J.fase;
+  let r;
+  if (voltouDaHistoria && J.ultimoResultado) r = J.ultimoResultado;
+  else {
+    const e2 = avaliarEstrela2();
+    const e3 = e2 && J.tentativas === 1;
+    const n = 1 + (e2 ? 1 : 0) + (e3 ? 1 : 0);
+    SAVE.registrar(f.id, n);
+    r = J.ultimoResultado = { n, e2, e3, idx: J.faseIdx };
+  }
+  J.estado = 'RESULTADO';
+  const est = [0, 1, 2].map(i => i < r.n ? `<span class="pop" style="animation-delay:${i * 0.25}s">★</span>` : '<i>★</i>').join('');
+  const verHist = !r.e2 && f.mostrarHistoria !== false;
+  const temProx = r.idx + 1 < FASES.length;
+  $('resCorpo').innerHTML = `
+    <h2>${f.titulo}</h2>
+    <div class="bigEst">${est}</div>
+    <ul class="critica">
+      <li class="ok">Gol! Fase completa</li>
+      <li class="${r.e2 ? 'ok' : 'no'}">${f.livre ? 'Cumpriu a regra: ' + f.sequenciaTexto.slice(-1)[0] : 'Seguiu a sequência histórica'}</li>
+      <li class="${r.e3 ? 'ok' : 'no'}">Na primeira tentativa, sem perder a bola</li>
+    </ul>
+    ${f.final ? `<p class="finalTxt">${f.final}</p>` : ''}
+    ${verHist ? `<div class="historia"><b>Na história foi assim:</b><ol class="seq">${f.sequenciaTexto.map(s => `<li>${s}</li>`).join('')}</ol>
+      <button class="btn ouro" id="rHist" style="width:100%;margin-top:8px">▶ Ver a jogada real</button></div>` : ''}
+    ${f.extra === 'segure' ? `<button class="btn ouro" id="rExtra">Modo extra: Segure o 1x0${SAVE.d.extras[f.id] ? ' ✔' : ''}</button>` : ''}
+    <div class="col">
+      ${temProx ? '<button class="btn verde" id="rProx">Próxima fase</button>' : ''}
+      <button class="btn fant" id="rRep">Jogar de novo</button>
+      <button class="btn fant" id="rLinha">Linha do tempo</button>
+    </div>`;
+  tela('resultado');
+  const on = (id, fn) => { const b = $(id); if (b) b.onclick = () => { Som.bip(800, 0.05, 0.1); fn(); }; };
+  on('rHist', () => iniciarFase(r.idx, { auto: true }));
+  on('rExtra', () => iniciarDefesa());
+  on('rProx', () => abrirContexto(r.idx + 1));
+  on('rRep', () => iniciarFase(r.idx, {}));
+  on('rLinha', () => irParaLinha());
+  if (r.n === 3) Som.explosao();
+}
+
+// pausa
+$('bPausa').onclick = () => {
+  if (!['MIRA', 'JOGO', 'INTRO', 'DEFESA'].includes(J.estado)) return;
+  J.pausado = true; tela('hud', 'pausa');
+};
+$('pContinuar').onclick = () => { J.pausado = false; tela('hud'); };
+$('pReiniciar').onclick = () => { J.pausado = false; if (J.modo === 'defesa') iniciarDefesa(); else iniciarFase(J.faseIdx, { retry: !J.autoplay, auto: J.autoplay }); };
+$('pSair').onclick = () => irParaLinha();
+$('bPular').onclick = () => { if (J.estado === 'REPLAY') fimReplay(); };
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && ['MIRA', 'JOGO', 'DEFESA'].includes(J.estado) && !J.pausado) { J.pausado = true; tela('hud', 'pausa'); }
+});
+
+$('bJogar').onclick = () => { Som.init(); Som.bip(900, 0.06, 0.12); montarLinha(); tela('linha'); };
+$('bComo').onclick = () => { Som.init(); tela('como'); };
+$('comoOk').onclick = () => tela('menu');
+$('linhaVoltar').onclick = () => { Som.bip(500, 0.05, 0.1); tela('menu'); };
+
+// ---------- modo extra da fase 4: "Segure o 1x0" ----------
+const D = { t: 60, interc: 0, cd: 0, espera: 1, dono: null, rec: null, etapa: 'posse', resetT: 0, chute: null, avanco: 0 };
+function iniciarDefesa() {
+  const f = FASES[3];
+  limparFase();
+  J.fase = f; J.modo = 'defesa'; J.autoplay = false; J.pausado = false;
+  aplicarCeu(f.ceu); pintarTorcida(f.adversario.cor);
+  const k = kitsDaFase(f);
+  const kGkFlu = { estilo: 'liso', camisa: '#e8e8e8', cor2: '#7b1530', calcao: '#1b1b1b', meia: '#e8e8e8', num: '#7b1530', numBorda: '#fff' };
+  const defs = [['Zagueiro', 3, 0.14, 0.40], ['Zagueiro', 4, 0.14, 0.60], ['Lateral', 2, 0.20, 0.82], ['Lateral', 6, 0.20, 0.18], ['Volante', 5, 0.27, 0.42], ['Volante', 8, 0.27, 0.60]];
+  J.flu = defs.map(([n, num, x, y]) => new Jogador({ nome: n, num, x, y }, 'flu', k.flu));
+  const gkFlu = new Jogador({ nome: 'Goleiro', num: 1, x: 0.012, y: 0.5, gk: true }, 'flu', kGkFlu);
+  J.flu.push(gkFlu);
+  const atk = [[0.46, 0.5], [0.38, 0.24], [0.38, 0.76], [0.33, 0.42], [0.31, 0.6], [0.42, 0.34]];
+  J.adv = atk.map(([x, y], i) => new Jogador({ nome: 'Atacante', num: [10, 7, 11, 9, 8, 20][i], x, y }, 'adv', k.adv));
+  J.gk = null; J.todos = [...J.flu, ...J.adv];
+  for (const p of J.flu) p.heading = -Math.PI / 2;
+  for (const o of J.adv) o.heading = -Math.PI / 2;
+  gkFlu.heading = Math.PI / 2; D.gk = gkFlu;
+  J.placar = [0, 1];
+  Object.assign(D, { t: 60, interc: 0, cd: 0, espera: 1.4, dono: J.adv[0], rec: null, etapa: 'posse', resetT: 0, chute: null, avanco: 0 });
+  for (const o of J.adv) o.base = o.pos.clone();
+  resetBola(); bola.p.copy(D.dono.pe());
+  REC.quadros = [];
+  tela('hud'); atualizarHUD();
+  dica('Toque na BOLA durante os passes do Figueirense para interceptar. Aguente 60 segundos!');
+  $('comBola').textContent = 'MODO EXTRA · SEGURE O 1x0';
+  $('cronometro').style.display = 'block'; $('cronometro').classList.remove('alerta');
+  J.estado = 'DEFESA'; CAM.modo = 'defesa'; CAM.k = 2;
+  Som.apito('curto'); Som.torcida(0.1);
+  criarEtiquetas();
+}
+function reiniciarAtaque() {
+  D.avanco = 0;
+  for (const o of J.adv) { o.alvoScript = o.base.clone(); }
+  D.dono = J.adv[0]; D.rec = null; D.etapa = 'reset'; D.resetT = 1.6;
+}
+function atualizarDefesa(dt) {
+  D.t -= dt; D.cd -= dt;
+  $('cronometro').textContent = Math.ceil(Math.max(0, D.t));
+  $('cronometro').classList.toggle('alerta', D.t < 10);
+  if (D.t <= 0) { fimDefesa(true); return; }
+  // movimentação: atacantes avançam conforme a posse progride; tricolores marcam
+  for (const o of J.adv) {
+    if (o === D.dono && D.etapa === 'posse') { o.vel = 0; virarPara(o, new V3(-MEIO_C, 0, 0), dt, 5); continue; }
+    if (o === D.rec) { moverPara(o, bola.p.clone().addScaledVector(bola.v, 0.15), 6.5, dt); continue; }
+    const alvo = o.alvoScript || o.base.clone().add(new V3(-D.avanco, 0, 0));
+    if (moverPara(o, alvo, 5, dt) && o.alvoScript) o.alvoScript = null;
+  }
+  const gol = new V3(-MEIO_C, 0, 0);
+  for (const f of J.flu) {
+    if (f.gk) continue;
+    if (f.alvoScript) { if (moverPara(f, f.alvoScript, 8, dt)) f.alvoScript = null; continue; }
+    const m = maisPerto(J.adv, f.home);
+    const alvo = m ? m.pos.clone().lerp(gol, 0.08).lerp(f.home, 0.35) : f.home;
+    moverPara(f, alvo, 5.5, dt);
+    virarPara(f, bola.p, dt, 5);
+  }
+  const gk = D.gk;
+  if (gk.mergulho) animarMergulho(gk, dt);
+  else { moverPara(gk, new V3(-MEIO_C + 0.6, 0, clamp(bola.p.z * 0.12, -2.4, 2.4)), 3.5, dt); virarPara(gk, bola.p, dt, 6); }
+
+  switch (D.etapa) {
+    case 'posse': {
+      colarBolaEm(D.dono, dt);
+      D.espera -= dt;
+      if (D.espera > 0) break;
+      if (D.dono.pos.x < -31) { chuteAdversario(); break; }
+      const cand = J.adv.filter(o => o !== D.dono && o.pos.x < D.dono.pos.x + 6 && dist2(o.pos, D.dono.pos) < 28);
+      const r = cand.sort((a, b) => a.pos.x - b.pos.x + rnd(-6, 6))[0] || J.adv.find(o => o !== D.dono);
+      D.rec = r; D.etapa = 'passe';
+      const v = velRasteiro(D.dono.pe(), r.pos.clone().add(new V3(-1.5, 0, 0)), 4.5);
+      D.dono.tocar('kick');
+      bola.p.copy(D.dono.pe()); bola.v.copy(v.v); bola.curva = 0;
+      Som.chute(12);
+      break;
+    }
+    case 'passe': {
+      integrar(bola, dt);
+      if (dist2(D.rec.pos, bola.p) < 0.9) {
+        D.dono = D.rec; D.rec = null; D.etapa = 'posse'; D.espera = rnd(0.6, 1.2);
+        D.avanco = Math.min(D.avanco + 5, 26);
+      } else if (bola.v.length() < 0.6) { D.dono = D.rec; D.rec = null; D.etapa = 'posse'; D.espera = 0.8; }
+      break;
+    }
+    case 'chute': {
+      integrar(bola, dt);
+      for (const [a, b] of POSTES) if (a.x < 0) colideSegmento(a, b, CFG.POSTE_R, 0.6, 0.9);
+      if (bola.p.x < -MEIO_C + 0.7 && D.chute.defende && !D.chute.feito) {
+        D.chute.feito = true;
+        bola.v.set(Math.abs(bola.v.x) * 0.4 + 3, 3, bola.v.z * 0.3);
+        banner('DEFENDEU!', 900, true); Som.chute(10); Som.explosao();
+      }
+      if (bola.p.x < -MEIO_C) {
+        if (Math.abs(bola.p.z) < CFG.GOL_L / 2 && bola.p.y < CFG.GOL_A) { fimDefesa(false); return; }
+        reiniciarAtaque();
+      }
+      if (D.chute.feito && bola.p.x > -MEIO_C + 6) reiniciarAtaque();
+      break;
+    }
+    case 'reset': {
+      D.resetT -= dt;
+      if (D.resetT <= 0) { D.etapa = 'posse'; D.espera = 0.8; bola.p.copy(D.dono.pe()); bola.v.set(0, 0, 0); }
+      else integrar(bola, dt);
+      break;
+    }
+  }
+  for (const p of J.todos) avancarAnim(p, dt);
+}
+function colarBolaEm(p, dt) { bola.p.lerp(p.pe(), Math.min(1, dt * 20)); bola.v.set(0, 0, 0); }
+function chuteAdversario() {
+  const p = D.dono, z = rnd(-3.1, 3.1), y = rnd(0.25, 2.1);
+  const alvo = new V3(-MEIO_C, y, z);
+  p.tocar('kick');
+  bola.p.copy(p.pe());
+  const d = dist2(bola.p, alvo);
+  const v = velAerea(bola.p, alvo, d / 22, y, 0);
+  bola.v.copy(v.v); bola.curva = 0;
+  D.etapa = 'chute';
+  D.chute = { defende: Math.random() < 0.55, feito: false };
+  const zg = D.chute.defende ? z : -Math.sign(z || 1) * 2.4;
+  setTimeout(() => { if (J.estado === 'DEFESA') mergulharPara(D.gk, zg, y, 1); }, 220);
+  Som.chute(22);
+}
+function toqueDefesa(sx, sy) {
+  if (D.etapa !== 'passe' || D.cd > 0) return;
+  const s = naTela(bola.p);
+  if (Math.hypot(s.x - sx, s.y - sy) > 95) { D.cd = 0.5; banner('Toque na bola!', 600, true); return; }
+  const f = maisPerto(J.flu, bola.p, q => !q.gk);
+  if (!f || dist2(f.pos, bola.p) > 12) { D.cd = 0.7; banner('Longe demais!', 700, true); Som.bip(220, 0.08, 0.1); return; }
+  D.interc++;
+  f.alvoScript = bola.p.clone().setY(0); f.tocar('lunge');
+  bola.v.multiplyScalar(0.1);
+  banner('INTERCEPTOU!', 800, true); Som.chute(9); Som.torcida(0.2, 0.3);
+  atualizarHUD();
+  reiniciarAtaque();
+}
+function fimDefesa(venceu) {
+  J.estado = 'POS'; $('cronometro').style.display = 'none'; dica('');
+  if (venceu) {
+    SAVE.d.extras[J.fase.id] = true; SAVE.gravar();
+    Som.apito('final'); Som.explosao(); estadio.uni.uFesta.value = 2;
+    for (const f of J.flu) f.tocar('celebrate');
+    $('resCorpo').innerHTML = `<h2>Segurou o 1x0!</h2><div class="bigEst"><span class="pop">🏆</span></div>
+      <p>${D.interc} interceptações. Fim de jogo em Florianópolis.</p><p class="finalTxt">${J.fase.final}</p>
+      <div class="col"><button class="btn verde" id="dDenovo">Jogar de novo</button><button class="btn fant" id="dLinha">Linha do tempo</button></div>`;
+    setTimeout(() => { tela('resultado'); $('dDenovo').onclick = () => iniciarDefesa(); $('dLinha').onclick = () => irParaLinha(); }, 1200);
+  } else {
+    J.falhaInfo = { tit: MOTIVOS.gol_sofrido[0], txt: MOTIVOS.gol_sofrido[1]() };
+    Som.uuh(); banner('Gol do Figueirense…', 1200);
+    golsMesh[1].balanco = 1;
+    setTimeout(() => mostrarFalha(), 1300);
+  }
+}
+
+// =====================================================================
+// RENDER
+// =====================================================================
+let tReal = 0, ultimo = performance.now();
+const _qb = new THREE.Quaternion(), _eixo = new V3(), _bolaAnt = new V3();
+function redimensionar() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.fov = camera.aspect < 1 ? 64 : 50;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', redimensionar);
+redimensionar();
+
+function atualizar(dt) {
+  tReal += dt;
+  estadio.uni.uTempo.value = tReal;
+  estadio.uni.uFesta.value = Math.max(0, estadio.uni.uFesta.value - dt * 0.15);
+  for (const g of golsMesh) {
+    g.balanco *= Math.exp(-dt * 2.5);
+    g.fundo.position.x = CFG.GOL_P + Math.sin(tReal * 28) * 0.12 * g.balanco + 0.1 * g.balanco;
+  }
+  if (J.rastroFade > 0 && !gesto.ativo) { J.rastroFade -= dt * 2.2; rastroMat.opacity = Math.max(0, J.rastroFade); if (J.rastroFade <= 0) rastro.visible = false; }
+  if (!J.pausado) {
+    switch (J.estado) {
+      case 'INTRO': J.introT -= dt; if (J.introT <= 0) iniciarJogada(); break;
+      case 'MIRA': atualizarMira(dt); break;
+      case 'JOGO': case 'GOL': case 'FALHA': {
+        let g = dt * (J.estado === 'FALHA' ? 0.5 : J.timeScale);
+        while (g > 1e-6) { const h = Math.min(CFG.PASSO, g); passoJogo(h); g -= h; }
+        if (J.estado === 'GOL') {
+          J.golT += dt;
+          if (J.golT > 1.3) J.timeScale = Math.min(1, J.timeScale + dt * 0.8);
+          if (J.golT > 3.8 && !J.replayIniciado) iniciarReplay();
+        }
+        if (J.estado === 'FALHA') { J.falhaT += dt; if (J.falhaT > 1.5 && !J.falhaMostrada) mostrarFalha(); }
+        if (J.cronoAtivo) atualizarCrono();
+        break;
+      }
+      case 'REPLAY': atualizarReplay(dt); break;
+      case 'CUTSCENE': atualizarCutscene(dt); break;
+      case 'DEFESA': { let g = dt; while (g > 1e-6) { const h = Math.min(CFG.PASSO, g); atualizarDefesa(h); g -= h; if (J.estado !== 'DEFESA') break; } break; }
+    }
+    if (J.estado === 'MIRA' && J.cronoAtivo) atualizarCrono();
+    if (!['JOGO', 'GOL', 'FALHA', 'REPLAY', 'CUTSCENE', 'DEFESA'].includes(J.estado)) for (const p of J.todos) avancarAnim(p, dt);
+    if (J.estado === 'MIRA' || J.estado === 'VITRINE' || J.estado === 'INTRO') { const p = J.portador; if (p) { bola.p.copy(p.pe()); } }
+  }
+  for (const p of J.todos) pose(p, tReal);
+  for (const p of J.extras) pose(p, tReal);
+  // bola: posição e rolamento
+  _eixo.set(bola.p.z - _bolaAnt.z, 0, -(bola.p.x - _bolaAnt.x));
+  const ang = _eixo.length() / CFG.BOLA_R;
+  if (ang > 1e-4 && ang < 20) { _qb.setFromAxisAngle(_eixo.normalize(), ang); bolaMesh.quaternion.premultiply(_qb); }
+  _bolaAnt.copy(bola.p);
+  bolaMesh.position.copy(bola.p);
+  atualizarCamera(dt);
+  atualizarEtiquetas();
+  atualizarAnelVisual(tReal);
+}
+function atualizarCrono() {
+  const c = $('cronometro');
+  c.style.display = 'block';
+  c.textContent = Math.max(0, J.crono).toFixed(1);
+  c.classList.toggle('alerta', J.crono < 3);
+}
+function quadro(agora) {
+  requestAnimationFrame(quadro);
+  const dt = Math.min(0.05, Math.max(0, (agora - ultimo) / 1000));
+  ultimo = agora;
+  atualizar(dt);
+  renderer.render(scene, camera);
+}
+
+// ---------- início ----------
+montarFase(FASES[0]);
+J.estado = 'MENU'; CAM.modo = 'orbita';
+CAM.pos.set(80, 34, 30);
+tela('menu');
+requestAnimationFrame(quadro);
+// gancho de depuração/teste (não usado pelo jogo)
+window.__HT = { J, bola, CAM, FASES, iniciarFase, tocarCutscene, cenasExpulsao, cenasProfecia, mostrarResultado, iniciarDefesa, D, executarAcao, classificar, toqueAnel, projetar, naTela, SAVE, camera };
+</script>
+</body>
+</html>

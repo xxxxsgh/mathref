@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com seis sites estáticos publicados pelo GitHub Pages.
+Repositório com sete sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -10,6 +10,7 @@ Repositório com seis sites estáticos publicados pelo GitHub Pages.
 | [`/arena/`](https://xxxxsgh.github.io/mathref/arena/) | **NULLPOINT** — FPS tático de arena com skins e inspeção de faca |
 | [`/ironline/`](https://xxxxsgh.github.io/mathref/ironline/) | **IRONLINE** — FPS militar com arquitetura de features plugáveis |
 | [`/quadra/`](https://xxxxsgh.github.io/mathref/quadra/) | **QUADRA VIVA** — futsal arcade com física em escala real |
+| [`/tricolor/`](https://xxxxsgh.github.io/mathref/tricolor/) | **Herói Tricolor** — jogadas históricas do Fluminense, desenhadas com o dedo |
 
 ## Publicação
 
@@ -155,3 +156,21 @@ npm test           # testes da física e das regras (seções A–H do adendo)
 npm run e2e        # ponta a ponta no Chromium (Playwright)
 node tools/sim.mjs 5 3   # 5 partidas IA × IA no Node, sem render
 ```
+
+## Herói Tricolor
+
+Jogo mobile 3D no estilo "Score! Hero" em **um único arquivo**
+([`tricolor/index.html`](./tricolor/index.html)), com Three.js 0.160.0 via
+jsDelivr e sem build. O jogador desenha com o dedo passes, lançamentos,
+cruzamentos, dribles, conduções e chutes para recriar oito gols históricos do
+Fluminense (do Gol de Barriga de 1995 à Glória Eterna de 2023 e ao Mundial
+de 2025). O tempo para sempre que a bola está com um tricolor; finalizações de
+primeira, voleios, cabeçadas e divididas usam um anel de timing.
+
+- Dados das fases: array `FASES` no topo do script (posições normalizadas
+  0–1), editável para criar novas fases.
+- PWA: manifest gerado em tempo de execução; o service worker é registrado
+  primeiro via Blob e, como os navegadores recusam SW com URL `blob:`, cai para
+  [`tricolor/sw.js`](./tricolor/sw.js) (mesmo código). Ele guarda a página e o
+  Three.js para jogar offline.
+- Jogo de torcedor, sem escudos, logos ou imagens oficiais.
