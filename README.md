@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com seis sites estáticos publicados pelo GitHub Pages.
+Repositório com sete sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -10,6 +10,7 @@ Repositório com seis sites estáticos publicados pelo GitHub Pages.
 | [`/arena/`](https://xxxxsgh.github.io/mathref/arena/) | **NULLPOINT** — FPS tático de arena com skins e inspeção de faca |
 | [`/ironline/`](https://xxxxsgh.github.io/mathref/ironline/) | **IRONLINE** — FPS militar com arquitetura de features plugáveis |
 | [`/quadra/`](https://xxxxsgh.github.io/mathref/quadra/) | **QUADRA VIVA** — futsal arcade com física em escala real |
+| [`/rfm/`](https://xxxxsgh.github.io/mathref/rfm/) | **Rafael Football Manager** — gerenciador de futebol (HTML único, PWA offline) |
 
 ## Publicação
 
@@ -155,3 +156,22 @@ npm test           # testes da física e das regras (seções A–H do adendo)
 npm run e2e        # ponta a ponta no Chromium (Playwright)
 node tools/sim.mjs 5 3   # 5 partidas IA × IA no Node, sem render
 ```
+
+## Rafael Football Manager
+
+Jogo de gerenciamento de futebol inspirado no Football Manager: você é o
+técnico de um clube fictício e cuida de elenco, tática, treino, mercado e
+finanças; as partidas são simuladas minuto a minuto. Sem build e sem
+dependências: o jogo inteiro está em `rfm/index.html` (HTML + CSS + JS puro).
+
+- Código: [`rfm/index.html`](./rfm/index.html), dividido em seções comentadas
+  (utilitários/RNG, dados, geração, regras, motor, temporada, mercado, testes, UI, save/PWA)
+- PWA: `rfm/manifest.webmanifest` + `rfm/sw.js` (o navegador exige o service
+  worker num arquivo próprio — ele não pode ficar embutido no HTML)
+- **Documentação:** [`docs/RAFAEL-FM.md`](./docs/RAFAEL-FM.md)
+
+```bash
+python3 -m http.server 8000   # na raiz do repo; abra http://localhost:8000/rfm/
+```
+
+Testes do motor: abra `rfm/?test=1` ou use *Menu → Testar motor de simulação*.
