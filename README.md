@@ -164,6 +164,11 @@ Jogo de gerenciamento de futebol do Brasileirão Série A em **um único arquivo
 [football-data.org](https://www.football-data.org/) (o usuário cola a própria
 chave em Config), cache local e jogo 100% offline depois disso. `prancheta/sw.js`
 é opcional: só permite abrir a página sem internet quando instalada como PWA.
+Inclui Brasileirão (38 rodadas), Copa do Brasil (32 clubes, mata-mata em ida e
+volta) e Libertadores (8 grupos + mata-mata, final única), com datas de meio de
+semana; mercado com janelas, caixa e salários; treino semanal e categorias de
+base; lesões e suspensões por cartões; diretoria com metas (o técnico pode ser
+demitido); coletivas e conversas que mexem na moral.
 Por estar na raiz, a pasta é publicada sem mexer no workflow.
 
 Football data provided by the Football-Data.org API.
