@@ -1,6 +1,6 @@
 # mathref
 
-Repositório com seis sites estáticos publicados pelo GitHub Pages.
+Repositório com sete sites estáticos publicados pelo GitHub Pages.
 
 | Caminho | O que é |
 |---|---|
@@ -10,6 +10,7 @@ Repositório com seis sites estáticos publicados pelo GitHub Pages.
 | [`/arena/`](https://xxxxsgh.github.io/mathref/arena/) | **NULLPOINT** — FPS tático de arena com skins e inspeção de faca |
 | [`/ironline/`](https://xxxxsgh.github.io/mathref/ironline/) | **IRONLINE** — FPS militar com arquitetura de features plugáveis |
 | [`/quadra/`](https://xxxxsgh.github.io/mathref/quadra/) | **QUADRA VIVA** — futsal arcade com física em escala real |
+| [`/ceat/`](https://xxxxsgh.github.io/mathref/ceat/) | **Interclasse Manager** — football manager do interclasse de futsal do CEAT (arquivo único) |
 
 ## Publicação
 
